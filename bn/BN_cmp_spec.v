@@ -7,7 +7,7 @@ Local Open Scope logic.
 Require Import sha.pure_lemmas.
 Require Import sha.common_lemmas.
 
-Require Import minibn.
+Require Import bn.minibn.
 Require Import BN_repr.
 Require Import minibn_cmp.
 
@@ -37,14 +37,127 @@ Proof.
 start_function.
 name a' _a.
 name b' _b.
+name i' _i.
 (*name A' _A.
 simpl_stackframe_of.*)
-unfold bnstate_; normalize. intros av.  normalize. intros bv. normalize.
+unfold bnstate_; normalize. intros av. normalize. intros bv. normalize.
+forward.
+  entailer. unfold bn_relate. destruct A as [d t dm n].
+   destruct av as [d' [t' [dm' [n' X]]]]. simpl. unfold tops_relate. normalize.
+forward.
+  entailer. unfold bn_relate. destruct B as [d t dm n].
+   destruct bv as [d' [t' [dm' [n' X]]]]. simpl. unfold tops_relate. normalize.
+forward.
+remember (PROP  ()
+   LOCAL  (temp _btop (fst (snd bv)); temp _atop (fst (snd av));
+   `(eq a) (eval_id _a); `(eq b) (eval_id _b))
+   SEP  (`(bn_relate A av); `(data_at Tsh t_struct_bignum_st av a);
+   `(bn_relate B bv); `(data_at Tsh t_struct_bignum_st bv b))) as PST.
+forward_if PST.
+  subst PST; normalize. 
+  forward. simpl in *.
+   apply andp_right.
+     unfold bn_ucmp. simpl. 
+     destruct A as [dA tA dmA nA]. destruct av as [dA' [tA' [dmA' [nA' XA]]]].
+     destruct B as [dB tB dmB nB]. destruct bv as [dB' [tB' [dmB' [nB' XB]]]].
+     simpl in *. unfold chunks_relate. normalize. admit.
+  unfold bnstate_. normalize. apply (exp_right bv). normalize.
+   apply (exp_right av). normalize.
 
+forward. subst PST. entailer.
+
+subst PST; normalize.
+forward. entailer. unfold bn_relate. destruct A as [d t dm n].
+   destruct av as [d' [t' [dm' [n' X]]]]. simpl. unfold chunks_relate. entailer.
+forward. entailer. unfold bn_relate. destruct B as [d t dm n].
+   destruct bv as [d' [t' [dm' [n' X]]]]. simpl. unfold chunks_relate. normalize.
+   destruct A as [dA tA dmA nA].
+   destruct av as [dA' [tA' [dmA' [nA' XA]]]]. simpl. unfold chunks_relate. entailer.
+continue here
+destruct A as [d t dm n].
+   destruct av as [d' [t' [dm' [n' X]]]]. simpl. unfold chunks_relate. entailer.
+
+ normalize.
+forward.
+  entailer. unfold bn_relate. destruct B as [d t dm n].
+   destruct bv as [d' [t' [dm' [n' X]]]]. simpl. unfold tops_relate. normalize.
+forward.
+ unfold bnstate_. entailer.  normalize. unfold POSTCONDITION, abbreviate. 
+  unfold bnstate_. entailer.
+  (dB',
+  (Vint (Int.repr (Z.of_nat (length dB))),
+  (Vint (Int.repr (Z.of_nat dmB)), (nB', XB))))). entailer. 
+  apply (exp_right  (dA',
+  (Vint (Int.repr (Z.of_nat (length dA))),
+  (Vint (Int.repr (Z.of_nat dmA)), (nA', XA))))). entailer.
+  unfold bn_relate. entailer. unfold tops_relate. entailer.
+destruct A as [dA tA dmA nA]. destruct av as [dA' [tA' [dmA' [nA' XA]]]].
+destruct B as [dB tB dmB nB]. destruct bv as [dB' [tB' [dmB' [nB' XB]]]].
+simpl. normalize. unfold tops_relate in *. subst tA' tB' dmA' dmB'.
+simpl.
+remember (Int.sub (Int.repr (Z.of_nat tA)) (Int.repr (Z.of_nat tB))) as i. 
+remember ((PROP  ( i <> Int.zero)
+   LOCAL  (temp _i (Vint i); temp _btop (Vint (Int.repr (Z.of_nat tB)));
+   temp _atop (Vint (Int.repr (Z.of_nat tA))); `(eq a) (eval_id _a);
+   `(eq b) (eval_id _b))
+   SEP  (`(chunks_relate dA dA');
+   `(data_at Tsh t_struct_bignum_st
+       (dA',
+       (Vint (Int.repr (Z.of_nat tA)),
+       (Vint (Int.repr (Z.of_nat dmA)), (nA', XA)))) a);
+   `(chunks_relate dB dB');
+   `(data_at Tsh t_struct_bignum_st
+       (dB',
+       (Vint (Int.repr (Z.of_nat tB)),
+       (Vint (Int.repr (Z.of_nat dmB)), (nB', XB)))) b)))) as PST.
+forward_if PST.
+  subst PST; normalize. 
+  forward. simpl in *.
+   apply andp_right.
+     unfold bn_ucmp. simpl. unfold chunks_relate. admit.
+  unfold bnstate_. normalize. apply (exp_right  (dB',
+  (Vint (Int.repr (Z.of_nat (length dB))),
+  (Vint (Int.repr (Z.of_nat dmB)), (nB', XB))))). entailer. 
+  apply (exp_right  (dA',
+  (Vint (Int.repr (Z.of_nat (length dA))),
+  (Vint (Int.repr (Z.of_nat dmA)), (nA', XA))))). entailer.
+  unfold bn_relate. entailer. unfold tops_relate. entailer.
+normalize.
+forward. entailer. rewrite H2, H3 in *. simpl in *. inv H1.
+  apply (exp_right (Int.sub _id1 _id0)). entailer.
+  destruct A as [dA tA dmA nA]. destruct av as [dA' [tA' [dmA' [nA' XA]]]].
+  destruct B as [dB tB dmB nB]. destruct bv as [dB' [tB' [dmB' [nB' XB]]]].
+  unfold bn_relate. entailer. simpl in *. subst. admit.
+
+   temp _btop (fst (snd bv)); temp _atop (fst (snd av));
+   `(eq a) (eval_id _a); `(eq (Vint i)) (eval_id _i); `(eq b) (eval_id _b))
+   SEP  (`(bn_relate A av); `(data_at Tsh t_struct_bignum_st av a);
+   `(bn_relate B bv); `(data_at Tsh t_struct_bignum_st bv b)))) as PST.
+forward_if PST.
+  subst; normalize. 
+  forward. simpl in *. rewrite H1, H2 in *. simpl in *. inv H0.
+   apply andp_right.
+     unfold bn_relate. destruct A as [dA tA dmA nA].
+     destruct av as [dA' [tA' [dmA' [nA' XA]]]]. destruct B as [dB tB dmB nB].
+     destruct bv as [dB' [tB' [dmB' [nB' XB]]]]. entailer. simpl in *. subst.
+     unfold bn_ucmp. simpl. unfold chunks_relate. admit.
+  unfold bnstate_. normalize. apply (exp_right bv). entailer.
+    apply (exp_right av). entailer.
+normalize.
+forward. entailer. rewrite H2, H3 in *. simpl in *. inv H1.
+  apply (exp_right (Int.sub _id1 _id0)). entailer.
+  destruct A as [dA tA dmA nA]. destruct av as [dA' [tA' [dmA' [nA' XA]]]].
+  destruct B as [dB tB dmB nB]. destruct bv as [dB' [tB' [dmB' [nB' XB]]]].
+  unfold bn_relate. entailer. simpl in *. subst. admit.
+
+subst.
+
+forward_seq.
+subst. forward. apply extract_exists. exp_left. forward.
 eapply semax_seq'.
 ensure_normal_ret_assert;
  hoist_later_in_pre.
-
+Print t_struct_bignum_st.
 match goal with
 | SE := @abbreviate type_id_env.type_id_env _ 
     |- semax ?Delta (|> (PROPx ?P (LOCALx ?Q (SEPx ?R)))) (Sset _ ?e) _ =>
