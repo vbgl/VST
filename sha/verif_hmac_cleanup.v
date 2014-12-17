@@ -12,7 +12,7 @@ Require Import sha.hmac091c.
 
 Require Import sha.spec_hmac.
 
-Lemma isbyte_Nlist i n: isbyteZ i -> Forall isbyteZ (HMAC_SHA256.Nlist i n).
+Lemma isbyte_list_repeat i n: isbyteZ i -> Forall isbyteZ (list_repeat n i).
   intros. apply Forall_forall. intros.
   induction n; simpl in *. contradiction.
   destruct H0. subst. trivial.
@@ -31,7 +31,7 @@ apply semax_pre with (P':=
    LOCAL  (`(eq c) (eval_id _ctx))
    SEP 
    (`(data_at Tsh t_struct_hmac_ctx_st
-        (upd_reptype t_struct_hmac_ctx_st [_md_ctx] hst
+        (upd_reptype t_struct_hmac_ctx_st [StructField _md_ctx] hst
            (default_val t_struct_SHA256state_st)) c))).
   entailer. unfold data_at. simpl. normalize.
 normalize.
@@ -42,14 +42,15 @@ forward_call (Tsh, c, sizeof t_struct_hmac_ctx_st, Int.zero).
     rewrite FR. clear FR Frame.
     entailer.
     eapply derives_trans. apply data_at_data_at_.
-       reflexivity.
+       (*reflexivity.*)
     rewrite <- memory_block_data_at_; try reflexivity.
     entailer. 
+    assumption.
   }
 after_call. subst retval0.
 forward.
 assert (isByte0:  isbyteZ 0). unfold isbyteZ. omega.
-specialize (isbyte_Nlist 0 (Z.to_nat (sizeof t_struct_hmac_ctx_st)) isByte0). 
+specialize (isbyte_list_repeat 0 (Z.to_nat (sizeof t_struct_hmac_ctx_st)) isByte0). 
 unfold data_block. rewrite Zlength_correct; simpl. intros.
 entailer. 
 Qed.
