@@ -52,7 +52,7 @@ forward_if (EX c:_,
   }
 apply extract_exists_pre. intros c. normalize. rename H into isPtrC. 
 eapply semax_seq'.
-myframe_SEP'' (0::1::3::nil).
+myframe_SEP'' [0; 1; 3].
 remember (HMACabs init_s256abs init_s256abs init_s256abs Z0 nil) as dummyHMA.
 remember (c, k, kl, key, KV, dummyHMA) as WITNESS.
 forward_call WITNESS.
@@ -80,7 +80,7 @@ eapply semax_pre with (P':=EX  h : hmacabs,
 apply extract_exists_pre. intros h0. normalize; rename H into HmacInit.
 
 eapply semax_seq'. 
-myframe_SEP'' (0::2::3::nil). 
+myframe_SEP'' [0;2;3]. 
 remember (h0, c, d, dl, data, KV) as WITNESS.
 (*Remark on confusing error messages: if the spec of HMAC_update includes _len OF tuint
   instead of _len OF tint, the following forward_call fails, complaining that
@@ -144,9 +144,7 @@ forward_call WITNESS.
      rewrite FR. clear FR Frame. 
   subst WITNESS. entailer. 
 after_call.
-subst WITNESS. normalize.
-
-normalize. simpl.
+subst WITNESS. normalize. simpl.
 
 apply semax_pre with (P':=EX dig : list Z, EX  h2 : hmacabs,
   (PROP  (hmacFinal h1 dig h2)
@@ -325,9 +323,14 @@ apply sepcon_derives.
 unfold data_block.
   rewrite Zlength_correct; simpl.
 rewrite <- memory_block_data_at_; try reflexivity. 
-(*XXX: was: rewrite memory_block_array_tuchar. *)
+(*XXX: WAS: rewrite memory_block_array_tuchar. 
+  normalize. clear H0. 
+  apply andp_right.
+    apply prop_right. trivial. cancel.
+  simpl; omega.
+NOW:*)
 normalize.
-rewrite (memory_block_data_at_ Tsh (tarray tuchar 392)).
+rewrite (memory_block_data_at_ Tsh (tarray tuchar (sizeof t_struct_hmac_ctx_st))).
   apply data_at_data_at_.
   trivial.
   trivial.

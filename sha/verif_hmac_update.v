@@ -6,7 +6,6 @@ Local Open Scope logic.
 
 Require Import sha.spec_sha.
 Require Import sha_lemmas.
-Require Import sha.HMAC_functional_prog.
 
 Require Import sha.hmac091c.
 Require Import sha.vst_lemmas.
@@ -86,11 +85,11 @@ rename H into HmacUpdate.
 
 (*WHY IS THIS NEEDED?*) unfold MORE_COMMANDS, abbreviate.
 forward.
-apply exp_right with (x:= HMACabs s iSha oSha (Int.unsigned l) key). entailer.
+apply (exp_right (HMACabs s iSha oSha (Int.unsigned l) key)). entailer.
 apply andp_right. apply prop_right. exists s; eauto.
 (*cancel. *)
 unfold hmacstate_, sha256state_, hmac_relate. normalize.
-apply exp_right with (x:=(r, (iCtx ST, (oCtx ST, (Vint l, Key ST))))). 
+apply (exp_right (r, (iCtx ST, (oCtx ST, (Vint l, Key ST))))). 
 simpl. entailer.
 apply andp_right. apply prop_right. exists l; eauto.
 

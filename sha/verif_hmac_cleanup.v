@@ -6,18 +6,11 @@ Local Open Scope logic.
 
 Require Import sha.spec_sha.
 Require Import sha_lemmas.
-Require Import sha.HMAC_functional_prog.
 
 Require Import sha.hmac091c.
 
 Require Import sha.spec_hmac.
-
-Lemma isbyte_list_repeat i n: isbyteZ i -> Forall isbyteZ (list_repeat n i).
-  intros. apply Forall_forall. intros.
-  induction n; simpl in *. contradiction.
-  destruct H0. subst. trivial.
-  apply (IHn H0).
-Qed.
+Require Import sha.hmac_common_lemmas.
 
 Lemma body_hmac_cleanup: semax_body HmacVarSpecs HmacFunSpecs 
        f_HMAC_cleanup HMAC_Cleanup_spec.

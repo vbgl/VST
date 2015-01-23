@@ -6,7 +6,6 @@ Local Open Scope logic.
 
 Require Import sha.spec_sha.
 Require Import sha_lemmas.
-Require Import sha.HMAC_functional_prog.
 
 Require Import sha.hmac091c.
 
@@ -14,6 +13,7 @@ Require Import sha.spec_hmac.
 Require Import vst_lemmas.
 Require Import hmac_pure_lemmas.
 Require Import hmac_common_lemmas.
+Require Import sha.HMAC_functional_prog.
 
 Lemma body_hmac_simple: semax_body HmacVarSpecs HmacFunSpecs 
       f_HMAC HMAC_Simple_spec.
@@ -188,9 +188,14 @@ apply andp_right. apply prop_right. trivial. cancel.
 unfold data_block.
   rewrite Zlength_correct; simpl.
 rewrite <- memory_block_data_at_; try reflexivity. 
-(*XXX: was: rewrite memory_block_array_tuchar. *)
+(*XXX: WAS: rewrite memory_block_array_tuchar. 
+  normalize. clear H1. 
+  apply andp_right.
+    apply prop_right. trivial. cancel.
+  simpl; omega.
+Now need this:*)
 normalize.
-rewrite (memory_block_data_at_ Tsh (tarray tuchar 392)).
+rewrite (memory_block_data_at_ Tsh (tarray tuchar (sizeof t_struct_hmac_ctx_st))).
   apply data_at_data_at_.
   trivial.
   trivial.
