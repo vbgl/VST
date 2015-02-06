@@ -7,69 +7,9 @@ Require Import List. Import ListNotations.
 Require Import sha.pure_lemmas.
 Require Import sha.common_lemmas.
 
+Require Import bn.bn_pure_lemmas.
 Require Import bn.minibn.
 Local Open Scope logic.
-
-Lemma skipn_add {A}: forall t n (ch:list A),
-      skipn (t+n) ch = skipn n (skipn t ch).
-Proof.
-  induction t; simpl. trivial.
-  intros. destruct ch. 
-    rewrite skipn_nil; trivial. 
-  rewrite IHt; trivial.
-Qed.
-
-Lemma firstn_app1 {A}: forall n (l t:list A),
-   (n >= length l)%nat -> firstn n (l++t) = l ++ firstn (n-length l) t.
-Proof. intros n; induction n; simpl; intros.
-  destruct l; simpl in *; trivial. omega.
-  destruct l; simpl in *. trivial. rewrite IHn. trivial. omega.
-Qed.
-
-Lemma firstn_nil {A}: forall m, firstn m (nil:list A) = (nil:list A).
-Proof. intros. rewrite firstn_same. trivial. simpl. omega. Qed.
-
-Lemma skipn_all {A}: forall l, skipn (length l) l = (nil:list A).
-Proof. intros l.
-  induction l; simpl; trivial.
-Qed.
-Lemma skipn_all' {A}: forall n l, (n>=length l)%nat -> skipn n l = (nil:list A).
-Proof. intros n.
-  induction n; simpl; trivial. intros. destruct l; simpl in *; trivial. omega. 
-  intros. destruct l; simpl in *; trivial. apply IHn. omega.
-Qed.
-
-Lemma firstn_list_repeat1 {A} k n (x:A) (N: (n>=k)%nat):
-      firstn n (list_repeat k x) = list_repeat k x.
-Proof.
-  intros. specialize (firstn_app1 n (list_repeat k x) nil).
-  rewrite app_nil_r. intros. rewrite H. 
-   rewrite firstn_nil. apply app_nil_r.
-  rewrite length_list_repeat. apply N. 
-Qed.
-
-Lemma firstn_list_repeat2 {A}: forall k n (x:A) (N: (n<=k)%nat),
-      firstn n (list_repeat k x) = list_repeat n x.
-Proof.
-  intros k.
-  induction k. simpl. intros. destruct n; simpl. trivial. omega.
-  simpl; intros. destruct n; simpl in *.  trivial.
-  rewrite IHk. trivial. omega. 
-Qed.
-
-Lemma firstn_geq {A}: forall k (l:list A),
-    (k>=length l)%nat ->  firstn k l = l.
-Proof. 
-  induction k; simpl; intros. destruct l; trivial. simpl in *; omega.
-destruct l. trivial. f_equal. apply IHk. simpl in *; omega.
-Qed.
-
-Lemma rev_list_repeat {A} (a:A): forall n, rev (list_repeat n a) = list_repeat n a.
-Proof. induction n; simpl; trivial. rewrite IHn; clear IHn.
-specialize (list_repeat_app A); intros Q.
-rewrite (Q n (1%nat)).
-specialize (Q (1%nat) n). rewrite plus_comm in Q. simpl in Q. rewrite Q; trivial.
-Qed.  
 
 Definition Chunk:Type := int.
 Function ch2Z (c:Chunk):Z:= Int.unsigned c.
@@ -199,8 +139,6 @@ Proof. induction l. simpl. omega.
   apply Z.mul_nonneg_nonneg; trivial.
 Qed. 
 
-Lemma zadd_zero_nonneg p q: 0 = p + q -> 0 <=p -> q>= 0 -> p=0 /\ q=0.
-Proof. omega. Qed.
 
 Lemma chunks2Z_0: forall l, 0 = chunks2Z l -> l = list_repeat (length l) Int.zero.
 Proof. induction l. simpl. trivial.
@@ -224,8 +162,6 @@ Proof. unfold normalize_aux. intros. rewrite Int.eq_true. trivial. Qed.
 Lemma normalize_snoc_zero: forall l, normalize (l ++ [Int.zero]) = normalize l.
 Proof. unfold normalize. intros. rewrite rev_app_distr. simpl. trivial. Qed.
 
-Lemma list_nil_length {A} (l:list A): l= [] -> (length l <= 0)%nat.
-Proof. intros. subst. trivial. Qed.
 
 (*Lemma rev_list_repeat {A} (c:A): forall n, rev (list_repeat n c) = list_repeat n c.*)
 
@@ -355,31 +291,43 @@ Definition bn_one : bnabs := BNabs [Int.one] 1 4 false Int.zero.
 Lemma bn_one1: bn2Z bn_one = 1. Proof. reflexivity. Qed.
 
 Definition bn_neg b := match b with BNabs d top dmax neg flags => neg end.
-Check data_at. Eval compute in (reptype t_struct_bignum_st).
+
 Definition bnstate: Type := 
   (val * (val * (val * (val * val))))%type.
-(* d (top (dmax (neg flags)))*)
-(*
-Definition chunks_relate (d: list Chunk) (d': val):mpred := 
-   array_at tuint Tsh (ZnthV tuint (map Vint d)) Z0 (Zlength d) d'.*)
-(*Eval compute in (reptype (tarray tuint (Zlength d))).*)
-Definition chunks_relate (d: list Chunk) (d': val):mpred := 
-   data_at Tsh (tarray tuint (Zlength d)) (map Vint d) d'.
+(* d (top (dsize (neg flags)))*)
+Definition chunks_relate (len:nat) (d: list Chunk) (d': val):mpred := 
+(*   data_at Tsh (tarray tuint (Zlength d)) (map Vint d) d'.*)
+  EX tail:_, !!(length (d++tail)=len) &&
+             data_at Tsh (tarray tuint (Z.of_nat len)) (map Vint (d++tail)) d'.
  
-Definition tops_relate (t:nat) (t':val):Prop := t' = Vint (Int.repr (Z.of_nat t)).
+(*Definition tops_relate (t:nat) (t':val):Prop := t' = Vint (Int.repr (Z.of_nat t)).*)
 
 Definition negs_relate (n:bool) (n':val):Prop := 
   if n then n' = Vint Int.one else exists z, z<>Int.one /\ n'=Vint z.
             
 Definition bn_relate (b: bnabs) (r: bnstate) : mpred :=
-  match b, r with BNabs d t dm n f,
-     (d' ,(t' ,(dm', (n', f'))))  =>
-    chunks_relate d d' &&
-    !! (tops_relate t t' /\ negs_relate n n' /\ t = length d /\ 
-        (t <= dm)%nat /\ dm'=Vint (Int.repr (Z.of_nat dm)))
-    (*no condition for flags (yet*)
+  match b, r with BNabs DATA TOP DSIZE NEG FLAGS,
+     (d ,(top ,(dsize, (neg, flags))))  =>
+    EX topN:_, EX dsizeN:_, EX dsN:_,
+    chunks_relate dsizeN DATA d &&
+    !! (top  = Vint (Int.repr (Z.of_nat topN)) /\
+        dsize = Vint (Int.repr (Z.of_nat dsizeN)) /\
+        dsizeN = (dsN * 4)%nat /\ (*size of the concrete array is a multiple of 4*)
+        negs_relate NEG neg /\ 
+        (topN <= (length DATA) * 4)%nat /\ (*abstract specification DATA has at least as 
+                                             many integers as topN specifies (in words)*)
+        Z.of_nat topN <= Z.of_nat dsizeN < Int.max_unsigned) 
+    (*no condition for flags yet*)
   end.
 
 Definition bnstate_ (b: bnabs) (c: val) : mpred :=
    EX r:bnstate, 
      bn_relate b r * data_at Tsh t_struct_bignum_st r c.
+
+Lemma bn_relate_DMAX_FLAGS_IRRELEVANT DATA TOP DSIZE NEG FLAGS DSIZE' FLAGS' r: 
+      bn_relate (BNabs DATA TOP DSIZE NEG FLAGS) r |-- bn_relate (BNabs DATA TOP DSIZE' NEG FLAGS') r.
+Proof. intros. unfold bn_relate.
+  destruct r as [d [top [dsize [neg flags]]]].
+  normalize. apply (exp_right topN). apply (exp_right (mult dsN 4%nat)).
+  apply (exp_right dsN). entailer.
+Qed.

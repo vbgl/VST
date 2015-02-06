@@ -2,90 +2,91 @@ Require Import Clightdefs.
 
 Local Open Scope Z_scope.
 
-Definition _BN_num_bits : ident := 65%positive.
+Definition _max : ident := 65%positive.
 Definition _BN_is_zero : ident := 40%positive.
 Definition ___compcert_va_int64 : ident := 16%positive.
 Definition _d : ident := 38%positive.
-Definition _should_free : ident := 46%positive.
-Definition _BN_one : ident := 69%positive.
-Definition _l : ident := 62%positive.
-Definition _BN_clear : ident := 54%positive.
+Definition _BN_free : ident := 46%positive.
+Definition _BN_set_word : ident := 69%positive.
+Definition _bits : ident := 62%positive.
+Definition _bn_wexpand : ident := 54%positive.
 Definition ___builtin_fmax : ident := 22%positive.
 Definition ___builtin_va_arg : ident := 12%positive.
-Definition _BN_num_bits_word : ident := 63%positive.
+Definition _l : ident := 63%positive.
 Definition ___builtin_annot_intval : ident := 10%positive.
-Definition _BN_init : ident := 44%positive.
+Definition _BN_new : ident := 44%positive.
 Definition ___builtin_negl : ident := 3%positive.
 Definition ___builtin_write32_reversed : ident := 2%positive.
 Definition ___builtin_write16_reversed : ident := 1%positive.
 Definition _free : ident := 31%positive.
-Definition _bits__1 : ident := 79%positive.
-Definition _words : ident := 72%positive.
-Definition _copy : ident := 49%positive.
-Definition _BN_num_bytes : ident := 66%positive.
-Definition _in : ident := 59%positive.
+Definition _bn_correct_top : ident := 79%positive.
+Definition _BN_is_negative : ident := 72%positive.
+Definition _src : ident := 49%positive.
+Definition _BN_num_bits : ident := 66%positive.
+Definition _out : ident := 59%positive.
 Definition ___builtin_addl : ident := 4%positive.
-Definition _bn_correct_top : ident := 78%positive.
-Definition _BN_set_word : ident := 68%positive.
-Definition _out : ident := 58%positive.
+Definition _tmp_top : ident := 78%positive.
+Definition _BN_zero : ident := 68%positive.
+Definition _BN_value_one : ident := 58%positive.
 Definition ___builtin_read16_reversed : ident := 28%positive.
 Definition ___builtin_fabs : ident := 7%positive.
 Definition ___builtin_fsqrt : ident := 21%positive.
 Definition ___builtin_bswap : ident := 18%positive.
-Definition _BN_free : ident := 45%positive.
-Definition _bn_expand : ident := 80%positive.
+Definition _BN_init : ident := 45%positive.
+Definition _bits__1 : ident := 80%positive.
 Definition ___builtin_va_copy : ident := 13%positive.
 Definition ___builtin_fnmsub : ident := 27%positive.
+Definition _main : ident := 82%positive.
 Definition _memset : ident := 33%positive.
-Definition _const_one : ident := 56%positive.
+Definition _data_one : ident := 56%positive.
 Definition ___builtin_fmsub : ident := 25%positive.
 Definition ___compcert_va_int32 : ident := 15%positive.
-Definition _BN_with_flags : ident := 60%positive.
+Definition _in : ident := 60%positive.
 Definition ___builtin_bswap16 : ident := 20%positive.
 Definition _memcpy : ident := 32%positive.
-Definition _value : ident := 70%positive.
+Definition _BN_one : ident := 70%positive.
 Definition ___builtin_fmadd : ident := 24%positive.
-Definition _BN_zero : ident := 67%positive.
+Definition _BN_num_bytes : ident := 67%positive.
 Definition ___compcert_va_float64 : ident := 17%positive.
 Definition ___builtin_memcpy_aligned : ident := 8%positive.
 Definition ___builtin_subl : ident := 5%positive.
-Definition _a : ident := 73%positive.
-Definition _BN_copy : ident := 50%positive.
-Definition _BN_new : ident := 43%positive.
-Definition _sign : ident := 74%positive.
-Definition _bn_wexpand : ident := 53%positive.
-Definition _BN_clear_free : ident := 47%positive.
-Definition _BN_value_one : ident := 57%positive.
+Definition _words : ident := 73%positive.
+Definition _copy : ident := 50%positive.
+Definition _bn : ident := 43%positive.
+Definition _a : ident := 74%positive.
+Definition _dest : ident := 53%positive.
+Definition _should_free : ident := 47%positive.
+Definition _const_one : ident := 57%positive.
 Definition _dmax : ident := 36%positive.
 Definition ___builtin_va_end : ident := 14%positive.
 Definition ___builtin_mull : ident := 6%positive.
 Definition ___builtin_fnmadd : ident := 26%positive.
 Definition ___builtin_bswap32 : ident := 19%positive.
 Definition _struct_bignum_st : ident := 39%positive.
-Definition _bits : ident := 61%positive.
+Definition _BN_with_flags : ident := 61%positive.
 Definition ___builtin_va_start : ident := 11%positive.
 Definition _top : ident := 37%positive.
-Definition _main : ident := 81%positive.
-Definition _ftl : ident := 76%positive.
-Definition _bn : ident := 42%positive.
+Definition _bn_expand : ident := 81%positive.
+Definition _BN_set_negative : ident := 76%positive.
+Definition _mallocN : ident := 42%positive.
 Definition ___builtin_annot : ident := 9%positive.
-Definition _max : ident := 64%positive.
-Definition _dest : ident := 52%positive.
+Definition _BN_num_bits_word : ident := 64%positive.
+Definition _BN_dup : ident := 52%positive.
 Definition _OPENSSL_cleanse : ident := 41%positive.
-Definition _tmp_top : ident := 77%positive.
-Definition _BN_is_negative : ident := 71%positive.
-Definition _BN_set_negative : ident := 75%positive.
+Definition _ftl : ident := 77%positive.
+Definition _value : ident := 71%positive.
+Definition _sign : ident := 75%positive.
 Definition _flags : ident := 34%positive.
 Definition ___builtin_read32_reversed : ident := 29%positive.
-Definition _data_one : ident := 55%positive.
+Definition _BN_clear : ident := 55%positive.
 Definition _neg : ident := 35%positive.
 Definition _malloc : ident := 30%positive.
 Definition ___builtin_fmin : ident := 23%positive.
-Definition _BN_dup : ident := 51%positive.
-Definition _src : ident := 48%positive.
-Definition _a' : ident := 93%positive.
-Definition _copy' : ident := 84%positive.
-Definition _bn' : ident := 82%positive.
+Definition _BN_copy : ident := 51%positive.
+Definition _BN_clear_free : ident := 48%positive.
+Definition _copy' : ident := 85%positive.
+Definition _bn' : ident := 83%positive.
+Definition _a' : ident := 94%positive.
 
 Definition t_struct_bignum_st :=
    (Tstruct _struct_bignum_st
@@ -150,7 +151,7 @@ Definition f_BN_free := {|
   fn_callconv := cc_default;
   fn_params := ((_bn, (tptr t_struct_bignum_st)) :: nil);
   fn_vars := nil;
-  fn_temps := ((83%positive, tint) :: nil);
+  fn_temps := ((84%positive, tint) :: nil);
   fn_body :=
 (Ssequence
   (Sifthenelse (Ebinop Oeq (Etempvar _bn (tptr t_struct_bignum_st))
@@ -166,7 +167,7 @@ Definition f_BN_free := {|
                      (Ecast (Econst_int (Int.repr 0) tint) (tptr tvoid))
                      tint)
         (Ssequence
-          (Sset 83%positive
+          (Sset 84%positive
             (Ecast
               (Ebinop Oeq
                 (Ebinop Oand
@@ -175,9 +176,9 @@ Definition f_BN_free := {|
                       t_struct_bignum_st) _flags tint)
                   (Econst_int (Int.repr 2) tint) tint)
                 (Econst_int (Int.repr 0) tint) tint) tbool))
-          (Sset 83%positive (Ecast (Etempvar 83%positive tbool) tint)))
-        (Sset 83%positive (Econst_int (Int.repr 0) tint)))
-      (Sifthenelse (Etempvar 83%positive tint)
+          (Sset 84%positive (Ecast (Etempvar 84%positive tbool) tint)))
+        (Sset 84%positive (Econst_int (Int.repr 0) tint)))
+      (Sifthenelse (Etempvar 84%positive tint)
         (Scall None
           (Evar _free (Tfunction (Tcons (tptr tvoid) Tnil) tvoid cc_default))
           ((Efield
@@ -276,7 +277,7 @@ Definition f_BN_dup := {|
   fn_params := ((_src, (tptr t_struct_bignum_st)) :: nil);
   fn_vars := nil;
   fn_temps := ((_copy, (tptr t_struct_bignum_st)) ::
-               (85%positive, (tptr t_struct_bignum_st)) ::
+               (86%positive, (tptr t_struct_bignum_st)) ::
                (_copy', (tptr t_struct_bignum_st)) :: nil);
   fn_body :=
 (Ssequence
@@ -298,7 +299,7 @@ Definition f_BN_dup := {|
         Sskip)
       (Ssequence
         (Ssequence
-          (Scall (Some 85%positive)
+          (Scall (Some 86%positive)
             (Evar _BN_copy (Tfunction
                              (Tcons (tptr t_struct_bignum_st)
                                (Tcons (tptr t_struct_bignum_st) Tnil))
@@ -306,7 +307,7 @@ Definition f_BN_dup := {|
             ((Etempvar _copy (tptr t_struct_bignum_st)) ::
              (Etempvar _src (tptr t_struct_bignum_st)) :: nil))
           (Sifthenelse (Eunop Onotbool
-                         (Etempvar 85%positive (tptr t_struct_bignum_st))
+                         (Etempvar 86%positive (tptr t_struct_bignum_st))
                          tint)
             (Ssequence
               (Scall None
@@ -326,7 +327,7 @@ Definition f_BN_copy := {|
   fn_params := ((_dest, (tptr t_struct_bignum_st)) ::
                 (_src, (tptr t_struct_bignum_st)) :: nil);
   fn_vars := nil;
-  fn_temps := ((86%positive, (tptr t_struct_bignum_st)) :: nil);
+  fn_temps := ((87%positive, (tptr t_struct_bignum_st)) :: nil);
   fn_body :=
 (Ssequence
   (Sifthenelse (Ebinop Oeq (Etempvar _src (tptr t_struct_bignum_st))
@@ -335,7 +336,7 @@ Definition f_BN_copy := {|
     Sskip)
   (Ssequence
     (Ssequence
-      (Scall (Some 86%positive)
+      (Scall (Some 87%positive)
         (Evar _bn_wexpand (Tfunction
                             (Tcons (tptr t_struct_bignum_st)
                               (Tcons tuint Tnil)) (tptr t_struct_bignum_st)
@@ -345,7 +346,7 @@ Definition f_BN_copy := {|
            (Ederef (Etempvar _src (tptr t_struct_bignum_st))
              t_struct_bignum_st) _top tint) :: nil))
       (Sifthenelse (Ebinop Oeq
-                     (Etempvar 86%positive (tptr t_struct_bignum_st))
+                     (Etempvar 87%positive (tptr t_struct_bignum_st))
                      (Ecast (Econst_int (Int.repr 0) tint) (tptr tvoid))
                      tint)
         (Sreturn (Some (Ecast (Econst_int (Int.repr 0) tint) (tptr tvoid))))
@@ -670,7 +671,7 @@ Definition f_BN_num_bits := {|
   fn_callconv := cc_default;
   fn_params := ((_bn, (tptr t_struct_bignum_st)) :: nil);
   fn_vars := nil;
-  fn_temps := ((_max, tint) :: (88%positive, tuint) :: (87%positive, tint) ::
+  fn_temps := ((_max, tint) :: (89%positive, tuint) :: (88%positive, tint) ::
                nil);
   fn_body :=
 (Ssequence
@@ -681,15 +682,15 @@ Definition f_BN_num_bits := {|
         _top tint) (Econst_int (Int.repr 1) tint) tint))
   (Ssequence
     (Ssequence
-      (Scall (Some 87%positive)
+      (Scall (Some 88%positive)
         (Evar _BN_is_zero (Tfunction (Tcons (tptr t_struct_bignum_st) Tnil)
                             tint cc_default))
         ((Etempvar _bn (tptr t_struct_bignum_st)) :: nil))
-      (Sifthenelse (Etempvar 87%positive tint)
+      (Sifthenelse (Etempvar 88%positive tint)
         (Sreturn (Some (Econst_int (Int.repr 0) tint)))
         Sskip))
     (Ssequence
-      (Scall (Some 88%positive)
+      (Scall (Some 89%positive)
         (Evar _BN_num_bits_word (Tfunction (Tcons tuint Tnil) tuint
                                   cc_default))
         ((Ederef
@@ -701,7 +702,7 @@ Definition f_BN_num_bits := {|
       (Sreturn (Some (Ebinop Oadd
                        (Ebinop Omul (Etempvar _max tint)
                          (Econst_int (Int.repr 32) tint) tint)
-                       (Etempvar 88%positive tuint) tuint))))))
+                       (Etempvar 89%positive tuint) tuint))))))
 |}.
 
 Definition f_BN_num_bytes := {|
@@ -709,15 +710,15 @@ Definition f_BN_num_bytes := {|
   fn_callconv := cc_default;
   fn_params := ((_bn, (tptr t_struct_bignum_st)) :: nil);
   fn_vars := nil;
-  fn_temps := ((89%positive, tuint) :: nil);
+  fn_temps := ((90%positive, tuint) :: nil);
   fn_body :=
 (Ssequence
-  (Scall (Some 89%positive)
+  (Scall (Some 90%positive)
     (Evar _BN_num_bits (Tfunction (Tcons (tptr t_struct_bignum_st) Tnil)
                          tuint cc_default))
     ((Etempvar _bn (tptr t_struct_bignum_st)) :: nil))
   (Sreturn (Some (Ebinop Odiv
-                   (Ebinop Oadd (Etempvar 89%positive tuint)
+                   (Ebinop Oadd (Etempvar 90%positive tuint)
                      (Econst_int (Int.repr 7) tint) tuint)
                    (Econst_int (Int.repr 8) tint) tuint))))
 |}.
@@ -727,19 +728,19 @@ Definition f_BN_zero := {|
   fn_callconv := cc_default;
   fn_params := ((_bn, (tptr t_struct_bignum_st)) :: nil);
   fn_vars := nil;
-  fn_temps := ((90%positive, tint) :: nil);
+  fn_temps := ((91%positive, tint) :: nil);
   fn_body :=
 (Ssequence
   (Ssequence
-    (Sset 90%positive (Econst_int (Int.repr 0) tint))
+    (Sset 91%positive (Econst_int (Int.repr 0) tint))
     (Sassign
       (Efield
         (Ederef (Etempvar _bn (tptr t_struct_bignum_st)) t_struct_bignum_st)
-        _neg tint) (Etempvar 90%positive tint)))
+        _neg tint) (Etempvar 91%positive tint)))
   (Sassign
     (Efield
       (Ederef (Etempvar _bn (tptr t_struct_bignum_st)) t_struct_bignum_st)
-      _top tint) (Ecast (Etempvar 90%positive tint) tint)))
+      _top tint) (Ecast (Etempvar 91%positive tint) tint)))
 |}.
 
 Definition f_BN_one := {|
@@ -747,16 +748,16 @@ Definition f_BN_one := {|
   fn_callconv := cc_default;
   fn_params := ((_bn, (tptr t_struct_bignum_st)) :: nil);
   fn_vars := nil;
-  fn_temps := ((91%positive, tint) :: nil);
+  fn_temps := ((92%positive, tint) :: nil);
   fn_body :=
 (Ssequence
-  (Scall (Some 91%positive)
+  (Scall (Some 92%positive)
     (Evar _BN_set_word (Tfunction
                          (Tcons (tptr t_struct_bignum_st) (Tcons tuint Tnil))
                          tint cc_default))
     ((Etempvar _bn (tptr t_struct_bignum_st)) ::
      (Econst_int (Int.repr 1) tint) :: nil))
-  (Sreturn (Some (Etempvar 91%positive tint))))
+  (Sreturn (Some (Etempvar 92%positive tint))))
 |}.
 
 Definition f_BN_set_word := {|
@@ -764,7 +765,7 @@ Definition f_BN_set_word := {|
   fn_callconv := cc_default;
   fn_params := ((_bn, (tptr t_struct_bignum_st)) :: (_value, tuint) :: nil);
   fn_vars := nil;
-  fn_temps := ((92%positive, (tptr t_struct_bignum_st)) :: nil);
+  fn_temps := ((93%positive, (tptr t_struct_bignum_st)) :: nil);
   fn_body :=
 (Ssequence
   (Sifthenelse (Ebinop Oeq (Etempvar _value tuint)
@@ -778,7 +779,7 @@ Definition f_BN_set_word := {|
     Sskip)
   (Ssequence
     (Ssequence
-      (Scall (Some 92%positive)
+      (Scall (Some 93%positive)
         (Evar _bn_wexpand (Tfunction
                             (Tcons (tptr t_struct_bignum_st)
                               (Tcons tuint Tnil)) (tptr t_struct_bignum_st)
@@ -786,7 +787,7 @@ Definition f_BN_set_word := {|
         ((Etempvar _bn (tptr t_struct_bignum_st)) ::
          (Econst_int (Int.repr 1) tint) :: nil))
       (Sifthenelse (Ebinop Oeq
-                     (Etempvar 92%positive (tptr t_struct_bignum_st))
+                     (Etempvar 93%positive (tptr t_struct_bignum_st))
                      (Ecast (Econst_int (Int.repr 0) tint) (tptr tvoid))
                      tint)
         (Sreturn (Some (Econst_int (Int.repr 0) tint)))
@@ -861,8 +862,8 @@ Definition f_bn_wexpand := {|
       (Ssequence
         (Ssequence
           (Scall (Some _a')
-            (Evar _malloc (Tfunction (Tcons tuint Tnil) (tptr tvoid)
-                            cc_default))
+            (Evar _mallocN (Tfunction (Tcons tint Tnil) (tptr tvoid)
+                             cc_default))
             ((Ebinop Omul (Econst_int (Int.repr 4) tuint)
                (Etempvar _words tuint) tuint) :: nil))
           (Sset _a (Ecast (Etempvar _a' (tptr tvoid)) (tptr tuint))))
@@ -918,21 +919,21 @@ Definition f_BN_set_negative := {|
   fn_callconv := cc_default;
   fn_params := ((_bn, (tptr t_struct_bignum_st)) :: (_sign, tint) :: nil);
   fn_vars := nil;
-  fn_temps := ((95%positive, tint) :: (94%positive, tint) :: nil);
+  fn_temps := ((96%positive, tint) :: (95%positive, tint) :: nil);
   fn_body :=
 (Ssequence
   (Sifthenelse (Etempvar _sign tint)
     (Ssequence
       (Ssequence
-        (Scall (Some 95%positive)
+        (Scall (Some 96%positive)
           (Evar _BN_is_zero (Tfunction (Tcons (tptr t_struct_bignum_st) Tnil)
                               tint cc_default))
           ((Etempvar _bn (tptr t_struct_bignum_st)) :: nil))
-        (Sset 94%positive
-          (Ecast (Eunop Onotbool (Etempvar 95%positive tint) tint) tbool)))
-      (Sset 94%positive (Ecast (Etempvar 94%positive tbool) tint)))
-    (Sset 94%positive (Econst_int (Int.repr 0) tint)))
-  (Sifthenelse (Etempvar 94%positive tint)
+        (Sset 95%positive
+          (Ecast (Eunop Onotbool (Etempvar 96%positive tint) tint) tbool)))
+      (Sset 95%positive (Ecast (Etempvar 95%positive tbool) tint)))
+    (Sset 95%positive (Econst_int (Int.repr 0) tint)))
+  (Sifthenelse (Etempvar 95%positive tint)
     (Sassign
       (Efield
         (Ederef (Etempvar _bn (tptr t_struct_bignum_st)) t_struct_bignum_st)
@@ -949,7 +950,7 @@ Definition f_bn_correct_top := {|
   fn_params := ((_bn, (tptr t_struct_bignum_st)) :: nil);
   fn_vars := nil;
   fn_temps := ((_ftl, (tptr tuint)) :: (_tmp_top, tint) ::
-               (96%positive, (tptr tuint)) :: nil);
+               (97%positive, (tptr tuint)) :: nil);
   fn_body :=
 (Ssequence
   (Sset _tmp_top
@@ -978,11 +979,11 @@ Definition f_bn_correct_top := {|
               Sbreak)
             (Ssequence
               (Ssequence
-                (Sset 96%positive (Etempvar _ftl (tptr tuint)))
+                (Sset 97%positive (Etempvar _ftl (tptr tuint)))
                 (Sset _ftl
-                  (Ebinop Osub (Etempvar 96%positive (tptr tuint))
+                  (Ebinop Osub (Etempvar 97%positive (tptr tuint))
                     (Econst_int (Int.repr 1) tint) (tptr tuint))))
-              (Sifthenelse (Ederef (Etempvar 96%positive (tptr tuint)) tuint)
+              (Sifthenelse (Ederef (Etempvar 97%positive (tptr tuint)) tuint)
                 Sbreak
                 Sskip)))
           (Sset _tmp_top
@@ -1000,10 +1001,10 @@ Definition f_bn_expand := {|
   fn_callconv := cc_default;
   fn_params := ((_bn, (tptr t_struct_bignum_st)) :: (_bits__1, tuint) :: nil);
   fn_vars := nil;
-  fn_temps := ((97%positive, (tptr t_struct_bignum_st)) :: nil);
+  fn_temps := ((98%positive, (tptr t_struct_bignum_st)) :: nil);
   fn_body :=
 (Ssequence
-  (Scall (Some 97%positive)
+  (Scall (Some 98%positive)
     (Evar _bn_wexpand (Tfunction
                         (Tcons (tptr t_struct_bignum_st) (Tcons tuint Tnil))
                         (tptr t_struct_bignum_st) cc_default))
@@ -1014,7 +1015,7 @@ Definition f_bn_expand := {|
            (Econst_int (Int.repr 32) tint) tuint)
          (Econst_int (Int.repr 1) tint) tuint)
        (Econst_int (Int.repr 32) tint) tuint) :: nil))
-  (Sreturn (Some (Etempvar 97%positive (tptr t_struct_bignum_st)))))
+  (Sreturn (Some (Etempvar 98%positive (tptr t_struct_bignum_st)))))
 |}.
 
 Definition prog : Clight.program := {|
@@ -1169,7 +1170,12 @@ prog_defs :=
    Gfun(External (EF_external _OPENSSL_cleanse
                    (mksignature (AST.Tint :: AST.Tint :: nil) None
                      cc_default)) (Tcons (tptr tvoid) (Tcons tuint Tnil))
-     tvoid cc_default)) :: (_BN_new, Gfun(Internal f_BN_new)) ::
+     tvoid cc_default)) ::
+ (_mallocN,
+   Gfun(External (EF_external _mallocN
+                   (mksignature (AST.Tint :: nil) (Some AST.Tint) cc_default))
+     (Tcons tint Tnil) (tptr tvoid) cc_default)) ::
+ (_BN_new, Gfun(Internal f_BN_new)) ::
  (_BN_init, Gfun(Internal f_BN_init)) ::
  (_BN_free, Gfun(Internal f_BN_free)) ::
  (_BN_clear_free, Gfun(Internal f_BN_clear_free)) ::

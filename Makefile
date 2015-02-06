@@ -157,7 +157,7 @@ SHA_FILES= \
   verif_addlength.v verif_SHA256.v
 
 HMAC_FILES= \
-  HMAC_functional_prog.v HMAC_lemmas.v \
+  HMAC_functional_prog.v vst_lemmas.v hmac_pure_lemmas.v hmac_common_lemmas.v \
   hmac091c.v spec_hmac.v verif_hmac_cleanup.v \
   verif_hmac_init_part1.v verif_hmac_init.v \
   verif_hmac_update.v verif_hmac_final.v verif_hmac_simple.v \
@@ -170,13 +170,13 @@ HMAC_FILES= \
   verif_hmacADT_init_part1.v verif_hmacADT_init.v \
   verif_hmacADT_update.v verif_hmacADT_final.v verif_hmacADT_simple.v \
   verif_hmacADT_double.v
-#  HMAC_refined_fp.v hmac_sha256.v HMAC_definitions.v \
+#  HMAC_lemmas.v HMAC_refined_fp.v hmac_sha256.v HMAC_definitions.v \
 #  HMAC_part2GT.v HMAC_part2LE.v \
 #  HMAC_LoopBodyGT.v HMAC_LoopBodyLE.v \
 #  HMAC_proofLE.v HMAC_proof.v
 
 BN_FILES= \
-  minibn.v minibn_cmp.v minibn_generic.v minimem.v BN_repr.v
+  bn_pure_lemmas.v minibn.v minibn_cmp.v minibn_generic.v minimem.v BN_repr.v
 
 C_FILES = reverse.c queue.c sumarray.c message.c insertionsort.c float.c nest3.c nest2.c nest3.c dotprod.c string.c field_loadstore.c
 

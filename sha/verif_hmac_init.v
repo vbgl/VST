@@ -14,20 +14,154 @@ Require Import hmac_common_lemmas.
 
 Require Import sha.hmac091c.
 
-Definition initPostKeyNullConditional r (c:val) (k: val) h key : mpred:=
-  match k with
-    Vint z => if Int.eq z Int.zero
-              then if zeq r Z0 then hmacstate_PreInitNull key h c else FF
-              else FF
-  | Vptr b ofs => if zeq r 0 then FF 
-                  else !!(Forall isbyteZ key) &&
-                    ((data_at Tsh t_struct_hmac_ctx_st (keyedHMS key) c) *
-                    (data_at Tsh (tarray tuchar (Zlength key)) (map Vint (map Int.repr key))
-(*                    (array_at Tsh tuchar 0 (Zlength key)  (map Vint (map Int.repr key)) *)
-                      (Vptr b ofs)))
-  | _ => FF
-  end.
-(*Require Import sha.verif_hmac_init_part1.*)
+Require Import sha.verif_hmac_init_part1.
+(*updconents = (upd contents vi (valinject _ v2)) *)
+(*Lemma semax_loadstore_array':
+  forall {Espec: OracleKind},
+ forall vi lo hi t1 gfs contents updcontents v1 v2 (Delta: tycontext) e1 e2 sh P P', 
+   writable_share sh ->
+   reptype t1 = val -> 
+   type_is_by_value t1 ->
+   legal_alignas_type t1 = true ->
+   typeof e1 = t1 ->
+   tc_val t1 v2 ->
+   in_range lo hi vi ->
+   P |--  rel_lvalue e1  (eval_binop Oadd (tptr t1) tint v1 (Vint (Int.repr vi)) )
+           && rel_expr (Ecast e2 t1) v2 
+           && (`(array_at sh t1 gfs lo hi contents v1) * P') ->
+   @semax Espec Delta (|> P) (Sassign e1 e2) 
+          (normal_ret_assert (`(array_at sh t1 gfs lo hi updcontents v1) * P')).
+Proof.
+intros until 2. intros BYVAL LAT H1 TCV RANGE H2. 
+  eapply semax_pre_post; [| | eapply semax_loadstore]; try eassumption.
+  apply andp_left2; apply derives_refl.
+ intros.
+Focus 2.
+ rewrite H1.
+ repeat rewrite prop_true_andp by auto.
+ rewrite <- (andp_dup P).
+ eapply derives_trans.
+ apply andp_derives. apply H2. apply derives_refl.
+ instantiate (4:=v2).
+(* normalize. *)
+ apply andp_right.
+ apply andp_right.
+ apply andp_right. entailer.
+ apply andp_left1. apply andp_left1. apply andp_left1. apply derives_refl.
+ apply andp_left1. apply andp_left1. apply andp_left2. apply derives_refl.
+ intro rho. unfold_lift. simpl.
+ apply andp_left1. apply andp_left2.
+ erewrite (split3_array_at sh t1 gfs lo vi). contents hi v1 (repinject _ (contents vi))); auto.
+ rewrite (sepcon_comm (array_at t1 sh contents lo vi v1)).
+ repeat rewrite sepcon_assoc.
+ apply sepcon_derives.
+ apply derives_refl.
+ repeat rewrite <- sepcon_assoc.
+ apply sepcon_derives; [ |  apply derives_refl].
+ apply sepcon_derives; apply derives_refl'; apply equal_f; apply array_at_ext; intros;
+ rewrite upd_neq by omega; auto.
+ clear - H0 BYVAL.
+ destruct t1; try contradiction.
+ destruct i,s; reflexivity.
+ destruct s; reflexivity.
+ destruct f; reflexivity.
+ reflexivity.
+*
+ apply andp_left2.
+ apply normal_ret_assert_derives'.
+ intro rho.
+ unfold_lift; simpl.
+  rewrite H1.
+   rewrite <- field_at_Tarray.
+ match goal with |- ?A |-- _ => set (XX := A) end.
+  rewrite (split3_array_at' sh t1 vi (*(upd contents vi (valinject t1 v2))*) lo hi updcontents v1 v2); auto.
+ 2: rewrite upd_eq; apply valinject_JMeq; auto.
+ rewrite (sepcon_comm (array_at t1 sh (upd contents vi (valinject t1 v2)) lo vi v1)).
+ repeat rewrite sepcon_assoc.
+ unfold XX; clear XX.
+ apply derives_refl.
+*
+ rewrite H1.
+ repeat rewrite prop_true_andp by auto.
+ rewrite <- (andp_dup P).
+ eapply derives_trans.
+ apply andp_derives. apply H2. apply derives_refl.
+(* normalize. *)
+ apply andp_right.
+ apply andp_right.
+ apply andp_left1. apply andp_left1. apply andp_left1. apply derives_refl.
+ apply andp_left1. apply andp_left1. apply andp_left2. apply derives_refl.
+ intro rho. unfold_lift. simpl.
+ apply andp_left1. apply andp_left2.
+ rewrite (split3_array_at' vi t1 sh contents lo hi v1 (repinject _ (contents vi))); auto.
+ rewrite (sepcon_comm (array_at t1 sh contents lo vi v1)).
+ repeat rewrite sepcon_assoc.
+ apply sepcon_derives.
+ apply derives_refl.
+ repeat rewrite <- sepcon_assoc.
+ apply sepcon_derives; [ |  apply derives_refl].
+ apply sepcon_derives; apply derives_refl'; apply equal_f; apply array_at_ext; intros;
+ rewrite upd_neq by omega; auto.
+ clear - H0 BYVAL.
+ destruct t1; try contradiction.
+ destruct i,s; reflexivity.
+ destruct s; reflexivity.
+ destruct f; reflexivity.
+ reflexivity.
+Qed.
+
+(*(upd contents vi (valinject _ v2))*)
+Lemma NEWsemax_loadstore_array:
+  forall {Espec: OracleKind},
+ forall n k gfs vi lo hi t1 (contents updcontents:list (reptype (nested_field_type2 t1 (ArraySubsc 0 :: gfs)))) 
+        v1 v2 (Delta: tycontext) e1 ei e2 sh P Q R, 
+  (*H0*) reptype t1 = val -> 
+  (*H1*) type_is_by_value t1 ->
+  (*H2*) legal_alignas_type t1 = true ->
+  (*H3*) typeof e1 = tarray t1 k->
+  (*H4*) typeof ei = tint ->
+  (*H8*) PROPx P (LOCALx Q (SEPx R)) |--  rel_expr e1 v1 && rel_expr ei (Vint (Int.repr vi))
+           && rel_expr (Ecast e2 t1) v2 ->
+  (*H7*) nth_error R n = Some (`(array_at sh t1 gfs lo hi contents v1)) ->
+  (*H *) writable_share sh ->
+  (*H5*) tc_val t1 v2 ->
+  (*H6*) in_range lo hi vi ->
+   @semax Espec Delta (|> PROPx P (LOCALx Q (SEPx R))) (Sassign (Ederef (Ebinop Oadd e1 ei (tptr t1)) t1) e2) 
+          (normal_ret_assert 
+           (PROPx P (LOCALx Q (SEPx 
+            (replace_nth n R `(array_at sh t1 gfs lo hi updcontents v1)))))).
+Proof. 
+intros until R.
+intros H0 H1 H2 H3 H4 H8 H7 H H5 H6.
+eapply semax_post_flipped'.
+apply semax_loadstore_array'; eauto.
+apply derives_trans with (!! isptr v1 && PROPx P (LOCALx Q (SEPx R))).
+rewrite (SEP_nth_isolate _ _ _ H7).
+repeat rewrite <- insert_SEP.
+rewrite array_at_isptr. normalize.
+normalize.
+destruct v1; try contradiction.
+instantiate (2:=v1).
+simpl eval_binop. rewrite mul_repr.
+apply andp_right; auto.
+eapply derives_trans; [ apply H8 |].
+intro rho. simpl.
+repeat apply andp_right.
+apply rel_lvalue_deref.
+eapply rel_expr_binop.
+repeat apply andp_left1. apply derives_refl.
+apply andp_left1. apply andp_left2. apply derives_refl.
+intro; rewrite H4; simpl. rewrite H3; simpl. 
+  unfold Cop.sem_add; simpl. rewrite mul_repr. auto.
+ apply andp_left2. auto.
+rewrite (SEP_nth_isolate _ _ _ H7).
+repeat rewrite <- insert_SEP.
+apply derives_refl.
+rewrite (SEP_replace_nth_isolate _ _ _ `(array_at t1 sh (upd contents vi (valinject t1 v2)) lo hi v1) H7).
+rewrite insert_SEP.
+auto.
+Qed.*)
+
 (*
 Lemma ZnthV_map_Vint_is_int_I8: forall l (i : Z) ,
        0 <= i < Zlength l -> 
@@ -121,6 +255,21 @@ Definition postResetHMS key (iS oS: s256state): hmacstate :=
    (if zlt 64 (Zlength key) then Vint (Int.repr 32) else Vint (Int.repr (Zlength key)), 
    map Vint (map Int.repr (HMAC_SHA256.mkKey key)))))).
 
+Lemma Tarray_emp_field_compatible b ofs: field_compatible (Tarray tuchar 0 noattr) [] (Vptr b ofs).
+        Proof. split; simpl. trivial. split. reflexivity. split. reflexivity.
+          split. apply (size_0_compatible (Tarray tuchar 0 noattr) (eq_refl _) (Vptr b ofs)).
+          split. apply Z.divide_1_l.
+          constructor; simpl; trivial.
+        Qed. 
+        
+Lemma data_Tarray_array_at_emp C b ofs: data_at Tsh (Tarray tuchar 0 noattr) C (Vptr b ofs)
+                  = !!field_compatible (Tarray tuchar 0 noattr) [] (Vptr b ofs) && emp.
+        Proof.
+          rewrite data_at_field_at.
+          erewrite field_at_Tarray. 2: reflexivity. 2: apply JMeq.JMeq_refl.
+          rewrite array_at_emp; trivial. omega.
+        Qed.
+
 Lemma body_hmac_init: semax_body HmacVarSpecs HmacFunSpecs 
        f_HMAC_Init HMAC_Init_spec.
 Proof.
@@ -155,7 +304,7 @@ forward_seq. instantiate (1:= PostKeyNull). (*eapply semax_seq.*)
 { assert (DD: Delta = initialized _reset 
                (func_tycontext f_HMAC_Init HmacVarSpecs HmacFunSpecs)) by reflexivity.
   rewrite DD; clear DD.
-  admit. (*eapply hmac_init_part1; eassumption.*)
+  eapply hmac_init_part1; eassumption.
 }
 subst PostKeyNull. normalize.
 apply extract_exists_pre; intros cb. 
@@ -166,7 +315,6 @@ normalize. rename H into HC; rewrite HC. rename H0 into R.
 
 (*isolate branch if (reset) *)
 apply seq_assoc.
-
 Definition initPostResetConditional r (c:val) (k: val) h key iS oS: mpred:=
   match k with
     Vint z => if Int.eq z Int.zero
@@ -291,21 +439,25 @@ eapply semax_seq. instantiate (1:=PostResetBranch).
              (Vptr kb kofs)); `(K_vector KV)))).
       { (*precondition implies "invariant"*) 
         clear HeqPostResetBranch.
-        entailer. cancel.
-        admit. (*XXX: TODO: rewrite array_at_emp. normalize. array_at_emp
-        rewrite array_at_local_facts''. entailer. cancel.*)
+        entailer. cancel. 
+        rewrite data_Tarray_array_at_emp. 
+        specialize (Tarray_emp_field_compatible pb pofs); intros. entailer.
       }
       { unfold normal_ret_assert. simpl. intros rho. entailer. cancel.
-        admit. (*rewrite array_at_emp. entailer.*)
+        rewrite data_Tarray_array_at_emp. entailer.
       }
-      { admit. (* unfold_data_at 3%nat. normalize. 
+      { unfold_data_at 3%nat. normalize. 
         rewrite (field_at_data_at Tsh t_struct_hmac_ctx_st [StructField _key]); try reflexivity.
-        normalize. rename H into I. (*rename H0 into SCc. rename H1 into ACc.*)
+        normalize. 
+        rename H into I. (*rename H0 into SCc. rename H1 into ACc.*)
         (*rewrite at_offset'_eq.
         2: simpl; rewrite Int.add_zero; reflexivity.*)
         eapply semax_pre0; [ apply now_later | ].
         eapply semax_post_flipped'.
-        { subst PostResetBranch.
+        { subst PostResetBranch. eapply semax_data_store_nth.
+          eapply semax_pre'. semax_store_nth.
+          eapply semax_pre.
+          WITH x12: (t1 * t2)%type
           remember (ZnthV tuchar (map Vint (map Int.repr (HMAC_SHA256.mkKey key))) i) as CONTi.
           unfold ZnthV in CONTi. destruct (nth_mapVintZ i (HMAC_SHA256.mkKey key)) as [N HN].
               rewrite Zlength_correct, mkKey_length. unfold SHA256.BlockSize; simpl. 

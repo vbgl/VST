@@ -65,6 +65,8 @@
 #include "internal.h"
 */
 
+extern void *mallocN (int n);
+
 BIGNUM *BN_new(void) {
   BIGNUM *bn = malloc(sizeof(BIGNUM));
 
@@ -286,7 +288,7 @@ BIGNUM *bn_wexpand(BIGNUM *bn, unsigned words) {
     return NULL;
   }
 
-  a = (BN_ULONG *)malloc(sizeof(BN_ULONG) * words);
+  a = (BN_ULONG *)mallocN(sizeof(BN_ULONG) * words);
   if (a == NULL) {
     //OPENSSL_PUT_ERROR(BN, bn_wexpand, ERR_R_MALLOC_FAILURE);
     return NULL;
