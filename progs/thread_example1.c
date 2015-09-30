@@ -36,9 +36,9 @@ void* f(void *args) {
 int main (void) {
   struct ab *ab = (struct ab*)malloc(sizeof(struct ab));
   int a, b;
-  lock_t l;
+  void *l;
   /* printf("%lu\n", sizeof(struct ab)); */
-  l = new_lock();
+  l = (void*)new_lock();
   make_lock(l);
   ab->lock = l;
   ab->a = 1;

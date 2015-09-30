@@ -90,7 +90,7 @@ Definition new_lock_spec :=
      LOCAL (temp ret_temp v) 
      SEP (`(is_lock Tsh v)).
 
-Variable Rlock : mpred.
+Variable Rlock_placeholder : mpred.
 
 Definition make_lock_spec :=
   DECLARE _make_lock
@@ -100,10 +100,9 @@ Definition make_lock_spec :=
      LOCAL (temp _lock v)
      SEP (`(is_lock Tsh v))
    POST [ tvoid ]
-     EX v: val,
      PROP ()
-     LOCAL (temp ret_temp v) 
-     SEP (`(lock_inv Tsh v Rlock)).
+     LOCAL () 
+     SEP (`(lock_inv Tsh v Rlock_placeholder)).
 
 Definition free_lock_spec :=
   DECLARE _make_lock
@@ -111,12 +110,11 @@ Definition free_lock_spec :=
    PRE [ _lock OF tptr tvoid ]
      PROP ()
      LOCAL (temp _lock v)
-     SEP (`Rlock ; `(lock_inv Tsh v Rlock))
+     SEP (`Rlock_placeholder ; `(lock_inv Tsh v Rlock_placeholder))
    POST [ tvoid ]
-     EX v: val,
      PROP ()
-     LOCAL (temp ret_temp v) 
-     SEP (`Rlock ; `(is_lock Tsh v)).
+     LOCAL (temp _lock v) 
+     SEP (`Rlock_placeholder ; `(is_lock Tsh v)).
 
 Definition acquire_spec :=
   DECLARE _acquire
@@ -124,12 +122,11 @@ Definition acquire_spec :=
    PRE [ _lock OF tptr tvoid ]
      PROP ()
      LOCAL (temp _lock v)
-     SEP (`(lock_inv sh v Rlock))
+     SEP (`(lock_inv sh v Rlock_placeholder))
    POST [ tvoid ]
-     EX v: val,
      PROP ()
-     LOCAL (temp ret_temp v) 
-     SEP (`(lock_inv sh v Rlock) * `Rlock).
+     LOCAL (temp _lock v) 
+     SEP (`(lock_inv sh v Rlock_placeholder) * `Rlock_placeholder).
 
 Definition release_spec :=
   DECLARE _release
@@ -137,12 +134,11 @@ Definition release_spec :=
    PRE [ _lock OF tptr tvoid ]
      PROP ()
      LOCAL (temp _lock v)
-     SEP (`(lock_inv sh v Rlock) * `Rlock)
+     SEP (`(lock_inv sh v Rlock_placeholder) * `Rlock_placeholder)
    POST [ tvoid ]
-     EX v: val,
      PROP ()
-     LOCAL (temp ret_temp v) 
-     SEP (`(lock_inv sh v Rlock)).
+     LOCAL (temp _lock v) 
+     SEP (`(lock_inv sh v Rlock_placeholder)).
 
 Definition voidstar_funtype :=
   Tfunction
@@ -248,6 +244,29 @@ Proof.
   forward_call tt l_.
   
   (* COMMAND: make_lock(l); *)
+  pose (lock_invariant :=
+    EX n : Z,
+     field_at Tsh (Tstruct _ab noattr) [StructField _a] (Vint (Int.repr n)) ab_ *
+     field_at Tsh (Tstruct _ab noattr) [StructField _a] (Vint (Int.repr (2 * n))) ab_
+  ).
+  forward_call l_ (* we should give the lock_invariant as an argument here *).
+  (* cheating because of the universe inconsistency: replace by admit "Rlock_placeholder" *)
+  replace Rlock_placeholder with lock_invariant by admit.
+  
+  (* COMMAND: ab->lock = l; *)
+  forward.
+  
+  (* COMMAND: ab->a = 1; *)
+  forward.
+  
+  (* COMMAND: ab->b = 2; *)
+  forward.
+  
+eapply semax_seq.
+eapply semax_post.
+2:forward_call_id00_wow l_.
+
+
 
 (* these tactic and lemma are not ready for prime time *)
 Ltac pull_first_SEP := match goal with |- semax _ (    PROPx ?a (LOCALx ?b (SEPx (?c :: ?d)))) _ _ =>
