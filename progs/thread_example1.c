@@ -37,7 +37,7 @@ int main (void) {
   struct ab *ab = (struct ab*)malloc(sizeof(struct ab));
   int a, b;
   void *l;
-  void *(*pf)(void*);
+  /* void *(*pf)(void*); */
   /* printf("%lu\n", sizeof(struct ab)); */
   l = (void*)new_lock();
   make_lock(l);
@@ -46,8 +46,8 @@ int main (void) {
   ab->b = 2;
   release(l);
   
-  pf=&f; /* we don't need this, but this is easier to debug */
-  spawn_thread(pf, (void*)ab);
+  /* pf=&f; /\* we don't need this, but this is easier to debug *\/ */
+  spawn_thread(&f, (void*)ab);
   
   acquire(l);
   a = ab->a;
