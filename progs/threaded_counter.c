@@ -1,8 +1,10 @@
+/*#include <stdio.h>
+ */
 #include <pthread.h>
-
+#include "threads.h"
 
 /* the lock*/
-pthread_mutex_t ctr_mutex = PTHREAD_MUTEX_INITIALIZER;
+lock_t ctr_lock;
 
 /* The counter part */
 
@@ -14,13 +16,13 @@ void reset() {
   *ctr0 = 0;
 }
 
-void *incr() {
-   pthread_mutex_lock( &ctr_mutex );
+void incr() {
+  /* acquire( &ctr_lock ); */
    int* ctr0 = ctr;
    int t = *ctr0;
-   *ctr0 = t +2;
-   /* printf("Counter is: %d \n", *ctr); */
-   pthread_mutex_unlock( &ctr_mutex );
+   *ctr0 = t +1;
+   /* printf("Counter is: %d \n", *ctr);
+    */
 }
 
 int read() {
@@ -30,10 +32,20 @@ int read() {
 }
 
 /* The threaded part */
-void *thread_incr(void *arg) {
-   pthread_mutex_t *thread_mutex_ptr = (pthread_mutex_t *)arg;
-   incr();
-   pthread_mutex_unlock( thread_mutex_ptr );
+
+void concurrent_incr() {
+  lock_t *ctr_lock_ptr = &ctr_lock; 
+  acquire(ctr_lock_ptr);
+  incr();
+  release(ctr_lock_ptr);
+}
+
+void *thread_func(void *arg) {
+  lock_t *thread_mutex_ptr;
+  thread_mutex_ptr = (lock_t *)arg;
+   concurrent_incr();
+   release( thread_mutex_ptr );
+   return NULL;
 }
 
 int  main(void)
@@ -41,20 +53,21 @@ int  main(void)
   
    /* ctr = 0 */
    reset();
-   int rc1;
-   pthread_mutex_t thread_mutex = PTHREAD_MUTEX_INITIALIZER;
-   pthread_mutex_lock( &thread_mutex );
-   pthread_t thread1;
+   makelock(&ctr_lock);
+   release(&ctr_lock);
+   lock_t thread_mutex;
+   makelock(&thread_mutex);
    /* Spawn */
-   rc1=pthread_create( &thread1, NULL, thread_incr, &thread_mutex);
+   spawn_thread(&thread_func, (void*)&thread_mutex);
+   /*rc1=pthread_create( &thread1, NULL, thread_incr, &thread_mutex); */
    
    /*Local incr */
-   incr();
+   concurrent_incr();
 
    /*JOIN */
-   pthread_mutex_lock( &thread_mutex );
-   /* printf("I'm done with a final counter of: %d\n", *ctr); */
-    
+   acquire( &thread_mutex );
+   /* printf("I'm done with a final counter of: %d\n", *ctr);
+    */ 
    int t = read();
    return t;
 }
