@@ -25,11 +25,81 @@ Require Import floyd.globals_lemmas.
 Require Import floyd.semax_tactics.
 Require Import floyd.for_lemmas.
 Require Import floyd.diagnosis.
+Require Import floyd.nested_pred_lemmas.
 Import Cop.
+
+Lemma field_address_eq_offset:
+ forall {cs: compspecs} t path v,
+  field_compatible t path v ->
+  field_address t path v = offset_val (Int.repr (nested_field_offset2 t path)) v.
+Proof.
+intros. unfold field_address; rewrite if_true by auto; reflexivity.
+Qed.
+
+Lemma field_address_eq_offset':
+ forall {cs: compspecs} t path v ofs,
+    field_compatible t path v ->
+    ofs = Int.repr (nested_field_offset2 t path) ->
+    field_address t path v = offset_val ofs v.
+Proof.
+intros. subst. apply field_address_eq_offset; auto.
+Qed.
+
+Hint Resolve field_address_eq_offset' : prove_it_now.
 
 Hint Rewrite <- @prop_and using solve [auto with typeclass_instances]: norm1.
 
 Local Open Scope logic.
+
+Lemma var_block_lvar1:
+ forall {cs: compspecs} id t Delta P Q R,
+   (var_types Delta) ! id = Some t ->
+   legal_alignas_type t = true ->
+   legal_cosu_type t = true ->
+   complete_type cenv_cs t = true ->
+   sizeof cenv_cs t < Int.modulus ->
+  PROPx P (LOCALx (tc_environ Delta :: Q) (SEPx (var_block Tsh (id,t) :: R))) |--
+  EX v:val, PROPx P (LOCALx (lvar id t v :: Q) (SEPx (`(data_at_ Tsh t v) :: R))).
+Proof.
+intros.
+assert (Int.unsigned Int.zero + sizeof cenv_cs t <= Int.modulus)
+ by (rewrite Int.unsigned_zero; omega).
+unfold var_block, lvar, eval_lvar.
+go_lowerx.
+normalize.
+unfold Map.get.
+destruct (ve_of rho id) as [[? ?] | ] eqn:?.
+destruct (eqb_type t t0) eqn:?.
+apply eqb_type_true in Heqb0.
+subst t0.
+apply exp_right with (Vptr b Int.zero).
+unfold size_compatible.
+rewrite prop_true_andp. rewrite TT_andp.
+apply sepcon_derives; auto.
+rewrite memory_block_data_at_.
+auto.
+split3; auto. apply I.
+split3; auto.
+split3; auto.
+split; auto.
+red. exists 0. rewrite Z.mul_0_l. apply Int.unsigned_zero.
+apply I.
+split; auto.
+rewrite memory_block_isptr; normalize.
+rewrite memory_block_isptr; normalize.
+Qed.
+
+Ltac fixup_local_var :=
+match goal with |- semax _ (PROPx _ (LOCALx _ (SEPx ?R))) _ _ =>
+ match R with
+ | context [var_block ?i ?t :: ?L] => 
+   let n := eval compute in (length R - (S (length L)))%nat
+    in rewrite (SEP_nth_isolate n R (var_block i t)) by reflexivity;
+        unfold replace_nth;
+        eapply semax_pre; [apply var_block_lvar1; now reflexivity 
+                 | apply extract_exists_pre; intros ?lvar0 ]
+ end
+end.
 
 Definition tc_option_val' (t: type) : option val -> Prop :=
  match t with Tvoid => fun v => match v with None => True | _ => False end | _ => fun v => tc_val t (force_val v) end.
@@ -90,7 +160,7 @@ Ltac forward_seq :=
 
 Ltac simpl_stackframe_of := 
   unfold stackframe_of, fn_vars; simpl map; unfold fold_right; rewrite sepcon_emp;
-  repeat rewrite var_block_data_at_ by reflexivity;
+  repeat fixup_local_var;
   repeat rewrite prop_true_andp by (simpl sizeof; computable).
 
 (* end of "stuff to move elsewhere" *)
@@ -139,7 +209,8 @@ Lemma local_True_right:
 Proof. intros. intro rho; apply TT_right.
 Qed.
 
-Lemma normalize_lvar:
+(*
+Lemma normalize_lvar {cs: compspecs}:
   forall v i t rho,  isptr (eval_lvar i t rho) ->
         v  = (eval_lvar i t rho) -> lvar i t v rho.
 Proof.
@@ -150,13 +221,15 @@ destruct (Map.get (ve_of rho) i) as [[? ?] | ].
 destruct (eqb_type t t0); inv H; auto.
 inv H.
 Qed.
+*)
 
-Lemma lvar_isptr:
+Lemma lvar_isptr {cs: compspecs}:
   forall i t v rho, lvar i t v rho -> isptr v.
 Proof.
 unfold lvar; intros.
 destruct (Map.get (ve_of rho) i) as [[? ?]|]; try contradiction.
-destruct (eqb_type t t0); try contradiction; subst; apply I.
+destruct (eqb_type t t0); try contradiction.
+destruct H; subst; apply I.
 Qed.
 
 Lemma gvar_isptr:
@@ -176,14 +249,16 @@ destruct (ge_of rho i); try contradiction.
 subst; apply I.
 Qed.
 
-Lemma lvar_eval_lvar:
+Lemma lvar_eval_lvar {cs: compspecs}:
   forall i t v rho, lvar i t v rho -> eval_lvar i t rho = v.
 Proof.
 unfold lvar, eval_lvar; intros.
 destruct (Map.get (ve_of rho) i) as [[? ?]|]; try contradiction.
-destruct (eqb_type t t0); try contradiction; subst; auto.
+destruct (eqb_type t t0); try contradiction.
+destruct H; subst; auto.
 Qed.
 
+(*
 Lemma lvar_eval_lvar':
   forall i t rho, 
    isptr (eval_lvar i t rho) ->
@@ -194,16 +269,18 @@ Proof.
   destruct (Map.get (ve_of rho) i) as [[? ?]|]; try contradiction; auto.
   destruct (eqb_type t t0); try contradiction; auto.
 Qed.
+*)
 
-Lemma lvar_eval_var:
+Lemma lvar_eval_var {cs: compspecs}:
  forall i t v rho, lvar i t v rho -> eval_var i t rho = v.
 Proof.
 intros.
 unfold eval_var. hnf in H. destruct (Map.get (ve_of rho) i) as [[? ?]|]; try inv H.
-destruct (eqb_type t t0); try inv H. auto.
+destruct (eqb_type t t0); try contradiction.
+destruct H; auto.
 Qed.
 
-Lemma lvar_isptr_eval_var:
+Lemma lvar_isptr_eval_var {cs: compspecs}:
  forall i t v rho, lvar i t v rho -> isptr (eval_var i t rho).
 Proof.
 intros.
@@ -213,24 +290,6 @@ Qed.
 
 Hint Extern 1 (isptr (eval_var _ _ _)) => (eapply lvar_isptr_eval_var; eassumption) : norm2.
 
-Ltac fixup_local_var  :=  (* this tactic is needed only until start_function
-                                           handles lvars in a better way *)
- match goal with |- semax _ ?Pre0 _ _ => match Pre0 with 
-    context [@liftx (Tarrow val (LiftEnviron mpred)) ?F (eval_lvar ?i ?t) ] =>
-     let v := fresh "v" in 
-    apply (remember_value (eval_lvar i t)); intro v;
-    assert_LOCAL (lvar i t v);
-      [entailer!; apply lvar_eval_lvar'; auto | ];
-    drop_LOCAL 1%nat;
-    match goal with |- semax _ ?Pre _ _ =>
-    match Pre with context C [@liftx (Tarrow val (LiftEnviron mpred)) F (eval_lvar i t) ] =>
-     let D := context C[ (@liftx (LiftEnviron mpred) (F v))  ]   in
-        apply semax_pre with D; 
-           [ entailer!; cbv beta; rewrite (lvar_eval_lvar i t v) by auto; auto 
-           | ] 
-    end end;
-    revert v
- end end.
 
 Lemma force_val_sem_cast_neutral_isptr:
   forall v,
@@ -241,7 +300,7 @@ intros.
  destruct v; try contradiction; reflexivity.
 Qed.
 
-Lemma force_val_sem_cast_neutral_lvar:
+Lemma force_val_sem_cast_neutral_lvar {cs: compspecs}:
   forall i t v rho,
   lvar i t v rho ->
   Some (force_val (sem_cast_neutral v)) = Some v.
@@ -995,16 +1054,14 @@ repeat match goal with
 | |- context [snd (?a,?b) ] => change (snd (a,b)) with b 
 end.
 
-Tactic Notation "forward_while" constr(Inv) constr (Postcond) :=
+Tactic Notation "forward_while" constr(Inv) :=
   check_Delta;
   repeat (apply -> seq_assoc; abbreviate_semax);
-  first [ignore (Inv: environ->mpred) 
-         | fail 1 "Invariant (first argument to forward_while) must have type (environ->mpred)"];
-  first [ignore (Postcond: environ->mpred)
-         | fail 1 "Postcondition (second argument to forward_while) must have type (environ->mpred)"];
+  first [ignore (Inv: bool -> environ->mpred) 
+         | fail 1 "Invariant (first argument to forward_while) must have type (bool -> environ->mpred)"];
   apply semax_pre with Inv;
     [  unfold_function_derives_right 
-    | apply semax_seq with Postcond;
+    | eapply semax_seq;
       [repeat match goal with
        | |- semax _ (exp _) _ _ => fail 1
        | |- semax _ (PROPx _ _) _ _ => fail 1
@@ -1016,35 +1073,40 @@ Tactic Notation "forward_while" constr(Inv) constr (Postcond) :=
           repeat rewrite exp_uncurry in Hp; subst p
        end;
        match goal with |- semax ?Delta ?Pre (Swhile ?e _) _ =>
-        first [eapply semax_while'_new | eapply semax_while'_new1]; 
+        eapply semax_while_3g; 
         simpl typeof;
        [ reflexivity 
        | no_intros || idtac
        | do_compute_expr1 Delta Pre e; eassumption
-       | no_intros || (autorewrite with ret_assert;
-         let HRE := fresh "HRE" in apply derives_extract_PROP; intro HRE;
-         repeat (apply derives_extract_PROP; intro); 
-         do_repr_inj HRE; normalize in HRE)
-       | no_intros || (let HRE := fresh "HRE" in apply semax_extract_PROP; intro HRE;
-          repeat (apply semax_extract_PROP; intro); 
-          do_repr_inj HRE; normalize in HRE)
+       | no_intros; simpl_fst_snd; 
+         let HRE := fresh "HRE" in apply semax_extract_PROP; intro HRE;
+         first [simple apply typed_true_of_bool in HRE
+               | apply typed_true_tint_Vint in HRE
+               | apply typed_true_tint in HRE
+               | idtac ];
+         repeat (apply semax_extract_PROP; intro); 
+         do_repr_inj HRE; normalize in HRE
         ]
        end
-       | simpl update_tycon 
+       | simpl update_tycon; 
+         apply extract_exists_pre; no_intros; simpl_fst_snd;
+         let HRE := fresh "HRE" in apply semax_extract_PROP; intro HRE;
+         first [simple apply typed_false_of_bool in HRE
+               | apply typed_false_tint_Vint in HRE
+               | apply typed_false_tint in HRE
+               | idtac ];
+         repeat (apply semax_extract_PROP; intro)
        ]
      ]; abbreviate_semax; autorewrite with ret_assert.
 
-
-Tactic Notation "forward_while" constr(Inv) constr (Postcond) 
+Tactic Notation "forward_while" constr(Inv)
      simple_intropattern(pat) :=
   repeat (apply -> seq_assoc; abbreviate_semax);
   first [ignore (Inv: environ->mpred) 
          | fail 1 "Invariant (first argument to forward_while) must have type (environ->mpred)"];
-  first [ignore (Postcond: environ->mpred)
-         | fail 1 "Postcondition (second argument to forward_while) must have type (environ->mpred)"];
   apply semax_pre with Inv;
     [  unfold_function_derives_right 
-    | apply semax_seq with Postcond;
+    | eapply semax_seq;
       [repeat match goal with
        | |- semax _ (exp _) _ _ => fail 1
        | |- semax _ (PROPx _ _) _ _ => fail 1
@@ -1055,24 +1117,30 @@ Tactic Notation "forward_while" constr(Inv) constr (Postcond)
           remember Pre as p eqn:Hp;
           repeat rewrite exp_uncurry in Hp; subst p
        end;
-       match goal with |- semax ?Delta ?Pre (Swhile ?e _) _ =>
-        first [eapply semax_while'_new | eapply semax_while'_new1]; 
+      match goal with |- semax ?Delta ?Pre (Swhile ?e _) _ =>
+        eapply semax_while_3g1; 
         simpl typeof;
        [ reflexivity 
        | intros pat; simpl_fst_snd
        | do_compute_expr1 Delta Pre e; eassumption
        | intros pat; simpl_fst_snd; 
-         autorewrite with ret_assert;
-         let HRE := fresh "HRE" in apply derives_extract_PROP; intro HRE;
-         repeat (apply derives_extract_PROP; intro); 
+         let HRE := fresh "HRE" in apply semax_extract_PROP; intro HRE;
+         first [simple apply typed_true_of_bool in HRE
+               | apply typed_true_tint_Vint in HRE
+               | apply typed_true_tint in HRE
+               | idtac ];
+         repeat (apply semax_extract_PROP; intro); 
          do_repr_inj HRE; normalize in HRE
-       | intros pat; simpl_fst_snd;
-          let HRE := fresh "HRE" in apply semax_extract_PROP; intro HRE;
-          repeat (apply semax_extract_PROP; intro); 
-          do_repr_inj HRE; normalize in HRE
         ]
        end
-       | simpl update_tycon 
+       | simpl update_tycon; 
+         apply extract_exists_pre; intros pat; simpl_fst_snd;
+         let HRE := fresh "HRE" in apply semax_extract_PROP; intro HRE;
+         first [simple apply typed_false_of_bool in HRE
+               | apply typed_false_tint_Vint in HRE
+               | apply typed_false_tint in HRE
+               | idtac ];
+         repeat (apply semax_extract_PROP; intro)
        ]
      ]; abbreviate_semax; autorewrite with ret_assert.
 
@@ -1544,7 +1612,7 @@ first [ ensure_normal_ret_assert;
         ].
 
 
-Inductive isolate_temp_binding (id: ident): list (environ->Prop) -> option val -> list (environ -> Prop) -> list Prop -> Prop :=
+Inductive isolate_temp_binding {cs: compspecs} (id: ident): list (environ->Prop) -> option val -> list (environ -> Prop) -> list Prop -> Prop :=
 | ITB_same: 
     forall Q v v' Q' P,
      isolate_temp_binding id Q v' Q' P ->
@@ -1574,7 +1642,7 @@ Inductive trivially_lifted:  (environ->mpred) -> Prop :=
   TL_ok: forall (R1: mpred), trivially_lifted (`R1).
 
 
-Lemma isolate_temp_binding_e:
+Lemma isolate_temp_binding_e {cs: compspecs}:
   forall id Q old (old': val) Q' P' (rho: environ),
  isolate_temp_binding id Q old Q' P' ->
  fold_right `and `True (map (subst id `old') Q) rho ->
@@ -3187,6 +3255,39 @@ Defined.
 Lemma Zge_refl: forall (n: Z), n >= n.
 Proof. intros. omega. Qed.
 
+Lemma EqLtFalse: Eq = Lt -> False.
+Proof. intro. discriminate. Qed.
+
+Ltac make_compspecs1 prog :=
+let p := eval lazy beta zeta iota delta [
+   prog_comp_env 
+   PTree.elements PTree.xelements prog
+   make_composite_env build_composite_env
+  add_composite_definitions composite_of_def
+  Errors.bind PTree.get PTree.empty
+  ] in (prog_comp_env prog)
+in let p := eval simpl in p
+in 
+assert (H : Forall
+       (fun x : ident * composite =>
+        composite_legal_alignas p (snd x) /\
+        composite_legal_fieldlist (snd x))
+        (PTree.elements p)) 
+  by (repeat constructor; compute; apply EqLtFalse);
+let b :=eval lazy beta zeta iota delta [
+   H mk_prog_compspecs prog_comp_env 
+   PTree.elements PTree.xelements prog
+   make_composite_env build_composite_env
+  add_composite_definitions composite_of_def
+  Errors.bind PTree.get PTree.empty
+  ] in (mk_prog_compspecs prog H)
+in let b := eval simpl in b
+in exact b.
+
+Ltac make_compspecs2 CS :=
+ let a := eval lazy beta delta [CS] in CS
+ in exact a.
+
 Ltac make_compspecs prog :=
 assert (H : Forall
        (fun x : ident * composite =>
@@ -3196,18 +3297,3 @@ assert (H : Forall
   by (repeat constructor; try apply Zge_refl);
 let a := eval vm_compute in (mk_prog_compspecs prog H)
  in exact a.
-
-Ltac simplify_value_fits H :=
-  rewrite ?proj_sumbool_is_true in H by auto;
-  rewrite ?proj_sumbool_is_false in H by auto;
-try match type of H with 
- | value_fits ?sh ?t ?v  =>
-    let t' := fresh "t" in set (t':=t) in H; hnf in t'; subst t';
-    rewrite value_fits_ind in H;
-    match type of H with _ v => fail 1 | _ => idtac end;
-    match type of H with 
-    | context [@unfold_reptype ?cs ?t v] =>
-      change (@unfold_reptype cs t v) with v in H
-    end;
-    rewrite ?Z.max_r in H by (try computable; omega)
-end.
