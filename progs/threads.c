@@ -4,26 +4,22 @@
 
 /* gcc -Wall -pthread */
 
-lock_t new_lock() {
-  return (lock_t)malloc(sizeof(pthread_mutex_t));
-}
-
-void make_lock(lock_t lock) {
+void makelock(lock_t *lock) {
   pthread_mutex_init((pthread_mutex_t*)lock, NULL);
   pthread_mutex_lock((pthread_mutex_t*)lock);
 }
 
-void free_lock(lock_t lock) {
+void freelock(lock_t *lock) {
   pthread_mutex_destroy((pthread_mutex_t*)lock);
   return;
 }
 
-void acquire(lock_t lock) {
+void acquire(lock_t *lock) {
   pthread_mutex_lock((pthread_mutex_t*)lock);
   return;
 }
 
-void release(lock_t lock) {
+void release(lock_t *lock) {
   pthread_mutex_unlock((pthread_mutex_t*)lock);
   return;
 }
