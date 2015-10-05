@@ -62,53 +62,50 @@ Definition malloc_spec :=
      LOCAL (temp ret_temp v)
      SEP (`(memory_block Tsh n v)).
 
-Axiom is_lock : share -> val -> mpred.
+Definition tlock := Tstruct _lock_t noattr.
+
+Definition default_val_lock : reptype tlock := ([Vundef; Vundef;
+Vundef; Vundef; Vundef; Vundef; Vundef; Vundef], [Vundef; Vundef;
+Vundef; Vundef]).
 
 Axiom lock_inv : share -> val -> mpred -> mpred.
 
 Axiom lock_inv_share_join : forall sh1 sh2 sh v R, sepalg.join sh1 sh2 sh ->
   lock_inv sh1 v R * lock_inv sh2 v R = lock_inv sh v R.
 
-Definition new_lock_spec :=
-  DECLARE _new_lock
-   WITH u : unit
-   PRE [  ] PROP () LOCAL () SEP ()
-   POST [ tptr tvoid ]
-     EX v: val,
-     PROP ()
-     LOCAL (temp ret_temp v)
-     SEP (`(is_lock Tsh v)).
+Axiom lock_inv_isptr : forall sh v R, `(lock_inv sh v R) |-- !!(isptr v).
 
 Parameter Rlock_placeholder : mpred.
 
-Definition make_lock_spec :=
-  DECLARE _make_lock
-   WITH v : val
-   PRE [ _lock OF tptr tvoid ]
-     PROP ()
+Definition makelock_spec :=
+  DECLARE _makelock
+   WITH v : val, sh : share
+   PRE [ _lock OF tptr tlock ]
+     PROP (writable_share sh)
      LOCAL (temp _lock v)
-     SEP (`(is_lock Tsh v))
+     (* SEP (`(mapsto_ Tsh tlock v)) *)  (* ask andrew: that, or mapsto ... (default_val tlock) ? *)
+     SEP (`(data_at_ Tsh tlock v))
    POST [ tvoid ]
      PROP ()
      LOCAL ()
      SEP (`(lock_inv Tsh v Rlock_placeholder)).
 
-Definition free_lock_spec :=
-  DECLARE _make_lock
+Definition freelock_spec :=
+  DECLARE _freelock
    WITH v : val, sh : share
-   PRE [ _lock OF tptr tvoid ]
-     PROP (writable_share sh) (* only writable because it might be a global variable *)
+   PRE [ _lock OF tptr tlock ]
+     PROP (writable_share sh)
      LOCAL (temp _lock v)
      SEP (`Rlock_placeholder ; `(lock_inv sh v Rlock_placeholder))
    POST [ tvoid ]
      PROP ()
      LOCAL ()
-     SEP (`Rlock_placeholder ; `(is_lock sh v)).
+     SEP (`Rlock_placeholder ; `(mapsto_ sh tlock v)).
 
 Definition acquire_spec :=
   DECLARE _acquire
    WITH v : val, sh : share
-   PRE [ _lock OF tptr tvoid ]
+   PRE [ _lock OF tptr tlock ]
      PROP (readable_share sh)
      LOCAL (temp _lock v)
      SEP (`(lock_inv sh v Rlock_placeholder))
@@ -120,7 +117,7 @@ Definition acquire_spec :=
 Definition release_spec :=
   DECLARE _release
    WITH v : val, sh : share
-   PRE [ _lock OF tptr tvoid ]
+   PRE [ _lock OF tptr tlock ]
      PROP (readable_share sh)
      LOCAL (temp _lock v)
      SEP (`(lock_inv sh v Rlock_placeholder) ; `Rlock_placeholder)
@@ -178,9 +175,8 @@ Definition exit_thread_spec :=
      SEP   (`FF).
 
 Definition threads_funspecs : funspecs :=
-  new_lock_spec ::
-  make_lock_spec ::
-  free_lock_spec ::
+  makelock_spec ::
+  freelock_spec ::
   acquire_spec ::
   release_spec ::
   spawn_thread_spec ::
@@ -188,11 +184,13 @@ Definition threads_funspecs : funspecs :=
 
 Definition f_spec :=
  DECLARE _f
-  WITH args_ : val, l_ : val, sh : share
+  WITH args_ : val, l_ : reptype tlock, sh : share
   PRE [ _args OF tptr tvoid ]
      PROP ()
      LOCAL (temp _args args_)
-     SEP (`!!(readable_share sh); `(field_at sh (Tstruct _ab noattr) [StructField _lock] l_ args_) ; `(lock_inv sh l_ Rlock_placeholder))
+     SEP (`!!(readable_share sh);
+          `(field_at sh (Tstruct _ab noattr) [StructField _lock] l_ args_);
+          `(lock_inv sh args_ Rlock_placeholder))
   POST [ tptr tvoid ]
      EX v: val,
      PROP ()
@@ -267,16 +265,14 @@ Proof.
 intros. 
 apply (semax_fun_id id f Delta); auto.
 eapply semax_pre_post; try apply H1; [ clear H1 | intros; entailer ].
-(* apply andp_right. *)
-(* admit. *)
 go_lowerx.
 apply exp_right with (eval_var id (type_of_funspec f) rho).
 simpl.
 unfold sgvar, eval_var.
 unfold Map.get.
 normalize.
-destruct (ge_of rho id) _eqn : ?.
-destruct (ve_of rho id) _eqn : ?.
+destruct (ge_of rho id) eqn : ?.
+destruct (ve_of rho id) eqn : ?.
 unfold func_ptr'.
 destruct p.
 destruct (eqb_type (type_of_funspec f) t) _eqn : Ht.
@@ -286,7 +282,36 @@ Admitted.
 
 Ltac get_global_function'' _f :=
   eapply (semax_fun_id'' _f); try reflexivity.
-  
+
+Ltac fold_field_at_' a :=
+  try match a with
+    | PROPx _ ?a => fold_field_at_' a
+    | LOCALx _ ?a => fold_field_at_' a
+    | SEPx ?l => fold_field_at_' l
+    | `?h :: ?t => fold_field_at_' h; fold_field_at_' t
+    | ?a * ?b => fold_field_at_' b; fold_field_at_' a
+    | ?a && ?b => fold_field_at_' a; fold_field_at_' b
+    | @mapsto ?cs ?sh ?ty ?val ?p => try replace (@mapsto cs sh ty val p) with (@mapsto_ cs sh ty p) by reflexivity
+    | @data_at ?cs ?sh ?ty ?val ?p => try replace (@data_at cs sh ty val p) with (@data_at_ cs sh ty p) by reflexivity
+    | @field_at ?cs ?sh ?ty ?path ?val ?p => try replace (@field_at cs sh ty path val p) with (@field_at_ cs sh ty path p) by reflexivity
+    | nil => idtac
+  end.
+
+Ltac fold_field_at_ :=
+  match goal with
+    | |- semax _ ?a _ _ => fold_field_at_' a
+    | |- ?a |-- ?b => fold_field_at_' a; fold_field_at_' b
+  end.
+
+Lemma field_compatible_tlock v :
+  field_compatible (Tstruct _ab noattr) [StructField _lock] v ->
+  field_compatible tlock [] v.
+Proof.
+  destruct v; unfold field_compatible; intuition.
+  unfold size_compatible, sizeof in *; simpl in *.
+  omega.
+Qed.
+
 Lemma body_main : semax_body Vprog Gprog f_main main_spec.
 Proof.
   start_function.
@@ -296,7 +321,7 @@ Proof.
   specification matches exactly the type of the function, for example
   here I copy-pasted a specification for mallocN found in verif_queue
   that used tint instead of tuint for the regular malloc *)
-  forward_call 12%Z ab_.
+  forward_call 32%Z ab_.
   now match goal with [|-_<=_<=_] => compute; intuition; congruence end.
   
   (* transforming memory_block into field_at_ *)
@@ -310,46 +335,57 @@ Proof.
     match goal with [ H : ( _ | _ ) |- _ ] => destruct H as [x Ex] end.
     exists (2 * x)%Z; omega. }
   
-  (* COMMAND: l = new_lock(); *)
-  forward_call tt l_.
-  
-  (* COMMAND: make_lock(l); *)
+  (* COMMAND: makelock(); *)
+  (* establish the lock invariant *)
   pose (lock_invariant :=
     EX n : Z,
      field_at Tsh (Tstruct _ab noattr) [StructField _a] (Vint (Int.repr n)) ab_ *
      field_at Tsh (Tstruct _ab noattr) [StructField _b] (Vint (Int.repr (2 * n))) ab_
   ).
-  forward_call l_ (* we should give [lock_invariant] as an argument here *).
-  (* cheating because of the universe inconsistency: replace by admit "Rlock_placeholder" *)
+  (* split the frame to extract the lock *)
+  unfold field_at_.
+  unfold_field_at 1%nat.
+  fold _a _b _lock.
+  fold_field_at_.
+  forward_call (ab_, Tsh). (* we should give [lock_invariant] as an
+  argument here but we are cheating because of the universe
+  inconsistency: replace by admit "Rlock_placeholder" *)
+  {
+    replace Frame with [field_at_ Tsh (Tstruct _ab noattr) [StructField _a] ab_;
+                        field_at_ Tsh (Tstruct _ab noattr) [StructField _b] ab_] by (unfold Frame; reflexivity).
+    simpl. entailer. cancel.
+    unfold data_at_, field_at_, field_at.
+    normalize.
+    apply andp_right.
+      apply prop_right; intuition.
+      now apply field_compatible_tlock; auto.
+      
+      apply derives_refl.
+  }
+  simpl.
   replace Rlock_placeholder with lock_invariant by admit.
-  
-  (* COMMAND: ab->lock = l; *)
-  forward.
   
   (* COMMAND: ab->a = 1; *)
   forward.
-  
+  rewrite <- field_at_offset_zero.
+
   (* COMMAND: ab->b = 2; *)
   forward.
+  rewrite <- field_at_offset_zero.
   
-  (* COMMAND: release(l); *)
-  forward_call (l_, Tsh).
+  (* COMMAND: release(); *)
+  forward_call (ab_, Tsh).
   {
     (* specify the passed frame evar generated by forward_call to be [ab->lock |-> l_] *)
-    assert (Frame = [field_at Tsh (Tstruct _ab noattr) [StructField _lock] (force_val (sem_cast_neutral l_)) ab_])
-      by (unfold Frame; reflexivity).
-    replace Rlock_placeholder with lock_invariant by admit.
-    (* our SEP satisfies the lock invariant *)
+    replace Rlock_placeholder with lock_invariant by (clear; admit).
+    replace Frame with (@nil mpred) by (unfold Frame; reflexivity).
     simpl; cancel.
-    unfold_field_at 1%nat.
-    unfold _lock.
-    entailer.
-    cancel.
+    unfold lock_invariant.
     apply exp_right with 1.
     cancel.
   }
   replace Rlock_placeholder with lock_invariant by admit.
-  (* END OF COMMAND: release(l); *)
+  (* END OF COMMAND: release(); *)
   
   (* COMMAND: spawn_thread(&f, (void* )ab); *)
   
@@ -357,15 +393,15 @@ Proof.
   get_global_function'' _f.
   normalize.
   apply extract_exists_pre; intros f_.
-  match goal with [ |- context[func_ptr' ?P _] ] => abbreviate P as specf end.
+  match goal with [ |- context[func_ptr' ?P _] ] => abbreviate P as fspec end.
   
   (* build the spawned frame *)
   destruct split_Tsh as (sh1 & sh2 & Rsh1 & Rsh2 & Join).
   rewrite <- (lock_inv_share_join _ _ _ _ _ Join).
-  rewrite <- (@field_at_share_join CompSpecs sh1 sh2 Tsh (Tstruct _ab noattr) [StructField _lock] _ _ Join).
+  (* rewrite <- (@field_at_share_join CompSpecs sh1 sh2 Tsh (Tstruct _ab noattr) [StructField _lock] _ _ Join). *)
   pose (spawned_precondition := fun y : val =>
-    lock_inv sh2 l_ lock_invariant *
-    field_at sh2 (Tstruct _ab noattr) [StructField _lock] (force_val (sem_cast_neutral l_)) y
+    lock_inv sh2 y lock_invariant
+    (* * field_at sh2 (Tstruct _ab noattr) [StructField _lock] (force_val (sem_cast_neutral l_)) y *)
   ).
   
   forward_call (f_, ab_).
@@ -381,7 +417,7 @@ Proof.
   {
     (* the second argument indeed evaluates to ab_ *)
     apply prop_right.
-    destruct ab_; inversion TC0; reflexivity.
+    destruct ab_; inversion TC; reflexivity.
   }
   {
     simpl; cancel.
@@ -392,31 +428,102 @@ Proof.
     match goal with [ |- _ |-- func_ptr' ?P _ * _ * _ ] => abbreviate P as fspec_spawned end.
     
     (* specify the passed frame *)
-    assert (Frame =
-      ([lock_inv sh1 l_ lock_invariant;
-       field_at sh1 (Tstruct _ab noattr) [StructField _lock] (force_val (sem_cast_neutral l_)) ab_] : list mpred))
-      by (unfold Frame; reflexivity); subst Frame.
+    replace Frame with [lock_inv sh2 ab_ lock_invariant] by (unfold Frame; reflexivity); subst Frame.
+    (* field_at sh1 (Tstruct _ab noattr) [StructField _lock] (force_val (sem_cast_neutral l_)) ab_] : list mpred)) *)
     simpl.
     unfold spawned_precondition.
     cancel.
     
-    unfold specf, fspec_spawned, abbreviate.
+    unfold fspec, fspec_spawned, abbreviate.
     simpl.
     (* make the specifications match somehow*)
-    
     admit.  (* theorem about equivalence of specifications *)
   }
   
   normalize.
-  (* state matching spec axiom *)
-Parameter PARAM : mpred.
-  replace_SEP 0 (`PARAM); [ admit | ].
+  replace_SEP 0 (`emp).  admit. (* there is some predicate over the heap that I don't know how to handle *)
   
-  forward_call l_.
-  intros.
+  (* COMMAND: aquire() *)
+  assert_PROP (isptr ab_). eapply derives_trans; [ | apply lock_inv_isptr ]. entailer.
+  forward_call (ab_, sh2).
+  {
+    replace Frame with (@nil mpred) by (unfold Frame; reflexivity).
+    replace Rlock_placeholder with lock_invariant by admit.
+    simpl; cancel.
+  }
+  replace Rlock_placeholder with lock_invariant by admit.
+  
+  (* COMMAND: a=ab->a *)
+  normalize.
+  unfold lock_invariant at 2.
+  normalize; intros n.
+  (* shouldn't forward succeed? *)
+  match goal with [ |- semax _ (PROP  () (LOCALx ?L (SEPx ?S))) _ _] =>
+  apply semax_seq with (PROP  () (LOCALx (temp _a (Vint (Int.repr n)) :: L) (SEPx S)))
+  end.
+  admit.
+  
+  (* COMMAND: while loop *)
+  simpl update_tycon.
+  abbreviate_semax.
+  normalize.
+forward_while (`lock_invariant) (`lock_invariant).
 
-  entailer.
-  forward.
+pose (Inv:=`lock_invariant).
+pose (Postcond:=`emp).
+
+  check_Delta.
+  repeat (apply -> seq_assoc; abbreviate_semax).
+  first [ignore (Inv: environ->mpred) 
+         | fail 1 "Invariant (first argument to forward_while) must have type (environ->mpred)"].
+  first [ignore (Postcond: environ->mpred)
+         | fail 1 "Postcondition (second argument to forward_while) must have type (environ->mpred)"].
+  apply semax_pre with Inv.
+      unfold_function_derives_right .
+Focus 2.
+     apply semax_seq with Postcond.
+      repeat match goal with
+       | |- semax _ (exp _) _ _ => fail 1
+       | |- semax _ (PROPx _ _) _ _ => fail 1
+       | |- semax _ ?Pre _ _ => match Pre with context [ ?F ] => unfold F end
+       end.
+       match goal with |- semax _ ?Pre _ _ =>
+          let p := fresh "Pre" in let Hp := fresh "HPre" in 
+          remember Pre as p eqn:Hp;
+          repeat rewrite exp_uncurry in Hp; subst p
+       end.
+       eapply semax_while'_new.
+       
+       match goal with |- semax ?Delta ?Pre (Swhile ?e _) _ =>
+        first [eapply semax_while'_new | eapply semax_while'_new1]; 
+        simpl typeof;
+       [ reflexivity 
+       | no_intros || idtac
+       | do_compute_expr1 Delta Pre e; eassumption
+       | no_intros || (autorewrite with ret_assert;
+         let HRE := fresh "HRE" in apply derives_extract_PROP; intro HRE;
+         repeat (apply derives_extract_PROP; intro); 
+         do_repr_inj HRE; normalize in HRE)
+       | no_intros || (let HRE := fresh "HRE" in apply semax_extract_PROP; intro HRE;
+          repeat (apply semax_extract_PROP; intro); 
+          do_repr_inj HRE; normalize in HRE)
+        ]
+       end.
+       
+       | simpl update_tycon 
+       ]
+     ]; abbreviate_semax; autorewrite with ret_assert.
+
+
+
+  forward_while (`emp) (`emp) VAR.
+  unfold lock_invariant at 2.
+  normalize; intros n.
+  (* shouldn't forward succeed? *)
+  match goal with [ |- semax _ (PROP  () (LOCALx ?L (SEPx ?S))) _ _] =>
+  apply semax_seq with (PROP  () (LOCALx (temp _a (Vint (Int.repr n)) :: L) (SEPx S)))
+  end.
+  admit.
   
 (* these tactic and lemma are not ready for prime time *)
 Ltac pull_first_SEP := match goal with |- semax _ (    PROPx ?a (LOCALx ?b (SEPx (?c :: ?d)))) _ _ =>
