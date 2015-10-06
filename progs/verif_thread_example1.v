@@ -293,36 +293,35 @@ Proof.
   apply split_readable_share; auto.
 Qed.
 
-Lemma semax_fun_id'': (* provable once we change the definition of tc_environ *)
-(* I also remove the "TC &&" *)
-      forall id f (* TC *)
-              Espec {cs: compspecs} Delta P Q R PostCond c
-            (GLBL: (var_types Delta) ! id = None),
-       (glob_specs Delta) ! id = Some f ->
-       (glob_types Delta) ! id = Some (type_of_funspec f) ->
-       @semax cs Espec Delta 
-        ((* TC &&  *)EX v : val, PROPx P (LOCALx (gvar id v :: Q)
-        (SEPx (`(func_ptr' f v) :: R))))
-                              c PostCond ->
-       @semax cs Espec Delta ((* TC &&  *)PROPx P (LOCALx Q (SEPx R))) c PostCond.
+Lemma semax_fun_id'' id f Espec {cs} Delta P Q R Post c :
+  (var_types Delta) ! id = None ->
+  (glob_specs Delta) ! id = Some f ->
+  (glob_types Delta) ! id = Some (type_of_funspec f) ->
+  @semax cs Espec Delta
+    (EX v : val, PROPx P
+      (LOCALx (gvar id v :: Q)
+      (SEPx (`(func_ptr' f v) :: R)))) c Post ->
+  @semax cs Espec Delta (PROPx P (LOCALx Q (SEPx R))) c Post.
 Proof.
-intros. 
+intros V G GS SA.
 apply (semax_fun_id id f Delta); auto.
-eapply semax_pre_post; try apply H1; [ clear H1 | intros; entailer ].
+eapply semax_pre_post; try apply SA; [ clear SA | intros; entailer ].
 go_lowerx.
 apply exp_right with (eval_var id (type_of_funspec f) rho).
-simpl.
-unfold sgvar, eval_var.
-unfold Map.get.
-normalize.
-destruct (ge_of rho id) eqn : ?.
-destruct (ve_of rho id) eqn : ?.
-unfold func_ptr'.
-destruct p.
-destruct (eqb_type (type_of_funspec f) t) eqn : Ht.
-rewrite <-(eqb_type_true _ _ Ht) in *.
-hnf in H1.
-Admitted.
+entailer.
+apply andp_right.
+- (* about gvar *)
+  apply prop_right.
+  unfold gvar, eval_var, Map.get.
+  destruct H as (_ & _ & DG & DS).
+  destruct (DS id _ GS) as [-> | (t & E)]; [ | congruence].
+  destruct (DG id _ GS) as (? & -> & ?); auto.
+
+- (* about func_ptr/func_ptr' *)
+  unfold func_ptr'.
+  rewrite <- andp_left_corable, andp_comm; auto.
+  apply corable_func_ptr.
+Qed.
 
 Ltac get_global_function'' _f :=
   eapply (semax_fun_id'' _f); try reflexivity.
