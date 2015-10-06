@@ -75,64 +75,55 @@ Axiom lock_inv_share_join : forall sh1 sh2 sh v R, sepalg.join sh1 sh2 sh ->
 
 Axiom lock_inv_isptr : forall sh v R, `(lock_inv sh v R) |-- !!(isptr v).
 
-Parameter Rlock_placeholder : mpred.
-
-Definition makelock_spec :=
-  DECLARE _makelock
+Definition makelock_spec R :=
    WITH v : val, sh : share
    PRE [ _lock OF tptr tlock ]
      PROP (writable_share sh)
      LOCAL (temp _lock v)
-     (* SEP (`(mapsto_ Tsh tlock v)) *)  (* ask andrew: that, or mapsto ... (default_val tlock) ? *)
      SEP (`(data_at_ Tsh tlock v))
    POST [ tvoid ]
      PROP ()
      LOCAL ()
-     SEP (`(lock_inv Tsh v Rlock_placeholder)).
+     SEP (`(lock_inv Tsh v R)).
 
-Definition freelock_spec :=
-  DECLARE _freelock
+Definition freelock_spec R :=
    WITH v : val, sh : share
    PRE [ _lock OF tptr tlock ]
      PROP (writable_share sh)
      LOCAL (temp _lock v)
-     SEP (`Rlock_placeholder ; `(lock_inv sh v Rlock_placeholder))
+     SEP (`R ; `(lock_inv sh v R))
    POST [ tvoid ]
      PROP ()
      LOCAL ()
-     SEP (`Rlock_placeholder ; `(mapsto_ sh tlock v)).
+     SEP (`R ; `(mapsto_ sh tlock v)).
 
-Definition acquire_spec :=
-  DECLARE _acquire
+Definition acquire_spec R :=
    WITH v : val, sh : share
    PRE [ _lock OF tptr tlock ]
      PROP (readable_share sh)
      LOCAL (temp _lock v)
-     SEP (`(lock_inv sh v Rlock_placeholder))
+     SEP (`(lock_inv sh v R))
    POST [ tvoid ]
      PROP ()
      LOCAL ()
-     SEP (`(lock_inv sh v Rlock_placeholder) ; `Rlock_placeholder).
+     SEP (`(lock_inv sh v R) ; `R).
 
-Definition release_spec :=
-  DECLARE _release
+Definition release_spec R :=
    WITH v : val, sh : share
    PRE [ _lock OF tptr tlock ]
      PROP (readable_share sh)
      LOCAL (temp _lock v)
-     SEP (`(lock_inv sh v Rlock_placeholder) ; `Rlock_placeholder)
+     SEP (`(lock_inv sh v R) ; `R)
    POST [ tvoid ]
      PROP ()
      LOCAL ()
-     SEP (`(lock_inv sh v Rlock_placeholder)).
+     SEP (`(lock_inv sh v R)).
 
 Definition voidstar_funtype :=
   Tfunction
     (Tcons (tptr tvoid) Tnil)
     (tptr tvoid)
     cc_default.
-
-Parameter spawned_precondition_placeholder : val -> mpred.
 
 (* Discussion about spawn_thread:
 
@@ -162,8 +153,7 @@ own R each time you use this function.
 
 *)
 
-Definition spawn_thread_spec :=
-  DECLARE _spawn_thread
+Definition spawn_thread_spec P :=
    WITH f : val, b : val
    PRE [_f OF tptr voidstar_funtype, _args OF tptr tvoid]
      PROP ()
@@ -173,21 +163,20 @@ Definition spawn_thread_spec :=
           PRE [ _y OF tptr tvoid ]
             PROP  ()
             LOCAL (temp _y y)
-            SEP   (`(spawned_precondition_placeholder y))
+            SEP   (`(P y))
           POST [tptr tvoid]
             PROP  ()
             LOCAL ()
             SEP   ()
        )
        f));
-     `(spawned_precondition_placeholder b))
+     `(P b))
    POST [ tvoid ]
      PROP  ()
      LOCAL ()
      SEP   (emp).
 
-Definition exit_thread_spec :=
-  DECLARE _exit_thread
+Definition exit_thread_spec (_ : unit) :=
    WITH u:unit
    PRE [ ]
      PROP ()
@@ -198,13 +187,159 @@ Definition exit_thread_spec :=
      LOCAL ()
      SEP   (`FF).
 
-Definition threads_funspecs : funspecs :=
-  makelock_spec ::
-  freelock_spec ::
-  acquire_spec ::
-  release_spec ::
-  spawn_thread_spec ::
-  exit_thread_spec :: nil.
+(* We list the specifications that we assume.  In the future,
+   identifier for those functions would be strings instead of
+   positives. *)
+
+Definition threadlib_specs : list (ident * {x : Type & x -> funspec}) := [
+  (_makelock    , existT _                       mpred          makelock_spec);
+  (_freelock    , existT _                       mpred          freelock_spec);
+  (_acquire     , existT _                       mpred          acquire_spec);
+  (_release     , existT _                       mpred          release_spec);
+  (_spawn_thread, existT _                       (val -> mpred) spawn_thread_spec);
+  (_exit_thread , existT (fun x => x -> funspec) unit           exit_thread_spec)
+].
+
+Fixpoint find_in_list {A B} (D:forall x y : A, {x = y} + {x <> y})
+  (a : A) (l : list (A * B)) : option B :=
+  match l with
+    | nil => None
+    | (a', b) :: l => if D a a' then Some b else find_in_list D a l
+  end.
+
+Definition find_in_threadlib_specs id := find_in_list peq id threadlib_specs.
+
+(* Same lemma as [semax_call_id00_wow] but it concerns only the
+   functions listed in [threadlib_specs], which, in addition to being
+   external, need an additional parameter [witness'] of type, for
+   example, [mpred], on which quantifying directly in the WITH clause
+   would result in a universe inconsistency. *)
+Lemma semax_call_id00_wow_threadlib :
+ forall  {A} {A'} (witness: A) (witness': A') (Frame: list mpred) 
+           Espec {cs: compspecs} Delta P Q R id (paramty: typelist) (bl: list expr)
+                  (argsig: list (ident * type)) (Pre Post: A -> environ -> mpred)
+                  ffunspec
+             (Post2: environ -> mpred)
+             (Ppre: list Prop)
+             (Qpre: list (environ -> Prop))
+             (Qtemp Qactuals Qpre_temp : PTree.t _)
+             (Qvar Qpre_var: PTree.t vardesc)
+             (B: Type)
+             (Ppost: B -> list Prop)
+             (Rpre: list (environ -> mpred))
+             (Rpost: B -> list (environ -> mpred))
+             (Rpost': B -> list mpred)
+             (R' Rpre' : list mpred)
+             (vl : list val)
+   (GLBL: (var_types Delta) ! id = None)
+   (NAME: find_in_threadlib_specs id = Some (existT (fun x => x -> funspec) A' ffunspec))
+   (FUNSPEC: ffunspec witness' = mk_funspec (argsig, Tvoid) A Pre Post)
+   (* (GLOBS: (glob_specs Delta) ! id = Some (mk_funspec (argsig,Tvoid) A Pre Post)) *)
+   (* (GLOBT: (glob_types Delta) ! id = Some (type_of_funspec (mk_funspec (argsig,Tvoid) A Pre Post))) *)
+   (H: paramty = type_of_params argsig)
+   (PTREE: local2ptree Q Qtemp Qvar nil nil)
+   (EXTRACT: extract_trivial_liftx R R')
+   (TC1: PROPx P (LOCALx (tc_environ Delta :: Q) (SEPx R))
+          |-- (tc_exprlist Delta (argtypes argsig) bl))
+   (PRE1: Pre witness = PROPx Ppre (LOCALx Qpre (SEPx Rpre)))
+   (PTREE': local2ptree Qpre Qpre_temp Qpre_var nil nil)
+   (EXTRACT': extract_trivial_liftx Rpre Rpre')
+   (MSUBST: force_list (map (msubst_eval_expr Qtemp Qvar) 
+                    (explicit_cast_exprlist (argtypes argsig) bl))
+                = Some vl)
+   (PTREE'': pTree_from_elements (List.combine (var_names argsig) vl) = Qactuals)
+   (CHECKTEMP: PROPx P (LOCALx (tc_environ Delta :: Q) (SEPx R)) 
+           |-- !! Forall (check_one_temp_spec Qactuals) (PTree.elements Qpre_temp))
+   (CHECKVAR: PROPx P (LOCALx (tc_environ Delta :: Q) (SEPx R))
+           |-- !! Forall (check_one_var_spec Qvar) (PTree.elements Qpre_var))
+   (FRAME: fold_right sepcon emp R' |-- fold_right sepcon emp Rpre' * fold_right sepcon emp Frame)
+   (POST1: Post witness = (EX vret:B, PROPx (Ppost vret) (LOCALx nil (SEPx (Rpost vret)))))
+   (EXTRACT'': forall vret, extract_trivial_liftx (Rpost vret) (Rpost' vret))
+   (POST2: Post2 = EX vret:B, PROPx (P++ Ppost vret ) (LOCALx Q
+             (SEPx (map liftx (Rpost' vret ++ Frame)))))
+   (PPRE: fold_right_and True Ppre),
+   @semax cs Espec Delta (PROPx P (LOCALx Q (SEPx R)))
+    (Scall None
+             (Evar id (Tfunction paramty Tvoid cc_default))
+             bl)
+    (normal_ret_assert Post2).
+Proof.
+Admitted.
+
+(* We need different tactics for them, if only because we have an
+   additional witness, which would conflict with the intropattern
+   notation. *)
+
+Ltac forward_call_id00_wow_threadlib witness witness' :=
+let Frame := fresh "Frame" in
+ evar (Frame: list (mpred));
+ eapply (semax_call_id00_wow_threadlib witness witness' Frame);
+ [ reflexivity | reflexivity | reflexivity | reflexivity
+ | prove_local2ptree | repeat constructor 
+ | try apply local_True_right; entailer!
+ | reflexivity
+ | prove_local2ptree | repeat constructor 
+ | reflexivity | reflexivity
+ | Forall_pTree_from_elements
+ | Forall_pTree_from_elements
+ | unfold fold_right at 1 2; cancel
+ | cbv beta iota; 
+    repeat rewrite exp_uncurry;
+    try rewrite no_post_exists0; 
+    first [reflexivity | extensionality; simpl; reflexivity]
+ | intros; try match goal with  |- extract_trivial_liftx ?A _ =>
+        (has_evar A; fail 1) || (repeat constructor)
+     end
+ | unify_postcondition_exps
+ | unfold fold_right_and; repeat rewrite and_True; auto
+ ].
+
+Ltac fwd_call'_threadlib witness witness' :=
+ try match goal with
+      | |- semax _ _ (Scall _ _ _) _ => rewrite -> semax_seq_skip
+      end;
+ first [
+     revert witness; 
+     match goal with |- let _ := ?A in _ => intro; fwd_call'_threadlib A witness'
+     end
+   | eapply semax_seq';
+     [first [forward_call_id1_wow witness
+           | forward_call_id1_x_wow witness
+           | forward_call_id1_y_wow witness
+           | forward_call_id01_wow witness ]
+     | after_forward_call
+     ]
+  |  eapply semax_seq'; [forward_call_id00_wow_threadlib witness witness'
+          | after_forward_call ]
+  | rewrite <- seq_assoc; fwd_call'_threadlib witness
+  ].
+
+Tactic Notation "forward_call_threadlib" constr(witness) constr(witness') simple_intropattern_list(v) :=
+    (* (* we don't need this check (as our specs are canonical),
+          and it stack overflows *)
+    check_canonical_call; *)
+    check_Delta;
+    fwd_call'_threadlib witness witness';
+  [ .. 
+  | first 
+      [ (* body of uniform_intros tactic *)
+         (((assert True by (intros v; apply I);
+            assert (forall a: unit, True) by (intros v; apply I);
+            fail 1)
+          || intros v) 
+        || idtac);
+        (* end body of uniform_intros tactic *)
+        match goal with
+        | |- semax _ _ _ _ => idtac 
+        | |- unit -> semax _ _ _ _ => intros _ 
+        end;
+        repeat (apply semax_extract_PROP; intro);
+       abbreviate_semax;
+       try fwd_skip
+     | complain_intros
+     ]  
+  ].
+
 
 (* ideally the function spec would be like this, but we have to fit
    the precondition of spawn.  Fortunately, we should be able to
@@ -250,7 +385,6 @@ Definition main_spec :=
 Definition Vprog : varspecs := (_f, Tfunction (Tcons (tptr tvoid) Tnil) (tptr tvoid) cc_default) :: nil.
 
 Definition Gprog : funspecs :=
-  threads_funspecs ++
   malloc_spec :: f_spec :: main_spec::nil.
 
 Lemma sepcon_lift_comm A B : `A * `B = `(A * B).
@@ -385,9 +519,7 @@ Proof.
   unfold_field_at 1%nat.
   fold _a _b _lock.
   fold_field_at_.
-  forward_call (ab_, Tsh). (* we should give [lock_invariant] as an
-  argument here but we are cheating because of the universe
-  inconsistency: replace by admit "Rlock_placeholder" *)
+  forward_call_threadlib (ab_, Tsh) (lock_resource ab_).
   {
     replace Frame with [field_at_ Tsh (Tstruct _ab noattr) [StructField _a] ab_;
                         field_at_ Tsh (Tstruct _ab noattr) [StructField _b] ab_] by (unfold Frame; reflexivity).
@@ -402,7 +534,6 @@ Proof.
       now apply derives_refl.
   }
   simpl.
-  replace Rlock_placeholder with (lock_resource ab_) by admit.
   
   (* COMMAND: ab->a = 1; *)
   forward.
@@ -413,17 +544,15 @@ Proof.
   rewrite <- field_at_offset_zero.
   
   (* COMMAND: release(); *)
-  forward_call (ab_, Tsh).
+  forward_call_threadlib (ab_, Tsh) (lock_resource ab_).
   {
     (* specify the passed frame evar generated by forward_call to be [ab->lock |-> l_] *)
-    replace Rlock_placeholder with (lock_resource ab_) by (clear; admit).
     replace Frame with (@nil mpred) by (unfold Frame; reflexivity).
     simpl; cancel.
     unfold lock_resource.
     apply exp_right with 1.
     cancel.
   }
-  replace Rlock_placeholder with (lock_resource ab_) by admit.
   (* END OF COMMAND: release(); *)
   
   (* COMMAND: spawn_thread(&f, (void* )ab); *)
@@ -437,20 +566,18 @@ Proof.
   (* build the spawned frame *)
   destruct split_Tsh as (sh1 & sh2 & Rsh1 & Rsh2 & Join).
   rewrite <- (lock_inv_share_join _ _ _ _ _ Join).
-  (* rewrite <- (@field_at_share_join CompSpecs sh1 sh2 Tsh (Tstruct _ab noattr) [StructField _lock] _ _ Join). *)
   pose (spawned_precondition := fun y : val =>
-    EX sh : share, !!readable_share sh && lock_inv sh y (lock_resource y)
-    (* * field_at sh2 (Tstruct _ab noattr) [StructField _lock] (force_val (sem_cast_neutral l_)) y *)
-  ).
+    EX sh : share, !!readable_share sh && lock_inv sh y (lock_resource y)).
   
-  forward_call (f_, ab_).
-  (* in forward we might invoque a theorem saying that if we can call spawn with an equivalent (or refined) specification
-     this seems too specialize, we could try to see a way around this
-   *)
+  normalize.
+  forward_call_threadlib (f_, ab_) spawned_precondition.
+  (* in forward we might invoque a theorem saying that if we can call
+     spawn with an equivalent (or refined) specification this seems
+     too specialize, we could try to see a way around this *)
   {
     (* extract_trivial_liftx *)
     (* renormalize. *)
-    rewrite exp_fun_comm, exp_lift_comm.
+    rewrite (* exp_fun_comm, *) exp_lift_comm.
     repeat constructor.
   }
   {
@@ -463,7 +590,6 @@ Proof.
     (* the argument of the global function _f is _args // eventually, an application of the alpha-conversion theorem *)
     do 2 rewrite exp_sepcon1.
     apply @exp_right with _args.
-    replace spawned_precondition_placeholder with spawned_precondition in * by (clear; admit).
     match goal with [ |- _ |-- func_ptr' ?P _ * _ * _ ] => abbreviate P as fspec_spawned end.
     
     (* specify the frame that stays *)
@@ -480,13 +606,7 @@ Proof.
   
   (* COMMAND: aquire() *)
   assert_PROP (isptr ab_). eapply derives_trans; [ | apply lock_inv_isptr ]. entailer.
-  forward_call (ab_, sh1).
-  {
-    replace Frame with (@nil mpred) by (unfold Frame; reflexivity).
-    replace Rlock_placeholder with (lock_resource ab_) by admit.
-    simpl; cancel.
-  }
-  replace Rlock_placeholder with (lock_resource ab_) by admit.
+  forward_call_threadlib (ab_, sh1) (lock_resource ab_).
   
   (* COMMAND: a=ab->a *)
   normalize.
@@ -513,10 +633,9 @@ Proof.
     (* loop body *)
     
     (* COMMAND: release() *)
-    forward_call (ab_, sh1).
+    forward_call_threadlib (ab_, sh1) (lock_resource ab_).
     {
       replace Frame with (@nil mpred) by (unfold Frame; reflexivity).
-      replace Rlock_placeholder with (lock_resource ab_) by (clear; admit).
       simpl fold_right.
       unfold lock_resource.
       cancel.
@@ -525,10 +644,9 @@ Proof.
     }
     
     (* COMMAND: acquire() *)
-    forward_call (ab_, sh1).
+    forward_call_threadlib (ab_, sh1) (lock_resource ab_).
     
     (* COMMAND: a = ab->a; *)
-    replace Rlock_placeholder with (lock_resource ab_) by (clear; admit).
     unfold lock_resource at 2.
     clear n; normalize; intros n.
     flatten_sepcon_in_SEP.
@@ -544,10 +662,9 @@ Proof.
   forward.
   
   (* COMMAND: freelock(&ab->lock); *)
-  forward_call (ab_, Tsh).
+  forward_call_threadlib (ab_, Tsh) (lock_resource ab_).
   {
     replace Frame with (@nil mpred) by (unfold Frame; reflexivity).
-    replace Rlock_placeholder with (lock_resource ab_) by (clear; admit).
     simpl fold_right.
     unfold lock_resource at 2.
     normalize.
@@ -557,7 +674,6 @@ Proof.
     To solve this, we must add "lock_inv sh2" to the lock invariant *)
     admit.
   }
-  replace Rlock_placeholder with (lock_resource ab_) by (clear; admit).
   normalize.
   
   (* COMMAND: return(b); *)
@@ -571,19 +687,13 @@ Proof.
   normalize.
   forward.
   assert_PROP (isptr args_). eapply derives_trans; [ | apply lock_inv_isptr ]; entailer.
-  forward_call (args_, sh).
+  forward_call_threadlib (args_, sh) (lock_resource args_).
   {
     destruct _id0; inversion H0; simpl.
     rewrite int_add_repr_0_r; entailer.
   }
-  {
-    replace Rlock_placeholder with (lock_resource args_) by (clear; admit).
-    replace Frame with (@nil mpred) by (unfold Frame; reflexivity).
-    simpl; cancel.
-  }
   normalize.
   
-  replace Rlock_placeholder with (lock_resource args_) by (clear; admit).
   unfold lock_resource at 2.
   normalize; intros n.
   normalize.
@@ -595,11 +705,10 @@ Proof.
   
   forward.
   
-  forward_call (args_, sh).
+  forward_call_threadlib (args_, sh) (lock_resource args_).
   {
-    replace Rlock_placeholder with (lock_resource args_) by (clear; admit).
     replace Frame with (@nil mpred) by (unfold Frame; reflexivity).
-    unfold lock_resource at 3.
+    unfold lock_resource.
     simpl; cancel.
     apply exp_right with (n + 1).
     cancel.
@@ -607,7 +716,7 @@ Proof.
     destruct n; simpl; auto.
   }
   
-  forward_call tt.
+  forward_call_threadlib tt tt.
   {
     replace Frame with (@nil mpred) by (unfold Frame; reflexivity).
     (* ??? *)
