@@ -25,8 +25,9 @@ void release(lock_t *lock) {
 }
 
 void spawn_thread(void* (*f)(void*), void* args) {
-  pthread_t *t = (pthread_t*)malloc(sizeof(pthread_t));
-  pthread_create(t, NULL, f, args);
+  pthread_t t;
+  pthread_create(&t, NULL, f, args);
+  pthread_detach(t);
   return;
 }
 
