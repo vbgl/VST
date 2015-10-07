@@ -87,9 +87,9 @@ Definition makelock_spec :=
 Definition acquire_spec :=
   DECLARE _acquire
    WITH v : val, sh : share
-   PRE [ _ctr_lock OF tptr tlock ]
+   PRE [ _ctr_lock_ptr OF tptr tlock ]
      PROP (readable_share sh)
-     LOCAL (temp _ctr_lock v)
+     LOCAL (temp _ctr_lock_ptr v)
      SEP (`(lock_inv sh v Rlock_placeholder))
    POST [ tvoid ]
      PROP ()
@@ -144,39 +144,51 @@ Definition threads_funspecs : funspecs :=
 (* Threaded part*)
 Definition concurrent_incr_spec :=
   DECLARE _concurrent_incr
-   WITH  addof_ctr_lock: val, addof_ctr: val,v : val, sh : share
+   WITH  addof_ctr_lock: val, addof_ctr: val, sh : share
    PRE [ ]
      PROP (readable_share sh) (*Holds partial ownerchip of ctr lock*)
-     LOCAL (gvar _ctr addof_ctr; gvar _ctr_lock addof_ctr_lock; gvar _ctr_lock v)
-     SEP (`(lock_inv sh v Rlock_placeholder))
+     LOCAL (gvar _ctr addof_ctr; gvar _ctr_lock addof_ctr_lock)
+     SEP (`(lock_inv sh addof_ctr_lock Rlock_placeholder))
    POST [ tvoid ]
      PROP ()
      LOCAL ()
-     SEP ().
+     SEP (`(lock_inv sh addof_ctr_lock Rlock_placeholder)).
+
+Definition thread_invariant v:=
+  EX sh:share,
+  (lock_inv sh v Rlock_placeholder).
 
 Definition thread_func_spec :=
   DECLARE _thread_func
-   WITH z: int
-   PRE [ ]
-     PROP () (*Holds partial ownerchip of two locks*)
-     LOCAL ()
-     SEP ()
+   WITH  addof_ctr_lock: val, addof_ctr: val,v : val, sh : share, arg_:val
+   PRE [_arg OF tptr tvoid]
+     PROP (readable_share sh) (*Holds partial ownerchip of two locks*)
+     LOCAL (temp _arg arg_; gvar _ctr addof_ctr; gvar _ctr_lock addof_ctr_lock)
+     SEP (`(lock_inv sh addof_ctr_lock Rlock_placeholder); `(lock_inv sh arg_ Rlock_placeholder))
    POST [ tvoid ]
      PROP ()
      LOCAL ()
-     SEP ().
+     SEP (`(lock_inv sh arg_ Rlock_placeholder)).
 
-Definition main_spec :=
+Definition main_spec' :=
  DECLARE _main
-  WITH  z0 : int, z1 : int, addof_ctr: val, ctr: val
+  WITH z0: int, addof_ctr: val, ctr: val
   PRE  [] 
         PROP ()
         LOCAL(gvar _ctr addof_ctr)
-        SEP(`(data_at Ews tint (repinj tint z0) ctr);`(data_at Ews (tptr tint) ctr addof_ctr))
+        SEP( `(data_at Ews tint (repinj tint z0) ctr);`(data_at Ews (tptr tint) ctr addof_ctr))
   POST [tint]
+  EX z1:int,
         PROP()
         LOCAL( temp ret_temp (Vint (Int.repr 2)))
-        SEP(`(data_at Ews tint (repinj tint z1) ctr);`(data_at Ews (tptr tint) ctr addof_ctr)).
+        SEP( `(data_at Ews tint (repinj tint z1) ctr);`(data_at Ews (tptr tint) ctr addof_ctr)).
+
+Definition main_spec :=
+ DECLARE _main
+  WITH u : unit
+  PRE  [] main_pre prog u
+  POST [ tint ] main_post prog u.
+
 
 Definition Vprog : varspecs := (_ctr_lock, tlock)::(_ctr, tptr tint)::(_zero,tint)::nil.
 
@@ -185,16 +197,101 @@ Definition Gprog : funspecs :=
 
 
 (*Lets do this first:*)
+
+Lemma body_main:  semax_body Vprog Gprog f_main main_spec.
+Proof.
+  start_function.
+  normalize; intros zero_.
+  normalize; intros addof_ctr.
+  normalize; intros ctr_lock_.
+  normalize; simpl.
+  normalize; simpl.
+
+  apply something.
+  normalize; simpl.
+  forward_call  (z0 , addof_ctr, ctr).
+  
+  
+  
+  eapply semax_seq'.
+  forward_call_id00_wow (z0 , addof_ctr, ctr).
+     [first [forward_call_id1_wow witness
+           | forward_call_id1_x_wow witness
+           | forward_call_id1_y_wow witness
+           | forward_call_id01_wow witness ]
+     | after_forward_call
+     ]
+  fwd_call' (z0 , addof_ctr, ctr).
+  forward_call (z0 , addof_ctr, ctr).
+
+
+Lemma body_thread_func_spec:semax_body Vprog Gprog f_thread_func thread_func_spec.
+Proof.
+  start_function.
+  normalize.
+
+  forward. 
+
+  (*call concurrent_incr*)
+  forward_call (addof_ctr_lock, addof_ctr, sh).
+
+  (* The invariant can't be set up 'legaly' because of universe inconsistency *)
+  assert (HH: Rlock_placeholder = thread_invariant addof_ctr_lock) by admit.
+
+  (*call release*)
+  forward_call (arg_, sh).
+  rewrite HH at 2. unfold thread_invariant.
+  normalize. 
+  apply exp_right with (sh). cancel.
+
+  forward.
+Qed.
+
 Lemma body_concurrent_incr:  semax_body Vprog Gprog f_concurrent_incr concurrent_incr_spec.
   start_function.
   forward _ctr_lock_ptr.
-  forward_call' (v, sh) r.
-  forward_call' (_ctr_lock_ptr).
- 
- forward thread_mutex_ptr_.
- forward.
+  
+  (*call Acquire *)
+  (*drop_LOCAL 2%nat. I don't understand why this condition breaks the fwd call*)
+  forward_call (addof_ctr_lock, sh).
 
-Proof.
+  
+  (*call incr*)
+  Definition counter_invariant addof_ctr:=
+  EX z : Z, EX ctr : val, 
+  (data_at Ews tint (repinj tint (Int.repr z)) ctr)*(data_at Ews (tptr tint) ctr addof_ctr).
+
+  (* The invariant can't be set up 'legaly' because of universe inconsistency *)
+  assert (HH: Rlock_placeholder = (counter_invariant addof_ctr)) by admit.
+  rewrite HH.
+  unfold counter_invariant at 2.
+
+  
+  normalize; intros z.
+  normalize; intros ctr.
+  normalize.
+  
+  forward_call ((Int.repr z), addof_ctr, ctr).
+
+  (*call Release *)
+  forward_call (addof_ctr_lock, sh).
+  rewrite HH.
+  cancel.
+  unfold counter_invariant.
+  normalize.
+  entailer.
+  apply exp_right with (z+1).
+  normalize.
+  rewrite <- add_repr; simpl.
+  fold Int.one.
+  apply exp_right with ctr.
+  cancel.
+
+  forward.
+Qed.
+
+  
+
 
 Lemma body_incr:  semax_body Vprog Gprog f_incr incr_spec.
 Proof.
