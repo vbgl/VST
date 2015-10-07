@@ -50,7 +50,6 @@ void *thread_func(void *arg) {
 
 int  main(void)
 {
-  
    /* ctr = 0 */
    reset();
    makelock(&ctr_lock);
