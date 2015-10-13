@@ -1,7 +1,9 @@
 Require Import floyd.proofauto.
 Require Import progs.sumarray.
+Definition CompSpecs' : compspecs.
+Proof. make_compspecs1 prog. Defined.
 Instance CompSpecs : compspecs.
-Proof. make_compspecs prog. Defined.
+Proof. make_compspecs2 CompSpecs'. Defined.
 
 Local Open Scope logic.
 
@@ -110,8 +112,9 @@ entailer!. (* smt_test verif_sumarray_example2 *)
   rewrite Zlength_map in *; omega.
 forward. (* s += x; *)
 forward. (* i++; *)
-  apply exp_right with (Zsucc a1).
- entailer!. rewrite H2 in H1; inv H1.
+ apply exp_right with (Zsucc a1).
+ entailer!.  (* smt_test: verif_sumarray_example3 *)
+ rewrite H2 in H1; inv H1.
  f_equal; apply add_one_more_to_sum; try omega; auto.
 (* After the loop *)
 forward.  (* return s; *)
