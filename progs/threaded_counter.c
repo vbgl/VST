@@ -2,6 +2,8 @@
  */
 #include <pthread.h>
 #include "threads.h"
+#include <stdio.h>
+#include <stdlib.h>
 
 /* the lock*/
 lock_t ctr_lock;
@@ -40,31 +42,31 @@ void concurrent_incr() {
   release(ctr_lock_ptr);
 }
 
-void *thread_func(void *arg) {
+void thread_func(void *arg) {
   lock_t *thread_mutex_ptr;
   thread_mutex_ptr = (lock_t *)arg;
    concurrent_incr();
    release( thread_mutex_ptr );
-   return NULL;
 }
 
 int  main(void)
 {
+  
    /* ctr = 0 */
    reset();
    makelock(&ctr_lock);
    release(&ctr_lock);
-   lock_t thread_mutex;
-   makelock(&thread_mutex);
+   lock_t *thread_mutex_ptr = (lock_t *)malloc(sizeof(lock_t));
+   makelock(thread_mutex_ptr);
    /* Spawn */
-   spawn_thread(&thread_func, (void*)&thread_mutex);
+   spawn_thread((void *)&thread_func, (void*)thread_mutex_ptr);
    /*rc1=pthread_create( &thread1, NULL, thread_incr, &thread_mutex); */
    
    /*Local incr */
    concurrent_incr();
 
    /*JOIN */
-   acquire( &thread_mutex );
+   acquire( thread_mutex_ptr );
    /* printf("I'm done with a final counter of: %d\n", *ctr);
     */ 
    int t = read();
