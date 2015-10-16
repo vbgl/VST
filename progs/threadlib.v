@@ -35,12 +35,13 @@ Require Import floyd.proofauto.
 
 Module Type threadlib_args.
   Parameter CompSpecs : compspecs.
-  (* these are all names defined in threads.h *)
+  (* these are all names defined in threads.h. They might not appear
+  in the file, in which case, choose a fresh identifier *)
   Parameters
-    _lock
+    _lock (* anonymous *)
     _lock_t
-    _f
-    _args
+    _f (* anonymous *)
+    _args (* anonymous *)
     _makelock
     _freelock
     _acquire
@@ -68,11 +69,11 @@ Definition makelock_spec R :=
    PRE [ _lock OF tptr tlock ]
      PROP (writable_share sh)
      LOCAL (temp _lock v)
-     SEP (`(data_at_ Tsh tlock v))
+     SEP (`(data_at_ sh tlock v))
    POST [ tvoid ]
      PROP ()
      LOCAL ()
-     SEP (`(lock_inv Tsh v R)).
+     SEP (`(lock_inv sh v R)).
 
 Definition freelock_spec R :=
    WITH v : val, sh : share
@@ -83,7 +84,7 @@ Definition freelock_spec R :=
    POST [ tvoid ]
      PROP ()
      LOCAL ()
-     SEP (`R ; `(mapsto_ sh tlock v)).
+     SEP (`R ; `(data_at_ sh tlock v)).
 
 Definition acquire_spec R :=
    WITH v : val, sh : share

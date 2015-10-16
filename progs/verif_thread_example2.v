@@ -81,11 +81,11 @@ Definition makelock_spec R :=
    PRE [ _lock OF tptr tlock ]
      PROP (writable_share sh; predicates_sl.precise R; positive_mpred R)
      LOCAL (temp _lock v)
-     SEP (`(data_at_ Tsh tlock v))
+     SEP (`(data_at_ sh tlock v))
    POST [ tvoid ]
      PROP ()
      LOCAL ()
-     SEP (`(lock_inv Tsh v R)).
+     SEP (`(lock_inv sh v R)).
 
 Definition freelock_spec R :=
    WITH v : val, sh : share
@@ -96,7 +96,7 @@ Definition freelock_spec R :=
    POST [ tvoid ]
      PROP ()
      LOCAL ()
-     SEP (`R ; `(mapsto_ sh tlock v)).
+     SEP (`R ; `(data_at_ sh tlock v)).
 
 Definition acquire_spec R :=
    WITH v : val, sh : share
@@ -517,7 +517,7 @@ Definition main_spec :=
  DECLARE _main
   WITH u : unit
   PRE  [] PROP () LOCAL () SEP ()
-  POST [ tint ] PROP () LOCAL (temp ret_temp (Vint (Int.repr 4))) SEP ().
+  POST [ tint ] PROP () LOCAL () SEP ().
 
 Definition Vprog : varspecs := (_f, Tfunction (Tcons (tptr tvoid) Tnil) (tptr tvoid) cc_default) :: nil.
 
@@ -899,12 +899,16 @@ Proof.
   (*  *)
   forward_call_threadlib (field_address (Tstruct _ab noattr) [StructField _join] ab_, Tsh) (res_inv_2 ab_ sh2).
   {
+    apply prop_right; f_equal.
+    unfold field_address, nested_field_offset2, nested_field_rec, field_offset, fieldlist.field_offset2, Ctypes.field_offset; simpl.
+    if_tac; tauto.
+  }
+  {
     rewrite res_inv_2_1.
     replace Frame with (@nil mpred) by (unfold Frame; reflexivity).
     simpl.
-    cancel.
-    entailer.
-    (* TODO ENTAILER AND NORMALIZE SOLVE THE GOAL BUT THEY SHOULD NOT BE ABLE TO *)
+    (* not provable, as the first lock is not a lock anymore *)
+    admit.
   }
   normalize.
   
