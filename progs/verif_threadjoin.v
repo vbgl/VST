@@ -1,7 +1,7 @@
 Require Import floyd.proofauto.
-Require Import progs.thread_example2.
+Require Import progs.threadjoin.
 
-(* We do not yet call threadlib, here, because we are modifying the
+(* We do not yet call threadlib, here, because we are tinkering with
    pre- and postconditions *)
 
 Instance CompSpecs : compspecs.
@@ -404,72 +404,9 @@ Proof.
   reflexivity.
 Qed.
 
-(* In fact we need locks to two resources:
-   1) the resource invariant, for passing the resources
-   2) the join resource invariant, for returning all resources, including itself
-   for this we need to define them in a mutually recursive fashion: *)
-
-Definition res_invariants_fun Q sh1 p1 sh2 p2 : (bool -> mpred) -> (bool -> mpred) :=
-  fun R b =>
-    if b then
-      Q * lock_inv sh2 p2 (|> R false)
-    else
-      Q * lock_inv sh1 p1 (|> R true) * lock_inv sh2 p2 (|> R false).
-
-Definition res_invariants Q sh1 p1 sh2 p2 : bool -> mpred := HORec (res_invariants_fun Q sh1 p1 sh2 p2).
-Definition res_invariant Q sh1 p1 sh2 p2 : mpred := res_invariants Q sh1 p1 sh2 p2 true.
-Definition join_res_invariant Q sh1 p1 sh2 p2 : mpred := res_invariants Q sh1 p1 sh2 p2 false.
-
-Lemma res_invariants_eq Q sh1 p1 sh2 p2 : res_invariants Q sh1 p1 sh2 p2 =
-  res_invariants_fun Q sh1 p1 sh2 p2 (res_invariants Q sh1 p1 sh2 p2).
-Proof.
-  apply HORec_fold_unfold, prove_HOcontractive.
-  intros P1 P2 b.
-  destruct b.
-    (* resource invariant *)
-    apply subp_sepcon; try apply subp_refl.
-    apply allp_left with false.
-    eapply derives_trans.
-      apply nonexpansive_entail, nonexpansive_lock_inv.
-      apply fash_derives, andp_left1, derives_refl.
-    
-    (* join resource invariant *)
-    repeat apply subp_sepcon; try apply subp_refl.
-      apply allp_left with true.
-      eapply derives_trans.
-        apply nonexpansive_entail, nonexpansive_lock_inv.
-        apply fash_derives, andp_left1, derives_refl.
-      
-      apply allp_left with false.
-      eapply derives_trans.
-        apply nonexpansive_entail, nonexpansive_lock_inv.
-        apply fash_derives, andp_left1, derives_refl.
-Qed.
-
-Lemma res_invariant_eq Q sh1 p1 sh2 p2 :
-  res_invariant Q sh1 p1 sh2 p2 =
-  Q *
-  lock_inv sh2 p2 (|> join_res_invariant Q sh1 p1 sh2 p2).
-Proof.
-  unfold res_invariant at 1.
-  rewrite res_invariants_eq.
-  reflexivity.
-Qed.
-
-Lemma join_res_invariant_eq Q sh1 p1 sh2 p2 :
-  join_res_invariant Q sh1 p1 sh2 p2 =
-  Q *
-  lock_inv sh1 p1 (|> res_invariant Q sh1 p1 sh2 p2) *
-  lock_inv sh2 p2 (|> join_res_invariant Q sh1 p1 sh2 p2).
-Proof.
-  unfold join_res_invariant at 1.
-  rewrite res_invariants_eq.
-  reflexivity.
-Qed.
-
 (* The following resource is the actual data that we want to pass *)
 
-Definition data_resource p :=
+Definition data_res p :=
   EX n : Z,
     field_at Tsh (Tstruct _ab noattr) [StructField _a] (Vint (Int.repr n)) p *
     field_at Tsh (Tstruct _ab noattr) [StructField _b] (Vint (Int.repr (2 * n))) p.
@@ -483,21 +420,16 @@ but it might be more like:
 { l []-> |>R } acquire(l) { R * l []-> |>R }
 *)
 
-Definition res_inv_1 p sh :=
-  res_invariant (data_resource p) sh p sh (field_address (Tstruct _ab noattr) [StructField _join] p).
+Definition shiftfield v := field_address (Tstruct _ab noattr) [StructField _join] v.
 
-Definition res_inv_2 p sh :=
-  join_res_invariant (data_resource p) sh p sh (field_address (Tstruct _ab noattr) [StructField _join] p).
+Definition join_res sh p := selflock (lock_inv sh p (data_res p)) sh (shiftfield p).
 
-Lemma res_inv_2_1 sh p :
-  res_inv_2 p sh = res_inv_1 p sh *
-  lock_inv sh p (|> res_inv_1 p sh).
+Lemma join_res_eq sh p : join_res sh p = lock_inv sh p (data_res p) * lock_inv sh (shiftfield p) (|> join_res sh p).
 Proof.
-  unfold res_inv_1, res_inv_2.
-  unfold res_invariant at 1, join_res_invariant.
-  rewrite res_invariants_eq.
-  simpl.
-  apply pred_ext; cancel.
+  unfold join_res at 1.
+  rewrite selflock_eq.
+  unfold join_res.
+  reflexivity.
 Qed.
 
 Definition f_spec :=
@@ -507,7 +439,10 @@ Definition f_spec :=
      PROP ()
      LOCAL (temp _args args_)
      SEP (`(EX sh : share,
-       !!(readable_share sh) && lock_inv sh args_ (res_inv_1 args_ sh)))
+       !!(readable_share sh) &&
+       (lock_inv sh args_ (data_res args_) *
+       lock_inv sh (shiftfield args_) (join_res sh args_))
+     ))
   POST [ tptr tvoid ]
      PROP ()
      LOCAL ()
@@ -632,7 +567,7 @@ Lemma field_compatible_tlock_join v :
 Proof.
   intros F; pose proof F as F'; revert F'. 
   destruct v; unfold field_compatible, field_address; if_tac; intuition;
-  assert (Int.unsigned i + 24 < Int.modulus) by (simpl in *; omega).
+  assert (Int.unsigned i + 32 < Int.modulus) by (simpl in *; omega).
   - (* size *)
     unfold nested_field_offset2, nested_field_rec, field_offset, fieldlist.field_offset2, Ctypes.field_offset; simpl in *.
     rewrite Int.unsigned_add_carry; unfold Int.add_carry, Int.unsigned in *.
@@ -642,7 +577,7 @@ Proof.
     match goal with [ H : align_compatible _ _ |- _ ] => destruct H as [x A] end.
     rewrite Int.unsigned_add_carry; unfold Int.add_carry, Int.unsigned in *.
     if_tac; simpl in *; [ | omega ].
-    exists (x + 6).
+    exists (x + 8).
     rewrite A; unfold align_attr; simpl.
     omega.
 Qed.
@@ -665,7 +600,7 @@ Proof.
   specification matches exactly the type of the function, for example
   here I copy-pasted a specification for mallocN found in verif_queue
   that used tint instead of tuint for the regular malloc *)
-  forward_call 56%Z ab_.
+  forward_call 72%Z ab_.
   now match goal with [|-_<=_<=_] => compute; intuition; congruence end.
   
   (* transforming memory_block into field_at_ *)
@@ -692,20 +627,23 @@ Proof.
   (* COMMAND: makelock(); *)
   (* establish the lock invariant *)
   destruct split_Tsh as (sh1 & sh2 & Rsh1 & Rsh2 & Join).
-  forward_call_threadlib (ab_, Tsh) (res_inv_1 ab_ sh2).
+  forward_call_threadlib (ab_, Tsh) (data_res ab_).
   {
     replace Frame with [field_at_ Tsh (Tstruct _ab noattr) [StructField _join] ab_;
                         field_at_ Tsh (Tstruct _ab noattr) [StructField _a] ab_;
                         field_at_ Tsh (Tstruct _ab noattr) [StructField _b] ab_] by (unfold Frame; reflexivity).
     simpl. entailer. cancel.
-    unfold data_at_, field_at_, field_at.
-    normalize.
-    apply andp_right.
-      apply prop_right; intuition.
-        now apply field_compatible_tlock; auto.
-        now apply default_value_fits.
-      
-      now apply derives_refl.
+    apply derives_refl'.
+    unfold field_at_.
+    rewrite field_at_data_at.
+    unfold data_at_, data_at, field_at_.
+    f_equal.
+    unfold field_address.
+    if_tac; [ | tauto ].
+    unfold nested_field_offset2, nested_field_rec, field_offset, fieldlist.field_offset2, Ctypes.field_offset; simpl.
+    assert (isptr ab_) as I by auto.
+    destruct ab_; simpl; [ reflexivity | .. ]; inversion I.
+    rewrite int_add_repr_0_r; reflexivity.
   }
   {
     intuition.
@@ -720,35 +658,20 @@ Proof.
   (* split the frame to extract the lock *)
   normalize.
   name ab _ab__1.
-  forward_call_threadlib (field_address (Tstruct _ab noattr) [StructField _join] ab_, Tsh) (res_inv_2 ab_ sh2).
+  replace_SEP 1 (`(data_at_ Tsh tlock (shiftfield ab_))) (* makes frame inference succeed *).
+  { 
+    entailer.
+    apply derives_refl'.
+    unfold field_at_.
+    unfold data_at_, field_at_, data_at.
+    rewrite field_at_data_at.
+    reflexivity.
+  }
+  forward_call_threadlib (shiftfield ab_, Tsh) (join_res sh2 ab_).
   {
     apply prop_right; f_equal.
-    unfold field_address.
+    unfold shiftfield, field_address.
     if_tac; [reflexivity|tauto].
-  }
-  {
-    replace Frame with [lock_inv Tsh ab_ (res_inv_1 ab_ sh2);
-                        field_at_ Tsh (Tstruct _ab noattr) [StructField _a] ab_;
-                        field_at_ Tsh (Tstruct _ab noattr) [StructField _b] ab_] by (unfold Frame; reflexivity).
-    simpl.
-    entailer.
-    cancel.
-    unfold data_at_, field_at_, field_at.
-    normalize.
-    apply andp_right. apply prop_right; intuition.
-      now apply field_compatible_tlock_join; auto.
-      now apply default_value_fits.
-      assert_PROP (isptr ab_) as I1 by entailer.
-      assert_PROP (isptr (field_address (Tstruct _ab noattr) [StructField _join] ab_)) as I2 by entailer.
-      apply derives_refl'.
-      unfold at_offset, offset_val.
-      f_equal.
-      destruct (field_address (Tstruct _ab noattr) [StructField _join] ab_) eqn : E2; try inversion I2.
-      destruct (ab_) eqn : E1; try inversion I1.
-      clear -E2.
-      unfold field_address, nested_field_offset2, nested_field_rec, field_offset, fieldlist.field_offset2, Ctypes.field_offset in *; simpl in *.
-      if_tac in E2; inversion E2.
-      rewrite Int.add_zero; auto.
   }
   {
     intuition.
@@ -770,22 +693,12 @@ Proof.
   normalize.
   
   (* COMMAND: release(); *)
-  forward_call_threadlib (ab_, Tsh) (res_inv_1 ab_ sh2).
+  forward_call_threadlib (ab_, Tsh) (data_res ab_).
   {
-    (* specify the passed frame evar generated by forward_call to be [ab->lock |-> l_] *)
-    replace Frame with [lock_inv sh1 (field_address (Tstruct _ab noattr) [StructField _join] ab_) (res_inv_2 ab_ sh2)] by (unfold Frame; reflexivity).
-    simpl; cancel.
-    unfold res_inv_1.
-    rewrite res_invariant_eq.
-    unfold data_resource at 1.
-    unfold res_inv_2.
-    Exists 1.
-    match goal with [ |- _ |-- ?F1 * ?F2 * lock_inv sh2 ?p (|> ?R) ] =>
-    apply derives_trans with (F1 * F2 * lock_inv sh2 p R)
-    end; cancel.
-    apply lock_inv_later.
+    unfold data_res.
+    Exists 1; simpl.
+    cancel.
   }
-  (* END OF COMMAND: release(); *)
   
   (* COMMAND: spawn_thread(&f, (void* )ab); *)
   
@@ -798,13 +711,12 @@ Proof.
   (* build the spawned frame *)
   rewrite <- (lock_inv_share_join _ _ _ _ _ Join).
   pose (spawned_precondition := fun y : val =>
-    EX sh : share, !!readable_share sh && lock_inv sh y (res_inv_1 y sh)).
+    EX sh : share, !!readable_share sh &&
+       (lock_inv sh y (data_res y) *
+       lock_inv sh (shiftfield y) (join_res sh y))).
   
   normalize.
   forward_call_threadlib (f_, ab_) spawned_precondition.
-  (* in forward we might invoque a theorem saying that if we can call
-     spawn with an equivalent (or refined) specification this seems
-     too specialize, we could try to see a way around this *)
   {
     (* extract_trivial_liftx *)
     (* renormalize. *)
@@ -817,44 +729,54 @@ Proof.
     destruct ab; inversion TC; reflexivity.
   }
   {
-    simpl; cancel.
-    (* the argument of the global function _f is _args // eventually, an application of the alpha-conversion theorem *)
-    do 2 rewrite exp_sepcon1.
-    apply @exp_right with _args.
-    match goal with [ |- _ |-- func_ptr' ?P _ * _ * _ ] => abbreviate P as fspec_spawned end.
-    
-    (* specify the frame that stays *)
-    replace Frame with [lock_inv sh1 ab_ (res_inv_1 ab_ sh2);
-                        lock_inv sh1 (field_address (Tstruct _ab noattr) [StructField _join] ab_)
-                                 (res_inv_2 ab_ sh2)] by (unfold Frame; reflexivity); subst Frame.
-    (* field_at sh1 (Tstruct _ab noattr) [StructField _lock] (force_val (sem_cast_neutral l_)) ab_] : list mpred)) *)
     simpl.
+    Exists _args.
+    match goal with [ |- _ |-- func_ptr' ?P _ * _ * _ ] => abbreviate P as fspec_spawned end.
     unfold spawned_precondition.
+    Exists sh2; normalize.
     cancel.
-    apply exp_right with sh2; entailer.
-  }
-  
+  }  
   normalize.
   replace_SEP 0 (`emp).  admit. (* there is some predicate over the heap that I don't know how to handle *)
   
   (* COMMAND: aquire() *)
-  assert_PROP (isptr ab_).
-  apply derives_trans with (!!isptr ab_ * `(lock_inv sh1 (field_address (Tstruct _ab noattr) [StructField _join] ab_) (res_inv_2 ab_ sh2))).
-    entailer. cancel. apply lock_inv_isptr. entailer.
-  forward_call_threadlib (field_address (Tstruct _ab noattr) [StructField _join] ab_, sh1) (res_inv_2 ab_ sh2).
+  assert_PROP (isptr ab_) as Pab_ by entailer.
+  (* apply derives_trans with (!!isptr ab_ * `(lock_inv sh1 (field_address (Tstruct _ab noattr) [StructField _join] ab_) (res_inv_2 ab_ sh2))). *)
+  (*   entailer. cancel. apply lock_inv_isptr. entailer. *)
+  forward_call_threadlib (shiftfield ab_, sh1) (join_res sh2 ab_).
   {
     apply prop_right; f_equal.
-    unfold field_address, nested_field_offset2, nested_field_rec, field_offset, fieldlist.field_offset2, Ctypes.field_offset; simpl.
+    unfold shiftfield, field_address, nested_field_offset2, nested_field_rec, field_offset, fieldlist.field_offset2, Ctypes.field_offset; simpl.
     if_tac; tauto.
   }
   
+  (* COMMAND: aquire() *)
+  forward_call_threadlib (ab_, sh1) (data_res ab_).
+  
   (* Now that we have acquired back all the lock resources, we put back sh1 and sh2 into Tsh *)
-  rewrite res_inv_2_1.
+  rewrite join_res_eq.
   normalize.
-  rewrite <- res_inv_2_1.
-  replace_SEP 3 (`(lock_inv sh1 ab_ (|> res_inv_1 ab_ sh2))).
-  { entailer; apply lock_inv_later. }
+  rewrite <- join_res_eq.
+  replace_SEP 4 (`(lock_inv sh1 (shiftfield ab_) (|> join_res sh2 ab_))); [entailer; apply lock_inv_later | ].
+  gather_SEP 4 1.
+  rewrite sepcon_lift_comm, (lock_inv_share_join _ _ _ _ _ Join).
+replace _lock with _join by admit (* TEMPORARY *).
+  forward_call_threadlib (shiftfield ab_, Tsh) (join_res sh2 ab_).
+  {
+    apply prop_right; f_equal.
+    unfold shiftfield, field_address, nested_field_offset2, nested_field_rec, field_offset, fieldlist.field_offset2, Ctypes.field_offset; simpl.
+    if_tac; tauto.
+  }
+  {
+  rewrite join_res_eq.
+rewrite <- (lock_inv_share_join _ _ _ _ _ Join).
+  rewrite <- join_res_eq.
+  cancel.
+  Intros n1.
+  Intros n2.
+  cancel.
   gather_SEP 1 3.
+rewrite (lock_inv_share_join _ _ _ _ _ Join).
   replace_SEP 0 (`(lock_inv Tsh ab_ (|> res_inv_1 ab_ sh2))).
   { rewrite <- (lock_inv_share_join _ _ _ _ _ Join).
     entailer. cancel. }
