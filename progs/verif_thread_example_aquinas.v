@@ -27,10 +27,12 @@ Ltac simplify_value_fits' :=
 
 Axiom lock_inv : share -> val -> mpred -> mpred.
 
-Axiom lock_inv_share_join : forall sh1 sh2 sh v R, sepalg.join sh1 sh2 sh ->
-  lock_inv sh1 v R * lock_inv sh2 v R = lock_inv sh v R.
+Axiom lock_inv_share_join : forall sh1 sh2 sh l R, sepalg.join sh1 sh2 sh ->
+  lock_inv sh1 l R * lock_inv sh2 l R = lock_inv sh l R.
 
-Axiom lock_inv_isptr : forall sh v R, lock_inv sh v R |-- !!(isptr v).
+Axiom lock_inv_isptr : forall sh l R, lock_inv sh l R |-- !!(isptr l).
+
+Axiom lock_inv_separate : forall sh1 sh2 l R1 R2, lock_inv sh1 l R1 * lock_inv sh2 l R2 |-- FF.
 
 Axiom hold : val -> mpred -> mpred.
 
@@ -41,43 +43,43 @@ Axiom tightly_eq : forall R, tight R -> tightly R = R.
 Definition tlock := Tstruct _lock_t noattr.
 
 Definition makelock_spec R :=
-   WITH v : val, sh : share
+   WITH l : val, sh : share
    PRE [ 1%positive OF tptr tlock ]
      PROP (writable_share sh)
-     LOCAL (temp 1%positive v)
-     SEP (`(data_at_ sh tlock v))
+     LOCAL (temp 1%positive l)
+     SEP (`(data_at_ sh tlock l))
    POST [ tvoid ]
      PROP ()
      LOCAL ()
-     SEP (`(lock_inv sh v R); `(hold v R)).
+     SEP (`(lock_inv sh l R); `(hold l R)).
 
 Definition freelock_spec R :=
-   WITH v : val, sh : share
+   WITH l : val, sh : share
    PRE [ 1%positive OF tptr tlock ]
      PROP (writable_share sh)
-     LOCAL (temp 1%positive v)
-     SEP (`(lock_inv sh v R); `(hold v R))
+     LOCAL (temp 1%positive l)
+     SEP (`(lock_inv sh l R); `(hold l R))
    POST [ tvoid ]
      PROP ()
      LOCAL ()
-     SEP (`(data_at_ sh tlock v)).
+     SEP (`(data_at_ sh tlock l)).
 
 Definition acquire_spec R :=
-   WITH v : val, sh : share
+   WITH l : val, sh : share
    PRE [ 1%positive OF tptr tlock ]
      PROP (readable_share sh)
-     LOCAL (temp 1%positive v)
-     SEP (`(lock_inv sh v R))
+     LOCAL (temp 1%positive l)
+     SEP (`(lock_inv sh l R))
    POST [ tvoid ]
      PROP ()
      LOCAL ()
-     SEP (`(lock_inv sh v R); `(tightly R)).
+     SEP (`(lock_inv sh l R); `(tightly R)).
 
 Definition release_spec R := (* no need for the share *)
-   WITH v : val
+   WITH l : val
    PRE [ 1%positive OF tptr tlock ]
-     PROP (tight R; exists R', (R = R' * hold v (|> R))%logic)
-     LOCAL (temp 1%positive v)
+     PROP (tight R; exists R', (R = R' * hold l (|> R))%logic)
+     LOCAL (temp 1%positive l)
      SEP (`R)
    POST [ tvoid ]
      PROP ()
@@ -442,6 +444,20 @@ Proof.
     apply fash_derives, andp_left1, derives_refl.
 Qed.
 
+Lemma data_res_eq_verbose p : data_res p = EX v : Z,
+    field_at Tsh (Tstruct _t noattr) [StructField _p1] (Vint (Int.repr v)) p *
+    field_at Tsh (Tstruct _t noattr) [StructField _p2] (Vint (Int.repr v)) p *
+    (field_at Tsh (Tstruct _t noattr) [StructField _p3] (Vint (Int.repr 1)) p
+    ||
+    (field_at Tsh (Tstruct _t noattr) [StructField _p3] (Vint (Int.repr 0)) p *
+    lock_inv sh2 p (|> data_res p))) *
+    hold p (|> data_res p).
+Proof.
+  rewrite data_res_eq at 1.
+  unfold data_res'.
+  apply pred_ext; Intros v; Exists v; auto.
+Qed.
+
 Definition f_spec :=
  DECLARE _f
   WITH y : val
@@ -549,61 +565,6 @@ Proof.
   omega.
 Qed.
 
-Tactic Notation "assert_PROP" constr(A) :=
-  first [apply (assert_PROP A) | apply (assert_PROP' A)]; [ | intro ].
-Tactic Notation "assert_PROP" constr(A) "by" tactic(t) :=
-  first [apply (assert_PROP A) | apply (assert_PROP' A)]; [ now t | intro ].
-Tactic Notation "assert_PROP" constr(A) "as" simple_intropattern(H)  :=
-  first [apply (assert_PROP A) | apply (assert_PROP' A)]; [ | intro H ].
-Tactic Notation "assert_PROP" constr(A) "as" simple_intropattern(H) "by" tactic(t) :=
-  first [apply (assert_PROP A) | apply (assert_PROP' A)]; [ now t | intro H ].
-
-
-Tactic Notation "forward_while" constr(Inv)
-     simple_intropattern(pat) :=
-  repeat (apply -> seq_assoc; abbreviate_semax);
-  first [ignore (Inv: environ->mpred) 
-         | fail 1 "Invariant (first argument to forward_while) must have type (environ->mpred)"];
-  apply semax_pre with Inv;
-    [  unfold_function_derives_right 
-    | eapply semax_seq;
-      [repeat match goal with
-       | |- semax _ (exp _) _ _ => fail 1
-       | |- semax _ (PROPx _ _) _ _ => fail 1
-       | |- semax _ ?Pre _ _ => match Pre with context [ ?F ] => unfold F end
-       end;
-       match goal with |- semax _ ?Pre _ _ =>
-          let p := fresh "Pre" in let Hp := fresh "HPre" in 
-          remember Pre as p eqn:Hp;
-          repeat rewrite exp_uncurry in Hp; subst p
-       end;
-      match goal with |- semax ?Delta ?Pre (Swhile ?e _) _ =>
-      match goal with [ |- semax _ (@exp _ _ ?A _) _ _ ] => eapply (@semax_while_3g1 _ _ A) end;  (****** CHANGED ****)
-        simpl typeof;
-       [ reflexivity 
-       | intros pat; simpl_fst_snd
-       | do_compute_expr1 Delta Pre e; eassumption
-       | intros pat; simpl_fst_snd; 
-         let HRE := fresh "HRE" in apply semax_extract_PROP; intro HRE;
-         first [simple apply typed_true_of_bool in HRE
-               | apply typed_true_tint_Vint in HRE
-               | apply typed_true_tint in HRE
-               | idtac ];
-         repeat (apply semax_extract_PROP; intro); 
-         do_repr_inj HRE; normalize in HRE
-        ]
-       end
-       | simpl update_tycon; 
-         apply extract_exists_pre; intros pat; simpl_fst_snd;
-         let HRE := fresh "HRE" in apply semax_extract_PROP; intro HRE;
-         first [simple apply typed_false_of_bool in HRE
-               | apply typed_false_tint_Vint in HRE
-               | apply typed_false_tint in HRE
-               | idtac ];
-         repeat (apply semax_extract_PROP; intro)
-       ]
-     ]; abbreviate_semax; autorewrite with ret_assert.
-
 Lemma semax_orp {E:OracleKind} {Delta P Q c R} : semax Delta P c R -> semax Delta Q c R -> semax Delta (P || Q) c R.
 Proof.
   intros HP HQ.
@@ -701,7 +662,7 @@ Proof.
     forward (* x.p2 = i; *).
     
     (* getting `(data_res x) in the precondition *)
-    replace_SEP 1 (`(hold x (|> data_res x))). entailer!. apply hold_later.
+    replace_SEP 1 (`(hold x (|> data_res x))) by (entailer!; apply hold_later).
     gather_SEP 1 2 3 4; replace_SEP 0 (`(data_res x)).
     rewrite data_res_eq; unfold data_res' at 2; rewrite <- data_res_eq. entailer.
     Exists i. entailer. cancel. apply orp_right1, derives_refl.
@@ -770,5 +731,128 @@ Proof.
   apply derives_refl'; f_equal.
 Qed.
 
-Lemma body_f : semax_body Vprog Gprog f_f f_spec.
+
+Lemma semax_loop_noincr {Espec} {CS: compspecs} Delta Q body R :
+  @semax CS Espec Delta Q (Swhile (Econst_int (Int.repr 1) tint) body) R ->
+  @semax CS Espec Delta Q (Sloop body Sskip) R.
+Proof.
 Admitted.
+
+Tactic Notation "forward_while" constr(Inv)
+     simple_intropattern(pat) :=
+  repeat (apply -> seq_assoc; abbreviate_semax);
+  first [ignore (Inv: environ->mpred) 
+         | fail 1 "Invariant (first argument to forward_while) must have type (environ->mpred)"];
+  apply semax_pre with Inv;
+    [  unfold_function_derives_right 
+    | eapply semax_seq;
+      [repeat match goal with
+       | |- semax _ (exp _) _ _ => fail 1
+       | |- semax _ (PROPx _ _) _ _ => fail 1
+       | |- semax _ ?Pre _ _ => match Pre with context [ ?F ] => unfold F end
+       end;
+       match goal with |- semax _ ?Pre _ _ =>
+          let p := fresh "Pre" in let Hp := fresh "HPre" in 
+          remember Pre as p eqn:Hp;
+          repeat rewrite exp_uncurry in Hp; subst p
+       end;
+      match goal with |- semax ?Delta ?Pre (Swhile ?e _) _ =>
+        eapply semax_while_3g1; 
+        simpl typeof;
+       [ reflexivity 
+       | intros pat; simpl_fst_snd
+       | (do_compute_expr1 Delta Pre e; eassumption || unfold tc_expr, denote_tc_assert; apply prop_right; tauto) (* CHANGED *)
+       | intros pat; simpl_fst_snd; 
+         let HRE := fresh "HRE" in apply semax_extract_PROP; intro HRE;
+         first [simple apply typed_true_of_bool in HRE
+               | apply typed_true_tint_Vint in HRE
+               | apply typed_true_tint in HRE
+               | idtac ];
+         repeat (apply semax_extract_PROP; intro); 
+         do_repr_inj HRE; normalize in HRE
+        ]
+       end
+       | simpl update_tycon; 
+         apply extract_exists_pre; intros pat; simpl_fst_snd;
+         let HRE := fresh "HRE" in apply semax_extract_PROP; intro HRE;
+         first [simple apply typed_false_of_bool in HRE
+               | apply typed_false_tint_Vint in HRE
+               | apply typed_false_tint in HRE
+               | idtac ];
+         repeat (apply semax_extract_PROP; intro)
+       ]
+     ]; abbreviate_semax; autorewrite with ret_assert.
+
+Lemma body_f : semax_body Vprog Gprog f_f f_spec.
+Proof.
+  start_function.
+  forward.
+  drop_LOCAL 1%nat.
+  assert_PROP (isptr y) as Py by (entailer; apply lock_inv_isptr).
+  replace (force_val (sem_cast_neutral y)) with y by (destruct y; inversion Py; auto).
+  apply semax_loop_noincr.
+  match goal with |- semax _ ?Pre _ _ => pose (Inv:=(EX u : unit, Pre)) end.
+  rewrite semax_seq_skip.
+  forward_while Inv VAR; [ .. | inversion HRE (* loop never exits *) ].
+  { Exists tt; entailer. }
+  { apply prop_right, I. }
+  
+  forward (* skip *).
+  forward_call_threadlib (y, sh2) (data_res y) (* acquire(&(x->l)); *).
+  { apply Rsh2. }
+  rewrite tightly_eq; [ | admit ].
+  
+  rewrite data_res_eq_verbose at 2.
+  forward_intro v.
+  normalize.
+  forward (* temp = x->p1; *).
+  forward (* x->p1 = temp * 2; *).
+  forward (* temp = x->p2; *).
+  forward (* x->p2 = temp * 2; *).
+  forward (* temp = x->p1; *).
+  
+  rename v into n.
+  forward_if ((PROP  ()  LOCAL  (temp _x y)  SEP  (`(data_res y); `(lock_inv sh2 y (data_res y))))) (* if(temp > 10) *).
+    (* case with temp>10: we release everything *)
+    
+    (* refactor the disjunctive SEP *)
+    replace_SEP 2 (`(EX b : bool,
+       field_at Tsh (Tstruct _t noattr) [StructField _p3] (Vint (Int.repr (if b then 1 else 0))) y
+        * if b then emp else lock_inv sh2 y (|>data_res y))).
+    { entailer. apply orp_left; [Exists true | Exists false ]; entailer. }
+    forward_intro b. normalize.
+    
+    forward (* x->p3 = 0; *).
+    
+    forward_call_threadlib y (data_res y) (* release(&(x->l)); *).
+    { (* nothing is left in SEP after this call *)
+      replace Frame with (@nil mpred) by (unfold Frame; reflexivity); simpl.
+      rewrite data_res_eq_verbose at 4.
+      Exists (n * 2)%Z.  cancel.
+      apply orp_right2.  cancel.
+      destruct b.
+      + cancel; apply lock_inv_later.
+      + (* contradiction *)  
+        eapply derives_trans; [ apply lock_inv_separate | ]. entailer.
+    }
+    { split.
+      + admit.
+      + eexists. rewrite data_res_eq at 1. f_equal. }
+      
+    forward (* return; *).
+    
+    (* other case of the if: Some Sskip *)
+    forward.
+    entailer.
+    rewrite data_res_eq_verbose at 4.
+    Exists (n * 2)%Z.  cancel.
+    
+  (* after the if *)
+  forward_call_threadlib y (data_res y) (* release(&(x->l)); *).
+  { split.
+    + admit.
+    + eexists. rewrite data_res_eq at 1. f_equal. }
+  
+  (* maintain the invariant *)
+  entailer.
+Qed.

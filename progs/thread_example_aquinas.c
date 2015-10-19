@@ -20,9 +20,10 @@ void* f(void* y) {
   struct t* x = (struct t*)y;
   while(1) {
     acquire(&(x->l));
-    temp = x->p1 * 2; x->p1 = temp;
-    temp = x->p2 * 2; x->p2 = temp;
-    if(x->p1 > 10) {
+    temp = x->p1; x->p1 = temp * 2;
+    temp = x->p2; x->p2 = temp * 2;
+    temp = x->p1;
+    if(temp > 10) {
       x->p3 = 0;
       release(&(x->l));
       return NULL;
