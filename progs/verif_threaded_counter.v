@@ -1,11 +1,31 @@
 Require Import floyd.proofauto.
+Require Import progs.threadlib.
 Load threaded_counter.
 
 Local Open Scope logic.
 
-
 Instance CompSpecs : compspecs.
-Proof. make_compspecs prog. Defined.  
+Proof. make_compspecs prog. Defined.
+
+Module threadlib_args <: threadlib_args.
+  Let CompSpecs := CompSpecs.
+  Let _lock := _lock.
+  Let _lock_t := _lock_t.
+  Let _f := _f.
+  Let _args := _args.
+  Let _makelock := _makelock.
+  Let _freelock := _freelock.
+  Let _acquire := _acquire.
+  Let _release := _release.
+  Let _spawn_thread := _spawn_thread.
+  Let _exit_thread := _exit_thread.
+End threadlib_args.
+
+Module threadlib := threadlib threadlib_args.
+Import threadlib.
+
+
+
 
 Definition t_struct_mutex1 := Tstruct _ctr_lock noattr.
 
