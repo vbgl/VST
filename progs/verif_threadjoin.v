@@ -760,7 +760,6 @@ Proof.
   replace_SEP 4 (`(lock_inv sh1 (shiftfield ab_) (|> join_res sh2 ab_))); [entailer; apply lock_inv_later | ].
   gather_SEP 4 1.
   rewrite sepcon_lift_comm, (lock_inv_share_join _ _ _ _ _ Join).
-replace _lock with _join by admit (* TEMPORARY *).
   forward_call_threadlib (shiftfield ab_, Tsh) (join_res sh2 ab_).
   {
     apply prop_right; f_equal.
