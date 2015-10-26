@@ -142,7 +142,7 @@ own R each time you use this function.
 
 *)
 
-Definition spawn_thread_spec P :=
+Definition spawn_thread_spec (PrePost: (val ->mpred * mpred)) :=
    WITH f : val, b : val
    PRE [_f OF tptr voidstar_funtype, _args OF tptr tvoid]
      PROP ()
@@ -152,14 +152,14 @@ Definition spawn_thread_spec P :=
           PRE [ _y OF tptr tvoid ]
             PROP  ()
             LOCAL (temp _y y)
-            SEP   (`(P y))
+            SEP   (`(fst (PrePost y)))
           POST [tptr tvoid]
             PROP  ()
             LOCAL ()
-            SEP   ()
+            SEP   (`(snd (PrePost y)))
        )
        f));
-     `(P b))
+     `(fst (PrePost b)))
    POST [ tvoid ]
      PROP  ()
      LOCAL ()
@@ -181,12 +181,12 @@ Definition exit_thread_spec (_ : unit) :=
    positives. *)
 
 Definition threadlib_specs : list (ident * {x : Type & x -> funspec}) := [
-  (_makelock    , existT _                       mpred          makelock_spec);
-  (_freelock    , existT _                       mpred          freelock_spec);
-  (_acquire     , existT _                       mpred          acquire_spec);
-  (_release     , existT _                       mpred          release_spec);
-  (_spawn_thread, existT _                       (val -> mpred) spawn_thread_spec);
-  (_exit_thread , existT (fun x => x -> funspec) unit           exit_thread_spec)
+  (_makelock    , existT _                      mpred                        makelock_spec);
+  (_freelock    , existT _                      mpred                        freelock_spec);
+  (_acquire     , existT _                      mpred                        acquire_spec);
+  (_release     , existT _                      mpred                        release_spec);
+  (_exit_thread , existT (fun x => x -> funspec) unit                         exit_thread_spec);
+  (_spawn_thread, existT _                      ((val->mpred * mpred))  spawn_thread_spec)
 ].
 
 Fixpoint find_in_list {A B} (D:forall x y : A, {x = y} + {x <> y})
@@ -300,7 +300,7 @@ Ltac fwd_call'_threadlib witness witness' :=
      ]
   |  eapply semax_seq'; [forward_call_id00_wow_threadlib witness witness'
           | after_forward_call ]
-  | rewrite <- seq_assoc; fwd_call'_threadlib witness
+  | rewrite <- seq_assoc; fwd_call'_threadlib witness witness'
   ].
 
 Tactic Notation "forward_call_threadlib" constr(witness) constr(witness') simple_intropattern_list(v) :=

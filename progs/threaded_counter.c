@@ -43,7 +43,7 @@ int read(int *ctr) {
   release(ctr_lock_ptr);
   } */
 
-void thread_func(void *context) {
+void* thread_func(void *context) {
   struct ctr_context *ctr_context = (struct ctr_context*)context;
   lock_t *thread_lock_ptr = &ctr_context->thread_lock;
   lock_t *ctr_lock_ptr = &ctr_context->ctr_lock;
@@ -55,6 +55,7 @@ void thread_func(void *context) {
   release(ctr_lock_ptr);
   //Yield: 'ready to join'.
   release( thread_lock_ptr );
+  return NULL;
 }
 
 int  main(void)
