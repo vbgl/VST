@@ -3,10 +3,11 @@ Require Import veric.base.
 Require Import veric.rmaps.
 Require Import veric.rmaps_lemmas.
 
-Inductive kind : Type := VAL : memval -> kind 
-                                   | LK : Z -> kind 
-                                   | CT: Z -> kind 
-                                   | FUN: funsig -> kind.
+Inductive kind : Type :=
+  | VAL : memval -> kind
+  | LK : Z -> forall A : Type, (share -> A) -> kind
+  | CT: Z -> kind
+  | FUN: funsig -> kind.
 
 Definition isVAL (k: kind) := match k with | VAL _ => True | _ => False end.
 Definition isFUN (k: kind) := match k with | FUN _ => True | _ => False end.
@@ -29,8 +30,9 @@ Definition kind := kind.
 Definition valid (f: address -> option (pshare*kind)) := 
   forall b ofs, 
      match f (b,ofs) with
-     | Some (sh, LK n) => forall i, 0 < i < n -> f(b,ofs+i) = Some (sh, CT i)
-     | Some (sh, CT i) => exists n, 0 < i < n /\ f(b,ofs-i) = Some (sh,LK n)
+     | Some (sh, LK n _ _) => forall i, 0 < i < n -> f(b,ofs+i) = Some (sh, CT i)
+     | Some (sh, CT i) => exists n, 0 < i < n /\
+         exists A g, f(b,ofs-i) = Some (sh,LK n A g)
      | _ => True
     end.
 
@@ -57,13 +59,13 @@ destruct k; auto; intros.
  inv J; auto.
  specialize (H b (ofs+i)). rewrite <- H3 in H. destruct a1. inv H8. simpl in *.
  inv H9. destruct H as [n [? ?]]. replace (ofs+i-i) with ofs in H8 by omega.
- rewrite <- H4 in H8; inv H8.
+ rewrite <- H4 in H8; destruct H8 as (A' & g' & H8); inv H8.
  clear H0'. rewrite H6 in H'. specialize (H' _ H2).
  specialize (J (b,ofs+i)); rewrite H' in J. 
  inv J; auto.
  specialize (H0 b (ofs+i)). rewrite <- H4 in H0. destruct a2. inv H8. simpl in *.
  inv H9. destruct H0 as [n [? ?]]. replace (ofs+i-i) with ofs in H8 by omega.
- rewrite <- H5 in H8; inv H8.
+ rewrite <- H5 in H8; destruct H8 as (A' & g' & H8); inv H8.
  rewrite <- H3 in H'. rewrite <- H4 in H0'. destruct a1; destruct a2.
  destruct H6. simpl in *. destruct H6; subst k k0.
  specialize (H b (ofs+i)); specialize (H0 b (ofs+i)).
@@ -72,18 +74,18 @@ destruct k; auto; intros.
  replace (ofs+i-i) with ofs in H6,H7 by omega.
  rewrite <- H4 in H7; inv H7. rewrite <- H3 in H6; inv H6.
  specialize (J (b,ofs+i)). rewrite (H' _ H2) in J. rewrite (H0' _ H2) in J.
- inv J; auto. inv H9; auto. simpl in *. destruct a3; simpl in *. inv H7. 
+ inv J; auto. inv H11; auto. simpl in *. destruct a3; simpl in *. inv H9. 
  f_equal. f_equal. eapply join_eq; eauto.
 (** CT -> LK **)
  generalize (H b ofs); intros H'; generalize (H0 b ofs); intro H0'.
  generalize (J (b,ofs)); intro H8; inv H8.
- rewrite H1 in H5. rewrite H5 in H0'. destruct H0' as [n [? ?]]; exists n; split; auto.
+ rewrite H1 in H5. rewrite H5 in H0'. destruct H0' as (n & ? & A & g' & H4); exists n; split; auto.
  specialize (J (b,ofs-z)); rewrite H4 in J.
- inv J; auto. destruct a1; destruct a3. destruct H9. simpl in *. inv H9.
+ inv J; eauto. destruct a1; destruct a3. destruct H9. simpl in *. inv H9.
  specialize (H b (ofs-z)). rewrite <- H6 in H.
  specialize (H _ H2). 
  replace (ofs-z+z) with ofs in H by omega. congruence.
- rewrite H1 in H5. rewrite H5 in H'. destruct H' as [n [? ?]]; exists n; split; auto.
+ rewrite H1 in H5. rewrite H5 in H'. destruct H' as [n [? ?]]; exists n; split; auto. destruct H3 as (A & g' & H3). exists A, g'.
  specialize (J (b,ofs-z)); rewrite H3 in J.
  inv J; auto. destruct a2; destruct a3. destruct H9. simpl in *. inv H9. 
  specialize (H0 b (ofs-z)). rewrite <- H7 in H0.
@@ -92,10 +94,13 @@ destruct k; auto; intros.
  destruct a1; destruct a2; destruct a3.
  rewrite <- H3 in H0'; rewrite <- H2 in H'. destruct H5. destruct H6. simpl in *; subst. 
  rewrite H1 in H4. inv H4. 
- destruct H' as [n [? ?]]. exists n; split; auto.
+ destruct H' as (n & ? & A & g' & ?). exists n; split; auto.
  specialize (J (b,ofs-z)). rewrite H6 in J.
- assert (g (b,ofs-z) = Some (p0, LK n)).
- destruct H0' as [n' [? ?]]. rewrite H8 in J. inv J. destruct H12. inv H10; simpl in *. inv H12; auto.
+ assert (g (b,ofs-z) = Some (p0, LK n A g')).
+ destruct H0' as (n' & ? & A' & g'' & ?). rewrite H8 in J. inv J. destruct H12. inv H10; simpl in *. inv H12; auto.
+ replace g'' with g' in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H16).
+ auto.
+ exists A, g'.
  rewrite H7 in J. inv J. inv H11. simpl in *. destruct a3; simpl in *. inv H9.
  repeat f_equal. eapply join_eq; auto.
 Qed.
@@ -200,7 +205,7 @@ inv H5.
 inv H3.
 destruct H3.
 rewrite H3 in H2.
-destruct H2 as [n [? ?]]; exists n; split; auto.
+destruct H2 as (n & ? & A & g & ?); exists n; split; auto. exists A, g.
 specialize (H0 (b,ofs-z)).
 destruct H0; try congruence.
 rewrite H4 in H0.
@@ -216,10 +221,16 @@ inv H4.
 inv H3.
 Qed.
 
+(*
+(* Equality for [kind] is not decidable any longer because of LK
+(which now ranges over types) but decidable equality does not seem to
+be needed anywhere anyway. *)
 Instance EqDec_kind: EqDec kind.
 Proof.
-  hnf. decide equality; try apply eq_dec; try apply zeq.
+  hnf.
+ decide equality; try apply eq_dec; try apply zeq.
 Qed.
+*)
 
 Module R := Rmaps (CompCert_AV).
 Module RML := Rmaps_Lemmas(R).
@@ -227,8 +238,8 @@ Module RML := Rmaps_Lemmas(R).
 Export RML. 
 Export R.
 
-Lemma rmap_valid_e1: forall r b ofs n i, 0 < i < n -> 
-     forall sh, res_option (r @ (b,ofs)) = Some (sh, LK n) -> res_option (r @ (b,ofs+i))= Some (sh, CT i).
+Lemma rmap_valid_e1: forall r b ofs n i A g, 0 < i < n -> 
+     forall sh, res_option (r @ (b,ofs)) = Some (sh, LK n A g) -> res_option (r @ (b,ofs+i))= Some (sh, CT i).
 Proof.
 intros until sh.
 generalize (rmap_valid r b ofs); unfold compose.
@@ -239,13 +250,13 @@ Qed.
 
 Lemma rmap_valid_e2:  forall r b ofs i sh,
     res_option (r @ (b,ofs+i)) = Some (sh, CT i) -> 
-            exists n, 0 < i < n /\ res_option (r @ (b,ofs)) = Some (sh, LK n).
+            exists n A g, 0 < i < n /\ res_option (r @ (b,ofs)) = Some (sh, LK n A g).
 Proof.
 intros until sh.
 generalize (rmap_valid r b (ofs+i)); unfold compose.
 case_eq (r @ (b,ofs+i)); simpl; intros; try discriminate.
 inv H1.
-destruct H0 as [n [? ?]].
+destruct H0 as (n&?&?&?&?).
 replace (ofs+i-i) with ofs in H1 by omega.
 eauto.
 Qed.
@@ -301,9 +312,9 @@ Proof.
   rewrite  H3. simpl. replace (ofs+i-i) with ofs by omega.
   destruct (dec_share_identity (a (b,ofs))); auto; contradiction.
   simpl.
-  destruct H0 as [n [? ?]].
+  destruct H0 as (n&?&A&g&?).
   destruct ( dec_share_identity (a (b, ofs - z0))); auto.
-  exists n. split; auto.
+  exists n. split; auto. exists A, g. auto.
   rewrite H2.
   destruct ( dec_share_identity (a (b, ofs - z0))); auto; contradiction.
   simpl.
@@ -409,15 +420,17 @@ Proof.
  assert (k = CT z0). generalize (H1 (b,ofs)); rewrite H7; intros [? H9]; inv H9; try congruence.
  rewrite H3 in H10. inv H10. destruct a2. destruct H12. destruct H9; simpl in *; subst; auto.
  subst k.
- specialize (H b ofs). rewrite H7 in H. destruct H as [? [? ?]].
+ specialize (H b ofs). rewrite H7 in H. destruct H as (?&?&A&g&?).
  rewrite H8. simpl. destruct p0; simpl.
  destruct (dec_share_identity x0); auto.
  elimtype False; clear - n0 i0; apply nonunit_nonidentity in n0; contradiction n0.
  revert H4; case_eq (a (b,ofs-z0)); intros.
  elimtype False.
- destruct (H1 (b,ofs-z0)). rewrite H4 in H9; rewrite H6 in H9.
+ destruct (H1 (b,ofs-z0)). rewrite H4 in H9.
+ destruct H6 as (A&g&?).
+ rewrite H6 in H9.
  destruct p0. 
- assert (k = LK n). inv H9; auto. destruct a2. destruct H13 as [? [? ?]]; simpl in *; subst. auto.
+ assert (k = LK n A g). inv H9; auto. destruct a2. destruct H13 as [? [? ?]]; simpl in *; subst. auto.
  subst k.
  generalize (H b (ofs-z0)); rewrite H4; intros.
  specialize (H10 _ H5). replace (ofs-z0+z0) with ofs in H10 by omega.
@@ -433,10 +446,10 @@ Focus 1.
  revert H5; case_eq (a (b,ofs-z0)); intros; [ | contradiction H6; auto].
  destruct p0.
  pose proof (H1 (b,ofs-z0)). rewrite H5 in H7.
- pose proof (H0 b ofs). rewrite H3 in H8. destruct H8 as [s [? ?]].
+ pose proof (H0 b ofs). rewrite H3 in H8. destruct H8 as (s&?&A&g&?).
  rewrite H9 in H7.
  destruct H7.
- assert (k = LK s).
+ assert (k = LK s A g).
   inv H7; auto. destruct a2; destruct H13 as [H13 H13']; inv H13'; simpl in *; subst; auto.
  subst k.
  specialize (H b (ofs-z0)). rewrite H5 in H. specialize (H z0 H8).
@@ -449,9 +462,9 @@ Focus 2.
  specialize (H2 (b,ofs-z0)); rewrite H4 in H2.
  simpl in H2. apply split_identity in H2; auto. contradiction.
  destruct p0.
- pose proof (H0 b ofs). rewrite H3 in H5. destruct H5 as [s [? ?]].
+ pose proof (H0 b ofs). rewrite H3 in H5. destruct H5 as (s&?&A&g&?).
  pose proof (H1 (b,ofs-z0)). rewrite H4 in H7; rewrite H6 in H7.
- assert (k=LK s). destruct H7; inv H7; auto. destruct a2; destruct H11; simpl in *.
+ assert (k=LK s A g). destruct H7; inv H7; auto. destruct a2; destruct H11; simpl in *.
     inv H8; auto. 
  subst k.
  specialize (H b (ofs-z0)). rewrite H4 in H. specialize (H _ H5).
@@ -630,9 +643,9 @@ destruct (f (b',z'+i)). simpl.
 case_eq (ab @ (b', z')); case_eq (c @ (b', z')); intros.
 rewrite H3 in j; rewrite H4 in j. inv j.
 rename H3 into H6.
-generalize (rmap_valid_e1 c b' z' _ _ H2 p); intro.
+generalize (rmap_valid_e1 c b' z' _ _ A a0 H2 p); intro.
 rewrite H4 in j; rewrite H6 in j.
-assert (k = LK z) by (inv j; auto). subst.
+assert (k = LK z A a0) by (inv j; auto). subst.
 assert (p1 = p) by (inv j; auto). subst.
 spec H3; [rewrite H6; auto|].
 destruct (c @ (b',z'+i)); inv H3.
@@ -643,23 +656,23 @@ repeat f_equal.
 inv j.
 generalize (rmap_valid_e2 ab b' z' i p1); intro.
 spec H5; [rewrite H3; auto|].
-destruct H5 as [n [? ?]].
-rewrite H4 in H7. inv H7.
+destruct H5 as (n&?&A'&g&?).
+rewrite H4 in H5. inv H5.
 intros.
 rewrite H3 in j0. inv j0.
 rewrite H4 in j. inv j. rewrite H3 in H7. inv H7. rewrite H4 in j. inv j.
-generalize (rmap_valid_e1 ab b' z' _ _ H2 p); intro.
+generalize (rmap_valid_e1 ab b' z' _ _ A a0 H2 p); intro.
 rewrite H4 in H5. spec H5 ; [ auto |].
 destruct (ab @ (b',z'+i)); inv H5.
 inv j0. reflexivity.
 revert H11; case_eq (c @ (b', z' + i)); intros; inv H11.
  generalize (rmap_valid_e2 c b' z' i p1); intro. rewrite H5 in H6.
-destruct H6 as [n [? ?]]; auto. rewrite H3 in H7; inv H7.
+destruct H6 as (n&?&A'&g&?); auto. rewrite H3 in H6; inv H6.
 rewrite H3 in H10; inv H10.
 rewrite H3 in j. rewrite H4 in j. inv j.
-generalize (rmap_valid_e1 c b' z' _ _ H2 p1); intro.
+generalize (rmap_valid_e1 c b' z' _ _ A a0 H2 p1); intro.
 spec H5; [rewrite H3; auto|].
-generalize (rmap_valid_e1 ab b' z' _ _ H2 p3); intro.
+generalize (rmap_valid_e1 ab b' z' _ _ A a0 H2 p3); intro.
 spec H7; [rewrite H4; auto|].
 destruct (c @ (b',z'+i)); inv H5.
 destruct (ab @ (b',z'+i)); inv H7.
@@ -678,10 +691,10 @@ rename H2 into H5.
 symmetry in H3.
 generalize (rmap_valid_e2 c b' (z'-z) z p); intro.
 spec H2; [replace (z'-z+z) with z' by omega; rewrite H5; auto|].
-destruct H2 as [n [? ?]]; exists n; split; auto.
+destruct H2 as (n&A&g&?&?); exists n; split; auto; exists A, g.
 destruct (c @ (b',z'-z)); inv H4.
 inv j0. reflexivity.
-generalize (rmap_valid_e1 ab b' (z'-z) _ _ H2 sh1); intro.
+generalize (rmap_valid_e1 ab b' (z'-z) _ _ A g H2 sh1); intro.
 spec H6; [ rewrite <- H4; auto|].
 replace (z'-z+z) with z' in H6 by omega.
 rewrite <- H3 in H6; inv H6.
@@ -691,21 +704,21 @@ generalize (rmap_valid_e2 ab b' (z'-z) z p1); intro.
 rename H4 into H2'; rename H2 into H4; rename H2' into H2.
 rename H3 into H5.
 spec H2; [replace (z'-z+z) with z' by omega; rewrite H5; auto|].
-destruct H2 as [n [? ?]]; exists n; split; auto.
+destruct H2 as (n&A&g&?&?); exists n; split; auto; exists A, g.
 destruct (ab @ (b',z'-z)); inv H3.
 inv j0; try reflexivity.
-generalize (rmap_valid_e1 c b' (z'-z) _ _ H2 sh2); intro.
+generalize (rmap_valid_e1 c b' (z'-z) _ _ A g H2 sh2); intro.
 spec H3; [ rewrite <- H10; reflexivity|].
 replace (z'-z+z) with z' in H3 by omega.
 rewrite H4 in H3; inv H3.
 rewrite H3 in j; rewrite H2 in j; inv j.
 generalize (rmap_valid_e2 c b' (z'-z) z p1); intro.
 spec H4; [replace (z'-z+z) with z' by omega; rewrite H2; auto|].
-destruct H4 as [n [? ?]]; exists n; split; auto.
+destruct H4 as (n&A&g&?&?); exists n; split; auto; exists A, g.
 destruct (c @ (b',z'-z)); inv H6.
 generalize (rmap_valid_e2 ab b' (z'-z) z p3); intro.
 spec H6; [replace (z'-z+z) with z' by omega; rewrite H3; auto|].
-destruct H6 as [n' [? ?]].
+destruct H6 as (n'&A'&g'&?&?).
 destruct (ab @ (b',z'-z)); inv j0; inv H7.
 simpl. do 2 f_equal.
 eapply join_eq; eauto.
