@@ -22,20 +22,7 @@ Require Import hmac_pure_lemmas.
 Require Import hmac_common_lemmas.
 Require Import sha.spec_hmacNK.
 
-Lemma split2_data_at_Tarray_at_tuchar_fold {cs} sh n n1 v p: 0 <= n1 <= n -> n = Zlength v -> n < Int.modulus ->
-   field_compatible (Tarray tuchar n noattr) [] p ->
-  (@data_at cs sh (Tarray tuchar n1 noattr) (sublist 0 n1 v) p *
-   at_offset (@data_at cs sh (Tarray tuchar (n - n1) noattr) (sublist n1 (Zlength v) v)) n1 p)%logic
-|-- 
-  @data_at cs sh (Tarray tuchar n noattr) v p.
-Admitted. (* proof is in tweetnacl/split_array.v*)
-
-Lemma memory_block_valid_ptr:
-  forall sh n p, n > 0 ->
-     memory_block sh n p |-- valid_pointer p.
-Proof.
-intros.
-Admitted. (* In analogy to floyd/field_at.data_at: surely true ;-)*)
+Require Import split_array_lemmas. 
 
 Definition HMAC_Double_spec :=
   DECLARE _HMAC
@@ -68,26 +55,6 @@ Definition HMAC_Double_spec :=
               `(initPostKey keyVal (CONT KEY) );
               `(data_block Tsh (CONT MSG) msgVal)).
 
-Lemma hmacstate_PostFinal_PreInitNull key h0 data h1 dig h2 v:
-      forall (HmacInit : hmacInit key h0)
-             (HmacUpdate : hmacUpdate data h0 h1)
-             (Round1Final : hmacFinal h1 dig h2),
-      hmacstate_PostFinal h2 v
-  |-- hmacstate_PreInitNull key h2 v.
-Proof. intros. 
-  unfold hmacstate_PostFinal, hmac_relate_PostFinal, hmacstate_PreInitNull; normalize.
-  Exists r.
-  Exists (default_val t_struct_SHA256state_st). 
-  apply andp_right. 2: apply derives_refl.
-  apply prop_right. 
-    destruct h2. destruct h1. simpl in *.
-    destruct Round1Final as [oSA [UPDO [XX FinDig]]]. inversion XX; subst; clear XX.
-    destruct h0. simpl in *. destruct HmacUpdate as [ctx2 [UpdI XX]]. inversion XX; subst; clear XX.
-    unfold  hmacInit in HmacInit. simpl in *. 
-    destruct HmacInit as [IS [OS [ISHA [OSHA XX]]]].  inversion XX; subst; clear XX. 
-    intuition.
-Qed.
-
 Lemma body_hmac_double: semax_body HmacVarSpecs HmacFunSpecs 
       f_HMAC2 HMAC_Double_spec.
 Proof.
@@ -113,12 +80,13 @@ forward_if  (
    `(data_block Tsh data d); `(K_vector kv);
    `(memory_block shmd 64 md))).
   { apply denote_tc_comparable_split. 
-       apply sepcon_valid_pointer2. apply memory_block_valid_ptr. omega.
+       apply sepcon_valid_pointer2. apply memory_block_valid_ptr. auto. omega.
        apply valid_pointer_zero. }
   { (* Branch1 *) exfalso. subst md. contradiction.  }
   { (* Branch2 *) forward. entailer. } 
 normalize. 
-
+assert_PROP (isptr k).
+{ unfold data_block. normalize. rewrite data_at_isptr with (p:=k). entailer. } (*Issue: used to be solved just by entailer *) 
 assert_PROP (isptr k). entailer. 
 rename H into Pk. 
 remember (HMACabs init_s256abs init_s256abs init_s256abs) as dummyHMA.
@@ -132,9 +100,9 @@ rename H into HmacInit. normalize.
 assert_PROP (s256a_len (absCtxt h0) = 512).
   { unfold hmacstate_. entailer. apply prop_right. 
     destruct h0; simpl in *.  
-    destruct H3 as [reprMD [reprI [reprO [iShaLen oShaLen]]]].
+    destruct H5 as [reprMD [reprI [reprO [iShaLen oShaLen]]]].
     inversion HmacInit; clear HmacInit.
-    destruct H3 as [oS [InnSHA [OntSHA XX]]]. inversion XX; clear XX.
+    destruct H5 as [oS [InnSHA [OntSHA XX]]]. inversion XX; clear XX.
     subst. assumption.
   }
 rename H into H0_len512.
@@ -170,9 +138,9 @@ forward_call (c, nullval, kl, key, kv, h2) h3. rename H into h3_init.
 assert_PROP (s256a_len (absCtxt h3) = 512).
   { unfold hmacstate_. entailer. apply prop_right. 
     destruct h3; simpl in *.  
-    destruct H4 as [reprMD [reprI [reprO [iShaLen oShaLen]]]].
+    destruct H7 as [reprMD [reprI [reprO [iShaLen oShaLen]]]].
     inversion h3_init; clear h3_init.
-    destruct H4 as [oS [InnSHA [OntSHA XX]]]. inversion XX; clear XX.
+    destruct H7 as [oS [InnSHA [OntSHA XX]]]. inversion XX; clear XX.
     subst ctx iSha oSha. assumption.
   }
 rename H into H3_len512.
@@ -205,7 +173,7 @@ cancel.
 unfold data_block.
   rewrite Zlength_correct; simpl.
 rewrite <- memory_block_data_at_; trivial.
-normalize. clear H2.
+normalize. clear H4.
 apply andp_right. 
   apply prop_right. apply Forall_app. split; trivial.
   rewrite (memory_block_data_at_ Tsh (tarray tuchar (sizeof (@cenv_cs CompSpecs) t_struct_hmac_ctx_st))).

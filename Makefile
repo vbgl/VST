@@ -122,13 +122,13 @@ LINKING_FILES= \
 VERIC_FILES= \
   base.v shares.v rmaps.v rmaps_lemmas.v compcert_rmaps.v Cop2.v\
   tycontext.v lift.v expr.v expr2.v environ_lemmas.v binop_lemmas.v binop_lemmas2.v \
-  expr_lemmas.v expr_lemmas2.v expr_lemmas3.v expr_rel.v  extend_tc.v \
+  expr_lemmas.v expr_lemmas2.v expr_lemmas3.v expr_rel.v xexpr_rel.v extend_tc.v \
   Clight_lemmas.v Clight_new.v Clightnew_coop.v Clight_sim.v \
   slice.v res_predicates.v seplog.v assert_lemmas.v  ghost.v \
   juicy_mem.v juicy_mem_lemmas.v local.v juicy_mem_ops.v juicy_safety.v juicy_extspec.v \
   semax.v semax_lemmas.v semax_call.v semax_straight.v semax_loop.v semax_congruence.v \
   initial_world.v initialize.v semax_prog.v semax_ext.v SeparationLogic.v SeparationLogicSoundness.v  \
-  NullExtension.v SequentialClight.v superprecise.v jstep.v address_conflict.v coqlib4.v
+  NullExtension.v SequentialClight.v superprecise.v jstep.v address_conflict.v valid_pointer.v coqlib4.v
 
 FLOYD_FILES= \
    coqlib3.v base.v proofauto.v computable_theorems.v \
@@ -167,26 +167,27 @@ SHA_FILES= \
 HMAC_FILES= \
   HMAC_functional_prog.v HMAC256_functional_prog.v \
   vst_lemmas.v hmac_pure_lemmas.v hmac_common_lemmas.v \
-  hmac091c.v spec_hmac.v verif_hmac_cleanup.v \
-  verif_hmac_init_part1.v verif_hmac_init_part2.v verif_hmac_init.v \
-  verif_hmac_update.v verif_hmac_final.v verif_hmac_simple.v \
-  verif_hmac_double.v verif_hmac_crypto.v \
+#  hmac091c.v spec_hmac.v \
+# verif_hmac_cleanup.v verif_hmac_init_part1.v \
+# verif_hmac_init_part2.v verif_hmac_init.v \
+# verif_hmac_update.v verif_hmac_final.v verif_hmac_simple.v \
+#  verif_hmac_double.v verif_hmac_crypto.v \
   hmac_NK.v spec_hmacNK.v verif_hmacNK_cleanup.v \
   verif_hmacNK_init_part1.v verif_hmacNK_init_part2.v verif_hmacNK_init.v\
   verif_hmacNK_update.v verif_hmacNK_final.v verif_hmacNK_simple.v \
-  verif_hmacNK_double.v verif_hmacNK_crypto.v \
-  spec_hmacADT.v verif_hmacADT_cleanup.v \
-  verif_hmacADT_init_part1.v \
-  verif_hmacADT_update.v verif_hmacADT_final.v verif_hmacADT_simple.v \
-  verif_hmacADT_double.v  verif_hmacADT_init_part1_5.v \
-  verif_hmacADT_init_part1.v  verif_hmacADT_init_part2.v verif_hmacADT_init.v 
+  verif_hmacNK_double.v verif_hmacNK_crypto.v 
+#  spec_hmacADT.v verif_hmacADT_cleanup.v \
+#  verif_hmacADT_init_part1.v \
+#  verif_hmacADT_update.v verif_hmacADT_final.v verif_hmacADT_simple.v \
+#  verif_hmacADT_double.v  verif_hmacADT_init_part1_5.v \
+#  verif_hmacADT_init_part1.v  verif_hmacADT_init_part2.v verif_hmacADT_init.v 
 #  HMAC_lemmas.v HMAC_refined_fp.v hmac_sha256.v HMAC_definitions.v \
 #  HMAC_part2GT.v HMAC_part2LE.v \
 #  HMAC_LoopBodyGT.v HMAC_LoopBodyLE.v \
 #  HMAC_proofLE.v HMAC_proof.v
 
 FCF_FILES= \
-  Limit.v Blist.v StdNat.v Rat.v Fold.v Comp.v DetSem.v DistSem.v \
+  Limit.v Blist.v StdNat.v Rat.v EqDec.v Fold.v Comp.v DetSem.v DistSem.v \
   DistRules.v DistTacs.v ProgTacs.v GenTacs.v Crypto.v SemEquiv.v \
   ProgramLogic.v RndNat.v Bernoulli.v FCF.v HasDups.v CompFold.v \
   RepeatCore.v PRF_Encryption_IND_CPA.v PRF.v Array.v Encryption.v \

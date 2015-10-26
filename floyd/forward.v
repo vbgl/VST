@@ -506,6 +506,43 @@ Qed.
 
 Ltac Forall_pTree_from_elements :=
  cbv beta;
+ unfold PTree.elements; simpl PTree.xelements;
+ go_lower;
+ repeat (( simple apply derives_extract_prop 
+                || simple apply derives_extract_prop');
+                fancy_intros);
+ autorewrite with gather_prop;
+ repeat (( simple apply derives_extract_prop 
+                || simple apply derives_extract_prop');
+                fancy_intros);
+   repeat erewrite unfold_reptype_elim in * by reflexivity;
+   try autorewrite with entailer_rewrite in *;
+   repeat first
+   [ apply prop_Forall_cons1;
+     [unfold check_one_temp_spec, check_one_var_spec; 
+     simpl; auto;
+     normalize;
+     solve [eapply force_val_sem_cast_neutral_lvar; eassumption
+              | eapply force_val_sem_cast_neutral_gvar; eassumption
+              | eapply force_val_sem_cast_neutral_sgvar; eassumption
+              | apply force_val_sem_cast_neutral_isptr; auto
+              ]
+     | ]
+   | apply prop_Forall_cons'
+   | apply prop_Forall_cons
+   | apply prop_Forall_nil'
+   | apply prop_Forall_nil
+   ];
+ unfold check_one_temp_spec;
+ simpl PTree.get.
+
+(* 
+Ltac Forall_pTree_from_elements :=
+   This older version can be much slower, because 
+   it calls "ent_iter" instead of just picking the parts
+   of ent_iter that it needs.  In particular, it avoids
+   saturate_local, which is expensive these days. 
+ cbv beta;
  go_lower; ent_iter;
  repeat first
    [ apply prop_Forall_cons1;
@@ -527,23 +564,7 @@ Ltac Forall_pTree_from_elements :=
  change (@snd ident val) with (fun p: ident*val => let (_,y) := p in y);
   cbv beta iota; simpl force_val;
  entailer.
-
-Ltac Forall_check_spec :=
- apply prop_right; repeat constructor; hnf; simpl;
-       first [eapply force_val_sem_cast_neutral_lvar; eassumption
-             | apply force_val_sem_cast_neutral_isptr; auto
-             | idtac
-             ].
-
-Ltac try_solve_Forall_pTree_from_elements :=
-  match goal with |- _ |-- !! Forall ?A _ =>
-   let ptf := fresh "ptf" in set (ptf := A);
- unfold pTree_from_elements in ptf; 
-   simpl in ptf; cbv beta iota in ptf; subst ptf;
- try solve [Forall_check_spec];
- entailer;
- try solve [Forall_check_spec]
- end.
+*)
 
 Lemma exp_uncurry2:
   forall {T} {ND: NatDed T} A B C F,
@@ -817,7 +838,13 @@ Tactic Notation "uniform_intros" simple_intropattern_list(v) :=
   fail 1) || intros v) || idtac).
 
 Tactic Notation "forward_call" constr(witness) simple_intropattern_list(v) :=
-    check_canonical_call; try match goal with |- semax _ _ _ _ =>
+    check_canonical_call; 
+    try  (* BUG IN THIS LINE!  If check_canonical_call succeeds, but the
+          rest of the tactic fails, then the whole tactic should fail,
+         but the "try" makes it fail.  Can't simply delete the try, 
+         in case check_canonical_call returns a diagnostic message.
+         Need to handle the diagnostic the proper way *)
+      match goal with |- semax _ _ _ _ =>
     check_Delta;
     fwd_call' witness;
   [ .. 
@@ -1355,7 +1382,7 @@ match goal with |- semax ?Delta (PROPx ?P (LOCALx ?Q (SEPx ?R))) (Sifthenelse ?e
     evar (v: val);
     do_compute_expr Delta P Q R e v HRE;
     simpl in v;
-    apply semax_ifthenelse_PQR' with (v:=v);
+    apply (semax_ifthenelse_PQR' _ v);
      [ reflexivity | entailer | assumption 
      | clear HRE; subst v; apply semax_extract_PROP; intro HRE; 
        do_repr_inj HRE; abbreviate_semax

@@ -345,3 +345,23 @@ Proof.
       rewrite andb_true_iff in H.
       tauto.
 Qed.
+
+Lemma Z2Nat_inj_0: forall z, z >= 0 -> Z.to_nat z = 0%nat -> z = 0.
+Proof.
+  intros.
+  destruct (zlt 0 z).
+  + replace z with (1 + (z - 1)) in H0 by omega.
+    rewrite Z2Nat.inj_add in H0 by omega.
+    change (Z.to_nat 1) with (1%nat) in H0.
+    inversion H0.
+  + omega.
+Qed.
+
+Lemma Z2Nat_id': forall n, Z.of_nat (Z.to_nat n) = Z.max 0 n.
+Proof.
+intros.
+ destruct (zlt n 0).
+ rewrite Z2Nat_neg by auto. rewrite Z.max_l by omega; reflexivity.
+ rewrite Z2Nat.id, Z.max_r by omega; omega.
+Qed.
+
