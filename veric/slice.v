@@ -282,10 +282,10 @@ destruct (P_DEC (b, ofs)).
     * specialize (H_id _ HHp).
       destruct (phi @ (b, ofs + i)); inv H_valid.
       apply YES_not_identity in H_id; tauto.
-  - destruct H_valid as [n [? ?]].
+  - destruct H_valid as (n&?&A&g&?).
     exists n; split; auto.
     destruct (P_DEC (b, ofs - z)) as [HHm | HHm].
-    * destruct (phi @ (b, ofs - z)); inv H1; auto.
+    * destruct (phi @ (b, ofs - z)); inv H1; auto. exists A, g. auto.
     * specialize (H_id _ HHm).
       destruct (phi @ (b, ofs - z)); inv H1.
       apply YES_not_identity in H_id; tauto.
