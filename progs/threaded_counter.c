@@ -82,11 +82,11 @@ int  main(void)
    /*JOIN */
    acquire( thread_lock_ptr );
    
-   /*En concurrency */
    acquire( ctr_lock_ptr );
    /*printf("I'm done with a final counter of: %d\n", *ctr);*/
 
    /* Should free this locks */
+   freelock( ctr_lock_ptr );
    
    ctr = ctr_context->ctr;
    int t = read(ctr);

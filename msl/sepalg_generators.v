@@ -74,7 +74,9 @@ Require Import msl.sepalg.
 
   Instance Perm_bool: Perm_alg bool.
   Proof.
-    constructor. auto with typeclass_instances.
+    constructor.
+    constructor.
+    auto with typeclass_instances.
     intros; inv H; inv H0; hnf; auto.
     repeat intro; hnf in *; subst; auto.
     intros. icase a; icase b; icase d; try solve [elimtype False; (inv H || inv H0)].
@@ -121,7 +123,8 @@ Section JOIN_EQUIV.
   Instance Join_equiv (A: Type) : Join A := fun x y z => x=y/\y=z.
 
   Instance Perm_equiv (A: Type) :  @Perm_alg A (Join_equiv A).
-  Proof. constructor; intros. 
+  Proof. constructor; intros.
+     constructor; intros.
      destruct H; destruct H0; unfold equiv in *; subst; auto.
      destruct H; destruct H0; subst. exists e; split; split; auto.
      destruct H; split; subst; auto.
@@ -176,6 +179,7 @@ Section SepAlgProp.
 
   Instance Perm_prop : Perm_alg (sig P).
   Proof.
+   constructor; intros.
    constructor; intros.
     destruct z; destruct z'. apply exist_ext. do 2 red in H,H0; eapply join_eq; eauto.
     do 2 red in H,H0.
@@ -249,6 +253,7 @@ Section SepAlgFun.
   Instance Perm_fun : Perm_alg (key -> t').
   Proof.
    constructor; intros.
+   constructor; intros.
    extensionality k.
    apply (join_eq (H k) (H0 k)).
   exists (fun x => projT1 (join_assoc (H x) (H0 x))).
@@ -306,6 +311,7 @@ Section SepAlgPi.
 
   Instance Perm_pi  : Perm_alg P.
   Proof.
+   constructor; intros.
    constructor; intros.
    extensionality i. apply (join_eq (H i) (H0 i)).
    exists (fun i => projT1 (join_assoc (H i) (H0 i))).
@@ -367,6 +373,7 @@ Section SepAlgSigma.
 
   Instance Perm_sigma: Perm_alg S.
   Proof.  constructor; intros.
+   constructor; intros.
 
     (* join_eq *)
     destruct z as [z Hz]. destruct z' as [z' Hz'].
@@ -464,6 +471,8 @@ Section SepAlgProd.
   Instance Perm_prod  : Perm_alg (A*B).
   Proof.
     constructor.
+    
+    constructor.
 
     (* join_eq *)
     intros [? ?] [? ?] [? ?] [? ?] [? ?] [? ?]; simpl in *.
@@ -532,6 +541,7 @@ Section SepAlgSum.
   Instance Perm_sum: Perm_alg (A+B).
   Proof.
     constructor.
+    constructor.
 
     intros. icase x; icase y; icase z; icase z'; simpl in *; hnf; simpl;
     f_equal; eapply join_eq; eauto.
@@ -596,6 +606,7 @@ Section sa_list.
 
   Instance Perm_list: Perm_alg (list A).
   Proof.
+    constructor.
     constructor.
 
     induction x; intros; inv H; inv H0; auto; try constructor.
@@ -687,6 +698,7 @@ Section sa_preimage.
   Instance Perm_preimage  : @Perm_alg _  Join_preimage.
   Proof.
     constructor; simpl; intros.
+    constructor; simpl; intros.
    do 2 red in H,H0.
    apply f_inj. 
    apply (join_eq H H0).
@@ -750,6 +762,7 @@ Section SepAlgBijection.
 
   Lemma Perm_bij  : Perm_alg B.
   Proof.
+    constructor; intros.
     constructor; intros.
 
     do 2 red in H,H0.

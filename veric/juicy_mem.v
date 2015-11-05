@@ -599,9 +599,9 @@ destruct k; simpl in *; auto.
 intros i H.
 specialize (VALID i H).
 destruct (phi @ (b, ofs + i)); simpl in *; auto; try discriminate.
-destruct VALID as (n & H & A & g & H0).
+destruct VALID as (n & H & A & he & g & H0).
 exists n.
-split; auto. exists A, g; auto.
+split; auto. exists A, he, g; auto.
 destruct (phi @ (b, ofs - z)); simpl in *; auto; try discriminate.
 
 (* NO *)
@@ -652,11 +652,11 @@ simpl in VALID.
 assert (H2: Some (p1, VAL m0) = Some (p, CT i)).
 apply (VALID H1).
 inversion H2.
-destruct VALID as (n & H & A & g & H0).
+destruct VALID as (n & H & A & he & g & H0).
 exists n.
 split; auto.
 destruct (phi @ (b, ofs - z)); simpl in *; auto.
-inversion H0; subst; auto. exists A, g. inversion H0. auto. inversion H0.
+inversion H0; subst; auto. exists A, he, g. inversion H0. auto. inversion H0.
 
 unfold compose.
 extensionality l.
@@ -692,9 +692,9 @@ intros i H.
 specialize (VALID i H).
 destruct (phi @ (b, ofs + i)); try destruct k; simpl in *; inv VALID; auto.
 
-destruct VALID as [n (H & A & g & H0)].
+destruct VALID as [n (H & A & he & g & H0)].
 exists n.
-split; auto. exists A, g.
+split; auto. exists A, he, g.
 destruct (phi @ (b, ofs - z)); try destruct k; simpl in *; auto.
 destruct (access_at m (b, ofs - z)); simpl; auto.
 inversion H0. 

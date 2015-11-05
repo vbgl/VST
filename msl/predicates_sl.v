@@ -10,6 +10,7 @@ Require Import msl.sepalg_generators.
 Require Import msl.age_sepalg.
 Require Import msl.predicates_hered.
 Require Import msl.cross_split.
+Require Import veric.pcm.
 
 Definition compareR {A} {JA: Join A}{SA: Sep_alg A}{AG: ageable A} : relation A 
    := comparable.
@@ -216,6 +217,25 @@ Proof.
   intros.
   rewrite sepcon_comm.
   apply emp_sepcon.
+Qed.
+
+Lemma emp_sepcon' {A} {JA: Join A}{PA: Perm_alg A}{SA: Sep_alg A}{UA: PartialUnital A}{AG: ageable A}{XA: Age_alg A} : forall (P:pred A),
+  (emp * P = P)%pred.
+Proof.
+  intros; apply pred_ext; hnf; intros.
+  destruct H as [x [y [? [? ?]]]].
+  simpl in H0.
+  replace a with y; auto.
+  destruct UA as [Aid]; destruct (Aid a) as [u [? ?]] .
+  exists u; exists a. split; auto.
+Qed.
+
+Lemma sepcon_emp' {A} {JA: Join A}{PA: Perm_alg A}{SA: Sep_alg A}{CA: PartialUnital A}{AG: ageable A}{XA: Age_alg A}  : forall (P:pred A),
+  (P * emp = P)%pred.
+Proof.
+  intros.
+  rewrite sepcon_comm.
+  apply emp_sepcon'.
 Qed.
 
 (*Lemma emp_sepcon : forall {A} `{Age_alg A} (P:pred A), emp * P = P. 

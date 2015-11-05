@@ -1,25 +1,26 @@
 (*
+ *
  * Copyright (c) 2009-2012, Andrew Appel, Robert Dockins and Aquinas Hobor.
  * This presentation of Permission Algebras and Separation Algebras
  * includes ideas from a discussion with Jonas Jensen and also from
  * a paper by Francois Pottier.
  *)
 Require Import msl.Extensionality.
+Require Export veric.pcm.
 
 Set Implicit Arguments.
 
-Class Join (t: Type) : Type := join: t -> t -> t -> Prop.
+(*Class Join (t: Type) : Type := join: t -> t -> t -> Prop.*)
 
 (* "Permission Algebra": commutative semigroup, 
    such that if units exist, they must have certain properties. *)
 Class Perm_alg (t: Type) {J: Join t} : Type :=
   mkPerm   {
-   join_eq: forall {x y z z'}, join x y z -> join x y z' -> z = z';   
-   join_assoc: forall {a b c d e}, join a b d -> join d c e ->
-                    {f : t & join b c f /\ join a f e};
-   join_comm: forall {a b c}, join a b c -> join b a c;
+   Perm_ppcm : PrePCM t;
    join_positivity: forall {a a' b b'}, join a a' b -> join b b' a -> a=b
-}.
+    }.
+Existing Instance Perm_ppcm.
+Coercion Perm_ppcm : Perm_alg >-> PrePCM.
 Implicit Arguments Perm_alg [[J]].
 
 Definition unit_for {t}{J: Join t} (e a: t) := join e a a.
@@ -557,6 +558,7 @@ Hint Resolve @join_joins @join_joins' @join_join_sub @join_join_sub'.
     apply identity_unit; trivial.
     exists a.
     destruct (join_ex_units a) as [ea H0].
+    destruct PA.
     generalize (join_comm H0); intro.
     generalize (H ea a H1); intro.
     rewrite <- H2 in *; clear a H2.
@@ -773,12 +775,13 @@ Qed.
 Lemma PermAlg_ext:
   forall (T: Type) (J: @Join T) (sa1 sa2: @Perm_alg T J), sa1=sa2.
 Proof. intros.
-destruct sa1, sa2.
+destruct sa1, sa2. destruct Perm_ppcm0, Perm_ppcm1.
+f_equal; try apply proof_irr.
 f_equal; try apply proof_irr.
 extensionality a b c.
 extensionality d e.
 extensionality H1 H2.
-destruct (join_assoc1 a b c d e H1 H2) as [f [? ?]].
+destruct (join_assoc a b c d e H1 H2) as [f [? ?]].
 destruct (join_assoc0 a b c d e H1 H2) as [f0 [? ?]].
 apply existT_ext.
 eapply join_eq0; eauto.

@@ -387,7 +387,7 @@ Module BA_Facts (BA:BOOLEAN_ALGEBRA) <: BA_FACTS.
   Instance Join_ba: Join t := fun x y z : t => glb x y = bot /\ lub x y = z.
 
   Instance pa: Perm_alg t.
-  Proof. constructor; simpl; intros.
+  Proof. constructor; try constructor; simpl; intros.
     (* saf_eq *)
     hnf in *. destruct H; destruct H0; subst; auto.
 

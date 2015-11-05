@@ -213,15 +213,15 @@ Admitted. (* share hacking *)
 
 Lemma join_splice:
   forall a1 a2 a3 b1 b2 b3,
- sepalg.join a1 a2 a3 ->
- sepalg.join b1 b2 b3 ->
- sepalg.join (Share.splice a1 b1)  (Share.splice a2 b2)  (Share.splice a3 b3).
+ join a1 a2 a3 ->
+ join b1 b2 b3 ->
+ join (Share.splice a1 b1)  (Share.splice a2 b2)  (Share.splice a3 b3).
 Admitted. (* share hacking *)
 
 Lemma join_unrel:
   forall sh a b c,
-  sepalg.join a b c ->
-  sepalg.join (Share.unrel sh a)  (Share.unrel sh b)  (Share.unrel sh c).
+  join a b c ->
+  join (Share.unrel sh a)  (Share.unrel sh b)  (Share.unrel sh c).
 Admitted. (* share hacking *) 
 
 Lemma splice_bot2:
@@ -282,7 +282,7 @@ Qed.
 
 Lemma join_unreadable_shares:
  forall sh1 sh2 sh,
-  sepalg.join sh1 sh2 sh ->
+  join sh1 sh2 sh ->
   ~ readable_share sh1 ->
   ~ readable_share sh2 ->
  ~ readable_share sh.

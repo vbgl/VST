@@ -293,7 +293,8 @@ Proof.
 Qed.
 
 Instance Perm_combiner : Perm_alg combiner.
-Proof. constructor.
+Proof.  constructor.
+        constructor.
   apply combineJ_eq.
   apply combineJ_assoc.
   apply combineJ_com.

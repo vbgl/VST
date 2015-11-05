@@ -25,8 +25,8 @@ rewrite H in H0. simpl in H0.
 destruct k; simpl; auto.
 + intros; specialize (H0 _ H1).
   destruct (phi @ (b,ofs+i)); inv H0; auto.
-+ destruct H0 as (n&?&A&g&?).
-  exists n; split; auto. exists A, g.
++ destruct H0 as (n&?&A&he&g&?).
+  exists n; split; auto. exists A, he, g.
   destruct (phi @ (b,ofs-z)); inv H1; auto.
 Qed.
 
@@ -41,7 +41,7 @@ generalize (rmap_valid m b ofs); unfold compose; simpl; rewrite H; simpl; intro.
 destruct k; auto; intros.
 specialize (H0 _ H1).
 destruct (m @ (b,ofs+i)); inv H0; auto.
-destruct H0 as (n&?&A&g&?). exists n; split; auto. exists A, g.
+destruct H0 as (n&?&A&he&g&?). exists n; split; auto. exists A,he, g.
 destruct (m @ (b,ofs-z)); inv H1; auto.
 Qed.
 
@@ -131,8 +131,8 @@ unfold compose; intros b ofs.
 generalize (rmap_valid m b ofs); unfold compose; intro.
 destruct (m @ (b,ofs)); simpl in *; auto; destruct k; auto.
 intros. spec H i H0. destruct (m @(b,ofs+i)); inv H; auto.
-destruct H as (n&?&A&g&?).
-exists n; split; auto. exists A, g.
+destruct H as (n&?&A&he&g&?).
+exists n; split; auto. exists A, he, g.
 destruct (m @ (b,ofs-z)); inv H0; auto.
 Qed.
 
@@ -144,8 +144,8 @@ unfold compose; intros b ofs.
 generalize (rmap_valid m b ofs); unfold compose; intro.
 destruct (m @ (b,ofs)); simpl in *; auto; destruct k; auto.
 intros. spec H i H0. destruct (m @(b,ofs+i)); inv H; auto.
-destruct H as (n&?&A&g&?).
-exists n; split; auto. exists A, g.
+destruct H as (n&?&A&he&g&?).
+exists n; split; auto. exists A,he, g.
 destruct (m @ (b,ofs-z)); inv H0; auto.
 Qed.
 
@@ -282,10 +282,10 @@ destruct (P_DEC (b, ofs)).
     * specialize (H_id _ HHp).
       destruct (phi @ (b, ofs + i)); inv H_valid.
       apply YES_not_identity in H_id; tauto.
-  - destruct H_valid as (n&?&A&g&?).
+  - destruct H_valid as (n&?&A&he&g&?).
     exists n; split; auto.
     destruct (P_DEC (b, ofs - z)) as [HHm | HHm].
-    * destruct (phi @ (b, ofs - z)); inv H1; auto. exists A, g. auto.
+    * destruct (phi @ (b, ofs - z)); inv H1; auto. exists A,he, g. auto.
     * specialize (H_id _ HHm).
       destruct (phi @ (b, ofs - z)); inv H1.
       apply YES_not_identity in H_id; tauto.

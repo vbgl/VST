@@ -167,7 +167,7 @@ Module StratModel (AV' : ADR_VAL) : STRAT_MODEL with Module AV:=AV'.
  Instance Join_res (PRED: Type) : Join (res PRED) := res_join PRED.
 
   Instance pa_rj : forall PRED, @Perm_alg _ (res_join PRED).
-  Proof. intros. constructor.
+  Proof. intros. constructor. constructor.
 
       (* saf_eq *)
       intros x y z z' H1 H2; inv H1; inv H2; auto.

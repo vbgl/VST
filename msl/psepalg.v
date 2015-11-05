@@ -56,7 +56,7 @@ Section DISCRETE.  (* Prevent these Instances from going global! *)
   Instance Join_discrete (A : Type): Join A := fun a1 a2 a3 : A => False.
 
   Instance Perm_discrete (A: Type)  : @Perm_alg A (Join_discrete A).
-  Proof. constructor; intros; inv H.
+  Proof. constructor; try constructor; intros; inv H.
   Qed.
   
   Instance psa_discrete (A: Type) :  @Pos_alg A  (Join_discrete A).
@@ -89,6 +89,7 @@ Section PSA_LIFT.
 
     Instance Perm_lift: Perm_alg lifted.
    Proof.
+     constructor; intros.
      constructor; intros.
 
     icase x; icase y; icase z; icase z'.
@@ -218,6 +219,7 @@ Section SA_LOWER.
 
   Instance Perm_lower: @Perm_alg (option A) Join_lower.
   Proof.
+   constructor; intros.
    constructor; intros.
 
    inv H; inv H0; try constructor. f_equal.   apply (join_eq H1 H3).

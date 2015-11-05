@@ -57,15 +57,25 @@ Instance algSepLog (T: Type) {agT: ageable T}{JoinT: Join T}{PermT: Perm_alg T}{
   intros; simpl. apply ewand_conflict; auto.
 Defined.
 
-Instance algClassicalSep (T: Type) {agT: ageable T}{JoinT: Join T}{PermT: Perm_alg T}{SepT: Sep_alg T}{CancT: Canc_alg T}{AgeT: Age_alg T}:
+Instance algClassicalSep' (T: Type) {agT: ageable T}{JoinT: Join T}{PermT: Perm_alg T}{SepT: Sep_alg T}{CancT: Canc_alg T}{AgeT: Age_alg T}:
      @ClassicalSep (pred T) (algNatDed T)(algSepLog T).
  constructor; intros. simpl. apply predicates_sl.sepcon_emp.
 Qed.
+
+(*New version*)
+Instance algClassicalSep (T: Type) {agT: ageable T}{JoinT: Join T}{PermT: Perm_alg T}{SepT: Sep_alg T}{PUT: PartialUnital T}{AgeT: Age_alg T}:
+     @ClassicalSep (pred T) (algNatDed T)(algSepLog T).
+ constructor; intros. simpl. apply predicates_sl.sepcon_emp'.
+Qed.
+
 
 Definition Triv := predicates_hered.pred nat.
 Instance TrivNatDed: NatDed Triv := algNatDed nat.
 Instance TrivSeplog: SepLog Triv := @algSepLog nat _ _ _ _ (asa_nat).
 Instance TrivClassical: ClassicalSep Triv := @algClassicalSep _ _ _ _ _ _ asa_nat.
+constructor. intros a. exists a. unfold pcm.identity.
+split. intros b c H; destruct H; auto. auto.
+Qed.
 Instance TrivIntuitionistic: IntuitionisticSep Triv.
  constructor. intros. hnf. intros. destruct H as [w1 [w2 [? [? _]]]].
  destruct H; subst; auto.

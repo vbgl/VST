@@ -1,18 +1,25 @@
 Require Import msl.msl_standard.
 Require Import msl.Coqlib2.
+Require Import veric.pcm.
 
 Module Type ADR_VAL.
 Parameter address : Type.
 Parameter some_address:address.
 
+(* Kinds form a Partial Commutative Monoid algebra *)
+Parameter kind: Type.
+Parameter kjoin: Join kind.
+Parameter kind_pcm: @PCM kind kjoin.
+Existing Instance kind_pcm.
+
+
 (* Validity of traces.  The "valid" predicate ensures that related addresses don't get
     split apart from each other.  *)
-Parameter kind: Type.
 Parameter valid : (address -> option (pshare * kind)) -> Prop.
 Parameter valid_empty: valid (fun _ => None).
 Parameter valid_join: forall f g h : address -> option (pshare * kind),
    @join _ (Join_fun address (option (pshare * kind))
-                   (Join_lower (Join_prod pshare Join_pshare kind (Join_equiv kind))))
+                   (Join_lower (Join_prod pshare Join_pshare kind kjoin)))
       f g h  ->
  valid f -> valid g -> valid h.
 End ADR_VAL.
@@ -20,22 +27,30 @@ End ADR_VAL.
 Module Type ADR_VAL0.
 Parameter address : Type.
 Parameter some_address:address.
+(* Kinds form a separation algebra *)
 Parameter kind: Type.
+Parameter kjoin: Join kind.
+Parameter kind_pcm: @PCM kind kjoin.
+Existing Instance kind_pcm.
 End ADR_VAL0.
 
 Module SimpleAdrVal (AV0: ADR_VAL0) <: 
    ADR_VAL with Definition address := AV0.address
-                   with Definition kind := AV0.kind.
+    with Definition kind := AV0.kind
+    with Definition kjoin := AV0.kjoin
+    with Definition kind_pcm := AV0.kind_pcm.
   Import AV0.
   Definition address := address.
   Definition some_address := some_address.
   Definition kind := kind.
+  Definition kind_pcm := kind_pcm.
+  Definition kjoin := kjoin.
   Definition valid (_: address -> option (pshare * kind)) := True.
   Lemma valid_empty: valid (fun _ => None).
   Proof. unfold valid; auto. Qed.
   Lemma valid_join: forall f g h : address -> option (pshare * kind),
    @join _ (Join_fun address (option (pshare * kind))
-                   (Join_lower (Join_prod pshare Join_pshare kind (Join_equiv kind))))
+                   (Join_lower (Join_prod pshare Join_pshare kind kjoin)))
       f g h  ->
     valid f -> valid g -> valid h.
   Proof.  intros; unfold valid; auto. Qed.
@@ -63,7 +78,6 @@ Module Type STRAT_MODEL.
     | YES': Share.t -> pshare -> kind -> preds PRED -> res PRED
     | PURE': kind -> preds PRED -> res PRED.
 
-
   Definition res_fmap (A B:Type) (f:A->B) (x:res A) : res B :=
     match x with
       | NO' rsh => NO' B rsh
@@ -84,10 +98,11 @@ Module Type STRAT_MODEL.
     | res_join_NO3 : forall rsh1 rsh2 rsh3 sh k p, 
                                join rsh1 rsh2 rsh3 ->
                                res_join PRED (YES' PRED rsh1 sh k p) (NO' PRED rsh2 ) (YES' PRED rsh3 sh k p)
-    | res_join_YES : forall (rsh1 rsh2 rsh3: Share.t) (sh1 sh2 sh3:pshare) k p,
+    | res_join_YES : forall (rsh1 rsh2 rsh3: Share.t) (sh1 sh2 sh3:pshare) (k1 k2 k3:kind) p,
                                join rsh1 rsh2 rsh3 ->
-                              join sh1 sh2 sh3 ->
-              res_join PRED (YES' PRED rsh1 sh1 k p) (YES' PRED rsh2 sh2 k p) (YES' PRED rsh3 sh3 k p)
+                               join sh1 sh2 sh3 ->
+                               kjoin k1 k2 k3 ->
+              res_join PRED (YES' PRED rsh1 sh1 k1 p) (YES' PRED rsh2 sh2 k2 p) (YES' PRED rsh3 sh3 k3 p)
     | res_join_PURE : forall k p, res_join PRED (PURE' PRED k p) (PURE' PRED k p) (PURE' PRED k p).
   Axiom pa_rj : forall PRED, @Perm_alg _ (res_join PRED).
   Axiom sa_rj : forall PRED, @Sep_alg _ (res_join PRED).
@@ -174,20 +189,23 @@ Module StratModel (AV' : ADR_VAL) : STRAT_MODEL with Module AV:=AV'.
     | res_join_NO3 : forall rsh1 rsh2 rsh3 sh k p, 
                                join rsh1 rsh2 rsh3 ->
                                res_join PRED (YES' PRED rsh1 sh k p) (NO' PRED rsh2 ) (YES' PRED rsh3 sh k p)
-    | res_join_YES : forall (rsh1 rsh2 rsh3: Share.t) (sh1 sh2 sh3:pshare) k p,
+    | res_join_YES : forall (rsh1 rsh2 rsh3: Share.t) (sh1 sh2 sh3:pshare) (k1 k2 k3:kind) p,
                                join rsh1 rsh2 rsh3 ->
-                              join sh1 sh2 sh3 ->
-              res_join PRED (YES' PRED rsh1 sh1 k p) (YES' PRED rsh2 sh2 k p) (YES' PRED rsh3 sh3 k p)
+                               join sh1 sh2 sh3 ->
+                               kjoin k1 k2 k3 ->
+              res_join PRED (YES' PRED rsh1 sh1 k1 p) (YES' PRED rsh2 sh2 k2 p) (YES' PRED rsh3 sh3 k3 p)
     | res_join_PURE : forall k p, res_join PRED (PURE' PRED k p) (PURE' PRED k p) (PURE' PRED k p).
 
  Instance Join_res (PRED: Type) : Join (res PRED) := res_join PRED.
 
   Instance pa_rj : forall PRED, @Perm_alg _ (res_join PRED).
   Proof. intros. constructor.
-
+         intros. constructor.
+         
       (* saf_eq *)
-      intros x y z z' H1 H2; inv H1; inv H2; repeat f_equal; eapply join_eq; eauto.
-  
+      intros x y z z' H1 H2; inv H1; inv H2;
+      repeat f_equal; eapply join_eq; eauto.
+      
       (* saf_assoc *)
       intros a b c d e H1 H2.
       destruct d as [rd | rd sd kd pd | kd pd].
@@ -229,21 +247,41 @@ Module StratModel (AV' : ADR_VAL) : STRAT_MODEL with Module AV:=AV'.
       destruct a as [ra | ra sa ka pa | ka pa ]; try solve [elimtype False; inv H1].
       assert (H: join ra rb rd) by (inv H1; auto).
       destruct (join_assoc H H0) as [rf [? ?]].
-      exists (YES' _ rf se kb pb).  inv H1; inv H2; split; try constructor; auto.
+      exists (YES' _ rf se ke pb).  inv H1; inv H2; split; try constructor; auto.
       assert (H: join ra rb rd) by (inv H1; auto).
       destruct (join_assoc H H0) as [rf [? ?]].
       assert (H5: join sa sb sd) by (inv H1; auto).
       assert (H6: join sd sc se) by (inv H2; auto).
+      assert (H7: kjoin ka kb kd) by (inv H1; auto).
+      assert (H8: kjoin kd kc ke) by (inv H2; auto).
       destruct (join_assoc H5 H6) as [sf [? ?]].
-      exists (YES' _ rf sf kb pb).  inv H1; inv H2; split; try constructor; auto.
+      destruct (join_assoc H7 H8) as [kf [? ?]].
+      exists (YES' _ rf sf kf pb).  inv H1; inv H2; split; try constructor; auto.
       exists (PURE' _ kd pd). inv H1; inv H2; split; constructor.
 
       (* saf_com *)
       intros a b c H; inv H; econstructor;  apply join_comm; auto.
 
      (* saf_positivity *)
-     intros; inv H; inv H0; auto; f_equal; eapply join_positivity; eauto.
- Qed.
+      { intros. inv H; inv H0; auto.
+      - f_equal; eapply join_positivity; eauto.
+      - f_equal; eapply join_positivity; eauto.
+      - f_equal; eapply join_positivity; eauto.
+      - f_equal; eapply join_positivity; eauto.
+      - (*This is impossible because sh's are not zero! *)
+        replace sh3 with sh1 in * by (eapply join_positivity; eauto).
+        eapply join_comm in H2; eapply join_comm in H12.
+        generalize (pshare_not_identity sh2); intros contra.
+        contradict contra.
+        Lemma join_unp : forall a b c,
+                           @join pshare _ a b c ->
+                           @join share _ a b c.
+          intros. inv H. constructor; unfold lifted_obj in *; auto.
+        Qed.
+        apply join_unp in H2. (*It has some effect but you can't see it! *)
+        eapply unit_identity in H2; assumption.
+        }
+  Qed.
 
   Instance sa_rj : forall PRED, @Sep_alg _ (res_join PRED).
   Proof. intros.
@@ -256,10 +294,13 @@ Module StratModel (AV' : ADR_VAL) : STRAT_MODEL with Module AV:=AV'.
   Proof. repeat intro. inv H; inv H0; auto.
     f_equal. eapply join_canc; eauto.
     f_equal. eapply join_canc; eauto.
-    apply no_units in H9; contradiction.
+    apply no_units in H10; contradiction.
     f_equal. eapply join_canc; eauto.
     apply no_units in H2; contradiction.
-    f_equal; eapply join_canc; eauto.
+    f_equal.
+    eapply join_canc; eauto.
+    eapply join_canc; eauto.
+    
   Qed.
 
   Instance da_rj : forall PRED, @Disj_alg _ (res_join PRED).

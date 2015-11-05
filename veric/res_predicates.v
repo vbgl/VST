@@ -252,7 +252,7 @@ Program Definition noat (l: AV.address) : pred rmap :=
  Qed.
 
 Definition ct_count (k: kind) : Z := 
-  match k with LK n _ _ => n-1 | _ =>  0 end.
+  match k with LK n _ _ _ => n-1 | _ =>  0 end.
 
 Definition resource_share (r: resource) : option share :=
  match r with
@@ -1180,11 +1180,11 @@ Program Definition CTat (base: address) (rsh sh: Share.t) (l: address) : pred rm
     apply (age1_YES a a'); auto.
   Qed.
 
-Definition LKspec (R: pred rmap) A g : spec :=
+Definition LKspec (R: pred rmap) he A g : spec :=
    fun (rsh sh: Share.t) (l: AV.address)  =>
     allp (jam (adr_range_dec l lock_size)
                          (jam (eq_dec l) 
-                            (yesat (SomeP nil (fun _ => R)) (LK lock_size A g) rsh sh)
+                            (yesat (SomeP nil (fun _ => R)) (LK lock_size he A g) rsh sh)
                             (CTat l rsh sh))
                     noat).
 
@@ -1254,9 +1254,9 @@ exists p.
 auto.
 Qed.
 
-Lemma LKspec_parametric: forall R A g,
+Lemma LKspec_parametric: forall R he A g,
   spec_parametric (fun l rsh sh => jam (eq_dec l) 
-                            (yesat (SomeP nil (fun _ => R)) (LK lock_size A g) rsh sh)
+                            (yesat (SomeP nil (fun _ => R)) (LK lock_size he A g) rsh sh)
                             (CTat l rsh sh)).
 Proof.
 intros.
@@ -1266,7 +1266,7 @@ simpl.
 destruct (eq_dec l l').
 unfold yesat, yesat_raw.
 exists (SomeP nil (fun _ : unit => R)).
-exists (fun k => k = LK lock_size A g).
+exists (fun k => k = LK lock_size he A g).
 intros.
 apply exists_ext; intro p.
 unfold yesat_raw.
@@ -1401,9 +1401,9 @@ apply jam_noat_splittable.
 apply VALspec_parametric.
 Qed.
 
-Lemma LKspec_splittable: forall R A g l, splittable (fun rsh sh => LKspec R A g rsh sh l).
+Lemma LKspec_splittable: forall R he A g l, splittable (fun rsh sh => LKspec R he A g rsh sh l).
 Proof.
-intros R A g.
+intros R he A g.
 apply jam_noat_splittable.
 apply LKspec_parametric.
 Qed.
@@ -1414,7 +1414,7 @@ Definition val2address (v: val) : option AV.address :=
 Definition fun_assert (fml: funsig) (A: Type) (P Q: A -> environ -> pred rmap) (v: val)  : pred rmap :=
  (EX b : block, !! (v = Vptr b Int.zero) && FUNspec fml A P Q (b, 0))%pred.
 
-Definition LK_at l w := exists n A g, kind_at (LK n A g) l w.
+Definition LK_at l w := exists n he A g, kind_at (LK n he A g) l w.
 
 Lemma VALspec_readable:
   forall l rsh sh w,  (VALspec rsh sh l * TT) %pred w -> readable l w.

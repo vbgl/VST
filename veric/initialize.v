@@ -125,7 +125,7 @@ Proof.
   simpl in H. spec H; [auto |].
   destruct (phi @ (b,ofs+i)); inv H3. destruct H; inv H. apply H3.
   pose proof (rmap_valid phi b ofs). unfold compose in H2. rewrite H1 in H2.
-  simpl in H2. destruct H2 as (n' & ? & A & g & ?); exists n'; split; auto. exists A, g.
+  simpl in H2. destruct H2 as (n' & ? & A & he & g & ?); exists n'; split; auto. exists A, he, g.
   if_tac. specialize (H (b,ofs-z0)). spec H. destruct H4; subst; split; auto; omega.
   destruct (phi @ (b,ofs-z0)); inv H3. destruct H; inv H.
   destruct (phi @ (b,ofs-z0)); inv H3. reflexivity.
@@ -1576,7 +1576,7 @@ if_tac. apply H5 in H4.
  assert (H9:= rmap_valid w1 b ofs). unfold compose in H9. rewrite H2 in H9. simpl in H9.
  specialize (H9 _ H5). destruct (w1 @ (b,ofs+i)); inv H9. rewrite if_false; auto. apply YES_not_identity.
  assert (H10:= rmap_valid w1 b ofs). unfold compose in H10. rewrite H2 in H10. simpl in H10.
- destruct H10 as (n & ? & A & g & ?); exists n; split; auto. exists A, g.
+ destruct H10 as (n & ? & A & vs & vo & ?); exists n; split; auto. exists A, vs, vo.
  destruct (w1 @ (b,ofs-z)); inv H6; rewrite if_false; auto. apply YES_not_identity.
 destruct (make_rmap _ H1 (level w))  as [w1' [? ?]]; clear H1.
  extensionality loc.
@@ -1600,7 +1600,7 @@ if_tac. apply H5 in H4.
  assert (H9:= rmap_valid w2 b ofs). unfold compose in H9. rewrite H2 in H9. simpl in H9.
  specialize (H9 _ H5). destruct (w2 @ (b,ofs+i)); inv H9. rewrite if_false; auto. apply YES_not_identity.
  assert (H10:= rmap_valid w2 b ofs). unfold compose in H10. rewrite H2 in H10. simpl in H10.
- destruct H10 as (n & ? & A & g & ?); exists n; split; auto. exists A, g.
+ destruct H10 as (n & ? & A & vs & vo & ?); exists n; split; auto. exists A, vs, vo.
  destruct (w2 @ (b,ofs-z)); inv H6; rewrite if_false; auto. apply YES_not_identity.
 destruct (make_rmap _ H1 (level w))  as [w2' [? ?]]; clear H1.
  extensionality loc.
