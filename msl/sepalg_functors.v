@@ -46,8 +46,14 @@ Existing Instance f_paf.
 
 Definition Perm_paf {F: Type -> Type}(FUN: functor F)(J_F: forall A, Join (F A)) :=
                   forall (A: Type){JA: Join A}{Perm_A: Perm_alg A}, Perm_alg (F A).
+Definition Core_paf {F}(FUN: functor F)(J_F: forall A, Join (F A)) :=
+  forall (A: Type){JA: Join A}{Perm_A: Perm_alg A}{Sep_A: Core_alg A}, Core_alg (F A).
 Definition Sep_paf {F}(FUN: functor F)(J_F: forall A, Join (F A)) :=
-                  forall (A: Type){JA: Join A}{Perm_A: Perm_alg A}{Sep_A: Sep_alg A}, Sep_alg (F A).
+  forall (A: Type){JA: Join A}{Perm_A: Perm_alg A}{Sep_A: Sep_alg A}, Sep_alg (F A).
+Definition Unit_paf {F}(FUN: functor F)(J_F: forall A, Join (F A)) := 
+                  forall (A: Type){JA: Join A}{PUnit_A: Unital A}, Unital (F A).
+Definition PUnit_paf {F}(FUN: functor F)(J_F: forall A, Join (F A)) := 
+                  forall (A: Type){JA: Join A}{PUnit_A: PartialUnital A}, PartialUnital (F A).
 Definition Canc_paf {F}(FUN: functor F)(J_F: forall A, Join (F A)) := 
                   forall (A: Type){JA: Join A}{Perm_A: Perm_alg A}{Canc_A: Canc_alg A}, Canc_alg (F A).
 Definition Disj_paf {F}(FUN: functor F)(J_F: forall A, Join (F A)) :=

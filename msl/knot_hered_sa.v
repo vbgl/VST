@@ -24,8 +24,10 @@ Module Type TY_FUNCTOR_SA_PROP.
 (*   Parameter Perm_F: forall A, Perm_alg (F A). EXisting Instance Perm_F. *)
   Parameter paf_F : pafunctor f_F.        Existing Instance paf_F.
   Parameter Perm_F: Perm_paf f_F Join_F.
-  Parameter Sep_F: Sep_paf f_F Join_F.
-  Parameter Canc_F: Canc_paf f_F Join_F.
+  Parameter Core_F: Core_paf f_F Join_F.
+  (*Parameter Sep_F: Sep_paf f_F Join_F.*)
+  (*Parameter PUnit_F: PUnit_paf f_F Join_F.*)
+  (*Parameter Canc_F: Canc_paf f_F Join_F.*)
   Parameter Disj_F: Disj_paf f_F Join_F.
 End TY_FUNCTOR_SA_PROP.
 
@@ -39,8 +41,17 @@ Module Type KNOT_HERED_SA.
 
   Parameter Join_knot: Join knot.  Existing Instance Join_knot.
   Parameter Perm_knot : Perm_alg knot.  Existing Instance Perm_knot.
-  Parameter Sep_knot : (forall A, Sep_alg (F A)) -> Sep_alg knot.  Existing Instance Sep_knot.
-  Parameter Canc_knot : (forall A, Canc_alg (F A)) -> Canc_alg knot.  Existing Instance Canc_knot.
+
+  
+  Parameter Core_knot :
+    forall Core_F : forall A : Type, Core_alg (F A),
+       (forall (n : nat) (f : TFSA.TF.F predicate),
+        core (fmap (approx n) f) = fmap (approx n) (core f)) -> 
+       Core_alg knot.
+  Existing Instance Core_knot.
+  (*Parameter Sep_knot : (forall A, Sep_alg (F A)) -> Sep_alg knot.  Existing Instance Sep_knot.
+  Parameter PUnit_knot : (forall A, PartialUnital (F A)) -> PartialUnital knot.  Existing Instance PUnit_knot.*)
+  (*Parameter Canc_knot : (forall A, Canc_alg (F A)) -> Canc_alg knot.  Existing Instance Canc_knot. *)
   Parameter Disj_knot : (forall A, Disj_alg (F A)) -> Disj_alg knot.  Existing Instance Disj_knot.
 
   Instance Join_nat_F: Join (nat * F predicate) := 
@@ -48,10 +59,14 @@ Module Type KNOT_HERED_SA.
 
  Instance Perm_nat_F : Perm_alg (nat * F predicate) :=
     @Perm_prod nat _ _ _ (Perm_equiv _) (Perm_F predicate _ (Perm_equiv _)).
- Instance Sep_nat_F (Sep_F: forall A, Sep_alg (F A)): Sep_alg (nat * F predicate) :=
-    @Sep_prod nat _ _ _ (Sep_equiv _) (Sep_F predicate).
- Instance Canc_nat_F (Canc_F: forall A, Canc_alg (F A)): Canc_alg (nat * F predicate) :=
-    @Canc_prod nat _ _ _ (Canc_equiv _) (Canc_F predicate).
+ Instance Core_nat_F (Core_F: forall A, Core_alg (F A)): Core_alg (nat * F predicate) :=
+   @Core_prod nat _ _ _ (Core_equiv _) (Core_F predicate).
+ (*Instance Sep_nat_F (Sep_F: forall A, Sep_alg (F A)): Sep_alg (nat * F predicate) :=
+   @Sep_prod nat _ _ _ (Sep_equiv _) (Sep_F predicate).
+ Instance PUnit_nat_F (PUnit_F: forall A, PartialUnital (F A)): PartialUnital (nat * F predicate) :=
+    @PUnit_prod nat _ _ _ (PUnit_equiv _) (PUnit_F predicate).*)
+ (*Instance Canc_nat_F (Canc_F: forall A, Canc_alg (F A)): Canc_alg (nat * F predicate) :=
+    @Canc_prod nat _ _ _ (Canc_equiv _) (Canc_F predicate). *)
  Instance Disj_nat_F (Disj_F: forall A, Disj_alg (F A)): Disj_alg (nat * F predicate) :=
     @Disj_prod nat _ _ _ (Disj_equiv _) (Disj_F predicate).
 
@@ -80,10 +95,14 @@ Module KnotHeredSa (TFSA':TY_FUNCTOR_SA_PROP) (K':KNOT_HERED with Module TF:=TFS
 
  Instance Perm_nat_F : Perm_alg (nat * F predicate) :=
     @Perm_prod nat _ _ _ (Perm_equiv _) (Perm_F predicate _ (Perm_equiv _)).
+ Instance Core_nat_F (Core_F: forall A, Core_alg (F A)): Core_alg (nat * F predicate) :=
+   @Core_prod nat _ _ _ (Core_equiv _) (Core_F predicate).
  Instance Sep_nat_F (Sep_F: forall A, Sep_alg (F A)): Sep_alg (nat * F predicate) :=
-    @Sep_prod nat _ _ _ (Sep_equiv _) (Sep_F predicate).
- Instance Canc_nat_F (Canc_F: forall A, Canc_alg (F A)): Canc_alg (nat * F predicate) :=
-    @Canc_prod nat _ _ _ (Canc_equiv _) (Canc_F predicate).
+   @Sep_prod nat _ _ _ (Sep_equiv _) (Sep_F predicate).
+ (*Instance PUnit_nat_F (PUnit_F: forall A, PartialUnital (F A)): PartialUnital (nat * F predicate) :=
+    @PUnit_prod nat _ _ _ (PUnit_equiv _) (PUnit_F predicate).*)
+ (*Instance Canc_nat_F (Canc_F: forall A, Canc_alg (F A)): Canc_alg (nat * F predicate) :=
+    @Canc_prod nat _ _ _ (Canc_equiv _) (Canc_F predicate).*)
  Instance Disj_nat_F (Disj_F: forall A, Disj_alg (F A)): Disj_alg (nat * F predicate) :=
     @Disj_prod nat _ _ _ (Disj_equiv _) (Disj_F predicate).
 
@@ -107,6 +126,58 @@ Module KnotHeredSa (TFSA':TY_FUNCTOR_SA_PROP) (K':KNOT_HERED with Module TF:=TFS
 
   Instance Sep_knot(Sep_F: forall A, Sep_alg (F A)) : Sep_alg knot := 
     Sep_preimage _ _ _  unsquash squash squash_unsquash unsquash_squash_join_hom.
+  Instance Core_knot
+           (Core_F: forall A, Core_alg (F A))
+           (Core_approx: forall n f, core (fmap (approx n) f) = fmap (approx n) (core f))
+  : Core_alg knot.
+  eapply (Core_preimage _ _ _  unsquash squash squash_unsquash unsquash_squash_join_hom).
+  intros. simpl.
+  destruct (unsquash a) as [n f] eqn: unsa. simpl.
+  apply unsquash_approx in unsa.
+  rewrite unsa.
+  rewrite unsquash_squash; f_equal.
+  rewrite Core_approx.
+  destruct TFSA'.TF.f_F; destruct functor_facts.
+  assert (fmap_comp := ff_comp _ _ _ (approx n) (approx n)).
+  assert (fmap_comp' : forall x,
+                        (fmap predicate predicate (approx n)
+              oo fmap predicate predicate (approx n)) x =
+                        fmap predicate predicate (approx n oo approx n) x) by
+      (rewrite fmap_comp; intros; reflexivity).
+  unfold compose in fmap_comp'.
+  unfold functors.fmap.
+  rewrite fmap_comp'. f_equal.
+  rewrite (approx_approx1 0) at 1; extensionality x; reflexivity.
+  Defined.
+
+  
+  (*Lemma BLAH (PUnit_F : forall A : Type, PartialUnital (F A))
+    (b : nat * TF.F predicate):
+      (*b = (unsquash oo squash) b -> *)
+      punit b = (unsquash oo squash) (punit b).
+    Admitted.
+(*    unfold compose.
+    intros b; destruct b; simpl.
+    do 2 rewrite unsquash_squash.
+    intros H; inversion H.
+    f_equal.
+    unfold punit.
+    unfold PUnit_nat_F, PUnit_prod.
+    
+    intros. unfold compose.
+    destruct b.
+    unfold PUnit_nat_F, PUnit_prod; simpl.
+    rewrite unsquash_squash.
+    f_equal.
+    destruct (PUnit_F (TF.F predicate)). 
+
+    
+    unfold fmap, TF.f_F, approx.*)
+
+    
+  Instance PUnit_knot(PUnit_F: forall A, PartialUnital (F A)) : PartialUnital knot := 
+    PUnit_preimage _ _ _  unsquash squash squash_unsquash unsquash_squash_join_hom _.
+  Proof. apply BLAH. Qed. *)
 
   Lemma join_unsquash : forall x1 x2 x3,
     join x1 x2 x3 =
@@ -115,6 +186,16 @@ Module KnotHeredSa (TFSA':TY_FUNCTOR_SA_PROP) (K':KNOT_HERED with Module TF:=TFS
     intuition.
   Qed.
 
+  (*Instance PUnit_knot(PUnit_F: forall A, PartialUnital (F A)) : PartialUnital knot.
+  Proof. constructor; intro a.
+         pose (e':= @join_pid _ _ _ (unsquash a)).
+         destruct e' as [e [eID eJOIN]].
+         apply exist with (squash e).
+         unfold pcm.identity, join, Join_knot, Join_preimage.
+         destruct e. rewrite unsquash_squash.
+         fmap
+         
+  Qed.*)
   Instance Canc_knot(Canc_F: forall A, Canc_alg (F A)) : Canc_alg knot.
   Proof. repeat intro. 
             do 3 red in H, H0.

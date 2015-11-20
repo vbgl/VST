@@ -10,10 +10,10 @@ Class PrePCM (t: Type) {J: Join t} : Type :=
    join_assoc: forall {a b c d e}, join a b d -> join d c e ->
                     {f : t & join b c f /\ join a f e};
    join_comm: forall {a b c}, join a b c -> join b a c
-}.
+    }.
 
 Definition unit_for {t}{J: Join t} (e a: t) := join e a a.
-Definition identity {t} {J: Join t} (e: t) := forall a b, join e a b -> a=b.
+Definition identity {t} {J: Join t} (e: t) := forall {a b}, join e a b -> a=b.
 
 Class Unital (t: Type) {J: Join t}  : Type :=
   mkUnital {
@@ -23,8 +23,16 @@ Class Unital (t: Type) {J: Join t}  : Type :=
 
 Class PartialUnital (t: Type) {J: Join t}  : Type :=
   mkPUnital {
-      join_pid: forall {a}, exists e, identity e /\ join e a a
+      punit : t -> t;
+      punit_unit: forall {a}, join (punit a) a a;
+      join_punit: forall a, identity (punit a)
     }.
+
+Lemma Unital_PUnital (t: Type) {J: Join t}{ _: PrePCM t}{_ : Unital t}: PartialUnital t.
+  apply mkPUnital with (fun _ => join_unit); intros.
+  apply join_lid.
+  unfold identity. intros. eapply (join_eq (join_lid) H).
+Qed. 
 
 Class PCM (t: Type) {J: Join t}  : Type :=
   mkPCM'   {

@@ -9,8 +9,11 @@ Parameter some_address:address.
 (* Kinds form a Partial Commutative Monoid algebra *)
 Parameter kind: Type.
 Parameter kjoin: Join kind.
-Parameter kind_pcm: @PCM kind kjoin.
-Existing Instance kind_pcm.
+(*Parameter kind_pcm: @PCM kind kjoin.*)
+Parameter kind_ppcm: @PrePCM kind kjoin.
+Parameter kind_sep: @Sep_alg kind kjoin.
+Existing Instance kind_ppcm.
+Existing Instance kind_sep.
 
 
 (* Validity of traces.  The "valid" predicate ensures that related addresses don't get
@@ -30,20 +33,25 @@ Parameter some_address:address.
 (* Kinds form a separation algebra *)
 Parameter kind: Type.
 Parameter kjoin: Join kind.
-Parameter kind_pcm: @PCM kind kjoin.
-Existing Instance kind_pcm.
+(*Parameter kind_pcm: @PCM kind kjoin.*)
+Parameter kind_ppcm: @PrePCM kind kjoin.
+Parameter kind_sep: @Sep_alg kind kjoin.
+Existing Instance kind_ppcm.
+Existing Instance kind_sep.
 End ADR_VAL0.
 
 Module SimpleAdrVal (AV0: ADR_VAL0) <: 
    ADR_VAL with Definition address := AV0.address
     with Definition kind := AV0.kind
     with Definition kjoin := AV0.kjoin
-    with Definition kind_pcm := AV0.kind_pcm.
+    with Definition kind_sep := AV0.kind_sep
+    with Definition kind_ppcm := AV0.kind_ppcm.
   Import AV0.
   Definition address := address.
   Definition some_address := some_address.
   Definition kind := kind.
-  Definition kind_pcm := kind_pcm.
+  Definition kind_sep := kind_sep.
+  Definition kind_ppcm := kind_ppcm.
   Definition kjoin := kjoin.
   Definition valid (_: address -> option (pshare * kind)) := True.
   Lemma valid_empty: valid (fun _ => None).
@@ -105,8 +113,10 @@ Module Type STRAT_MODEL.
               res_join PRED (YES' PRED rsh1 sh1 k1 p) (YES' PRED rsh2 sh2 k2 p) (YES' PRED rsh3 sh3 k3 p)
     | res_join_PURE : forall k p, res_join PRED (PURE' PRED k p) (PURE' PRED k p) (PURE' PRED k p).
   Axiom pa_rj : forall PRED, @Perm_alg _ (res_join PRED).
-  Axiom sa_rj : forall PRED, @Sep_alg _ (res_join PRED).
-  Axiom ca_rj : forall PRED, @Canc_alg _ (res_join PRED).
+  Axiom co_rj : forall PRED, @Core_alg _ (res_join PRED).
+  (*Axiom sa_rj : forall PRED, @Sep_alg _ (res_join PRED). INCLUDED IN co_rj*)
+  (*Axiom pu_rj : forall PRED, @PartialUnital _ (res_join PRED). *)
+  (*Axiom ca_rj : forall PRED, @Canc_alg _ (res_join PRED).*)
   Axiom da_rj : forall PRED, @Disj_alg _ (res_join PRED).
   Axiom paf_res : @pafunctor res f_res res_join.
 
@@ -135,8 +145,10 @@ Module Type STRAT_MODEL.
             Join_prop _ (Join_fun address (res A) (res_join A)) (valid' A).
 
   Parameter Perm_pre_rmap: forall (A: Type), Perm_alg (pre_rmap A).
-  Parameter Sep_pre_rmap: forall (A: Type), Sep_alg (pre_rmap A).
-  Parameter Canc_pre_rmap: forall (A: Type), Canc_alg (pre_rmap A).
+  Parameter Core_pre_rmap: forall (A: Type), Core_alg (pre_rmap A).
+  (*Parameter Sep_pre_rmap: forall (A: Type), Sep_alg (pre_rmap A). INCLUDED IN CORE*)
+  (*Parameter PUnit_pre_rmap: forall (A: Type), PartialUnital (pre_rmap A).*)
+  (*Parameter Canc_pre_rmap: forall (A: Type), Canc_alg (pre_rmap A).*)
   Parameter Disj_pre_rmap: forall (A: Type), Disj_alg (pre_rmap A).
   Instance paf_pre_rmap : pafunctor f_pre_rmap := 
     saf_subset  (paf_fun address paf_res) valid' valid'_res_map valid'_res_map2.
@@ -290,7 +302,62 @@ Module StratModel (AV' : ADR_VAL) : STRAT_MODEL with Module AV:=AV'.
             intros. inversion H; auto.
   Defined.
 
-  Instance ca_rj : forall PRED, @Canc_alg _ (res_join PRED).
+  Lemma share_dup_unit:
+    forall (sh: share),
+      join sh sh sh -> sh = Share.bot.
+    intros.
+    assert (H0:= bot_join_eq sh).
+    apply (join_canc H H0).
+  Qed.
+  Lemma pshare_no_dup:
+    forall (sh1: pshare),
+      join sh1 sh1 sh1 -> False.
+    intros.
+    destruct sh1 as [sh shPos].
+    do 3 red in H; simpl in H.
+    rewrite (share_dup_unit _ H) in shPos.
+    apply (shPos Share.bot).
+    apply bot_join_eq.
+  Qed.
+  Lemma share_no_split:
+    forall (sh1 sh2: share),
+      join sh1 sh2 Share.bot -> sh1 = Share.bot.
+    intros.
+    apply (join_positivity H (bot_join_eq sh1)).
+  Qed.
+    
+  Instance co_rj : forall PRED, @Core_alg _ (res_join PRED).
+  Proof. intros.
+         apply mkCore with (sa_rj PRED); intros.
+         { inv H; simpl.
+           - f_equal. eapply share_dup_unit; assumption.
+           - eapply pshare_no_dup in H8; contradiction.
+           - reflexivity. }
+         { destruct c; inv H; [ | | solve[constructor] ];
+           (assert (H4:= join_comm H3);
+             apply share_no_split in H3;
+             apply share_no_split in H4; subst;
+             constructor; apply bot_join_eq).
+           }
+  Defined.
+  
+  Lemma bot_join_eq': forall a b, join Share.bot a b -> a = b.
+    intros a b HH. pose (bot_join_eq a).
+    apply (join_eq(x:=Share.bot)(y:=a)); assumption.
+  Qed.
+  
+  Instance pu_rj : forall PRED, @PartialUnital _ (res_join PRED).
+  Proof.
+    intros.
+    apply mkPUnital with (fun x => match x with NO' _ => NO' _ Share.bot | YES' _ _ _ _ => NO' _ Share.bot| PURE' k pds => PURE' _ k pds end); intros a.
+    - destruct a.
+      + constructor. apply bot_join_eq.
+      + constructor. apply bot_join_eq.
+      + constructor.
+    - destruct a; intros b c HH; inv HH; f_equal;
+      (apply bot_join_eq'; assumption) .
+  Defined.
+    (*Instance ca_rj : forall PRED, @Canc_alg _ (res_join PRED).
   Proof. repeat intro. inv H; inv H0; auto.
     f_equal. eapply join_canc; eauto.
     f_equal. eapply join_canc; eauto.
@@ -301,11 +368,23 @@ Module StratModel (AV' : ADR_VAL) : STRAT_MODEL with Module AV:=AV'.
     eapply join_canc; eauto.
     eapply join_canc; eauto.
     
-  Qed.
+  Qed.*)
 
   Instance da_rj : forall PRED, @Disj_alg _ (res_join PRED).
   Proof.  repeat intro.
-    inv H; f_equal; auto; apply join_self; auto.
+          inv H.
+          f_equal; auto.
+          apply join_self; auto.
+          Focus 2.
+          f_equal; auto.
+          
+          replace sh3 with sh1 in * by
+              (apply join_self; auto).
+
+        generalize (pshare_not_identity sh1); intros contra.
+        contradict contra.
+        apply join_unp in H6. (*It has some effect but you can't see it! *)
+        eapply unit_identity in H6. assumption.
   Qed.
 
   Instance paf_res : @pafunctor res f_res res_join.
@@ -335,7 +414,7 @@ Module StratModel (AV' : ADR_VAL) : STRAT_MODEL with Module AV:=AV'.
    destruct z' as [ rz | rz sz kz pz | kz pz ]; try solve [elimtype False; inv H].
    exists (NO' _ ry); exists (YES' _ rz sx kx px); inv H; split; constructor; auto.
    destruct z' as [ rz | rz sz kz pz | kz pz ]; try solve [elimtype False; inv H].
-   exists (YES' _ ry sy kx px); exists (YES' _ rz sz kx px); inv H; split; constructor; auto. simpl; f_equal; auto.
+   exists (YES' _ ry sy ky px); exists (YES' _ rz sz kz px); inv H; split; constructor; auto; simpl; f_equal; auto.
    exists (PURE' _ kx px); exists (PURE' _ kx px); inv H; split; constructor; auto.
   Qed.
   
@@ -393,9 +472,33 @@ Module StratModel (AV' : ADR_VAL) : STRAT_MODEL with Module AV:=AV'.
     intros. red. red.
     replace (fun l => res_option A (core x l)) with (fun l : address => @None (pshare * kind)).
     apply AV.valid_empty.
-    extensionality a. simpl. icase (x a).
+    extensionality a.
+    simpl. icase (x a).
   Qed.
-
+  Lemma pre_rmap_co_valid_core (A: Type):
+        forall x : address -> res A,
+       valid' A x ->
+       valid' A  (@core (address -> res A) (Join_fun address (res A) (res_join A))
+                     (Core_fun address (res A) (res_join A) (co_rj A)) x).
+  Proof.
+    intros. red. red.
+    replace (fun l => res_option A (core x l)) with (fun l : address => @None (pshare * kind)).
+    apply AV.valid_empty.
+    extensionality a.
+    simpl. icase (x a).
+  Qed.
+  Lemma pre_rmap_pu_valid_punit (A: Type):
+        forall x : address -> res A,
+       valid' A x ->
+       valid' A  (@punit (address -> res A) (Join_fun address (res A) (res_join A))
+                     (PUnit_fun address (res A) (res_join A) (pu_rj A)) x).
+  Proof.
+    intros. red. red.
+    replace (fun l => res_option A (punit x l)) with (fun l : address => @None (pshare * kind)).
+    apply AV.valid_empty.
+    extensionality a.
+    simpl. icase (x a).
+  Qed.
 
   Lemma pre_rmap_sa_valid_join : forall A (x y z : address -> res A),
     @join _ (Join_fun address (res A) (res_join A)) x y z ->
@@ -410,12 +513,14 @@ Module StratModel (AV' : ADR_VAL) : STRAT_MODEL with Module AV:=AV'.
 
   Definition Perm_pre_rmap (A: Type): Perm_alg (pre_rmap A) :=
     Perm_prop _ _ (Perm_fun address _ _ _) _ (pre_rmap_sa_valid_join _).
-
+  Definition Core_pre_rmap (A: Type): Core_alg (pre_rmap A):=
+    Core_prop _ _ (Perm_fun address _ _ _) _ (pre_rmap_sa_valid_join _) _ (pre_rmap_co_valid_core _).
   Definition Sep_pre_rmap (A: Type): Sep_alg (pre_rmap A) :=
     Sep_prop _ _ (Perm_fun address _ _ _) _ (pre_rmap_sa_valid_join _)  _ (pre_rmap_sa_valid_core _).
-
-  Definition Canc_pre_rmap (A: Type): Canc_alg (pre_rmap A) :=
-    @Canc_prop _ _ _ (Canc_fun address _ _ _).
+  Definition PUnit_pre_rmap (A: Type): PartialUnital (pre_rmap A) :=
+    PUnit_prop _ _ (Perm_fun address _ _ _) _ (pre_rmap_sa_valid_join _)  _ (pre_rmap_pu_valid_punit _).
+  (*Definition Canc_pre_rmap (A: Type): Canc_alg (pre_rmap A) :=
+    @Canc_prop _ _ _ (Canc_fun address _ _ _).*)
 
   Definition Disj_pre_rmap (A: Type): Disj_alg (pre_rmap A) :=
     @Disj_prop _ _ _ (Disj_fun address _ _ _).
@@ -431,8 +536,10 @@ Module Type RMAPS.
   Parameter rmap : Type.
   Axiom Join_rmap: Join rmap. Existing Instance Join_rmap.
   Axiom Perm_rmap: Perm_alg rmap. Existing Instance Perm_rmap.
-  Axiom Sep_rmap: Sep_alg rmap. Existing Instance Sep_rmap.
-  Axiom Canc_rmap: Canc_alg rmap.  Existing Instance Canc_rmap.
+  Axiom Core_rmap: Core_alg rmap. Existing Instance Core_rmap.
+  (*Axiom Sep_rmap: Sep_alg rmap. Existing Instance Sep_rmap.CONTAINED IN Core_alg*)
+  (*Axiom PUnit_rmap: PartialUnital rmap. Existing Instance PUnit_rmap.*)
+  (*Axiom Canc_rmap: Canc_alg rmap.  Existing Instance Canc_rmap.*)
   Axiom Disj_rmap: Disj_alg rmap.  Existing Instance Disj_rmap.
   Axiom ag_rmap: ageable rmap.  Existing Instance ag_rmap.
   Axiom Age_rmap: Age_alg rmap.  Existing Instance Age_rmap.
@@ -464,16 +571,19 @@ Module Type RMAPS.
    | res_join_NO3 : forall rsh1 rsh2 rsh3 sh k p
                                (RJ: join rsh1 rsh2 rsh3),
                                res_join (NO rsh1) (YES rsh2 sh k p) (YES rsh3 sh k p) 
-   | res_join_YES : forall rsh1 rsh2 rsh3 (sh1 sh2 sh3:pshare) k p
+   | res_join_YES : forall rsh1 rsh2 rsh3 (sh1 sh2 sh3:pshare) k1 k2 k3 p
                                (RJ: join rsh1 rsh2 rsh3),
-                               join sh1 sh2 sh3 -> 
-        res_join (YES rsh1 sh1 k p) (YES rsh2 sh2 k p) (YES rsh3 sh3 k p)
+                      join sh1 sh2 sh3 ->
+                      kjoin k1 k2 k3 ->
+        res_join (YES rsh1 sh1 k1 p) (YES rsh2 sh2 k2 p) (YES rsh3 sh3 k3 p)
    | res_join_PURE : forall k p, res_join (PURE k p) (PURE k p) (PURE k p). 
 
   Instance Join_resource: Join resource := res_join.
   Axiom Perm_resource: Perm_alg resource. Existing Instance Perm_resource.
-  Axiom Sep_resource: Sep_alg resource. Existing Instance Sep_resource.
-  Axiom Canc_resource: Canc_alg resource. Existing Instance Canc_resource.
+  Axiom Core_resource: Core_alg resource. Existing Instance Core_resource.
+  (*Axiom Sep_resource: Sep_alg resource. Existing Instance Sep_resource.*)
+  (*Axiom PUnit_resource: PartialUnital resource. Existing Instance PUnit_resource.*)
+  (*Axiom Canc_resource: Canc_alg resource. Existing Instance Canc_resource.*)
   Axiom Disj_resource: Disj_alg resource. Existing Instance Disj_resource.
 
   Definition preds_fmap (f:pred rmap -> pred rmap) (x:preds) : preds :=
@@ -566,8 +676,11 @@ Module Rmaps (AV':ADR_VAL) : RMAPS with Module AV:=AV'.
 
   Instance Join_F: forall A, Join (F A) := _.
   Definition Perm_F : Perm_paf f_F Join_F := fun A _ _ => Perm_pre_rmap A.
-  Definition Sep_F : Sep_paf f_F Join_F := fun (A : Type) (JA : Join A) _ _ => Sep_pre_rmap A.
-  Definition Canc_F : Canc_paf f_F Join_F := fun (A : Type) (JA : Join A) _ _ => Canc_pre_rmap A.
+  Definition Core_F : Core_paf f_F Join_F := fun (A : Type) (JA : Join A) _ _ => Core_pre_rmap A.
+  (*Definition Sep_F : Sep_paf f_F Join_F := fun (A : Type) (JA : Join A) _ _ => Sep_pre_rmap A.*)
+  (*Definition PUnit_F : PUnit_paf f_F Join_F :=
+    fun (A : Type) (JA : Join A) _ => PUnit_pre_rmap A.*)
+(*Definition Canc_F : Canc_paf f_F Join_F := fun (A : Type) (JA : Join A) _ _ => Canc_pre_rmap A.*)
   Definition Disj_F : Disj_paf f_F Join_F := fun (A : Type) (JA : Join A) _ _ => Disj_pre_rmap A.
   Definition paf_F := paf_pre_rmap.
  End TyFSA.
@@ -579,8 +692,13 @@ Module Rmaps (AV':ADR_VAL) : RMAPS with Module AV:=AV'.
   Definition rmap := K.knot.
   Instance Join_rmap: Join rmap := KSa.Join_knot.
   Instance Perm_rmap : Perm_alg rmap:= KSa.Perm_knot.
-  Instance Sep_rmap : Sep_alg rmap:= KSa.Sep_knot Sep_pre_rmap. 
-  Instance Canc_rmap : Canc_alg rmap:= KSa.Canc_knot Canc_pre_rmap.
+  Parameter Core_fmap_commute:
+    forall (n : nat) (f : KSa.TFSA.TF.F KSa.K.predicate),
+   core (fmap (KSa.K.approx n) f) = fmap (KSa.K.approx n) (core f).
+  Instance Core_rmap : Core_alg rmap:= KSa.Core_knot Core_pre_rmap Core_fmap_commute.
+  (*Instance Sep_rmap : Sep_alg rmap:= KSa.Sep_knot Sep_pre_rmap.*)
+  (*Instance PUnit_rmap: PartialUnital rmap:= KSa.PUnit_knot PUnit_pre_rmap.*)
+  (*Instance Canc_rmap : Canc_alg rmap:= KSa.Canc_knot Canc_pre_rmap.*)
   Instance Disj_rmap : Disj_alg rmap:= KSa.Disj_knot Disj_pre_rmap.
   Instance ag_rmap : ageable rmap := KSa.K.ag_knot.
   Instance Age_rmap: Age_alg rmap := KSa.asa_knot.
@@ -637,15 +755,17 @@ Module Rmaps (AV':ADR_VAL) : RMAPS with Module AV:=AV'.
    | res_join_NO3 : forall rsh1 rsh2 rsh3 sh k p
                                (RJ: join rsh1 rsh2 rsh3),
                                res_join (NO rsh1) (YES rsh2 sh k p) (YES rsh3 sh k p) 
-   | res_join_YES : forall rsh1 rsh2 rsh3 (sh1 sh2 sh3:pshare) k p
+   | res_join_YES : forall rsh1 rsh2 rsh3 (sh1 sh2 sh3:pshare) k1 k2 k3 p
                                (RJ: join rsh1 rsh2 rsh3),
-                               join sh1 sh2 sh3 -> 
-        res_join (YES rsh1 sh1 k p) (YES rsh2 sh2 k p) (YES rsh3 sh3 k p)
+                      join sh1 sh2 sh3 ->
+                      kjoin k1 k2 k3 ->
+        res_join (YES rsh1 sh1 k1 p) (YES rsh2 sh2 k2 p) (YES rsh3 sh3 k3 p)
    | res_join_PURE : forall k p, res_join (PURE k p) (PURE k p) (PURE k p). 
 
   Instance Join_resource: Join resource := res_join.
   Instance Perm_resource: Perm_alg resource.
   Proof. constructor.
+         constructor.
 
       (* saf_eq *)
       intros x y z z' H1 H2; inv H1; inv H2; repeat f_equal; eapply join_eq; eauto.
@@ -690,22 +810,44 @@ Module Rmaps (AV':ADR_VAL) : RMAPS with Module AV:=AV'.
       exists (YES rf sc kc pc).  inv H1; inv H2; split; constructor; auto.
       destruct a as [ra | ra sa ka pa | ka pa ]; try solve [elimtype False; inv H1].
       assert (H: join ra rb rd) by (inv H1; auto).
+      assert (Hk: kb = kd) by (inv H1; auto); subst kb.
+      assert (Hk': join kd kc ke) by (inv H2; auto).
       destruct (join_assoc H H0) as [rf [? ?]].
-      exists (YES rf se kb pb).  inv H1; inv H2; split; try constructor; auto.
+      exists (YES rf se ke pb).  inv H1; inv H2; split; try constructor; auto.
       assert (H: join ra rb rd) by (inv H1; auto).
       destruct (join_assoc H H0) as [rf [? ?]].
       assert (H5: join sa sb sd) by (inv H1; auto).
       assert (H6: join sd sc se) by (inv H2; auto).
+      assert (Hk5: join ka kb kd) by (inv H1; auto).
+      assert (Hk6: join kd kc ke) by (inv H2; auto).
       destruct (join_assoc H5 H6) as [sf [? ?]].
-      exists (YES rf sf kb pb).  inv H1; inv H2; split; try constructor; auto.
+      destruct (join_assoc Hk5 Hk6) as [sfk [? ?]].
+      exists (YES rf sf sfk pb).  inv H1; inv H2; split; try constructor; auto.
       exists (PURE kd pd). inv H1; inv H2; split; constructor.
 
       (* saf_com *)
       intros a b c H; inv H; econstructor;  apply join_comm; auto.
 
      (* saf_positivity *)
-     intros; inv H; inv H0; auto; f_equal; eapply join_positivity; eauto.
- Qed.
+      { intros. inv H; inv H0; auto.
+      - f_equal; eapply join_positivity; eauto.
+      - f_equal; eapply join_positivity; eauto.
+      - f_equal; eapply join_positivity; eauto.
+      - f_equal; eapply join_positivity; eauto.
+      - (*This is impossible because sh's are not zero! *)
+        replace sh3 with sh1 in * by (eapply join_positivity; eauto).
+        eapply join_comm in H1; eapply join_comm in H11.
+        generalize (pshare_not_identity sh2); intros contra.
+        contradict contra.
+        Lemma join_unp : forall a b c,
+                           @join pshare _ a b c ->
+                           @join share _ a b c.
+          intros. inv H. constructor; unfold lifted_obj in *; auto.
+        Qed.
+        apply join_unp in H1. (*It has some effect but you can't see it! *)
+        eapply unit_identity in H1; assumption.
+        }
+  Qed.
 
   Instance Sep_resource: Sep_alg resource.
   Proof.
@@ -714,16 +856,47 @@ Module Rmaps (AV':ADR_VAL) : RMAPS with Module AV:=AV'.
     intros; inv H; auto.
   Defined.
 
-  Instance Canc_resource: Canc_alg resource.
+  Instance Core_resource: Core_alg resource.
+  Proof.
+    apply mkCore with Sep_resource; intros.
+
+    inv H. unfold core, Sep_resource. admit.
+    admit. (*pshare*)
+    unfold core, Sep_resource; reflexivity.
+
+    revert H; destruct c; unfold core, Sep_resource.
+    intros H; inv H; constructor. admit.
+    intros H; inv H; constructor. admit.
+    intros H; inv H; constructor.
+  Defined.
+  
+  Instance PUnit_resource: PartialUnital resource.
+  Proof.
+    apply mkPUnital with (fun x => match x with NO _ => NO Share.bot | YES _ _ _ _ => NO Share.bot | PURE k pds => PURE k pds end); intros a.
+    destruct a; constructor; try apply join_unit1; auto.
+    intros b c HH.
+    destruct a; inv HH; f_equal;
+    (eapply join_eq; [apply bot_join_eq | auto]).
+  Defined.
+  
+  (*Instance Canc_resource: Canc_alg resource.
   Proof. repeat intro.
     inv H; inv H0; f_equal;
    try solve [   elimtype False; eapply no_units; eassumption];
    eapply join_canc; eassumption.
-  Qed.
+  Qed.*)
 
   Instance Disj_resource: Disj_alg resource.
   Proof.
-    repeat intro. inv H; auto; f_equal; apply join_self; auto.
+    repeat intro. inv H; auto.
+    f_equal. apply join_self; auto.
+
+    replace sh3 with sh1 in * by
+              (apply join_self; auto).
+    generalize (pshare_not_identity sh1); intros contra.
+        contradict contra.
+        apply join_unp in H5. (*It has some effect but you can't see it! *)
+        eapply unit_identity in H5. assumption.
   Qed.
 
   Lemma same_valid : forall f1 f2, (forall x, f1 x = f2 x) -> AV.valid f1 -> AV.valid f2.
@@ -748,8 +921,11 @@ Module Rmaps (AV':ADR_VAL) : RMAPS with Module AV:=AV'.
      simpl in H.
      unfold valid, compose in *.
      apply AV.valid_join with (fun l => res_option (x l)) (fun l => res_option (y l)); auto.
-     intro l. specialize (H l). inv  H; eauto. constructor. constructor. constructor.
-     constructor. constructor. eauto. eauto.
+     intro l. specialize (H l). unfold join, Join_resource in H.
+     About res_join.
+     inv  H; eauto. constructor. constructor. constructor.
+     constructor. constructor. eauto.
+     simpl. eauto.
      constructor.
   Qed.
 
@@ -1121,7 +1297,7 @@ Qed.
    rewrite K.knot_level. destruct (K.unsquash x); simpl. auto.
   Qed.
  
-  Lemma unevolve_identity_rmap :
+  (*Lemma unevolve_identity_rmap :
    (* REMARK:  This may not be needed for anything, so for now it's removed
      from the Module Type *)
     forall w w':rmap, necR w w' -> identity w' -> identity w.
@@ -1151,11 +1327,7 @@ Qed.
     inv H1; auto.
     inv H1. constructor; auto.
     constructor.
-  Qed.
+  Qed.*)
 
 End Rmaps.
 Local Close Scope nat_scope.
-
-
-
-

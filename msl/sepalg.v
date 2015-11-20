@@ -38,7 +38,7 @@ Hint Extern 2 (@join _ _ _ _ _) =>
 Hint Unfold unit_for.
 
 Lemma join_assoc_uniq:
-  forall {t} {J: Join t} (PA1 PA2: @Perm_alg t J),
+  forall {t} {J: Join t} (PA1 PA2: @PrePCM t J),
       forall a b c d e H H',
          (proj1_sig (@join_assoc _ _ PA1  a b c d e H H'))
         = (proj1_sig (@join_assoc _ _ PA2  a b c d e H H')).
@@ -53,6 +53,9 @@ Qed.
      into a Separation Algebra.  The notion of "core" comes from
     F. Pottier, "Syntactic soundness proof of a type-and-capability
       system with hidden state" *)
+  (* This is a misnomer, now that I use it independent of a Permissin
+     Algebra. Should be called a PreCorable Algebra 
+     Algebra. *)
   Class Sep_alg A {J: Join A} : Type :=
     mkSep {
       core: A -> A;
@@ -86,7 +89,7 @@ Proof.
  apply (join_core H).
 Qed.
 
-Lemma core_hom {A}{J: Join A}{PA: Perm_alg A}{SA: Sep_alg A}:
+Lemma core_hom {A}{J: Join A}{PA: PrePCM A}{SA: Sep_alg A}:
   forall {a b c}, join a b c -> join (core a) (core b) (core c).
 Proof.
  intros.
@@ -96,7 +99,7 @@ Proof.
  apply core_duplicable.
 Qed.
 
-Lemma split_core{A} {J: Join A}{PA: Perm_alg A}{SA: Sep_alg A}:
+Lemma split_core'{A} {J: Join A}{PA: Perm_alg A}{SA: Sep_alg A}:
  forall a b c, join a b (core c) -> unit_for a a.
 Proof.
  intros.
@@ -109,7 +112,7 @@ Proof.
  rewrite <- H1 in H0; auto.
 Qed.
 
-Lemma core_uniq {t} {J: Join t}{PA: Perm_alg t}:
+Lemma core_uniq {t} {J: Join t}{PA: PrePCM t}:
    forall (SA1: @Sep_alg _ J)
           (SA2: @Sep_alg _ J),
      forall x, @core _ _ SA1 x = @core _ _ SA2 x.
@@ -132,7 +135,7 @@ Proof.
  apply (join_eq H4 H5).
 Qed.
 
-Lemma join_core2 {A}{J: Join A}{PA: Perm_alg A}{SA: Sep_alg A}:
+Lemma join_core2 {A}{J: Join A}{PA: PrePCM A}{SA: Sep_alg A}:
   forall a b c, join a b c -> core a = core b. 
 Proof.
 intros. generalize H; intro.
@@ -140,10 +143,29 @@ apply join_comm in H.
 apply join_core in H0; apply join_core in H. congruence.
 Qed.
 
+
+(******************************************************************)
+(*NEW: Santiago Nov 13 2015*)
+(*Cor_alg: Corable Algebra. Is the resource algebra of F. Pottier:
+  See: https://hal.inria.fr/hal-00877589/document *)
+Class Core_alg (t: Type) {J: Join t} : Type :=
+  mkCore {
+      Core_sepalg: Sep_alg t;
+      dup_core: forall a, join a a a -> a = core a;
+      split_core: forall a b c, join a b (core c) -> join a a a
+  }.
+
+Existing Instance Core_sepalg.
+Coercion Core_sepalg : Core_alg >-> Sep_alg.
+Implicit Arguments Core_alg [[J]].
+
+(******************************************************************)
+
 (* Canc_alg: makes a Permission Algebra into a cancellative Perm.Alg. *)
 Class Canc_alg (t: Type) {J: Join t} :=
     join_canc: forall {a1 a2 b c}, join a1 b c -> join a2 b c -> a1 = a2.
 Implicit Arguments Canc_alg [[J]].
+
 
 Lemma   unit_identity {A}{J: Join A}{PA: Perm_alg A}{SA: Sep_alg A}{CA: Canc_alg A} : 
         forall {e} b, unit_for e b -> identity e.
@@ -550,8 +572,7 @@ Hint Resolve @join_joins @join_joins' @join_join_sub @join_join_sub'.
   Qed.
 
   (** Identities are exactly units for themselves (are idempotent).*)
-  Lemma identity_unit_equiv {A} {JA: Join A}{PA: Perm_alg A}{SA: Sep_alg A}{CA: Canc_alg A}:
-    forall a,  identity a <-> unit_for a a.
+  Lemma identity_unit_equiv {A} {JA: Join A}{PA: Perm_alg A}{SA: Sep_alg A}{CA: Canc_alg A}:    forall a,  identity a <-> unit_for a a.
   Proof.
     intros.
     split; intro.
@@ -566,6 +587,39 @@ Hint Resolve @join_joins @join_joins' @join_join_sub @join_join_sub'.
     apply (unit_identity _ H).
   Qed.
 
+  (** New verison using Unitals *)
+  Lemma identity_unit_equiv'' {A} {JA: Join A}{PA: Perm_alg A}{SA: Sep_alg A}{CA: PartialUnital A}:    forall a,  identity a -> unit_for a a.
+  Proof.
+    intros.
+    apply identity_unit; trivial.
+    exists a.
+    destruct (join_ex_units a) as [ea H0].
+    destruct PA.
+    generalize (join_comm H0); intro.
+    generalize (H ea a H1); intro.
+    rewrite <- H2 in *; clear a H2.
+    trivial.
+  Qed.
+  Lemma identity_unit_equiv' {A} {JA: Join A}{PA: Perm_alg A}{SA: Core_alg A}:
+       forall a : A, identity a -> unit_for a a.
+  intros. unfold identity in H; unfold unit_for.
+  specialize (H (core a) a).
+  
+  apply (split_core _ (core a) (a)).
+
+  destruct PA. destruct Perm_ppcm0. specialize (join_comm (core a) a a).
+
+  assert (HH: join a (core a) a).
+  apply join_comm;
+  apply core_unit.
+  specialize (H HH).
+
+  revert HH.
+  replace (core a) with a by apply H.
+
+  trivial.
+  Qed.
+  
   (** Joinable identities are unique. *)
   Lemma identities_unique {A} `{HA: Perm_alg A} :
    forall e1 e2,  identity e1 ->  identity e2 ->  joins e1 e2 ->  e1 = e2.
@@ -583,10 +637,10 @@ Lemma split_identity{A} {JA: Join A}{PA: Perm_alg A}{SA: Sep_alg A}{CA: Canc_alg
 Proof.
  intros.
  apply identity_unit_equiv.
- apply (split_core a b c).
+ apply (split_core' a b c).
  generalize (core_hom H); intro.
  generalize (join_core H); intro.
-  generalize (split_core _ _ _ H1); unfold unit_for; intro.
+  generalize (split_core' _ _ _ H1); unfold unit_for; intro.
   apply identity_unit_equiv in H0.
   generalize (core_unit c); unfold unit_for; intro.
   generalize (join_canc H0 H4); intro.

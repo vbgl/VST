@@ -82,8 +82,9 @@ Module Type KNOT_SA_PROP.
   Import K.
 
   Parameter Join_knot: Join knot.  Existing Instance Join_knot.
-  Parameter Sep_knot : Sep_alg knot.  Existing Instance Sep_knot.
-  Parameter Canc_knot : Canc_alg knot.  Existing Instance Canc_knot.
+  (*Parameter Sep_knot : Sep_alg knot.  Existing Instance Sep_knot.*)
+  Parameter Core_knot : Core_alg knot.  Existing Instance Core_knot.
+  (* Parameter Canc_knot : Canc_alg knot.  Existing Instance Canc_knot.*)
   Parameter Disj_knot :  Disj_alg knot.  Existing Instance Disj_knot.
 
   Instance Join_nat_F: Join (nat * F predicate) := 
@@ -91,11 +92,12 @@ Module Type KNOT_SA_PROP.
 
  Instance Perm_nat_F : Perm_alg (nat * F predicate) :=
     @Perm_prod nat _ _ _ (Perm_equiv _) (Perm_F predicate _ (Perm_equiv _)).
-
- Instance Sep_nat_F (Sep_F: forall A, Sep_alg (F A)): Sep_alg (nat * F predicate) :=
-    @Sep_prod nat _ _ _ (Sep_equiv _) (Sep_F predicate).
- Instance Canc_nat_F (Canc_F: forall A, Canc_alg (F A)): Canc_alg (nat * F predicate) :=
-    @Canc_prod nat _ _ _ (Canc_equiv _) (Canc_F predicate).
+ (*Instance Sep_nat_F (Sep_F: forall A, Sep_alg (F A)): Sep_alg (nat * F predicate) :=
+    @Sep_prod nat _ _ _ (Sep_equiv _) (Sep_F predicate). *)
+ Instance Core_nat_F (Core_F: forall A, Core_alg (F A)): Core_alg (nat * F predicate) :=
+    @Core_prod nat _ _ _ (Core_equiv _) (Core_F predicate).
+ (*Instance Canc_nat_F (Canc_F: forall A, Canc_alg (F A)): Canc_alg (nat * F predicate) :=
+    @Canc_prod nat _ _ _ (Canc_equiv _) (Canc_F predicate).*)
  Instance Disj_nat_F (Disj_F: forall A, Disj_alg (F A)): Disj_alg (nat * F predicate) :=
     @Disj_prod nat _ _ _ (Disj_equiv _) (Disj_F predicate).
 
@@ -152,7 +154,8 @@ Module KnotProp (TF':TY_FUNCTOR_PROP) : KNOT_PROP with Module TF:=TF'.
     extensionality n p w.
     unfold approx, Knot_G.approx, TF_G.T_bot.
     case (le_gt_dec n (level w)); intro; apply prop_ext; firstorder.
-    unfold knot, TF_G.other, ag_knot in *. omega.
+    unfold knot, TF_G.other, ag_knot in *.
+    omega.
   Qed.
 
   Definition knot_level := Knot_G.knot_level.
@@ -209,7 +212,8 @@ Module TyFunctorSaProp2TyFunctorSa (TF' : TY_FUNCTOR_SA_PROP) <: TY_FUNCTOR_SA.
 
   Instance Join_T: Join T := Join_equiv T.
   Instance pa_T : Perm_alg T := Perm_equiv T.
-  Instance sa_T : Sep_alg T := Sep_equiv T.
+  Instance co_T : Core_alg T := Core_equiv T.
+  (*Instance sa_T : Sep_alg T := Sep_equiv T.*)
   Instance ca_T : Canc_alg T := Canc_equiv T.
   Instance da_T : Disj_alg T := Disj_equiv T.
   Lemma T_bot_identity : identity T_bot.
@@ -217,21 +221,28 @@ Module TyFunctorSaProp2TyFunctorSa (TF' : TY_FUNCTOR_SA_PROP) <: TY_FUNCTOR_SA.
 
   Instance Join_TF (A: Type) : Join (A -> T) := Join_fun A T Join_T.
   Instance pa_TF (A : Type) : Perm_alg (A -> T) := Perm_fun _ _ _ pa_T.
-  Instance sa_TF (sa_T: Sep_alg T) (A : Type) : Sep_alg (A -> T) := Sep_fun _ _ _ sa_T.
-  Instance ca_TF (ca_T: Canc_alg T) (A : Type) : Canc_alg (A -> T) := Canc_fun _ _ _ _. 
+  (*Instance sa_TF
+ (sa_T: Sep_alg T) (A : Type) : Sep_alg (A -> T) := Sep_fun _ _ _ sa_T.*)
+  Instance co_TF (co_T: Core_alg T) (A : Type) : Core_alg (A -> T) := Core_fun _ _ _ co_T.
+  (*Instance ca_TF (ca_T: Canc_alg T) (A : Type) : Canc_alg (A -> T) := Canc_fun _ _ _ _. *)
   Instance da_TF (da_T: Disj_alg T) (A : Type) : Disj_alg (A -> T) := Disj_fun _ _ _ _.
 
   Instance J_F (A: Type) : Join (F (A -> T)) := TF'.Join_F (A -> T).
   Instance Perm_F (A : Type) : Perm_alg (F (A -> T)) := TF'.Perm_F (A -> T) _ _.
 
-  Instance Sep_F (A : Type) : Sep_alg (F (A -> T)).
+  Instance Core_F (A : Type) : Core_alg (F (A -> T)).
+  Proof. 
+    apply (TF'.Core_F _ (Join_TF A)); auto with typeclass_instances.
+  Defined.
+  
+(*  Instance Sep_F (A : Type) : Sep_alg (F (A -> T)).
   Proof. 
     apply (TF'.Sep_F _ (Join_TF A)); auto with typeclass_instances.
-  Defined.
-  Instance Canc_F (A : Type) : Canc_alg (F (A -> T)).
+  Defined.*)
+  (*Instance Canc_F (A : Type) : Canc_alg (F (A -> T)).
   Proof. 
     apply (TF'.Canc_F _ (Join_TF A)); auto with typeclass_instances.
-  Qed.
+  Qed.*)
   Instance Disj_F (A : Type) : Disj_alg (F (A -> T)).
   Proof. 
     apply (TF'.Disj_F _ (Join_TF A)); auto with typeclass_instances.
@@ -278,8 +289,15 @@ Module KnotSaProp (TFSA':TY_FUNCTOR_SA_PROP)
 
   Instance Join_knot: Join knot := KnotSa_G.Join_knot.
   Instance Perm_knot : Perm_alg knot := KnotSa_G.Perm_knot.
-  Instance Sep_knot : Sep_alg knot := KnotSa_G.Sep_knot _.
-  Instance Canc_knot : Canc_alg knot := KnotSa_G.Canc_knot _.
+  (*Instance Sep_knot : Sep_alg knot := KnotSa_G.Sep_knot _.*)
+  
+    
+  Instance Core_knot : Core_alg knot.
+  eapply (KnotSa_G.Core_knot _).
+  apply KnotSa_G.core_fmap_commute.
+  Qed.
+  
+  (*Instance Canc_knot : Canc_alg knot := KnotSa_G.Canc_knot _.*)
   Instance Disj_knot : Disj_alg knot := KnotSa_G.Disj_knot _.
 
 
@@ -291,6 +309,8 @@ Module KnotSaProp (TFSA':TY_FUNCTOR_SA_PROP)
 
  Instance Sep_nat_F (Sep_F: forall A, Sep_alg (F A)): Sep_alg (nat * F predicate) :=
     @Sep_prod nat _ _ _ (Sep_equiv _) (Sep_F predicate).
+ Instance Core_nat_F (Core_F: forall A, Core_alg (F A)): Core_alg (nat * F predicate) :=
+    @Core_prod nat _ _ _ (Core_equiv _) (Core_F predicate).
  Instance Canc_nat_F (Canc_F: forall A, Canc_alg (F A)): Canc_alg (nat * F predicate) :=
     @Canc_prod nat _ _ _ (Canc_equiv _) (Canc_F predicate).
  Instance Disj_nat_F (Disj_F: forall A, Disj_alg (F A)): Disj_alg (nat * F predicate) :=

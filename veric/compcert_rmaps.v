@@ -5,11 +5,145 @@ Require Import veric.rmaps_lemmas.
 
 Inductive Held:= held | not_held.
 
+(* This should be made pretty and packaged somewhere else*)
+(*********************************************************)
+Set Implicit Arguments.
+Record PCM1 (t:Type) : Type :=
+  mkPCM1 {
+      pcm_join : Join t;
+      ppcm : @PrePCM t pcm_join;
+      pcm_sa : @Sep_alg t pcm_join}.
+Section packing.
+  Structure pack_type : Type := Pack {type : Type; _ : PCM1 type}.
+  Variable cT: pack_type.
+  Local Coercion type : pack_type >-> Sortclass.
+Definition pcm_struct : PCM1 cT :=
+  match cT return PCM1 cT with
+    | Pack _ c => c
+  end.
+
+Definition pjoin := pcm_join pcm_struct.
+End packing.
+Notation pcm := pack_type.
+Coercion type : pcm >-> Sortclass.
+
+Lemma PCM_PPCM : forall t (P:PCM1 t), @PrePCM _ (@pcm_join _ P).
+  intros. apply P.
+Qed.
+
+Lemma PCM_SEP : forall t (P:PCM1 t), @Sep_alg _ (@pcm_join _ P).
+  intros. apply P.
+Qed.  
+
 Inductive kind : Type :=
   | VAL : memval -> kind
-  | LK : Z -> forall A : Type, A -> A -> kind
+  | LK : Z -> forall t: Type, PCM1 t -> t -> option t -> kind
   | CT: Z -> kind
   | FUN: funsig -> kind.
+
+
+Inductive same_join' {t}: Join t -> Join t -> Join t -> Join t -> Prop  :=
+| Same_join : forall (a b c d : Join t), b=a -> c=a -> d=a -> same_join' a b c d.
+
+Definition same_join {t} (a b c d: PCM1 t):=
+  same_join' (@pcm_join t a) (@pcm_join t b) (@pcm_join t c) (@pcm_join t d).
+
+Inductive kind_join : Join kind :=
+| Join_Val: forall mv, kind_join (VAL mv) (VAL mv) (VAL mv)
+| Join_LK: forall z t (P Pa Pb Pc:PCM1 t) (a b c:t),
+             pcm_join P a b c ->
+             same_join P Pa Pb Pc ->
+             kind_join (LK z Pa a None) (LK z Pb b None) (LK z Pc c None)
+| Join_CT: forall z, kind_join (CT z) (CT z) (CT z)
+| Join_FUN: forall f, kind_join (FUN f) (FUN f) (FUN f).
+
+Lemma kjoin_inv_VAL:
+  forall mv b c, kind_join (VAL mv) b c -> b = (VAL mv) /\ c = (VAL mv).
+  intros. inv H. split; reflexivity.
+Qed.
+
+(*Lemma kjoin_inv_VAL:
+  forall mv b c, kind_join (LK t P vs vo) b c -> b = (VAL mv) /\ c = (VAL mv).
+  intros. inv H. split; reflexivity.
+Qed.*)
+
+Lemma kind_ppcm : @PrePCM kind kind_join.
+  constructor; intros.
+  (*JOIN_EQ*)
+  inv H; inv H0; auto.
+
+(*  replace P with P1 in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H4).
+ replace a with a1 in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H5).
+ replace b with b0 in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H7).
+ replace c with c0.
+ reflexivity.
+ { assert (PPCM:= PCM_PPCM _ P1).
+ assert (SA:= PCM_SEP _ P1).
+ apply (@join_eq _ _ PPCM  a1 b0 c0 c);
+   do 2 red; destruct P1. apply H8. apply H1. }
+ *) admit.
+  
+ (*JOIN_ASSOC*)
+ { destruct a, b, c, d, e; try solve[ exfalso; inv H; inv H0].
+ (*VALS*)
+ exists (VAL m);
+ inv H; inv H0; split; constructor.
+
+ (*LK *)
+ assert (t = t1) by (inv H; auto).
+ assert (t = t5) by (inv H; auto).
+ assert (t3 = t7) by (inv H0; auto).
+ assert (t3 = t5) by (inv H0; auto).
+ do 2 subst.
+ 
+ assert (HH1:pcm_join p2 t0 t2 t6).
+ inv H.
+ replace p2 with Pc in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H12).
+ replace t0 with a0 in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H5).
+ replace t2 with b in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H9).
+ replace t6 with c in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H13).
+ inv H15.
+ rewrite H2.
+ exact H3.
+
+ assert (HH2:pcm_join p2 t6 t4 t8).
+ inv H0.
+ replace p2 with Pa0 in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H4).
+ replace t6 with a0 in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H5).
+ replace t4 with b in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H9).
+ replace t8 with c in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H13).
+ inv H15.
+ rewrite H0.
+ exact H3.
+ assert (HH3:=@join_assoc _ _ (ppcm p2) _ _ _ _ _ HH1 HH2). 
+ destruct HH3 as [f [J1 J2]].
+ exists (LK z0 p0 f None); split.
+ constructor.
+ 
+ unfold pjoin.
+ assert (pcm_join (pcm_struct (Pack p1)) = pcm_join (pcm_struct P)).
+ destruct p1; simpl.
+ destruct P.
+ simpl in pcm_join0.
+ assert (Pack p1 = P).
+ destruct p1.
+ destruct P.
+ f_equal. destruct p1.
+ f_equal.
+ 
+ apply H2. 
+ replace (@Pack (type P) p1) with P.
+ (*CT*)
+ exists (CT z);
+   inv H; inv H0; split; constructor.
+ 
+ (*FUN*)
+ exists (FUN f);
+ inv H; inv H0; split; constructor. }
+
+ 
+  
+(*********************************************************)
 
 Definition isVAL (k: kind) := match k with | VAL _ => True | _ => False end.
 Definition isFUN (k: kind) := match k with | FUN _ => True | _ => False end.
@@ -28,13 +162,14 @@ Module CompCert_AV <: ADR_VAL.
 Definition address := address.
 Definition some_address : address := (xH,0).
 Definition kind := kind.
-
+Definition kjoin := kind_join.
+  
 Definition valid (f: address -> option (pshare*kind)) := 
   forall b ofs, 
      match f (b,ofs) with
-     | Some (sh, LK n _ _ _) => forall i, 0 < i < n -> f(b,ofs+i) = Some (sh, CT i)
+     | Some (sh, LK n _ _ _ _) => forall i, 0 < i < n -> f(b,ofs+i) = Some (sh, CT i)
      | Some (sh, CT i) => exists n, 0 < i < n /\
-         exists A vs vo, f(b,ofs-i) = Some (sh, LK n A vs vo)
+         exists t P vs vo, f(b,ofs-i) = Some (sh, LK n t P vs vo)
      | _ => True
     end.
 
@@ -62,13 +197,13 @@ destruct k; auto; intros.
  inv J. auto. unfold join, Join in H8. simpl in H8.
  specialize (H b (ofs+i)). rewrite <- H3 in H. destruct a1. inv H8. simpl in *.
  inv H9. destruct H as [n [? ?]]. replace (ofs+i-i) with ofs in H8 by omega.
- rewrite <- H4 in H8; destruct H8 as (A' & vs' & vo' & H8); inv H8.
+ rewrite <- H4 in H8; destruct H8 as (t' & P' & vs' & vo' & H8); inv H8.
  clear H0'. rewrite H6 in H'. specialize (H' _ H2).
  specialize (J (b,ofs+i)); rewrite H' in J. 
  inv J; auto.
  specialize (H0 b (ofs+i)). rewrite <- H4 in H0. destruct a2. inv H8. simpl in *.
  inv H9. destruct H0 as [n [? ?]]. replace (ofs+i-i) with ofs in H8 by omega.
- rewrite <- H5 in H8; destruct H8 as (A' & vs' &vo' & H8); inv H8.
+ rewrite <- H5 in H8; destruct H8 as (t' & P' & vs' & vo' & H8); inv H8.
  rewrite <- H3 in H'. rewrite <- H4 in H0'. destruct a1; destruct a2.
  destruct H6. simpl in *. destruct H6; subst k k0.
  specialize (H b (ofs+i)); specialize (H0 b (ofs+i)).
@@ -82,13 +217,13 @@ destruct k; auto; intros.
 (** CT -> LK **)
  generalize (H b ofs); intros H'; generalize (H0 b ofs); intro H0'.
  generalize (J (b,ofs)); intro H8; inv H8.
- rewrite H1 in H5. rewrite H5 in H0'. destruct H0' as (n & ? & A & vs' & vo' & H4); exists n; split; auto.
+ rewrite H1 in H5. rewrite H5 in H0'. destruct H0' as (n & ? & t' & P' & vs' & vo' & H4); exists n; split; auto.
  specialize (J (b,ofs-z)); rewrite H4 in J.
  inv J; eauto. destruct a1; destruct a3. destruct H9. simpl in *. inv H9.
  specialize (H b (ofs-z)). rewrite <- H6 in H.
  specialize (H _ H2). 
  replace (ofs-z+z) with ofs in H by omega. congruence.
- rewrite H1 in H5. rewrite H5 in H'. destruct H' as [n [? ?]]; exists n; split; auto. destruct H3 as (A &  vs' & vo' & H3). exists A, vs', vo'.
+ rewrite H1 in H5. rewrite H5 in H'. destruct H' as [n [? ?]]; exists n; split; auto. destruct H3 as (t' & P' &  vs' & vo' & H3). exists t', P', vs', vo'.
  specialize (J (b,ofs-z)); rewrite H3 in J.
  inv J; auto. destruct a2; destruct a3. destruct H9. simpl in *. inv H9. 
  specialize (H0 b (ofs-z)). rewrite <- H7 in H0.
@@ -97,14 +232,15 @@ destruct k; auto; intros.
  destruct a1; destruct a2; destruct a3.
  rewrite <- H3 in H0'; rewrite <- H2 in H'. destruct H5. destruct H6. simpl in *; subst. 
  rewrite H1 in H4. inv H4. 
- destruct H' as (n & ? & A &  vs & vo & ?). exists n; split; auto.
+ destruct H' as (n & ? & t & P &  vs & vo & ?). exists n; split; auto.
  specialize (J (b,ofs-z)). rewrite H6 in J.
- assert (g (b,ofs-z) = Some (p0, LK n A vs vo)).
- destruct H0' as (n' & ? & A' &  vs' & vo' & ?). rewrite H8 in J. inv J. destruct H12. inv H10; simpl in *. inv H12; auto.
- replace vs' with vs in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H16).
- replace vo' with vo in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H17).
+ assert (g (b,ofs-z) = Some (p0, LK n t P vs vo)).
+ destruct H0' as (n' & ? & t' & P' &  vs' & vo' & ?). rewrite H8 in J. inv J. destruct H12. inv H10; simpl in *. inv H12; auto.
+ replace P' with P in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H16).
+ replace vs' with vs in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H17).
+ replace vo' with vo in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H18).
  auto.
- exists A, vs, vo.
+ exists t, P, vs, vo.
  rewrite H7 in J. inv J. inv H11. simpl in *. destruct a3; simpl in *. inv H9.
  repeat f_equal. eapply join_eq; auto. 
 Qed.
@@ -209,7 +345,7 @@ inv H5.
 inv H3.
 destruct H3.
 rewrite H3 in H2.
-destruct H2 as (n & ? & he & A & a & ?); exists n; split; auto. exists he, A, a.
+destruct H2 as (n & ? & he & t & P & vs & ?); exists n; split; auto. exists he, A, a.
 specialize (H0 (b,ofs-z)).
 destruct H0; try congruence.
 rewrite H4 in H0.

@@ -226,8 +226,9 @@ Proof.
   destruct H as [x [y [? [? ?]]]].
   simpl in H0.
   replace a with y; auto.
-  destruct UA as [Aid]; destruct (Aid a) as [u [? ?]] .
-  exists u; exists a. split; auto.
+  exists (punit a), a. repeat split; auto.
+  apply punit_unit.
+  apply join_punit.
 Qed.
 
 Lemma sepcon_emp' {A} {JA: Join A}{PA: Perm_alg A}{SA: Sep_alg A}{CA: PartialUnital A}{AG: ageable A}{XA: Age_alg A}  : forall (P:pred A),

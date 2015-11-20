@@ -8,7 +8,7 @@ Module Rmaps_Lemmas (R: RMAPS).
 Module R := R. 
 Import R.
 
-Hint Resolve (@subp_sepcon _ Join_rmap Perm_rmap Sep_rmap): contractive.
+Hint Resolve (@subp_sepcon _ Join_rmap Perm_rmap Core_rmap): contractive.
 
  Lemma approx_p  : forall (p:pred rmap) n w, approx n p w -> p w.
  Proof. unfold approx; simpl; intuition. Qed.
@@ -47,11 +47,26 @@ Lemma identity_NO:
   forall r, identity  r -> r = NO Share.bot \/ exists k, exists pds, r = PURE k pds.
 Proof.
   destruct r; auto; intros.
-  apply identity_unit_equiv in H. inv H.
+
+  assert (identity t). intros a b H0.
+  specialize (H (NO a) (NO b)).
+  assert (HH: NO a = NO b) by  (apply H; constructor; auto).
+  inv HH; reflexivity.
+  apply identity_share_bot in H0; rewrite H0; auto.
+  
+  specialize (H (NO Share.bot) (YES t p k p0)).
+  assert (HH: NO Share.bot = YES t p k p0).
+  apply H. constructor. apply join_bot_eq.
+  inv HH.
+
+  right. exists k, p; trivial.
+
+  
+  (*eapply identity_unit_equiv in H. inv H.
   apply identity_unit_equiv in RJ. apply identity_share_bot in RJ. subst. auto.
   apply identity_unit_equiv in H. inv H.
   apply pshare_nonunit in H1. contradiction.
-  right. exists k. exists p. trivial.
+  right. exists k. exists p. trivial.*)
 Qed.
 
 Lemma age1_resource_at_identity:
@@ -373,19 +388,17 @@ Qed.
     split; auto.
   Qed.
 
+
+  (*UGLY: this used to depend on identity_unit_equiv. 
+    now it heavily depend on extensionality *)
 Lemma all_resource_at_identity:
   forall w, (forall l, identity (w@l)) ->
          identity w.
 Proof.
-  intros.
-  rewrite identity_unit_equiv.
-  apply join_unsquash.
-  split. split; auto.
-  revert H. unfold resource_at.
-  case_eq (unsquash w); simpl; intros.
-  intro a. spec H0 a.
-  rewrite identity_unit_equiv in H0.
-  trivial.
+  intros w H a b H0.
+  eapply rmap_ext. destruct (join_level w a b); auto.
+  intros l; specialize (H l).
+  apply (resource_at_join _ _ _ l) in H0. apply H; auto.
 Qed.
 
   Lemma ageN_squash : forall d n rm, le d n ->
@@ -447,15 +460,21 @@ Proof.
   pfullshare_join.
 Qed.
 
+  (*UGLY: this used to depend on identity_unit_equiv. 
+    now it heavily depend join_res *)
 Lemma YES_not_identity:
   forall rsh sh k Q, ~ identity (YES rsh sh k Q).
 Proof.
-intros. intro.
+  intros. intro.
+  assert (HH: join (YES rsh sh k Q) (NO Share.bot) (YES rsh sh k Q)) by
+      (constructor; apply join_bot_eq).
+  apply H in HH; inversion HH.
+  (*
 rewrite identity_unit_equiv in H.
 simpl in * |-.
 unfold unit_for in H.
 inv H.
-apply no_units in H1; auto.
+apply no_units in H1; auto.*)
 Qed.
 
 Lemma YES_overlap:
@@ -605,16 +624,36 @@ Proof.
   generalize (necR_PURE _ _ _ _ _ H H1); congruence.
 Qed.
 
+(*
+MOVED TO sepalg.v
+Lemma identity_unit_equiv':
+  forall (A : Type) (JA : Join A),
+       
+Perm_alg A ->
+       Core_alg A ->
+       PartialUnital A -> forall a : A, identity a -> unit_for a a.
+  intros. unfold identity in H; unfold unit_for.
+  specialize (H (core a) a).
+  
+  apply (split_core _ (core a) (a)).
+  destruct X. destruct Perm_ppcm. specialize (join_comm (core a) a a).
+
+  rewrite H at 2;
+  apply join_comm;
+  apply core_unit.
+  Qed.
+*)
 Lemma resource_at_empty: forall phi, identity phi -> forall l, (phi @ l = NO Share.bot \/ exists k, exists pds, phi @ l = PURE k pds).
 Proof.
   intros.
-  rewrite identity_unit_equiv in H.
+  unfold identity in H.
+  apply identity_unit_equiv' in H; auto.
   unfold unit_for in H.
   generalize (resource_at_join _ _ _ l H); intro.
   remember (phi @ l) as r.
   destruct r; inv H0; eauto.
   apply identity_unit_equiv in RJ; apply identity_share_bot in RJ; subst; auto.
-  apply no_units in H2; contradiction.
+  apply no_units in H3; contradiction.
 Qed.
 Implicit Arguments resource_at_empty.
 
@@ -825,7 +864,8 @@ Lemma empty_NO: forall r, identity r -> r = NO Share.bot \/ exists k, exists pds
 Proof.
 intros.
 destruct r; auto.
-left. f_equal. apply identity_unit_equiv in H. inv H.
+left. f_equal.
+apply identity_unit_equiv' in H. inv H.
   apply identity_unit_equiv in RJ. apply identity_share_bot in RJ. subst. auto.
 unfold identity in H.
 spec H (NO Share.bot) (YES t p k p0).
@@ -1092,20 +1132,22 @@ Qed.
 
 Instance Join_trace : Join (AV.address -> option (pshare * AV.kind)) :=
      (Join_fun AV.address (option (pshare * AV.kind))
-                   (Join_lower (Join_prod pshare Join_pshare AV.kind (Join_equiv AV.kind)))).
+                   (Join_lower (Join_prod pshare Join_pshare AV.kind AV.kjoin))).
 
 
  Lemma res_option_join:
     forall x y z, join x y z -> @join _ (@Join_lower (pshare * AV.kind)
-     (Join_prod pshare Join_pshare AV.kind (Join_equiv AV.kind))) (res_option x) (res_option y) (res_option  z).
+     (Join_prod pshare Join_pshare AV.kind AV.kjoin)) (res_option x) (res_option y) (res_option  z).
  Proof.
    intros.
   inv H; constructor.  split; auto. 
  Qed.
-
+(*
 Lemma Cross_resource: Cross_alg resource.
 Proof.
-intro; intros.
+  intro; intros.
+  admit.
+  (*
 destruct a as [ra | ra sa ka pa | ka pa ].
 destruct b as [rb | rb sb kb pb | kb pb ]; try solve [elimtype False; inv H].
 destruct z as [rz | rz sz kz pz | kz pz ]; try solve [elimtype False; inv H].
@@ -1132,7 +1174,7 @@ exists (NO ac, NO ad, YES bc sb kb pb, NO bd); inv H; inv H0;
   repeat split; simpl; auto; try constructor; auto.
 assert (J2: join rc rd rz) by (inv H0; auto).
 destruct (share_cross_split _ _ _ _ _ J1 J2) as [[[[ac ad] bc] bd] [Ha [Hb [Hc Hd]]]].
-exists (NO ac, NO ad, YES bc sc kb pb, YES bd sd kd pd); inv H; inv H0;
+exists (NO ac, NO ad, YES bc sc kc pb, YES bd sd kd pd); inv H; inv H0;
   repeat split; simpl; auto; try constructor; auto.
 destruct b as [rb | rb sb kb pb | kb pb ]; try solve [elimtype False; inv H].
 destruct z as [rz | rz sz kz pz | kz pz ]; try solve [elimtype False; inv H].
@@ -1158,12 +1200,12 @@ destruct c as [rc | rc sc kc pc | kc pc ]; try solve [elimtype False; inv H0].
 destruct d as [rd | rd sd kd pd | kd pd ]; try solve [elimtype False; inv H0].
 assert (J2: join rc rd rz) by (inv H0; auto).
 destruct (share_cross_split _ _ _ _ _ J1 J2) as [[[[ac ad] bc] bd] [Ha [Hb [Hc Hd]]]].
-exists (NO ac, YES ad sa kd pd, NO bc, YES bd sb kd pd); inv H; inv H0;
+exists (NO ac, YES ad sa ka pd, NO bc, YES bd sb kb pd); inv H; inv H0;
   repeat split; simpl; auto; try constructor; auto.
 destruct d as [rd | rd sd kd pd | kd pd ]; try solve [elimtype False; inv H0].
 assert (J2: join rc rd rz) by (inv H0; auto).
 destruct (share_cross_split _ _ _ _ _ J1 J2) as [[[[ac ad] bc] bd] [Ha [Hb [Hc Hd]]]].
-exists (YES ac sa kc pc, NO ad, YES bc sb kb pb, NO bd); inv H; inv H0;
+exists (YES ac sa ka pc, NO ad, YES bc sb kb pb, NO bd); inv H; inv H0;
   repeat split; simpl; auto; try constructor; auto.
 assert (J2: join rc rd rz) by (inv H0; auto).
 destruct (share_cross_split _ _ _ _ _ J1 J2) as [[[[ac ad] bc] bd] [Ha [Hb [Hc Hd]]]].
@@ -1175,8 +1217,8 @@ apply i in Ha'; apply i in Hc'. subst.
 destruct (dec_share_identity bd').
 apply join_comm in Hb'; apply join_comm in Hd'; apply i0 in Hb'; apply i0 in Hd'; subst.
 apply lifted_eq in Hb'. apply lifted_eq in Hd'; subst sb sd.
-exists (NO ac, YES ad sa ka pa, YES bc sc kc pc, NO bd); 
-   inv H; inv H0; simpl; repeat split; auto;  constructor; auto.
+exists (NO ac, YES ad sa ka pa, YES bc sc kb pc, NO bd).
+   inv H; inv H0; simpl. repeat split; auto.  constructor; auto.
 apply nonidentity_nonunit in n.
 exists (NO ac, YES ad sa ka pa, YES bc sc kc pc, YES bd (mk_lifted _ n) kd pd); 
    inv H; inv H0; simpl; repeat split; auto;  constructor; auto.
@@ -1203,9 +1245,10 @@ exists (YES ac (mk_lifted _ (nonidentity_nonunit n)) ka pa, YES ad (mk_lifted _ 
     inv H; inv H0; simpl; repeat split; auto;  constructor; auto.
 exists (PURE ka pa, PURE ka pa, PURE ka pa, PURE ka pa).
 inv H. inv H0.
-repeat split; constructor; auto.
+repeat split; constructor; auto. 
+*)
 Qed.
-
+*)
 Definition res_retain (r: resource) : Share.t :=
  match r with
   | NO sh => sh
@@ -1295,10 +1338,10 @@ Ltac crtac :=
  | H: @join _ _ _ None _ |- _ => 
                 apply join_unit2_e in H; [| apply None_identity]
  | H:  prod pshare AV.kind |- _ => destruct H
- | H: @join _ (Join_equiv _) ?a ?b ?c |- _ => destruct H; try subst a; try subst b; try subst c 
+ | H: @join _ AV.kjoin ?a ?b ?c |- _ => destruct H; try subst a; try subst b; try subst c 
  | H: @join _ (Join_prod _ _ _ _) (_,_) (_,_) (_,_) |- _ => destruct H; simpl fst in *; simpl snd in *
  end; auto).
-
+(*
 Instance Cross_rmap: 
       @Cross_alg _ (Join_prop _ Join_trace AV.valid) ->
       Cross_alg rmap.
@@ -1318,7 +1361,7 @@ Proof.
           (exist AV.valid _ Hz)).
   destruct CAV as [[[[Vac Vad] Vbc] Vbd] [Va [Vb [Vc Vd]]]].
   intro l.  unfold compose. simpl.
-  apply res_option_join. apply resource_at_join. auto.
+  eapply res_option_join. apply resource_at_join. auto.
   intro l.  simpl. unfold compose.
   apply res_option_join. apply resource_at_join. auto.
   assert (CAR: Cross_alg (AV.address -> Share.t)) by auto with typeclass_instances.
@@ -1348,15 +1391,18 @@ Proof.
   forget (d @ l) as dl; forget (z @ l) as zl;
    clear - Ra Rb Rc Rd Va Vb Vc Vd H H0.
   (* case 1 *)
-  destruct (ac l); crtac. destruct (ad l); crtac.
+  - destruct (ac l); crtac.
+    destruct zl; inv H; inv H0.
+    destruct (ad l), zl; crtac.
   (* case 2 *)
   destruct (bc l); crtac. destruct (bd l); crtac.
   (* case 3 *)
   destruct (ac l); crtac. destruct (bc l); crtac.
   (* case 4 *)
   destruct (ad l); crtac. destruct (bd l); crtac.
-Qed.
- 
+Qed. *)
+
+(*
 Lemma Cross_rmap_simple: (forall f, AV.valid f) -> Cross_alg rmap.
 Proof.
   intro V.
@@ -1368,7 +1414,7 @@ Proof.
    eapply (Cross_bij' _ _ _ _ (opposite_bij (option_bij (lift_prod_bij _ _)))).
    apply Cross_smash; auto with typeclass_instances.
    clear; intro. destruct x. destruct (dec_share_identity t); [left|right].
-    apply identity_unit_equiv in i. apply identity_unit_equiv. split; auto.
+    apply identity_unit_equiv' in i. apply identity_unit_equiv. split; auto.
     contradict n.
     apply identity_unit_equiv in n. apply identity_unit_equiv. destruct n; auto.
    clear. extensionality a b c. apply prop_ext.
@@ -1381,16 +1427,18 @@ Proof.
               exist AV.valid bc (V _), exist AV.valid bd (V _)).
    split; [ |split3]; simpl; auto.
 Qed.
+ *)
 
 Lemma identity_resource: forall r: resource, identity r <->
     match r with YES _ _ _ _ => False | NO rsh => identity rsh | PURE _ _ => True end.
 Proof.
- intros. destruct r.
- split; intro; apply identity_unit_equiv in H;  apply identity_unit_equiv.
- inv H; auto. constructor; auto.
- intuition. specialize (H (NO Share.bot) (YES t p k p0)).
- spec H. constructor. apply join_unit2; auto. inv H.
- intuition. intros  ? ? ?. inv H0. auto.
+  intros r; split; intros HH.
+  - apply empty_NO in HH; destruct HH as [HH | [k [pds HH]]]; rewrite HH.
+    + exact bot_identity.
+    + trivial. 
+  - destruct r; try solve[inversion HH].
+    + rewrite (identity_share_bot _ HH). exact NO_identity.
+    + apply PURE_identity.
 Qed.
 
 Lemma resource_at_core_identity:  forall m i, identity (core m @ i).
@@ -1401,7 +1449,7 @@ Proof.
   case_eq (core m @ i); intros; auto.
   rewrite H in Hdup. inv Hdup. apply identity_unit_equiv; auto.
   rewrite H in Hdup. inv Hdup.
-   apply pshare_nonunit in H1. auto. 
+   apply pshare_nonunit in H2. auto. 
 Qed.
 
 Lemma YES_inj: forall rsh sh k pp rsh' sh' k' pp',
@@ -1422,14 +1470,18 @@ Lemma PURE_inj: forall T x x' y y', PURE x (SomeP T y) = PURE x' (SomeP T y') ->
  Proof. intros. inv H. apply inj_pair2 in H2. subst; auto. 
  Qed.
 
-Lemma core_resource_at: forall w i, core (w @ i) = core w @ i.
+
+(*Lemma core_resource_at: forall w i, core (w @ i) = core w @ i.
 Proof.
- intros.
- generalize (core_unit w); intros.
- apply (resource_at_join _ _ _ i) in H.
- generalize (core_unit (w @ i)); unfold unit_for; intros.
- eapply join_canc; eauto.
+  intros.
+  generalize (core_duplicable w); intro Hdup.
+  apply (resource_at_join _ _ _ i) in Hdup.
+  generalize (core_unit w); intros.
+  apply (resource_at_join _ _ _ i) in H.
+  generalize (core_unit (w @ i)); unfold unit_for; intros.
+  eapply join_canc; eauto.
 Qed.
+*)
 
 Lemma resource_at_identity: forall (m: rmap) (loc: AV.address), 
  identity m -> identity (m @ loc).
@@ -1445,7 +1497,7 @@ Proof.
  intros. generalize (core_unit (YES rsh sh k pp)); unfold unit_for; intros. 
  inv H; auto.
  apply unit_identity in RJ. apply identity_share_bot in RJ. subst; auto.
- apply pshare_nonunit in H2. contradiction.
+ apply pshare_nonunit in H3. contradiction.
 Qed.
 
 Lemma core_NO: forall rsh, core (NO rsh) = NO Share.bot.
@@ -1462,15 +1514,18 @@ Proof.
 Qed.
 
 
+(*
 Lemma core_not_YES: forall {w loc rsh sh k pp},
    core w @ loc = YES rsh sh k pp -> False.
 Proof.
-intros.
+  intros.
+unfold core in H.  
 rewrite <- core_resource_at in H.
 destruct (w @ loc); [rewrite core_NO in H | rewrite core_YES in H | rewrite core_PURE in H]; inv H.
 Qed.
+ *)
 
-Lemma resource_at_empty2:
+(*Lemma resource_at_empty2:
  forall phi: rmap, (forall l, identity (phi @ l)) -> identity phi.
 Proof.
 intros.
@@ -1478,10 +1533,10 @@ assert (phi = core phi).
 apply rmap_ext.
 rewrite level_core. auto.
 intro l; specialize (H l).
-apply identity_unit_equiv in H; apply unit_core in H.
+apply identity_unit_equiv' in H; apply unit_core in H.
 rewrite core_resource_at in *; auto.
 rewrite H0.
 apply core_identity.
-Qed.
+Qed.*)
 
 End Rmaps_Lemmas.

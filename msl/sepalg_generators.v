@@ -28,11 +28,25 @@ Require Import msl.sepalg.
   Instance Sep_unit: Sep_alg unit.
   Proof. apply mkSep with (fun _ => tt); intros;  hnf; auto with typeclass_instances. Qed.
 
+  Instance Core_unit: Core_alg unit.
+  Proof. apply mkCore with Sep_unit; intros;  hnf; auto.
+         destruct a, (core tt); auto.
+  Qed.
+  
   Instance Sing_unit: Sing_alg unit.
   Proof. apply (mkSing tt); intros; hnf; simpl.
         destruct (core a); destruct tt; auto.
  Qed.
 
+  Instance Unit_unit: Unital unit.
+  Proof. apply (mkUnital unit _ tt); intros; constructor. Qed.
+  Instance PUnit_unit: PartialUnital unit.
+  Proof.
+    apply mkPUnital with (fun _ => tt); intro.
+    constructor.
+    destruct a0, b; reflexivity.
+  Qed.
+  
   Instance Canc_unit: Canc_alg unit.
   Proof. repeat intro. auto. hnf; destruct a1; destruct a2; auto. Qed.
 
@@ -56,6 +70,10 @@ Require Import msl.sepalg.
   Proof. apply mkSep with (fun x => x); intros. 
       auto with typeclass_instances. destruct t. destruct a.
   Qed.
+  Instance Core_void: Core_alg Void.
+  Proof. apply mkCore with Sep_void; intros; destruct a. Qed.
+  Instance PUnit_void: PartialUnital Void.
+  Proof. apply mkPUnital with (fun x => x); destruct a. Qed.
   Instance Canc_void: Canc_alg Void.
   Proof. repeat intro. destruct b. Qed. 
   Instance Disj_void: Disj_alg Void.
@@ -91,11 +109,21 @@ Require Import msl.sepalg.
   Proof. apply mkSep with (fun t => false); intros; hnf; auto with typeclass_instances.
      icase t; constructor.
   Defined.
-
+  Instance Core_bool: Core_alg bool.
+  Proof. apply mkCore with Sep_bool; intros.
+         inv H. reflexivity.
+         destruct c; unfold core, Sep_bool in H;
+         inv H; auto; constructor.
+  Defined.
   Instance Sing_bool: Sing_alg bool.
   Proof. apply (mkSing false). intros; simpl; reflexivity.
   Defined.
-
+  Instance Unit_bool: Unital bool.
+  Proof. apply (mkUnital _ _ false); intros; destruct a; constructor. Qed.
+  Instance PUnit_bool: PartialUnital bool.
+  Proof. eapply Unital_PUnital; auto.
+         destruct Perm_bool; auto.
+         exact Unit_bool. Qed.
   Instance Canc_bool: Canc_alg bool.
   Proof. repeat intro. inv H; inv H0; hnf; auto. Qed.
 
@@ -137,7 +165,16 @@ Section JOIN_EQUIV.
             split; reflexivity.
             destruct H; subst; reflexivity.
   Defined.
-
+  Instance Core_equiv (A: Type): Core_alg A.
+  Proof. apply mkCore with (Sep_equiv A); intros.
+         unfold core, Sep_equiv; reflexivity.
+         constructor; reflexivity.
+  Defined.
+  Instance PUnit_equiv (A: Type): PartialUnital A.
+  Proof. apply mkPUnital with (fun x => x); intro s.
+         split; reflexivity.
+         intros b c HH. inv HH; reflexivity.
+  Qed.
   Instance Canc_equiv (A: Type): Canc_alg A.
   Proof. repeat intro. destruct H; destruct H0; subst; reflexivity. Qed.
 
@@ -158,6 +195,8 @@ End JOIN_EQUIV.
   to do the following EXisting Instances: *)
 Existing Instance Perm_equiv.
 Existing Instance Sep_equiv.
+Existing Instance Core_equiv.
+Existing Instance PUnit_equiv.
 Existing Instance Canc_equiv.
 Existing Instance Disj_equiv.
 Existing Instance Cross_equiv.
@@ -200,7 +239,14 @@ Section SepAlgProp.
       apply exist_ext.
       do 2 red in H. apply join_core in H. apply H.
   Defined.
-
+  Instance Core_prop (CA: Core_alg A)(HPcore : forall x, P x -> P (core x)): Core_alg (sig P).
+  Proof. repeat intro.
+         apply mkCore with (Sep_prop CA HPcore); intros.
+         destruct a as [a ?];
+         apply exist_ext; apply dup_core; apply H.
+         destruct a, b, c; do 2 red in H; simpl in H.
+         apply split_core in H. exact H.
+  Defined.
  Instance Sing_prop  (SA: Sep_alg A)(Sing_A: Sing_alg A)
                (HPcore : forall x, P x -> P (core x)): P the_unit -> 
     @Sing_alg (sig P) Join_prop (Sep_prop _ HPcore).
@@ -209,6 +255,25 @@ Section SepAlgProp.
   intros. destruct a as  [a Ha]. simpl. apply exist_ext.
   rewrite <- (the_unit_core a).
   apply core_uniq.
+ Defined.
+
+ Instance Unit_prop  (UA: Unital A)(Unit: P join_unit):  Unital (sig P).
+ Proof.
+   apply mkUnital with (exist P join_unit Unit). intros [a Ha].
+   unfold join, Join_prop; simpl.
+   apply join_lid.
+ Qed.
+ 
+ Instance PUnit_prop (PU: PartialUnital A)(HPpunit : forall x, P x -> P (punit x)): PartialUnital (sig P).
+ Proof. repeat intro.
+        apply mkPUnital with
+        (fun a : sig P => exist P (punit (proj1_sig a)) (HPpunit _ (proj2_sig a)));
+          intros a. apply Perm_prop.
+        do 2 red. destruct a; simpl. apply join_comm; apply punit_unit.
+        intros b c HH.
+        destruct a, b, c. simpl in *.
+        apply exist_ext.
+        eapply join_punit with x; exact HH.
  Defined.
 
   Instance Canc_prop  {CA: Canc_alg A}:  Canc_alg (sig P).
@@ -233,8 +298,10 @@ Section SepAlgProp.
 End SepAlgProp.
 Existing Instance Join_prop.
 Existing Instance Perm_prop.
+Existing Instance Core_prop.
 Existing Instance Sep_prop.
 Existing Instance Sing_prop.
+Existing Instance Unit_prop.
 Existing Instance Canc_prop.
 Existing Instance Disj_prop.
 
@@ -269,6 +336,15 @@ Section SepAlgFun.
    extensionality k; apply @join_core with (b k); auto.
  Defined.
 
+  Instance Core_fun (SA: Core_alg t'): Core_alg (key -> t').
+  Proof.
+    apply mkCore with (Sep_fun SA); intros.
+    extensionality k.
+    unfold core, Sep_fun; simpl.
+    apply dup_core.
+    apply H.
+    intros k. apply (split_core _ _ _ (H k)).
+  Defined.
  Instance Sing_fun (SA: Sep_alg t'): Sing_alg t' -> Sing_alg (key -> t').
  Proof.
  intros. apply (mkSing (fun _: key => the_unit)).
@@ -277,7 +353,25 @@ Section SepAlgFun.
   unfold core. simpl. auto.
  Defined. 
 
- Instance Canc_fun: Canc_alg t' -> Canc_alg (key -> t').
+ Instance Unit_fun: Unital t' -> Unital (key -> t').
+ intros. apply mkUnital with (fun _ => join_unit); intros.
+ unfold join, Join_fun; intros k; apply join_lid.
+ Defined.
+  
+ Instance PUnit_fun: PartialUnital t' -> PartialUnital (key -> t').
+ intros PU.
+ apply mkPUnital with (fun a k => punit (a k)); intros.
+ unfold join, Join_fun; intros HH.
+ apply punit_unit.
+ 
+ intros b c HH.
+ extensionality x; specialize (HH x).
+ apply (join_punit (a x) ).
+ assumption.
+ Defined.
+ 
+
+  Instance Canc_fun: Canc_alg t' -> Canc_alg (key -> t').
  Proof. repeat intro. extensionality x; apply (join_canc (H0 x) (H1 x)). Qed.
 
  Instance Disj_fun: Disj_alg t' -> Disj_alg (key -> t').
@@ -287,7 +381,10 @@ End SepAlgFun.
 Existing Instance Join_fun. 
 Existing Instance Perm_fun.
 Existing Instance Sep_fun.
+Existing Instance Core_fun.
 Existing Instance Sing_fun.
+Existing Instance Unit_fun.
+Existing Instance PUnit_fun.
 Existing Instance Canc_fun.
 Existing Instance Disj_fun.
 
@@ -327,6 +424,39 @@ Section SepAlgPi.
    extensionality i; apply @join_core with (b i); auto.
  Defined.
 
+  Instance Core_pi (SA : forall i:I, Core_alg (Pi i)): Core_alg P.
+  Proof. apply mkCore with (Sep_pi SA); intros.
+         unfold core, Sep_pi.
+         extensionality x.
+         apply dup_core; apply H.
+         intros i.
+         apply (split_core _ _ _ (H i)).
+  Defined.
+         
+  Instance Unit_pi: (forall i, Unital (Pi i)) -> Unital P.
+  Proof.
+    intros. unfold P.
+    assert (H: forall i, {x: Pi i | forall a : Pi i, join x a a}).
+    intros i. destruct (X i) . apply (@exist _ _ join_unit join_lid).
+    apply mkUnital with (fun i => proj1_sig (H i)). intros a.
+    unfold join, Join_pi; intros i.
+    destruct (H i); simpl. exact (j (a i)).
+  Qed.
+
+  Instance PUnit_pi: (forall i, PartialUnital (Pi i)) -> PartialUnital P.
+  Proof.
+    intros PU.
+    apply mkPUnital with (fun a i => punit (a i)); intro ai.
+    unfold join, Join_pi; intros.
+    apply (punit_unit).
+
+    intros b c.
+    unfold join, Join_pi; intros HH.
+    extensionality i.
+    specialize (HH i).
+    apply (@join_punit _ _ (PU i) (ai i)); assumption.
+  Qed. 
+  
   Instance Canc_pi: (forall i, Canc_alg (Pi i)) -> Canc_alg P.
   Proof. repeat intro. extensionality i; apply (join_canc (H0 i) (H1 i)). Qed.
 
@@ -337,6 +467,9 @@ End SepAlgPi.
 Existing Instance Join_pi. 
 Existing Instance Perm_pi.
 Existing Instance Sep_pi.
+Existing Instance Core_pi.
+Existing Instance Unit_pi.
+Existing Instance PUnit_pi.
 Existing Instance Canc_pi.
 Existing Instance Disj_pi.
 
@@ -429,6 +562,42 @@ Section SepAlgSigma.
    intros. inv H. f_equal. apply (join_core H0). 
  Defined.
 
+  Instance Core_sigma (SA : forall i:I, Core_alg (Sigma i)) : Core_alg S.
+  Proof. apply mkCore with (Sep_sigma SA); intros.
+         destruct a as [a ?].
+         simpl; f_equal.
+         apply dup_core.
+         inversion H.
+         apply inj_pair2 in H2;
+         apply inj_pair2 in H3;
+         apply inj_pair2 in H4.
+         subst; auto.
+
+         inv H; constructor.
+         apply inj_pair2 in H4.
+         rewrite H4 in H3.
+         apply (split_core _ _ _ H3).
+  Defined.
+  
+  (* No UNIT:
+     If I is empty type, [forall i, Unital (Sigma i)] holds
+     vacuously, but [Unital S] doesn't hold because, there is no 
+     unit (becasue there is not even a single element). *) 
+  (* Instance Unit_sigma: (forall i, Unital (Sigma i)) -> Unital S.*)
+  
+  
+  Instance PUnit_sigma: (forall i, PartialUnital (Sigma i)) -> PartialUnital S.
+  Proof.
+    intros PU.
+    apply mkPUnital with (fun a => existT Sigma (projT1 a) (punit (projT2 a))); intro a.
+    destruct a. constructor.
+    apply punit_unit.
+    intros b c HH. inv HH.
+    f_equal.
+    apply join_punit with  (projT2 a).
+    apply inj_pair2 in H1; rewrite <- H1; assumption.
+  Qed.
+    
   Instance Canc_sigma: (forall i, Canc_alg (Sigma i)) -> Canc_alg S.
   Proof. repeat intro.
        destruct a1; destruct a2; destruct b; destruct c; 
@@ -455,6 +624,9 @@ End SepAlgSigma.
 Existing Instance Join_sigma. 
 Existing Instance Perm_sigma.
 Existing Instance Sep_sigma.
+Existing Instance Core_sigma.
+(*Existing Instance Unit_sigma.*)
+Existing Instance PUnit_sigma.
 Existing Instance Canc_sigma.
 Existing Instance Disj_sigma.
 
@@ -499,11 +671,39 @@ Section SepAlgProd.
     intros [? ?] [? ?] [? ?] [? ?]; f_equal; simpl; eapply join_core; eauto.
   Defined.
 
+  Instance Core_prod (CAa: Core_alg A) (CAb: Core_alg B) : Core_alg (A*B).
+  Proof.
+    apply mkCore with (Sep_prod CAa CAb).
+    intros [a b] H; inv H.
+    unfold core, Sep_prod; f_equal; apply dup_core; simpl; auto.
+
+    intros [a1 b1] [a2 b2] [a3 b3] H; inv H. constructor.
+    apply (split_core _ _ _ H0). 
+    apply (split_core _ _ _ H1).
+  Defined.
+    
   Instance Sing_prod {SAa: Sep_alg A} {SAb: Sep_alg B} {SingA: Sing_alg A}{SingB: Sing_alg B}: Sing_alg (A*B).
   Proof. apply (mkSing  (the_unit, the_unit)).
      intros [? ?].  f_equal; simpl; f_equal; apply the_unit_core.
   Defined.
 
+  Instance Unit_prod {Ua: Unital A} {Ub:  Unital B}: Unital (A*B).
+  Proof.
+    apply mkUnital with (join_unit, join_unit); intros.
+    constructor; simpl; apply join_lid.
+  Defined.
+
+  Instance PUnit_prod {Ua: PartialUnital A} {Ub:  PartialUnital B}: PartialUnital (A*B).
+  Proof.
+    apply mkPUnital with (fun a => (punit (fst a), punit (snd a))); intros a; destruct a; simpl.
+    constructor; simpl; apply punit_unit.
+
+    intros aa bb HH. destruct aa, bb; inv HH.
+    f_equal.
+    apply join_punit with a; auto.
+    apply join_punit with b; auto.
+  Defined.
+  
   Instance Canc_prod {CAa: Canc_alg A} {CAb:  Canc_alg B}: Canc_alg (A*B).
   Proof. intros  [? ?] [? ?] [? ?] [? ?] [? ?] [? ?].
    f_equal; simpl in *; eapply join_canc;eauto.
@@ -521,6 +721,9 @@ Implicit Arguments Sep_prod [[A][Ja][B][Jb]].
 Existing Instance Join_prod. 
 Existing Instance Perm_prod.
 Existing Instance Sep_prod.
+Existing Instance Core_prod.
+Existing Instance Unit_prod.
+Existing Instance PUnit_prod.
 Existing Instance Canc_prod.
 Existing Instance Disj_prod.
 
@@ -573,6 +776,34 @@ Section SepAlgSum.
     intros; icase a; icase b; icase c; hnf in *; f_equal; eapply join_core; eauto.
   Defined.
 
+  Instance Core_sum (CAa: Core_alg A) (CAb: Core_alg B): Core_alg (A+B).
+  Proof.
+    apply mkCore with (Sep_sum CAa CAb).
+    intros [a| b] H; simpl; f_equal; apply dup_core; auto.
+    intros [a| a] [b| b] [c| c] HH; simpl in HH;
+    unfold join, Join_sum in HH; try solve[inv HH];
+    unfold join, Join_sum; eapply split_core; eauto.
+  Qed.
+    
+  (*No UNIT: A's and B's don't mix so a unit can't be either type -> no unit*)
+  (*Instance Unit_sum {Ua: Unital A} {Ub:  Unital B}: Unital (A+B). *)
+  
+  Instance PUnit_sum {Ua: PartialUnital A} {Ub:  PartialUnital B}: PartialUnital (A+B).
+  Proof.
+    apply mkPUnital
+      with (fun ab : A+B => 
+              match ab with 
+              | inl a => inl _ (punit a) 
+              | inr b => inr _ (punit b)
+              end); intros a; destruct a.
+    apply punit_unit.
+    apply punit_unit.
+    intros b c HH. destruct b, c; try inv HH.
+    f_equal; apply join_punit with a; auto.
+    intros a c HH. destruct a, c; try inv HH.
+    f_equal; apply join_punit with b; auto.
+  Qed.
+      
   Instance Canc_sum {CAa: Canc_alg A} {CAb:  Canc_alg B}: Canc_alg (A+B).
   Proof. repeat intro. icase a1; icase a2; icase b; icase c; hnf;
     f_equal; eapply join_canc; hnf in *; eauto.
@@ -586,6 +817,9 @@ End SepAlgSum.
 Existing Instance Join_sum. 
 Existing Instance Perm_sum.
 Existing Instance Sep_sum.
+Existing Instance Core_sum.
+(*Existing Instance Unit_sum.*)
+Existing Instance PUnit_sum.
 Existing Instance Canc_sum.
 Existing Instance Disj_sum.
 
@@ -641,6 +875,44 @@ Section sa_list.
     f_equal.  eapply join_core; eauto. eapply IHa; eauto.
  Defined.
 
+  
+  Instance Core_list (CAa: Core_alg A) : Core_alg (list A).
+  Proof.
+    apply mkCore with (Sep_list CAa).
+    induction a. simpl; auto.
+    intros HH; inv HH; simpl.
+    f_equal; auto.
+    apply dup_core; auto.
+
+    induction a. simpl; auto. constructor.
+    intros b c HH; inv HH.
+    constructor.
+    destruct c; inv H1.
+    eapply (split_core _ _ _ H3); auto.
+   
+    destruct c; inv H1.
+    apply (IHa _ _ H4).
+  Qed.
+    
+    (*No UNIT: lists are same length -> no universal unit*)
+  (*Instance Unit_list {UA: Unital A}: Unital (list A).*)
+
+
+  Instance PUnit_list {PUA: PartialUnital A}: PartialUnital (list A).
+  Proof.
+    apply mkPUnital with (map punit); intros als.
+    - induction als.
+      + unfold map; constructor.
+      + simpl; constructor.
+        * apply punit_unit.
+        * assumption.
+    - induction als; intros b c HH; inv HH.
+      + reflexivity.
+      + f_equal.
+        * apply join_punit with a; assumption.
+        * apply IHals. assumption.
+  Qed.
+  
   Instance Canc_list {CA: Canc_alg A}: Canc_alg (list A).
   Proof.
    intro. induction a1; intros; inv H; inv H0; auto.
@@ -658,6 +930,9 @@ End sa_list.
 Existing Instance Join_list. 
 Existing Instance Perm_list.
 Existing Instance Sep_list.
+Existing Instance Core_list.
+(*Existing Instance Unit_list.*)
+Existing Instance PUnit_list.
 Existing Instance Canc_list.
 Existing Instance Disj_list.
 
@@ -726,7 +1001,33 @@ Section sa_preimage.
    do 2 red in H.
    f_equal; apply (join_core H).
  Defined.
+  
+  Instance Core_preimage {CAb: Core_alg B}
+           (fcore: forall a:A, core (f a) = f (core a))
+           (*PEa: Perm_alg A *): Core_alg A.
+  Proof.
+    apply mkCore with (Sep_preimage).
+    intros a H1.
+    assert (H2: join (core a) a a) by
+    apply core_unit.
+    do 2 red in H1.
+    do 2 red in H2.
+    apply f_inj.
+    rewrite (dup_core _ H1); auto.
+    
+    intros a b c H1.
+    assert (H2: join (core c) a a).
+    apply join_core in H1; rewrite core_idem in H1; rewrite <- H1.
+    apply core_unit.
 
+    (*Note this could end using positivity. 
+      Since we used fcore in the previous goal, 
+      we stick to that *)
+    (*rewrite (join_positivity H1 H2) at 1; assumption.*)
+    do 2 red in H1; rewrite <- fcore in H1.
+    do 2 red. apply (split_core _ _ _ H1).
+  Qed.
+    
  Instance Sing_preimage {SAb: Sep_alg B}{Sing_b: Sing_alg B}: Sing_alg A.
  Proof.
  apply (mkSing (f' the_unit)).
@@ -734,6 +1035,70 @@ Section sa_preimage.
  simpl. rewrite <- (the_unit_core (f a)). f_equal; apply core_uniq.
  Defined.
 
+ Instance Unit_preimage(* {SAb: Sep_alg B}*){Ub: Unital B} : Unital A.
+ Proof.
+   apply mkUnital with (f' (@join_unit _ _ Ub)).
+   intros a. unfold join, Join_preimage.
+   rewrite <- (Hf'_f a).
+   apply Hf_f'.
+   apply join_lid.
+ Qed.
+
+ (*Could it be proved without PrePCM.
+   That is, without using join_eq
+  *)
+ Instance PUnit_preimage' {Ub:Unital B}{PUb: PartialUnital B} : PartialUnital A.
+ Proof.
+   apply Unital_PUnital; auto.
+   destruct Perm_preimage; auto.
+   apply Unit_preimage.
+ Qed.
+
+
+ (*Need to assume units are surjective on f*)
+ Instance PUnit_preimage {PUb: PartialUnital B}(PUff': forall b, punit b = (f oo f') (punit b)) : PartialUnital A.
+ Proof.
+   apply mkPUnital with (fun x : A => f' (punit (f x))); intros a.
+   do 2 red.
+
+   generalize (@Hf_f' (@punit B B_J PUb (f a)) (f a) (f a) (punit_unit)); intro H.
+   unfold compose in H. rewrite Hf'_f in H. auto.
+
+   (*clear PUff' .
+   pose (e':=f' (punit (f a))); fold e'.
+   intros b c HH. do 2 red in HH.
+   generalize (join_punit (f e') _ _ HH).*)
+   
+   intros b c HH.
+   do 2 red in HH.
+   apply f_inj.
+   unfold compose in PUff';
+   rewrite <- PUff' in HH.
+   apply join_punit with (f a); assumption.
+ Qed.
+ 
+ (*NOTE: I don't believe this can be proven. The hom hypothesis is too weak. *)
+ (*Instance PUnit_preimage {PUb: PartialUnital B} : PartialUnital A.
+ Proof.
+    apply mkPUnital with (fun x : A => f' (punit (f x))); intros.
+    - unfold join, Join_preimage.
+      
+      destruct PUb. generalize (punit_unit (f a)).
+      intros. apply Hf_f' in H; unfold compose in H.
+      rewrite Hf'_f in H; auto.
+   
+    - simpl. intros b c HH.
+      do 2 red in HH.
+      
+      
+      rewrite <- (Hf'_f b), <- (Hf'_f c).
+      apply f_inj. apply join_punit with (f a).
+      unfold join, Join_preimage in HH.
+      apply Hf_f' in HH; unfold compose in HH.
+     rewrite <- (Hf'_f b), <- (Hf'_f c).
+     apply Hf_f'; auto.
+ Qed.*)
+ 
  Instance Canc_preimage {SAb: Sep_alg B}{CAb: Canc_alg B} : Canc_alg A.
  Proof. intros ? ? ? ? ? ?. do 2 red in H,H0.
   generalize (join_canc H H0); intro.
@@ -749,13 +1114,16 @@ End sa_preimage.
 Existing Instance Join_preimage. 
 Existing Instance Perm_preimage.
 Existing Instance Sep_preimage.
+Existing Instance Core_preimage.
 Existing Instance Sing_preimage.
+Existing Instance Unit_preimage.
+Existing Instance PUnit_preimage'.
 Existing Instance Canc_preimage.
 Existing Instance Disj_preimage.
 
 Section SepAlgBijection.
   Variables (A: Type) (Ja: Join A)(PAa: Perm_alg A).
-  Variable B:Type .
+  Variable B:Type.
 
   Variable bij : bijection A B.
   Instance Join_bij: Join B := fun (x y z : B) => join (bij_g _ _ bij x) (bij_g _ _ bij y) (bij_g _ _ bij z).
@@ -786,15 +1154,55 @@ Section SepAlgBijection.
    do 3 red.
    repeat rewrite bij_gf. simpl. apply core_unit.
    do 2 red in H. f_equal. apply (join_core H).
- Defined.
+  Defined.
 
+  Instance Core_bij {CAa: Core_alg A} : Core_alg B.
+  Proof.
+    pose (g:=bij_g _ _ bij); pose (f:= bij_f _ _ bij).
+    apply mkCore with Sep_bij.
+    intros. do 2 red in H; fold g in H.
+    unfold core, Sep_bij. fold f g.
+    eapply bij_g_inj with bij; fold g.
+    rewrite (bij_gf _ _ bij).
+    apply (dup_core _ H).
+
+    intros a b c HH.
+    do 2 red. fold f g.
+    do 2 red in HH; unfold core, Sep_bij in HH; fold f g in HH. 
+    rewrite (bij_gf _ _ bij) in HH.
+    eapply (split_core _ _ _ HH).
+  Qed.
+    
+    
  Lemma Sing_bij {SAa: Sep_alg A}{SingA: Sing_alg A} : Sing_alg B.
   Proof.
    apply (mkSing (bij_f _ _ bij the_unit)); intros.
    simpl. f_equal. apply  (the_unit_core (bij_g _ _ bij a)).
   Defined.
 
- Instance Canc_bij {SAa: Canc_alg A} : Canc_alg B.
+  Instance Unit_bij {Ua: Unital A} : Unital B.
+  Proof.
+    apply mkUnital with (bij_f  _ _ bij join_unit).
+    intros. unfold join, Join_bij.
+    rewrite (bij_gf _ _ bij); apply join_lid.
+  Qed.
+  
+  Instance PUnit_bij {PUa: PartialUnital A} : PartialUnital B.
+  Proof.
+    pose (g:=bij_g _ _ bij); pose (f:= bij_f _ _ bij).
+    apply mkPUnital with (fun e => f (punit (g e))); intros a.
+    unfold join, Join_bij; repeat rewrite (bij_gf _ _ bij). apply punit_unit.
+
+    intros b c HH.
+    cut (g b = g c).
+    { intros H; rewrite <- (bij_fg _ _ bij b); rewrite <- (bij_fg _ _ bij c).
+        repeat fold g. rewrite H. reflexivity. }
+    apply join_punit with (g a).
+    revert HH; unfold join, Join_bij.
+    repeat rewrite (bij_gf _ _ bij). fold g. trivial.
+  Qed.
+  
+ Instance Canc_bij {CAa: Canc_alg A} : Canc_alg B.
   Proof. repeat intro.
     do 2 red in H,H0.
     generalize (join_canc H H0);intro.
@@ -811,6 +1219,9 @@ End SepAlgBijection.
 Existing Instance Join_bij. 
 Existing Instance Perm_bij.
 Existing Instance Sep_bij.
+Existing Instance Core_bij.
 Existing Instance Sing_bij.
+Existing Instance Unit_bij.
+Existing Instance PUnit_bij.
 Existing Instance Canc_bij.
 Existing Instance Disj_bij.

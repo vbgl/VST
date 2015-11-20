@@ -28,20 +28,21 @@ Module Type TY_FUNCTOR_SA.
   Axiom T_bot_unit : unit_for T_bot T_bot.
 
   Instance pa_TF (A : Type) : Perm_alg (A -> T) := Perm_fun _ _ _ pa_T.
-  Instance sa_TF (sa_T: Sep_alg T) (A : Type): Sep_alg (A -> T) := Sep_fun _ _ _ sa_T.
-  Instance ca_TF (ca_T: Canc_alg T) (A : Type): Canc_alg (A -> T) := Canc_fun _ _ _ ca_T.
+  (*Instance sa_TF (sa_T: Sep_alg T) (A : Type): Sep_alg (A -> T) := Sep_fun _ _ _ sa_T.*)
+  Instance co_TF (co_T: Core_alg T) (A : Type): Core_alg (A -> T) := Core_fun _ _ _ co_T.
+  (*Instance ca_TF (ca_T: Canc_alg T) (A : Type): Canc_alg (A -> T) := Canc_fun _ _ _ ca_T.*)
   Instance da_TF (da_T: Disj_alg T) (A : Type): Disj_alg (A -> T) := Disj_fun _ _ _ da_T.
 
   Parameter J_F: forall A, Join (F (A -> T)).
   Existing Instance J_F.
   Parameter Perm_F: forall A, Perm_alg  (F (A -> T)).
   Implicit Arguments Perm_F.   Existing Instance Perm_F.
-  Parameter Sep_F: forall A, Sep_alg  (F (A -> T)).
-  Implicit Arguments Sep_F.
-  Existing Instance Sep_F.
-  Parameter Canc_F: forall A, Canc_alg  (F (A -> T)).
+  Parameter Core_F: forall A, Core_alg  (F (A -> T)).
+  Implicit Arguments Core_F.
+  Existing Instance Core_F.
+  (*Parameter Canc_F: forall A, Canc_alg  (F (A -> T)).
   Implicit Arguments Canc_F.
-  Existing Instance Canc_F.
+  Existing Instance Canc_F.*)
   Parameter Disj_F: forall A, Disj_alg  (F (A -> T)).
   Implicit Arguments Disj_F.
   Existing Instance Disj_F.
@@ -74,8 +75,16 @@ Module Type KNOT_SA.
 
   Parameter Join_knot: Join knot.  Existing Instance Join_knot.
   Parameter Perm_knot : Perm_alg knot.  Existing Instance Perm_knot.
-  Parameter Sep_knot: forall (sa_T: Sep_alg T), Sep_alg knot. Existing Instance Sep_knot.
-  Parameter Canc_knot: forall (sa_T: Canc_alg T), Canc_alg knot. Existing Instance Canc_knot.
+  Parameter Core_knot :
+    forall ca_T: Core_alg T,
+       (forall (n : nat) (f : TFSA.TF.F predicate),
+        core (fmap (approx n) f) = fmap (approx n) (core f)) -> 
+       Core_alg knot.
+  Existing Instance Core_knot.
+  Parameter core_fmap_commute:
+    forall (n : nat) (f : TFSA.TF.F predicate),
+      core (fmap (approx n) f) = fmap (approx n) (core f).
+  (*Parameter Canc_knot: forall (sa_T: Canc_alg T), Canc_alg knot. Existing Instance Canc_knot.*)
   Parameter Disj_knot: forall (sa_T: Disj_alg T), Disj_alg knot. Existing Instance Disj_knot.
 
   Instance Join_nat_F: Join (nat * F predicate) := 
@@ -84,17 +93,17 @@ Module Type KNOT_SA.
   Instance Perm_nat_F : Perm_alg (nat * F predicate) := 
    @Perm_prod _ _ (F (knot * TF.other -> T)) (J_F (knot * TF.other)) (Perm_equiv nat) _.
 
-  Instance Sep_nat_F (sa_T: Sep_alg T) : Sep_alg (nat * F predicate) := 
-   @Sep_prod _ _ (F (knot * TF.other -> T)) (J_F (knot * TF.other)) (Sep_equiv nat) _.
-  Instance Canc_nat_F (sa_T: Canc_alg T) : Canc_alg (nat * F predicate) := 
-   @Canc_prod _ _ (F (knot * TF.other -> T)) (J_F (knot * TF.other)) (Canc_equiv nat) _.
+  Instance Core_nat_F (sa_T: Core_alg T) : Core_alg (nat * F predicate) := 
+   @Core_prod _ _ (F (knot * TF.other -> T)) (J_F (knot * TF.other)) (Core_equiv nat) _.
+  (*Instance Canc_nat_F (sa_T: Canc_alg T) : Canc_alg (nat * F predicate) := 
+   @Canc_prod _ _ (F (knot * TF.other -> T)) (J_F (knot * TF.other)) (Canc_equiv nat) _.*)
   Instance Disj_nat_F (sa_T: Disj_alg T) : Disj_alg (nat * F predicate) := 
    @Disj_prod _ _ (F (knot * TF.other -> T)) (J_F (knot * TF.other)) (Disj_equiv nat) _.
 
   Axiom join_unsquash : forall x1 x2 x3 : knot,
     join x1 x2 x3 = join (unsquash x1) (unsquash x2) (unsquash x3).
 
-  Axiom asa_knot : Sep_alg T -> @Age_alg knot _ K.ag_knot.
+  Axiom asa_knot : Core_alg T -> @Age_alg knot _ K.ag_knot.
 
 End KNOT_SA.
 
@@ -112,10 +121,16 @@ Module KnotSa (TFSA':TY_FUNCTOR_SA) (K':KNOT with Module TF:=TFSA'.TF)
 
   Instance Join_pred : Join predicate := Join_fun (knot * other) T Join_T.
   Instance pred_pa : Perm_alg predicate := pa_TF (knot * other).
-  Instance pred_sa (sa_T: Sep_alg T): Sep_alg predicate := sa_TF _ _.
-  Instance pred_ca (ca_T: Canc_alg T): Canc_alg predicate := ca_TF _ _.
+  (*Instance pred_sa (sa_T: Sep_alg T): Sep_alg predicate := sa_TF _ _.*)
+  Instance pred_co (co_T: Core_alg T): Core_alg predicate := co_TF _ _.
+  (*Instance pred_ca (ca_T: Canc_alg T): Canc_alg predicate := ca_TF _ _.*)
   Instance pred_da (da_T: Disj_alg T): Disj_alg predicate := da_TF _ _.
 
+  (*Imperative to push core through indirection*)
+  Parameter core_fmap_commute:
+    forall n p,
+      core (fmap (approx n) p) = fmap (approx n) (core p).
+  (*Definition core_fmap_commute := core_fmap_commute.*)
   Lemma approx_join_hom : forall n, join_hom (approx n).
   Proof.
     unfold join_hom.
@@ -139,10 +154,12 @@ Module KnotSa (TFSA':TY_FUNCTOR_SA) (K':KNOT with Module TF:=TFSA'.TF)
          Join_prod nat (Join_equiv nat) (F (knot * other -> T))  (J_F (knot * other)).
   Instance Perm_nat_F : Perm_alg (nat * F predicate) :=
          Perm_prod (Perm_equiv nat) (Perm_F (knot * other)).
-  Instance Sep_nat_F (sa_T: Sep_alg T) : Sep_alg (nat * F predicate) :=
-         Sep_prod (Sep_equiv nat) (Sep_F (knot * other)).
-  Instance Canc_nat_F (ca_T: Canc_alg T) : Canc_alg (nat * F predicate) :=
-         Canc_prod _ _ _ _.
+  (*Instance Sep_nat_F (sa_T: Sep_alg T) : Sep_alg (nat * F predicate) :=
+    Sep_prod (Sep_equiv nat) (Sep_F (knot * other)).*)
+  Instance Core_nat_F (sa_T: Core_alg T) : Core_alg (nat * F predicate) :=
+         Core_prod _ _ _ _ (Core_equiv nat) (Core_F (knot * other)).
+  (*Instance Canc_nat_F (ca_T: Canc_alg T) : Canc_alg (nat * F predicate) :=
+         Canc_prod _ _ _ _.*)
   Instance Disj_nat_F (sa_T: Disj_alg T) : Disj_alg (nat * F predicate) :=
          Disj_prod _ _ _ _.
 
@@ -172,14 +189,40 @@ Module KnotSa (TFSA':TY_FUNCTOR_SA) (K':KNOT with Module TF:=TFSA'.TF)
     intuition.
   Qed.
 
-  Instance Sep_knot (sa_T: Sep_alg T): Sep_alg knot := 
-    Sep_preimage _ _ _  unsquash squash squash_unsquash unsquash_squash_join_hom.
-  Instance Canc_knot (sa_T: Canc_alg T): Canc_alg knot.
+  (*Instance Sep_knot (sa_T: Sep_alg T): Sep_alg knot := 
+    Sep_preimage _ _ _  unsquash squash squash_unsquash unsquash_squash_join_hom.*)
+
+  (*THIS *)
+  Instance Core_knot
+           (Core_T: Core_alg T)
+           (Core_approx: forall n f, core (fmap (approx n) f) = fmap (approx n) (core f))
+  : Core_alg knot.
+  eapply (Core_preimage _ _ _  unsquash squash squash_unsquash unsquash_squash_join_hom).
+  intros. simpl.
+  destruct (unsquash a) as [n f] eqn: unsa. simpl.
+  apply unsquash_approx in unsa.
+  rewrite unsa.
+  rewrite unsquash_squash; f_equal.
+  rewrite  Core_approx.
+  destruct TFSA'.TF.f_F; destruct functor_facts.
+  assert (fmap_comp := ff_comp _ _ _ (approx n) (approx n)).
+  assert (fmap_comp' : forall x,
+                        (fmap predicate predicate (approx n)
+              oo fmap predicate predicate (approx n)) x =
+                        fmap predicate predicate (approx n oo approx n) x) by
+      (rewrite fmap_comp; intros; reflexivity).
+  unfold compose in fmap_comp'.
+  unfold functors.fmap.
+  rewrite fmap_comp'. f_equal.
+  rewrite (approx_approx1 0) at 1; extensionality x; reflexivity.
+  Defined.
+
+  (*Instance Canc_knot (sa_T: Canc_alg T): Canc_alg knot.
   Proof.
      repeat intro.
      do 3 red in H,H0. 
      apply unsquash_inj. apply (join_canc H H0).
-  Qed.
+  Qed.*)
   Instance Disj_knot (da_T: Disj_alg T): Disj_alg knot.
   Proof.
      repeat intro.
@@ -243,6 +286,7 @@ Module KnotSa (TFSA':TY_FUNCTOR_SA) (K':KNOT with Module TF:=TFSA'.TF)
     apply F_approx_join_hom; auto.
   Qed.
 
+ 
   Lemma pred_unmap_left_approx (sa_T: Sep_alg T):
     forall n, unmap_left _ Join_pred (approx n).
   Proof.
@@ -451,7 +495,7 @@ Module KnotSa (TFSA':TY_FUNCTOR_SA) (K':KNOT with Module TF:=TFSA'.TF)
     trivial.
   Qed.
 
-  Theorem asa_knot(sa_T: Sep_alg T) : @Age_alg knot _ K.ag_knot.
+  Theorem asa_knot(sa_T: Core_alg T) : @Age_alg knot _ K.ag_knot.
   Proof.
     constructor.
     exact age_join1.
@@ -459,5 +503,4 @@ Module KnotSa (TFSA':TY_FUNCTOR_SA) (K':KNOT with Module TF:=TFSA'.TF)
     exact (unage_join1 _).
     exact (unage_join2 _).
   Qed.
-
 End KnotSa.

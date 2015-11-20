@@ -21,6 +21,7 @@ Module Trivial_TyFunctorSaProp (TF':TY_FUNCTOR_PROP) <: TY_FUNCTOR_SA_PROP.
   Instance Join_F A : Join (F A) := Join_equiv (F A).
   Definition Perm_F: Perm_paf f_F Join_F := fun (A : Type) _ _ => Perm_equiv (F A).
   Definition Sep_F: Sep_paf f_F Join_F := fun (A : Type) _ _ _ => Sep_equiv (F A).
+  Definition Core_F: Core_paf f_F Join_F := fun (A : Type) _ _ _ => Core_equiv (F A).
   Definition Canc_F: Canc_paf f_F Join_F := fun (A : Type) _ _ _ => Canc_equiv (F A).
   Definition Disj_F: Disj_paf f_F Join_F := fun (A : Type) _ _ _ => Disj_equiv (F A).
 
