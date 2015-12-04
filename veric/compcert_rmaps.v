@@ -2,148 +2,11 @@ Require Export msl.msl_standard.
 Require Import veric.base.
 Require Import veric.rmaps.
 Require Import veric.rmaps_lemmas.
+Require Import veric.kinds.
 
 Inductive Held:= held | not_held.
 
-(* This should be made pretty and packaged somewhere else*)
-(*********************************************************)
-Set Implicit Arguments.
-Record PCM1 (t:Type) : Type :=
-  mkPCM1 {
-      pcm_join : Join t;
-      ppcm : @PrePCM t pcm_join;
-      pcm_sa : @Sep_alg t pcm_join}.
-Section packing.
-  Structure pack_type : Type := Pack {type : Type; _ : PCM1 type}.
-  Variable cT: pack_type.
-  Local Coercion type : pack_type >-> Sortclass.
-Definition pcm_struct : PCM1 cT :=
-  match cT return PCM1 cT with
-    | Pack _ c => c
-  end.
 
-Definition pjoin := pcm_join pcm_struct.
-End packing.
-Notation pcm := pack_type.
-Coercion type : pcm >-> Sortclass.
-
-Lemma PCM_PPCM : forall t (P:PCM1 t), @PrePCM _ (@pcm_join _ P).
-  intros. apply P.
-Qed.
-
-Lemma PCM_SEP : forall t (P:PCM1 t), @Sep_alg _ (@pcm_join _ P).
-  intros. apply P.
-Qed.  
-
-Inductive kind : Type :=
-  | VAL : memval -> kind
-  | LK : Z -> forall t: Type, PCM1 t -> t -> option t -> kind
-  | CT: Z -> kind
-  | FUN: funsig -> kind.
-
-
-Inductive same_join' {t}: Join t -> Join t -> Join t -> Join t -> Prop  :=
-| Same_join : forall (a b c d : Join t), b=a -> c=a -> d=a -> same_join' a b c d.
-
-Definition same_join {t} (a b c d: PCM1 t):=
-  same_join' (@pcm_join t a) (@pcm_join t b) (@pcm_join t c) (@pcm_join t d).
-
-Inductive kind_join : Join kind :=
-| Join_Val: forall mv, kind_join (VAL mv) (VAL mv) (VAL mv)
-| Join_LK: forall z t (P Pa Pb Pc:PCM1 t) (a b c:t),
-             pcm_join P a b c ->
-             same_join P Pa Pb Pc ->
-             kind_join (LK z Pa a None) (LK z Pb b None) (LK z Pc c None)
-| Join_CT: forall z, kind_join (CT z) (CT z) (CT z)
-| Join_FUN: forall f, kind_join (FUN f) (FUN f) (FUN f).
-
-Lemma kjoin_inv_VAL:
-  forall mv b c, kind_join (VAL mv) b c -> b = (VAL mv) /\ c = (VAL mv).
-  intros. inv H. split; reflexivity.
-Qed.
-
-(*Lemma kjoin_inv_VAL:
-  forall mv b c, kind_join (LK t P vs vo) b c -> b = (VAL mv) /\ c = (VAL mv).
-  intros. inv H. split; reflexivity.
-Qed.*)
-
-Lemma kind_ppcm : @PrePCM kind kind_join.
-  constructor; intros.
-  (*JOIN_EQ*)
-  inv H; inv H0; auto.
-
-(*  replace P with P1 in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H4).
- replace a with a1 in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H5).
- replace b with b0 in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H7).
- replace c with c0.
- reflexivity.
- { assert (PPCM:= PCM_PPCM _ P1).
- assert (SA:= PCM_SEP _ P1).
- apply (@join_eq _ _ PPCM  a1 b0 c0 c);
-   do 2 red; destruct P1. apply H8. apply H1. }
- *) admit.
-  
- (*JOIN_ASSOC*)
- { destruct a, b, c, d, e; try solve[ exfalso; inv H; inv H0].
- (*VALS*)
- exists (VAL m);
- inv H; inv H0; split; constructor.
-
- (*LK *)
- assert (t = t1) by (inv H; auto).
- assert (t = t5) by (inv H; auto).
- assert (t3 = t7) by (inv H0; auto).
- assert (t3 = t5) by (inv H0; auto).
- do 2 subst.
- 
- assert (HH1:pcm_join p2 t0 t2 t6).
- inv H.
- replace p2 with Pc in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H12).
- replace t0 with a0 in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H5).
- replace t2 with b in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H9).
- replace t6 with c in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H13).
- inv H15.
- rewrite H2.
- exact H3.
-
- assert (HH2:pcm_join p2 t6 t4 t8).
- inv H0.
- replace p2 with Pa0 in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H4).
- replace t6 with a0 in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H5).
- replace t4 with b in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H9).
- replace t8 with c in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H13).
- inv H15.
- rewrite H0.
- exact H3.
- assert (HH3:=@join_assoc _ _ (ppcm p2) _ _ _ _ _ HH1 HH2). 
- destruct HH3 as [f [J1 J2]].
- exists (LK z0 p0 f None); split.
- constructor.
- 
- unfold pjoin.
- assert (pcm_join (pcm_struct (Pack p1)) = pcm_join (pcm_struct P)).
- destruct p1; simpl.
- destruct P.
- simpl in pcm_join0.
- assert (Pack p1 = P).
- destruct p1.
- destruct P.
- f_equal. destruct p1.
- f_equal.
- 
- apply H2. 
- replace (@Pack (type P) p1) with P.
- (*CT*)
- exists (CT z);
-   inv H; inv H0; split; constructor.
- 
- (*FUN*)
- exists (FUN f);
- inv H; inv H0; split; constructor. }
-
- 
-  
-(*********************************************************)
 
 Definition isVAL (k: kind) := match k with | VAL _ => True | _ => False end.
 Definition isFUN (k: kind) := match k with | FUN _ => True | _ => False end.
@@ -163,13 +26,16 @@ Definition address := address.
 Definition some_address : address := (xH,0).
 Definition kind := kind.
 Definition kjoin := kind_join.
+Definition kind_ppcm := kind_ppcm.
+Definition kind_sep := kind_sep.
+Definition kind_cross := kind_cross.
   
 Definition valid (f: address -> option (pshare*kind)) := 
   forall b ofs, 
      match f (b,ofs) with
      | Some (sh, LK n _ _ _ _) => forall i, 0 < i < n -> f(b,ofs+i) = Some (sh, CT i)
      | Some (sh, CT i) => exists n, 0 < i < n /\
-         exists t P vs vo, f(b,ofs-i) = Some (sh, LK n t P vs vo)
+         exists t (P: PCM1 t) vs vo, f(b,ofs-i) = Some (sh, LK n P vs vo)
      | _ => True
     end.
 
@@ -179,11 +45,20 @@ unfold valid; intros.
 auto.
 Qed.
 
+(*Set Printing All.
+Unset Implicit Arguments.*)
+
 Lemma valid_join: forall f g h : address -> option (pshare * kind),
-   @join _ (Join_fun address (option (pshare * kind))
+@join (address -> option (prod pshare kind))
+       (Join_fun address (option (prod pshare kind))
+          (@Join_lower (prod pshare kind)
+             (Join_prod pshare Join_pshare kind kjoin))) f g h ->
+     valid f -> valid g -> valid h.
+                    
+   (*@join (address -> option (prod pshare kind)) (Join_fun address (option (pshare * kind))
                    (Join_lower (Join_prod pshare Join_pshare kind (Join_equiv kind))))
       f g h  ->
- valid f -> valid g -> valid h.
+ valid f -> valid g -> valid h.*)
 Proof.
 
  unfold valid; intros f g h J H H0 b ofs.
@@ -205,14 +80,16 @@ destruct k; auto; intros.
  inv H9. destruct H0 as [n [? ?]]. replace (ofs+i-i) with ofs in H8 by omega.
  rewrite <- H5 in H8; destruct H8 as (t' & P' & vs' & vo' & H8); inv H8.
  rewrite <- H3 in H'. rewrite <- H4 in H0'. destruct a1; destruct a2.
- destruct H6. simpl in *. destruct H6; subst k k0.
+ destruct H6. simpl in *.
+ inv H6.
+ (*destruct H6; subst k k0.*)
  specialize (H b (ofs+i)); specialize (H0 b (ofs+i)).
  rewrite (H0' _ H2) in H0.  rewrite (H' _ H2) in H.
  destruct H as [n [? ?]]; destruct H0 as [n' [? ?]].
  replace (ofs+i-i) with ofs in H6,H7 by omega.
  rewrite <- H4 in H7; inv H7. rewrite <- H3 in H6; inv H6.
  specialize (J (b,ofs+i)). rewrite (H' _ H2) in J. rewrite (H0' _ H2) in J.
- inv J; auto. inv H11; auto. simpl in *. destruct a3; simpl in *. inv H9. 
+ inv J; auto. inv H16; auto. simpl in *. destruct a3; simpl in *. inv H9. 
  f_equal. f_equal. eapply join_eq; eauto.
 (** CT -> LK **)
  generalize (H b ofs); intros H'; generalize (H0 b ofs); intro H0'.
@@ -229,20 +106,44 @@ destruct k; auto; intros.
  specialize (H0 b (ofs-z)). rewrite <- H7 in H0.
  specialize (H0 _ H2). 
  replace (ofs-z+z) with ofs in H0 by omega. congruence.
+
+
  destruct a1; destruct a2; destruct a3.
- rewrite <- H3 in H0'; rewrite <- H2 in H'. destruct H5. destruct H6. simpl in *; subst. 
- rewrite H1 in H4. inv H4. 
+ rewrite <- H3 in H0'; rewrite <- H2 in H'. destruct H5.
+ simpl in *. rewrite H1 in H4; inv H4.
+ inv H6.
+
+ 
+ (*rewrite H1 in H4. inv H4.
+ assert (J':= (J (b, ofs))).
+ rewrite <- H2, <- H3 in J'; inv J'.
+ rewrite H1 in H7; inv H7.
+ inv H8. simpl in H6; inv H6.*)
  destruct H' as (n & ? & t & P &  vs & vo & ?). exists n; split; auto.
  specialize (J (b,ofs-z)). rewrite H6 in J.
- assert (g (b,ofs-z) = Some (p0, LK n t P vs vo)).
- destruct H0' as (n' & ? & t' & P' &  vs' & vo' & ?). rewrite H8 in J. inv J. destruct H12. inv H10; simpl in *. inv H12; auto.
- replace P' with P in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H16).
- replace vs' with vs in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H17).
- replace vo' with vo in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H18).
+ destruct H0' as (n' & ? & t' & P' &  vs' & vo' & ?).
+ assert (J':= J).
+ rewrite H8 in J'. inv J'.
+ inv H12. inv H10.
+ 
+ assert (g (b,ofs-z) = Some (p0, LK n' P vs' vo')).
+ replace P with P1 in * by (eapply ( Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H15)).
+ replace P' with P1 in * by (eapply ( Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H20)).
  auto.
- exists t, P, vs, vo.
- rewrite H7 in J. inv J. inv H11. simpl in *. destruct a3; simpl in *. inv H9.
- repeat f_equal. eapply join_eq; auto. 
+ (*admit.
+ 
+ replace vs' with vs1 in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H21).
+ replace vs with us0 in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H16).
+ replace vo' with vo in * by eapply (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H18).
+ auto.*)
+ rewrite H8 in J.
+ move J at bottom. inv J. destruct a3 as [p1 k].
+ inv H19.
+ simpl in H12, H13. inv H13.
+ 
+ exists t', P1, ws, wo. repeat f_equal; auto.
+ simpl in H9.
+ eapply (join_eq H9 H5).
 Qed.
 
 End CompCert_AV.
@@ -335,20 +236,20 @@ congruence.
 rewrite H2 in H0.
 destruct (f' (b,ofs+i)).
 destruct p0.
-destruct H0.
+destruct p1; destruct H0.
 destruct H0; inv H0.
 destruct H0; inv H0.
 destruct (f(b,ofs)).
 destruct p0.
-destruct H3.
+destruct p1; destruct H3.
 inv H5.
 inv H3.
 destruct H3.
 rewrite H3 in H2.
-destruct H2 as (n & ? & he & t & P & vs & ?); exists n; split; auto. exists he, A, a.
+destruct H2 as (n & he & t & P & vs & vo & ?); exists n; split; auto. exists t, P, vs, vo.
 specialize (H0 (b,ofs-z)).
 destruct H0; try congruence.
-rewrite H4 in H0.
+rewrite H2 in H0.
 destruct (f' (b,ofs-z)); auto.
 destruct p0.
 destruct H0.
@@ -378,8 +279,8 @@ Module RML := Rmaps_Lemmas(R).
 Export RML. 
 Export R.
 
-Lemma rmap_valid_e1: forall r b ofs n i he A a, 0 < i < n -> 
-     forall sh, res_option (r @ (b,ofs)) = Some (sh, LK n he A a) -> res_option (r @ (b,ofs+i))= Some (sh, CT i).
+Lemma rmap_valid_e1: forall r b ofs n i t P vs vo, 0 < i < n -> 
+     forall sh, res_option (r @ (b,ofs)) = Some (sh, @LK n t P vs vo) -> res_option (r @ (b,ofs+i))= Some (sh, CT i).
 Proof.
 intros until sh.
 generalize (rmap_valid r b ofs); unfold compose.
@@ -390,15 +291,15 @@ Qed.
 
 Lemma rmap_valid_e2:  forall r b ofs i sh,
     res_option (r @ (b,ofs+i)) = Some (sh, CT i) -> 
-            exists n he A a, 0 < i < n /\ res_option (r @ (b,ofs)) = Some (sh, LK n he A a).
+            exists n t P vs vo, 0 < i < n /\ res_option (r @ (b,ofs)) = Some (sh, @LK n t P vs vo).
 Proof.
 intros until sh.
 generalize (rmap_valid r b (ofs+i)); unfold compose.
 case_eq (r @ (b,ofs+i)); simpl; intros; try discriminate.
 inv H1.
-destruct H0 as (n&?&A&vs&vo&H1).
+destruct H0 as (n&?&t'&P&vs&vo&H1).
 replace (ofs+i-i) with ofs in H1 by omega.
-exists n, A, vs, vo.
+exists n, t', P, vs, vo.
 eauto.
 Qed.
 
@@ -433,7 +334,8 @@ Definition fixup_splitting
 Definition share_of (x: option (pshare * kind)) : Share.t :=
   match x with Some (p,_) => pshare_sh p | None => Share.bot end.
 
-Definition Join_pk := (Join_lower (Join_prod pshare _ kind (Join_equiv _))).
+Definition Join_pk' := (Join_lower (Join_prod pshare _ kind (Join_equiv _))).
+Definition Join_pk := (Join_lower (Join_prod pshare _ kind (kind_join))).
 
 Lemma fixup_splitting_valid : forall (a: address->Share.t) (z:address -> option (pshare * kind)),
     (forall x, join_sub (a x) (share_of (z x))) ->
@@ -453,9 +355,9 @@ Proof.
   rewrite  H3. simpl. replace (ofs+i-i) with ofs by omega.
   destruct (dec_share_identity (a (b,ofs))); auto; contradiction.
   simpl.
-  destruct H0 as (n&?&A&vs&vo&?).
+  destruct H0 as (n&?&t&P&vs&vo&?).
   destruct ( dec_share_identity (a (b, ofs - z0))); auto.
-  exists n. split; auto. exists A, vs, vo. auto.
+  exists n. split; auto. exists t, P, vs, vo. auto.
   rewrite H2.
   destruct ( dec_share_identity (a (b, ofs - z0))); auto; contradiction.
   simpl.
@@ -469,7 +371,7 @@ Proof.
 apply nonunit_nonidentity ;auto.
 Qed.
 
-Lemma fixup_join : forall a (ac ad: address -> Share.t)  z,
+(*Lemma fixup_join : forall a (ac ad: address -> Share.t)  z,
   AV.valid a ->
   AV.valid z ->
   (forall x, @join_sub _ Join_pk (a x) (z x)) ->
@@ -521,15 +423,19 @@ Proof.
  generalize (H2 x); intro. apply join_unit1_e in H4; auto. rewrite H4.
  destruct (dec_share_identity (share_of (a x))); auto.
  destruct (a x); try constructor.
- contradiction (share_of_Some p0).
+ contradiction (share_of_Some p1).
+ 
  apply join_unit1; [ apply None_unit |].
  generalize (H1 x); intro.
  destruct H5. rewrite H3 in H5.
  destruct (a x). inv H5. simpl.
  destruct p; simpl.  
  f_equal. f_equal. apply exist_ext. auto.
- destruct p0. destruct a3 (*a2*). destruct H9. destruct H6. simpl in *; subst.
- repeat f_equal. destruct p0; apply exist_ext; auto.
+ destruct p0. destruct a2 (*a3*). destruct H9. destruct H6. simpl in *; subst.
+ repeat f_equal. destruct p1.
+ simpl in H7; rewrite H7; f_equal.
+ destruct p1.
+ apply exist_ext; auto.
  contradict n. simpl. apply bot_identity.
  destruct (dec_share_identity (ad x)); auto.
  apply join_unit2; [ apply None_unit |].
@@ -538,16 +444,18 @@ Proof.
  generalize (H2 x); intro. apply join_unit2_e in H5; auto.
  remember (ac x) as acx.
  subst acx.
- destruct (a x). destruct p0. destruct p0. simpl.
- f_equal. f_equal. apply exist_ext; auto.
- clear - H4; inv H4; auto. destruct a3 (*a2*); inv H2; auto. simpl in *. destruct H0; subst; auto.
+ destruct (a x). destruct p0. destruct p1; simpl.
+ f_equal. f_equal.
+ destruct p0.
+ apply exist_ext; auto.
+ clear - H4; inv H4; auto. destruct a2 (*a3*); inv H2; auto. simpl in *. destruct H0; subst; auto.
  contradiction n. rewrite H5; simpl. auto.
  generalize (H1 x); rewrite H3; intro.
  generalize (H2 x); intro.
- destruct (a x). destruct p0. destruct p0.
+ destruct (a x). destruct p0. destruct p1.
  constructor. constructor. simpl.
  do 3 red; simpl. simpl in H5. auto.
- simpl. clear - H4. destruct H4. inv H; auto. destruct  a3 (*a2*); destruct  H3 as [? [? ?]]; simpl in *; subst; auto.
+ simpl. clear - H4. destruct H4. inv H; auto. destruct  a2 (*a3*); destruct  H3 as [? [? ?]]; simpl in *; subst; auto.
  apply split_identity in H5; auto. contradiction.
  destruct x as [b ofs].
  simpl in *.
@@ -562,17 +470,17 @@ Proof.
  assert (k = CT z0). generalize (H1 (b,ofs)); rewrite H7; intros [? H9]; inv H9; try congruence.
  rewrite H3 in H10. inv H10. destruct a2. destruct H12. destruct H9; simpl in *; subst; auto.
  subst k.
- specialize (H b ofs). rewrite H7 in H. destruct H as (?&?&A&vs&vo&?).
+ specialize (H b ofs). rewrite H7 in H. destruct H as (?&?&t&P&vs&vo&?).
  rewrite H8. simpl. destruct p0; simpl.
  destruct (dec_share_identity x0); auto.
  elimtype False; clear - n0 i0; apply nonunit_nonidentity in n0; contradiction n0.
  revert H4; case_eq (a (b,ofs-z0)); intros.
  elimtype False.
  destruct (H1 (b,ofs-z0)). rewrite H4 in H9.
- destruct H6 as (A&vs&vo&?).
+ destruct H6 as (t&P&vs&vo&?).
  rewrite H6 in H9.
  destruct p0. 
- assert (k = LK n A vs vo). inv H9; auto. destruct a2. destruct H13 as [? [? ?]]; simpl in *; subst. auto.
+ assert (k = LK n P vs vo). inv H9; auto. destruct a2. destruct H13 as [? [? ?]]; simpl in *; subst. auto.
  subst k.
  generalize (H b (ofs-z0)); rewrite H4; intros.
  specialize (H10 _ H5). replace (ofs-z0+z0) with ofs in H10 by omega.
@@ -588,10 +496,10 @@ Focus 1.
  revert H5; case_eq (a (b,ofs-z0)); intros; [ | contradiction H6; auto].
  destruct p0.
  pose proof (H1 (b,ofs-z0)). rewrite H5 in H7.
- pose proof (H0 b ofs). rewrite H3 in H8. destruct H8 as (s&?&A&vs&vo&?).
+ pose proof (H0 b ofs). rewrite H3 in H8. destruct H8 as (s&?&t&P&vs&vo&?).
  rewrite H9 in H7.
  destruct H7.
- assert (k = LK s A vs vo).
+ assert (k = LK s P vs vo).
   inv H7; auto. destruct a2; destruct H13 as [H13 H13']; inv H13'; simpl in *; subst; auto.
  subst k.
  specialize (H b (ofs-z0)). rewrite H5 in H. specialize (H z0 H8).
@@ -604,9 +512,9 @@ Focus 2.
  specialize (H2 (b,ofs-z0)); rewrite H4 in H2.
  simpl in H2. apply split_identity in H2; auto. contradiction.
  destruct p0.
- pose proof (H0 b ofs). rewrite H3 in H5. destruct H5 as (s&?&A&vs&vo&?).
+ pose proof (H0 b ofs). rewrite H3 in H5. destruct H5 as (s&?&t&P&vs&vo&?).
  pose proof (H1 (b,ofs-z0)). rewrite H4 in H7; rewrite H6 in H7.
- assert (k=LK s A vs vo). destruct H7; inv H7; auto. destruct a2; destruct H11; simpl in *.
+ assert (k=LK s P vs vo). destruct H7; inv H7; auto. destruct a2; destruct H11; simpl in *.
     inv H8; auto. 
  subst k.
  specialize (H b (ofs-z0)). rewrite H4 in H. specialize (H _ H5).
@@ -657,7 +565,7 @@ Focus 2.
  rewrite H8; constructor.
  specialize (H1 x). rewrite H3 in H1. destruct H1. inv H1; auto; try constructor. 
  rewrite H7; constructor.
-Qed.
+Qed.*)
  
 Lemma join_share_of: forall a b c,
      @join _ Join_pk a b c -> join (share_of a) (share_of b) (share_of c).
@@ -673,30 +581,129 @@ Proof.
  hnf in H,H0. simpl in H,H0.
  destruct (cross_split_fun Share.t _ address share_cross_split
                    (share_of oo a) (share_of oo b) (share_of oo c) (share_of oo d) (share_of oo z))
-  as [[[[ac ad] bc] bd] [? [? [? ?]]]].
+   as [[[[sac sad] sbc] sbd] [? [? [? ?]]]].
+ unfold join in H.
  intro x. specialize (H x). unfold compose. 
  clear - H. inv H; simpl in *. apply join_unit1; auto. apply join_unit2; auto.
  destruct a1; destruct a2; destruct a3; apply H3.
  intro x. specialize (H0 x). unfold compose. 
  clear - H0. inv H0; simpl in *. apply join_unit1; auto. apply join_unit2; auto.
  destruct a1; destruct a2; destruct a3; apply H3.
- assert (Sac: forall x : address, join_sub (ac x) (share_of (z x))).
-   intro x.  apply join_sub_trans with (share_of (a x)). eexists; apply (H1 x).
-   exists (share_of (b x)).  apply join_share_of; auto.
- assert (Sad: forall x : address, join_sub (ad x) (share_of (z x))).
-   intro x.  apply join_sub_trans with (share_of (a x)). eexists; eapply join_comm; apply (H1 x).
-   exists (share_of (b x)).  apply join_share_of; auto.
- assert (Sbc: forall x : address, join_sub (bc x) (share_of (z x))).
-   intro x.  apply join_sub_trans with (share_of (b x)). eexists; apply (H2 x).
-   exists (share_of (a x)).  eapply join_comm; apply join_share_of; auto.
- assert (Sbd: forall x : address, join_sub (bd x) (share_of (z x))).
-   intro x.  apply join_sub_trans with (share_of (b x)). eexists; eapply join_comm; apply (H2 x).
-   exists (share_of (a x)).  eapply join_comm; apply join_share_of; auto.
- exists (exist AV.valid _ (fixup_splitting_valid ac z Sac Hz),
-            exist AV.valid _ (fixup_splitting_valid ad z Sad Hz),
-            exist AV.valid _ (fixup_splitting_valid bc z Sbc Hz),
-            exist AV.valid _ (fixup_splitting_valid bd z Sbd Hz)).
- split3; [ | | split];  do 2 red; simpl; intro; apply fixup_join; auto; intro.
+
+ (*This should be an external lemma. MAybe it already is?*)
+ 
+ assert (cross_okind: Cross_alg (option kind)).
+ { intros u v w x y J1 J2.
+   destruct u, v, w, x,y; try solve[exfalso; inv J1; inv J2].
+   - assert (J3: join k k0 k3) by (inv J1; assumption).
+     assert (J4: join k1 k2 k3) by (inv J2; assumption).
+     destruct (kind_cross _ _ _ _ _ J3 J4) as [[[[ac ad] bc] bd] [? [? [? ?]]]].
+     exists (Some ac, Some ad, Some bc, Some bd); repeat split; constructor; assumption.
+   - exists (Some k, None, Some k0, None); repeat split; constructor.
+   inv J1; inv J2; assumption.
+   - exists (None, Some k, None, Some k0); repeat split; constructor.
+   inv J1; inv J2; assumption.
+   - exists (Some k0, Some k1, None, None); repeat split; constructor.
+   inv J1; inv J2; assumption.
+   - exists (Some k, None, None, None); repeat split;
+   try constructor;
+   inv J1; inv J2; constructor.
+   - exists (None, Some k, None, None); repeat split;
+   try constructor;
+   inv J1; inv J2; constructor.
+   - exists (None, None, Some k0, Some k1); repeat split; constructor.
+   inv J1; inv J2; assumption.
+   - exists (None, None, Some k, None); repeat split;
+   try constructor;
+   inv J1; inv J2; constructor.
+   - exists (None, None, None, Some k); repeat split;
+   try constructor;
+   inv J1; inv J2; constructor.
+   - exists (None, None, None, None); repeat split; constructor.
+ }
+ Definition okind_of:=
+   fun x : (option (pshare * kind)) =>
+     match x with Some (_,k) => Some k | None => None end.
+ destruct (cross_split_fun (option kind) _ address cross_okind
+                   (okind_of oo a) (okind_of oo b) (okind_of oo c) (okind_of oo d) (okind_of oo z))
+   as [[[[ac ad] bc] bd] [? [? [? ?]]]].
+ unfold join, Join_lower in H.
+ intros i.
+ unfold compose.
+ specialize (H i). inv H; try constructor.
+ destruct a1, a2, a3; simpl. constructor. inv H8; assumption.
+ intros i.
+ unfold compose.
+ specialize (H0 i). inv H0; try constructor.
+ destruct a1, a2, a3; simpl. constructor. inv H8; assumption.
+(*
+ Definition fixup_kind (a:address -> option kind) (z: address -> option (pshare * kind)):=
+   fun x => match a x, z x with
+                None , _ => None
+              | _ , None => None
+              | Some k, Some (psh, _) => Some (psh, k)
+            end.
+ Lemma BLAH: 
+   forall (a b: address -> option kind) c,
+     join a b (okind_of oo c) ->
+     AV.valid c -> AV.valid (fixup_kind a c).
+   intros. intros bck ofs.
+   assert (H1:=H).
+   specialize (H (bck, ofs)).
+   specialize (H0 bck ofs).
+   unfold compose in H.
+   unfold fixup_kind.
+   destruct (a (bck, ofs)) eqn:Aeq.
+   destruct (c (bck, ofs)).
+   destruct p; simpl in H.
+   destruct k; auto.
+   intros i HH.
+   inv H. specialize (H0 i HH).
+   specialize (H1 (bck, ofs + i)).
+   unfold compose in H1; rewrite H0 in H1.
+   inv H1.
+   *)
+   assert (Sac: forall x : address, join_sub (sac x) (share_of (z x))).
+   admit.
+(*   intro x.  apply join_sub_trans with (share_of (a x)). eexists; apply (H1 x).
+   exists (share_of (b x)).
+   
+   apply join_share_of; auto.
+   { unfold join, Join_pk, Join_lower, Join_prod.
+     specialize (H x); inv H.
+     constructor.
+     constructor.
+     constructor.
+     inv H8. constructor; auto.
+     inv H9; constructor; auto.
+     Print Top.R.AV.kind.
+     Print kind.
+     Set Printing All.
+     rewrite <- H10, <- H11.
+     rewrite H6, H8.*)
+
+   
+   
+ assert (Sad: forall x : address, join_sub (sad x) (share_of (z x))). admit. (*
+ intro x0.  apply join_sub_trans with (share_of (a x0)).
+ eexists; eapply join_comm. apply (H1 x0).
+   exists (share_of (b x0)).  apply join_share_of; auto.*)
+ assert (Sbc: forall x : address, join_sub (sbc x) (share_of (z x))). admit. (*
+ clear x x0.
+ intro x0.  apply join_sub_trans with (share_of (b x0)). eexists; apply (H2 x0).
+   exists (share_of (a x0)).  eapply join_comm; apply join_share_of; auto.*) 
+ assert (Sbd: forall x : address, join_sub (sbd x) (share_of (z x))). admit. (*
+ clear x0.
+ intro x0.  apply join_sub_trans with (share_of (b x0)). eexists; eapply join_comm; apply (H2 x0).
+   exists (share_of (a x0)).  eapply join_comm; apply join_share_of; auto.*)
+ exists (exist AV.valid _ (fixup_splitting_valid sac z Sac Hz),
+            exist AV.valid _ (fixup_splitting_valid sad z Sad Hz),
+            exist AV.valid _ (fixup_splitting_valid sbc z Sbc Hz),
+            exist AV.valid _ (fixup_splitting_valid sbd z Sbd Hz)).
+ split3; [ | | split];  do 2 red; simpl; intro.
+ Set Printing All.
+ eapply fixup_join.
+ apply fixup_join; auto; intro.
  exists (b x0); apply H.
  exists (a x0); apply join_comm; apply H.
  exists (d x0); apply H0.

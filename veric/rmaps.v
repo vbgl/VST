@@ -12,6 +12,7 @@ Parameter kjoin: Join kind.
 (*Parameter kind_pcm: @PCM kind kjoin.*)
 Parameter kind_ppcm: @PrePCM kind kjoin.
 Parameter kind_sep: @Sep_alg kind kjoin.
+Parameter kind_cross: @Cross_alg kind kjoin.
 Existing Instance kind_ppcm.
 Existing Instance kind_sep.
 
@@ -36,6 +37,7 @@ Parameter kjoin: Join kind.
 (*Parameter kind_pcm: @PCM kind kjoin.*)
 Parameter kind_ppcm: @PrePCM kind kjoin.
 Parameter kind_sep: @Sep_alg kind kjoin.
+Parameter kind_cross: @Cross_alg kind kjoin.
 Existing Instance kind_ppcm.
 Existing Instance kind_sep.
 End ADR_VAL0.
@@ -45,13 +47,15 @@ Module SimpleAdrVal (AV0: ADR_VAL0) <:
     with Definition kind := AV0.kind
     with Definition kjoin := AV0.kjoin
     with Definition kind_sep := AV0.kind_sep
-    with Definition kind_ppcm := AV0.kind_ppcm.
+    with Definition kind_ppcm := AV0.kind_ppcm
+    with Definition kind_cross := AV0.kind_cross.
   Import AV0.
   Definition address := address.
   Definition some_address := some_address.
   Definition kind := kind.
   Definition kind_sep := kind_sep.
   Definition kind_ppcm := kind_ppcm.
+  Definition kind_cross := kind_cross.
   Definition kjoin := kjoin.
   Definition valid (_: address -> option (pshare * kind)) := True.
   Lemma valid_empty: valid (fun _ => None).
