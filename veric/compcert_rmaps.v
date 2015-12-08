@@ -662,7 +662,8 @@ Proof.
    specialize (H1 (bck, ofs + i)).
    unfold compose in H1; rewrite H0 in H1.
    inv H1.
-   *)
+ *)
+ 
    assert (Sac: forall x : address, join_sub (sac x) (share_of (z x))).
    admit.
 (*   intro x.  apply join_sub_trans with (share_of (a x)). eexists; apply (H1 x).
@@ -701,6 +702,7 @@ Proof.
             exist AV.valid _ (fixup_splitting_valid sbc z Sbc Hz),
             exist AV.valid _ (fixup_splitting_valid sbd z Sbd Hz)).
  split3; [ | | split];  do 2 red; simpl; intro.
+ 
  Set Printing All.
  eapply fixup_join.
  apply fixup_join; auto; intro.

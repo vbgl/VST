@@ -81,6 +81,7 @@ Require Import msl.sepalg.
   Instance Cross_void: Cross_alg Void.
   Proof. repeat intro. destruct z. Qed.
 
+  
 (** The separation algebra over booleans, e.g. Z/2 with bounded addition *)
 
   Inductive join_bool : bool -> bool -> bool -> Prop :=
@@ -141,6 +142,98 @@ Require Import msl.sepalg.
      exists (false,false,false,false); repeat split; constructor.
   Qed.     
 
+  Section TrivialLifting.
+    
+(** The trivial lifitng with option monad, where Some only mix with None.
+*)
+    Variable t:Type.
+    Inductive join_tlift : Join (option t) :=
+      | JNone : join_tlift None None None
+      | JSome1 : forall (a:t), join_tlift (Some a) None (Some a)
+      | JSome2 : forall (a:t), join_tlift None (Some a) (Some a).
+    Instance Join_tlift: Join (option t):= join_tlift.
+    
+    Lemma blah: forall a b c, join_tlift a b c -> a = None \/ b = None \/ c = None.
+    Proof.
+      intros.
+      inv H.
+      left; reflexivity.
+      right; left; reflexivity.
+      left; reflexivity.
+    Qed.
+    
+  Instance Perm_tlift : Perm_alg (option t).
+  Proof.
+    constructor; intros.
+    constructor; intros.
+    (*join_eq*)
+    inv H; inv H0; reflexivity.
+    (*join_assoc*)
+    destruct b.
+    exists (Some t0); split;
+    inv H; inv H0; constructor.
+    destruct c.
+    exists (Some t0); split;
+    inv H0; inv H; constructor.
+    exists None; split; inv H; inv H0; constructor.
+
+    (*join_comm*)
+    inv H; constructor.
+
+    (*join_positivity*)
+    inv H; inv H0; reflexivity.
+  Defined.
+
+  Instance Sep_tlift: Sep_alg (option t).
+  Proof. apply mkSep with (fun _ => None ).
+         intros t0; destruct t0; constructor.
+         reflexivity.
+  Defined.
+         
+  Instance Core_tlift: Core_alg (option t).
+  Proof. apply mkCore with Sep_tlift; intros;  hnf; auto.
+         inv H; reflexivity.
+         inv H; constructor.
+  Defined.
+  
+  Instance Sing_tlift: Sing_alg (option t).
+  Proof. apply (mkSing None); intros; hnf; simpl.
+         reflexivity.    
+ Qed.
+  
+  Instance Canc_tlift: Canc_alg (option t).
+  Proof. repeat intro.
+         inv H; inv H0; reflexivity.
+  Qed.
+
+  Instance Disj_tlift: Disj_alg (option t).
+  Proof. repeat intro.
+         inv H; reflexivity.
+  Qed.
+
+  Instance Cross_tlift: Cross_alg (option t).
+  Proof. repeat intro.
+         destruct a, b, z, c ,d; try solve [exfalso; inv H];try solve [exfalso; inv H0].
+         - exists (Some t0, None, None, None); inv H; inv H0;
+                  repeat split; constructor.
+         - exists ( None, Some t0,None, None); inv H; inv H0;
+                  repeat split; constructor.
+         - exists ( None, None,Some t0, None); inv H; inv H0;
+                  repeat split; constructor.
+         - exists ( None, None, None, Some t0); inv H; inv H0;
+                  repeat split; constructor.
+         - exists (None, None, None, None); inv H; inv H0;
+                  repeat split; constructor.
+  Qed.
+  End TrivialLifting.
+
+Existing Instance Perm_tlift.
+Existing Instance Sep_tlift.
+Existing Instance Core_tlift.
+Existing Instance Cross_tlift.
+Existing Instance Disj_tlift.
+  
+  
 Section JOIN_EQUIV.
 (** The "equivalance" or discrete SA.  In this SA, every element of an arbitrary
     set is made an idempotent element.  We do not add this as a global
