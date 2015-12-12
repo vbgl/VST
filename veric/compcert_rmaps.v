@@ -575,7 +575,7 @@ Proof.
   destruct H0. simpl in *. do 3 red in H. unfold lifted_obj in H. simpl in H. auto.
 Qed.
 
-Instance Cross_rmap_aux: Cross_alg (sig AV.valid).
+(*Instance Cross_rmap_aux: Cross_alg (sig AV.valid).
 Proof. 
  hnf. intros [a Ha] [b Hb] [c Hc] [d Hd] [z Hz] ? ?.
  hnf in H,H0. simpl in H,H0.
@@ -589,9 +589,8 @@ Proof.
  intro x. specialize (H0 x). unfold compose. 
  clear - H0. inv H0; simpl in *. apply join_unit1; auto. apply join_unit2; auto.
  destruct a1; destruct a2; destruct a3; apply H3.
-
- (*This should be an external lemma. MAybe it already is?*)
  
+ (*This should be an external lemma. MAybe it already is?*)
  assert (cross_okind: Cross_alg (option kind)).
  { intros u v w x y J1 J2.
    destruct u, v, w, x,y; try solve[exfalso; inv J1; inv J2].
@@ -621,98 +620,53 @@ Proof.
    inv J1; inv J2; constructor.
    - exists (None, None, None, None); repeat split; constructor.
  }
- Definition okind_of:=
-   fun x : (option (pshare * kind)) =>
-     match x with Some (_,k) => Some k | None => None end.
- destruct (cross_split_fun (option kind) _ address cross_okind
-                   (okind_of oo a) (okind_of oo b) (okind_of oo c) (okind_of oo d) (okind_of oo z))
-   as [[[[ac ad] bc] bd] [? [? [? ?]]]].
- unfold join, Join_lower in H.
- intros i.
- unfold compose.
- specialize (H i). inv H; try constructor.
- destruct a1, a2, a3; simpl. constructor. inv H8; assumption.
- intros i.
- unfold compose.
- specialize (H0 i). inv H0; try constructor.
- destruct a1, a2, a3; simpl. constructor. inv H8; assumption.
-(*
- Definition fixup_kind (a:address -> option kind) (z: address -> option (pshare * kind)):=
-   fun x => match a x, z x with
-                None , _ => None
-              | _ , None => None
-              | Some k, Some (psh, _) => Some (psh, k)
-            end.
- Lemma BLAH: 
-   forall (a b: address -> option kind) c,
-     join a b (okind_of oo c) ->
-     AV.valid c -> AV.valid (fixup_kind a c).
-   intros. intros bck ofs.
-   assert (H1:=H).
-   specialize (H (bck, ofs)).
-   specialize (H0 bck ofs).
-   unfold compose in H.
-   unfold fixup_kind.
-   destruct (a (bck, ofs)) eqn:Aeq.
-   destruct (c (bck, ofs)).
-   destruct p; simpl in H.
-   destruct k; auto.
-   intros i HH.
-   inv H. specialize (H0 i HH).
-   specialize (H1 (bck, ofs + i)).
-   unfold compose in H1; rewrite H0 in H1.
-   inv H1.
- *)
+ assert (Sac: forall x : address, join_sub (sac x) (share_of (z x))).
+ {
+ intro x.  apply join_sub_trans with (share_of (a x)).
+ exists (sad x); apply (H1 x).
+ exists (share_of (b x)).
+ specialize (H x).
+ apply join_share_of; auto. }
  
-   assert (Sac: forall x : address, join_sub (sac x) (share_of (z x))).
-   admit.
-(*   intro x.  apply join_sub_trans with (share_of (a x)). eexists; apply (H1 x).
-   exists (share_of (b x)).
-   
-   apply join_share_of; auto.
-   { unfold join, Join_pk, Join_lower, Join_prod.
-     specialize (H x); inv H.
-     constructor.
-     constructor.
-     constructor.
-     inv H8. constructor; auto.
-     inv H9; constructor; auto.
-     Print Top.R.AV.kind.
-     Print kind.
-     Set Printing All.
-     rewrite <- H10, <- H11.
-     rewrite H6, H8.*)
-
-   
-   
- assert (Sad: forall x : address, join_sub (sad x) (share_of (z x))). admit. (*
- intro x0.  apply join_sub_trans with (share_of (a x0)).
- eexists; eapply join_comm. apply (H1 x0).
-   exists (share_of (b x0)).  apply join_share_of; auto.*)
- assert (Sbc: forall x : address, join_sub (sbc x) (share_of (z x))). admit. (*
- clear x x0.
- intro x0.  apply join_sub_trans with (share_of (b x0)). eexists; apply (H2 x0).
-   exists (share_of (a x0)).  eapply join_comm; apply join_share_of; auto.*) 
- assert (Sbd: forall x : address, join_sub (sbd x) (share_of (z x))). admit. (*
- clear x0.
- intro x0.  apply join_sub_trans with (share_of (b x0)). eexists; eapply join_comm; apply (H2 x0).
-   exists (share_of (a x0)).  eapply join_comm; apply join_share_of; auto.*)
+ 
+ assert (Sad: forall x : address, join_sub (sad x) (share_of (z x))).
+ {
+ intro x.  apply join_sub_trans with (share_of (d x)).
+ exists (sbd x); apply (H4 x).
+ exists (share_of (c x)).
+ apply join_comm.
+ specialize (H0 x).
+ apply join_share_of; auto. }
+ assert (Sbc: forall x : address, join_sub (sbc x) (share_of (z x))).
+ {
+ intro x.  apply join_sub_trans with (share_of (b x)).
+ exists (sbd x); apply (H2 x).
+ exists (share_of (a x)).
+ apply join_comm.
+ specialize (H x).
+ apply join_share_of; auto. }
+ assert (Sbd: forall x : address, join_sub (sbd x) (share_of (z x))).
+ {
+ intro x.  apply join_sub_trans with (share_of (b x)).
+ exists (sbc x); apply join_comm; apply (H2 x).
+ exists (share_of (a x)).
+ apply join_comm;
+ specialize (H x).
+ apply join_share_of; auto. }
  exists (exist AV.valid _ (fixup_splitting_valid sac z Sac Hz),
             exist AV.valid _ (fixup_splitting_valid sad z Sad Hz),
             exist AV.valid _ (fixup_splitting_valid sbc z Sbc Hz),
             exist AV.valid _ (fixup_splitting_valid sbd z Sbd Hz)).
  split3; [ | | split];  do 2 red; simpl; intro.
- 
- Set Printing All.
  eapply fixup_join.
  apply fixup_join; auto; intro.
  exists (b x0); apply H.
  exists (a x0); apply join_comm; apply H.
  exists (d x0); apply H0.
  exists (c x0); apply join_comm; apply H0.
-Qed.
+Qed.*)
 
-Instance Trip_resource : Trip_alg resource.
+(*Instance Trip_resource : Trip_alg resource.
 Proof.
 intro; intros.
 destruct a as [ra | ra sa ka pa | ka pa].
@@ -772,13 +726,15 @@ assert (nonidentity sabc).
 eapply join_nonidentity; try apply (join_comm j0).
  destruct sc; simpl. 
  apply (nonunit_nonidentity n).
-exists (YES rabc (mk_pshare _ (nonidentity_nonunit H2)) kc pc).
+ exists (YES rabc (mk_pshare _ (nonidentity_nonunit H2)) kc pc).
  inv H. inv H1. inv H0.  
-constructor; auto.
- exists ab. inv H. inv H1. inv H0. constructor.
-Qed.
+ constructor; auto.
 
-Instance Trip_rmap : Trip_alg rmap.
+ 
+ exists ab. inv H. inv H1. inv H0. constructor.
+Qed.*)
+
+(*Instance Trip_rmap : Trip_alg rmap.
 Proof.
 intro; intros.
 pose (f loc := @Trip_resource _ _ _ _ _ _ 
@@ -920,7 +876,7 @@ rewrite H4.
 destruct (f loc).
 simpl.
 auto.
-Qed.
+Qed.*)
 
 Obligation Tactic := Tactics.program_simpl.
 
@@ -958,6 +914,7 @@ simpl in *.
 generalize (resource_at_join _ _ _ loc H); clear H; intros.
 revert H0 H; destruct (phi1 @ loc); intros; try contradiction.
 inv H; auto.
+inv H8; auto.
 Qed.
 
 Lemma readable_writable_join:

@@ -1470,18 +1470,21 @@ Lemma PURE_inj: forall T x x' y y', PURE x (SomeP T y) = PURE x' (SomeP T y') ->
  Proof. intros. inv H. apply inj_pair2 in H2. subst; auto. 
  Qed.
 
-
-(*Lemma core_resource_at: forall w i, core (w @ i) = core w @ i.
+(* I think this is a key part.
+   Having proven this gives me hope for pushing 
+   cores through the rest of the development*)
+Lemma core_resource_at: forall w i, core (w @ i) = core w @ i.
 Proof.
   intros.
   generalize (core_duplicable w); intro Hdup.
   apply (resource_at_join _ _ _ i) in Hdup.
-  generalize (core_unit w); intros.
-  apply (resource_at_join _ _ _ i) in H.
-  generalize (core_unit (w @ i)); unfold unit_for; intros.
-  eapply join_canc; eauto.
+  apply dup_core in Hdup.
+  rewrite Hdup.
+  symmetry.
+  apply (@join_core _ _ _ _ (w@i)).
+  apply (resource_at_join _ _ _ i).
+  apply core_unit.
 Qed.
-*)
 
 Lemma resource_at_identity: forall (m: rmap) (loc: AV.address), 
  identity m -> identity (m @ loc).

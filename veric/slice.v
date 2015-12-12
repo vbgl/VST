@@ -1,37 +1,74 @@
 Require Import veric.base.
-Require Import msl.msl_standard.
+(*Require Import msl.msl_standard.
 Require Import msl.rmaps.
-Require Import msl.rmaps_lemmas.
+Require Import msl.rmaps_lemmas. *)
 Require Import veric.compcert_rmaps.
 
 Open Local Scope pred.
 
-Definition slice_resource (rsh: share) (sh: pshare) (r: resource) :=
+Definition slice_resource (rsh: share) (sh: pshare) (k:AV.kind) (r: resource) :=
   match r with
    | NO _ => NO rsh
-   | YES _ _ k pp => YES rsh sh k pp
+   | YES _ _ _ pp => YES rsh sh k pp
    | PURE k pp => PURE k pp
  end.
 
+Definition is_lock k n t:=
+  match k with
+    | kinds.LK n' t' _ _ _ => n = n' /\ t' = t
+    | _ => False
+  end.
+
+Definition erase_eq_kind k k':=
+  match k with
+   | kinds.LK n t P a b => is_lock k' n t
+   | _ => k = k'
+ end.
+
+Definition erase_eq_resource r k':=
+  match r with
+   | NO _ => True
+   | YES _ _ k pp => erase_eq_kind k k'
+   | PURE k pp => True
+ end.
+
 Lemma slice_resource_valid:
-  forall rsh sh phi, AV.valid (fun l => res_option (slice_resource (rsh l) sh (phi @ l))).
+  forall rsh sh k phi,
+    (forall l, erase_eq_resource (phi @ l) (k l)) ->
+    AV.valid (fun l => res_option (slice_resource (rsh l) sh (k l) (phi @ l))).
 Proof.
-intros.
+intros  ? ? ? ? ERASE; intros;
 unfold slice_resource.
 intro; intros.
-case_eq (phi @ (b,ofs)); intros; simpl; auto.
+assert (ERASE':= ERASE).
+specialize (ERASE (b, ofs)); revert ERASE.
+case_eq (phi @ (b,ofs)); simpl; intros; auto.
 generalize (rmap_valid phi b ofs); unfold compose; intro.
 rewrite H in H0. simpl in H0.
-destruct k; simpl; auto.
-+ intros; specialize (H0 _ H1).
-  destruct (phi @ (b,ofs+i)); inv H0; auto.
-+ destruct H0 as (n&?&A&he&g&?).
-  exists n; split; auto. exists A, he, g.
-  destruct (phi @ (b,ofs-z)); inv H1; auto.
+revert ERASE. destruct k0; simpl; intros; try solve[rewrite <- ERASE; auto].
+- destruct (k (b, ofs)); try solve[inv ERASE]; destruct ERASE as [N T]; subst.
+  intros i ineq. specialize (H0 i ineq).
+  destruct (phi @ (b,ofs+i)) eqn:log; try solve[inv H0].
+  revert H0; simpl.
+  specialize (ERASE' (b, ofs + i)); rewrite log in ERASE'.
+  simpl in ERASE'.
+  unfold erase_eq_kind in ERASE'.
+  destruct k0; try (rewrite <- ERASE'; intros HH; inv HH; f_equal; auto).
+  destruct (k (b, ofs + i)); try solve[inv ERASE']; destruct ERASE' as [N T]; subst.
+  intros HH; inv HH; f_equal; auto.
+- rewrite <- ERASE.
+  destruct H0 as (n&?&A&P&vs&vo&?).
+  destruct (phi @ (b,ofs-z)) eqn:log; inv H1; auto.
+  specialize (ERASE' (b, ofs - z)); rewrite log in ERASE'.
+  simpl in ERASE'.
+  destruct (k (b, ofs - z)) eqn:log1; try solve[inv ERASE']; simpl.
+  destruct ERASE' as [N T]; subst.
+  exists z0; split; auto. exists A, p1, t2, o.
+  f_equal; f_equal.
 Qed.
 
 Lemma slice_rmap_valid:
-    forall rsh sh m, CompCert_AV.valid (res_option oo (fun l => slice_resource (rsh l) sh (m @ l))).
+    forall rsh sh m k, CompCert_AV.valid (res_option oo (fun l => slice_resource (rsh l) sh (m @ l))).
 Proof.
 intros.
 intros b ofs.
@@ -41,7 +78,7 @@ generalize (rmap_valid m b ofs); unfold compose; simpl; rewrite H; simpl; intro.
 destruct k; auto; intros.
 specialize (H0 _ H1).
 destruct (m @ (b,ofs+i)); inv H0; auto.
-destruct H0 as (n&?&A&he&g&?). exists n; split; auto. exists A,he, g.
+destruct H0 as (n&?&A&he&g&vo&?). exists n; split; auto. exists A,he, g, vo.
 destruct (m @ (b,ofs-z)); inv H1; auto.
 Qed.
 
@@ -98,22 +135,38 @@ simpl.
 clear H; destruct a; auto.
 Qed.
 
+Definition subcore (r: resource):=
+  match r with
+    | YES rsh sh k pp => YES rsh sh (core k) pp
+    | _ => r
+  end.
+Definition rmap_subcore (rm:rmap):=
+
+
 Lemma slice_rmap_join: forall rsh1 rsh2 rsh (sh1 sh2 sh: pshare) w,
     join rsh1 rsh2 rsh ->
     join (pshare_sh sh1) (pshare_sh sh2) (pshare_sh sh) ->
-     join (slice_rmap rsh1 sh1 w) (slice_rmap rsh2 sh2 w) (slice_rmap rsh sh w).
+     join (slice_rmap rsh1 sh1 w) (slice_rmap rsh2 sh2 (core w)) (slice_rmap rsh sh w).
 Proof.
-intros.
+  intros.
+(*destruct (@join_level _ _ compcert_rmaps.R.Perm_rmap _ compcert_rmaps.R.Age_rmap _ _ _ H1).*)
 apply resource_at_join2.
 transitivity (level w).
 apply slice_rmap_level.
 symmetry; apply slice_rmap_level.
 transitivity (level w).
+rewrite <- (level_core w).
 apply slice_rmap_level.
 symmetry; apply slice_rmap_level.
 intro loc.
 repeat rewrite resource_at_slice.
-destruct (w @ loc); simpl; constructor; auto.
+
+rewrite <- core_resource_at.
+destruct (w @ loc); simpl.
+  - rewrite core_NO; simpl. constructor; auto.
+  - rewrite core_YES. simpl. constructor; auto.
+  simpl; constructor; auto.
+inv H1; assumption.
 Qed.
 
 Definition split_resource r :=
@@ -131,8 +184,8 @@ unfold compose; intros b ofs.
 generalize (rmap_valid m b ofs); unfold compose; intro.
 destruct (m @ (b,ofs)); simpl in *; auto; destruct k; auto.
 intros. spec H i H0. destruct (m @(b,ofs+i)); inv H; auto.
-destruct H as (n&?&A&he&g&?).
-exists n; split; auto. exists A, he, g.
+destruct H as (n&?&A&P&vs&vo&?).
+exists n; split; auto. exists A, P, vs, vo.
 destruct (m @ (b,ofs-z)); inv H0; auto.
 Qed.
 
@@ -144,8 +197,8 @@ unfold compose; intros b ofs.
 generalize (rmap_valid m b ofs); unfold compose; intro.
 destruct (m @ (b,ofs)); simpl in *; auto; destruct k; auto.
 intros. spec H i H0. destruct (m @(b,ofs+i)); inv H; auto.
-destruct H as (n&?&A&he&g&?).
-exists n; split; auto. exists A,he, g.
+destruct H as (n&?&A&P&vs&vo&?).
+exists n; split; auto. exists A, P, vs, vo.
 destruct (m @ (b,ofs-z)); inv H0; auto.
 Qed.
 
@@ -204,16 +257,17 @@ Definition split_rmap (m: rmap) : rmap * rmap :=
  (proj1_sig (make_rmap _ (split_rmap_valid1 m) (level m) (split_rmap_ok1 m)),
   proj1_sig (make_rmap _ (split_rmap_valid2 m) (level m) (split_rmap_ok2 m))).
 
-Lemma split_resource_join: forall r, join (fst (split_resource r)) (snd (split_resource r)) r.
+Lemma split_resource_join: forall r, join r r r -> join (fst (split_resource r)) (snd (split_resource r)) r.
 Proof.
-intro.
-destruct r; simpl; constructor; auto; try (apply split_join; apply surjective_pairing).
+  intros r Jr.
+  destruct r; simpl; constructor; auto; try (apply split_join; apply surjective_pairing).
+  inv Jr; assumption.
 Qed.
 
 Lemma split_rmap_join:
-  forall m, join (fst (split_rmap m)) (snd (split_rmap m)) m.
+  forall m, join m m m -> join (fst (split_rmap m)) (snd (split_rmap m)) m.
 Proof.
-intros.
+intros m Jm.
 unfold split_rmap; simpl.
 case_eq (make_rmap _ (split_rmap_valid1 m) (level m) (split_rmap_ok1 m)); intros.
 case_eq (make_rmap _ (split_rmap_valid2 m) (level m) (split_rmap_ok2 m)); intros.
@@ -224,6 +278,7 @@ apply resource_at_join2; simpl; try congruence.
 rewrite H2; rewrite H4; simpl; auto.
 intro l.
 apply split_resource_join; auto.
+apply resource_at_join; assumption.
 Qed.
 
 Lemma split_rmap_at1:
@@ -278,6 +333,7 @@ destruct (P_DEC (b, ofs)).
   destruct k; simpl; auto.
   - intros. specialize (H_valid _ H0).
     destruct (P_DEC (b, ofs + i)) as [HHp | HHp].
+
     * destruct (phi @ (b, ofs + i)); inv H_valid; auto.
     * specialize (H_id _ HHp).
       destruct (phi @ (b, ofs + i)); inv H_valid.

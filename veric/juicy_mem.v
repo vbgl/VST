@@ -1,5 +1,6 @@
 Require Import veric.base.
 Require Import veric.rmaps.
+Require Import veric.kinds.
 Require Import veric.rmaps_lemmas.
 Require Import veric.compcert_rmaps.
 Require Import veric.shares.
@@ -570,7 +571,7 @@ Qed.
 
 (* FIXME
    Build an rmap that's identical to phi except where m has allocated. *)
-Definition inflate_alloc: rmap.
+(*Definition inflate_alloc: rmap.
  refine (proj1_sig (remake_rmap (fun loc =>
    fmap_option (res_option (phi @ loc))
        
@@ -615,7 +616,7 @@ right; destruct p; simpl; auto.
 left; exists phi; split; auto.
 right; destruct  (access_at m l); simpl; auto.
 destruct p0; simpl; auto.
-Defined.
+Defined. *)
 
 Lemma approx_map_idem: forall n (lp: preds), 
   preds_fmap (approx n) (preds_fmap (approx n) lp) = preds_fmap (approx n) lp.
@@ -649,14 +650,18 @@ specialize VALID with i.
 destruct (phi @ (b, ofs + i)); auto.
 destruct k; simpl; auto.
 simpl in VALID.
-assert (H2: Some (p1, VAL m0) = Some (p, CT i)).
+assert (H2: Some (p2, VAL m0) = Some (p, CT i)).
 apply (VALID H1).
 inversion H2.
 destruct VALID as (n & H & A & he & g & H0).
 exists n.
 split; auto.
 destruct (phi @ (b, ofs - z)); simpl in *; auto.
-inversion H0; subst; auto. exists A, he, g. inversion H0. auto. inversion H0.
+inversion H0; subst; auto. exists A, he, g; auto.
+
+inversion H0; subst; auto. exists A, he, g.
+inversion H1; subst; auto.
+inversion H0; inversion H1.
 
 unfold compose.
 extensionality l.
@@ -697,7 +702,7 @@ exists n.
 split; auto. exists A, he, g.
 destruct (phi @ (b, ofs - z)); try destruct k; simpl in *; auto.
 destruct (access_at m (b, ofs - z)); simpl; auto.
-inversion H0. 
+inversion H0; inv H1.
 
 unfold compose.
 extensionality l.
