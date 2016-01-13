@@ -11,6 +11,19 @@ Inductive Held:= held | not_held.
 Definition isVAL (k: kind) := match k with | VAL _ => True | _ => False end.
 Definition isFUN (k: kind) := match k with | FUN _ => True | _ => False end.
 
+Lemma isVAL_join1: forall (k1 k2 k3: kind), kind_join k1 k2 k3 -> isVAL k1 -> isVAL k3.
+  intros ? ? ? H H0. inv H; auto; try solve[inv H0].
+Qed.
+Lemma isVAL_join2: forall (k1 k2 k3: kind), kind_join k1 k2 k3 -> isVAL k3 -> isVAL k1.
+  intros ? ? ? H H0. inv H; auto; try solve[inv H0].
+Qed.
+Lemma isFUN_join1: forall (k1 k2 k3: kind), kind_join k1 k2 k3 -> isFUN k1 -> isFUN k3.
+  intros ? ? ? H H0. inv H; auto; try solve[inv H0].
+Qed.
+Lemma isFUN_join2: forall (k1 k2 k3: kind), kind_join k1 k2 k3 -> isFUN k3 -> isFUN k1.
+  intros ? ? ? H H0. inv H; auto; try solve[inv H0].
+Qed.
+
 Lemma isVAL_i: forall v, isVAL (VAL v).
 Proof. intros; simpl; auto. Qed.
 Hint Resolve isVAL_i.

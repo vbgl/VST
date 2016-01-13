@@ -67,7 +67,7 @@ revert ERASE. destruct k0; simpl; intros; try solve[rewrite <- ERASE; auto].
   f_equal; f_equal.
 Qed.
 
-Lemma slice_rmap_valid:
+(*Lemma slice_rmap_valid:
     forall rsh sh m k, CompCert_AV.valid (res_option oo (fun l => slice_resource (rsh l) sh (m @ l))).
 Proof.
 intros.
@@ -80,9 +80,9 @@ specialize (H0 _ H1).
 destruct (m @ (b,ofs+i)); inv H0; auto.
 destruct H0 as (n&?&A&he&g&vo&?). exists n; split; auto. exists A,he, g, vo.
 destruct (m @ (b,ofs-z)); inv H1; auto.
-Qed.
+Qed.*)
 
-Lemma slice_rmap_ok: forall rsh sh m,
+(*Lemma slice_rmap_ok: forall rsh sh m,
   resource_fmap (approx (level m)) oo (fun l => slice_resource (rsh l) sh (m @ l)) =
        (fun l => slice_resource (rsh l) sh (m @ l)).
 Proof.
@@ -105,12 +105,12 @@ inversion H0.
 rewrite <- H2.
 rewrite <- H2.
 auto.
-Qed.
+Qed.*)
 
-Definition slice_rmap (rsh: address -> share) (sh: pshare) (m: rmap) : rmap :=
-   proj1_sig (make_rmap _ (slice_rmap_valid rsh sh m) (level m) (slice_rmap_ok rsh sh m)).
+(*Definition slice_rmap (rsh: address -> share) (sh: pshare) (m: rmap) : rmap :=
+   proj1_sig (make_rmap _ (slice_rmap_valid rsh sh m) (level m) (slice_rmap_ok rsh sh m)).*)
 
-Lemma resource_at_slice:
+(*Lemma resource_at_slice:
   forall rsh sh m l, resource_at (slice_rmap rsh sh m) l = slice_resource (rsh l) sh (resource_at m l).
 Proof.
 intros.
@@ -122,9 +122,9 @@ simpl.
 generalize a; intros [? ?].
 rewrite H1.
 auto.
-Qed.
+Qed.*)
 
-Lemma slice_rmap_level: forall rsh sh w, level (slice_rmap rsh sh w) = level w.
+(*Lemma slice_rmap_level: forall rsh sh w, level (slice_rmap rsh sh w) = level w.
 Proof.
 intros.
 unfold slice_rmap.
@@ -133,9 +133,9 @@ case_eq (make_rmap (fun l  => slice_resource (rsh l) sh (w @ l))
         (slice_rmap_ok rsh sh w)); intros.
 simpl.
 clear H; destruct a; auto.
-Qed.
+Qed.*)
 
-Definition subcore (r: resource):=
+(*Definition subcore (r: resource):=
   match r with
     | YES rsh sh k pp => YES rsh sh (core k) pp
     | _ => r
@@ -353,3 +353,4 @@ destruct (P_DEC (b, ofs)).
   apply YES_not_identity in H_id; tauto.
 Qed.
 
+*)

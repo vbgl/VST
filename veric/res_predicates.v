@@ -1,7 +1,7 @@
 Require Import msl.log_normalize.
 Require Export veric.base.
-Require Import msl.rmaps.
-Require Import msl.rmaps_lemmas.
+(*Require Import msl.rmaps.
+Require Import msl.rmaps_lemmas.*)
 Require Import veric.compcert_rmaps.
 Require Import veric.slice.
 Require Import veric.Clight_lemmas.
@@ -21,14 +21,14 @@ Proof.
 intros.
 unfold R.valid.
 replace (res_option oo resource_at ephi) with 
-            (fun l : address => @None (pshare * kind)).
+            (fun l : address => @None (pshare * AV.kind)).
 apply CompCert_AV.valid_empty.
 extensionality l.
 unfold compose; simpl.
 destruct (resource_at_empty H l) as [?|[? [? ?]]]; rewrite H0; simpl; auto.
 Qed.
 
-Program Definition kind_at (k: kind) (l: address) : pred rmap := 
+Program Definition kind_at (k: AV.kind) (l: address) : pred rmap := 
    fun m => exists rsh, exists sh, exists pp, m @ l = YES rsh sh k pp.
  Next Obligation.
    try intro; intros.
@@ -40,7 +40,7 @@ Program Definition kind_at (k: kind) (l: address) : pred rmap :=
 
 Definition spec : Type :=  forall (rsh: Share.t) (sh: Share.t) (l: AV.address), pred rmap.
 
-Program Definition yesat_raw (pp: preds) (k: kind) 
+Program Definition yesat_raw (pp: preds) (k: AV.kind) 
                            (rsh: share) (sh: pshare) (l: address) : pred rmap :=
    fun phi => phi @ l = YES rsh sh k (preds_fmap (approx (level phi)) pp).
   Next Obligation.
@@ -50,7 +50,7 @@ Program Definition yesat_raw (pp: preds) (k: kind)
 
 Obligation Tactic := idtac.
 
-Program Definition yesat (pp: preds) (k: kind) : spec :=
+Program Definition yesat (pp: preds) (k: AV.kind) : spec :=
  fun rsh (sh: Share.t) (l: AV.address) (m: rmap) =>
   exists p, yesat_raw pp k rsh (mk_lifted sh p) l m.
   Next Obligation.
@@ -59,7 +59,7 @@ Program Definition yesat (pp: preds) (k: kind) : spec :=
     apply pred_hereditary with a; auto.
   Qed.
 
-Program Definition pureat (pp: preds) (k: kind) (l: AV.address): pred rmap :=
+Program Definition pureat (pp: preds) (k: AV.kind) (l: AV.address): pred rmap :=
        fun phi => phi @ l = PURE k (preds_fmap (approx (level phi)) pp).
   Next Obligation.
     intros; intro; intros.
@@ -251,8 +251,8 @@ Program Definition noat (l: AV.address) : pred rmap :=
     apply (age1_resource_at_identity _ _ l H); auto.
  Qed.
 
-Definition ct_count (k: kind) : Z := 
-  match k with LK n _ _ _ => n-1 | _ =>  0 end.
+Definition ct_count (k: AV.kind) : Z := 
+  match k with kinds.LK n _ _ _ _ => n-1 | _ =>  0 end.
 
 Definition resource_share (r: resource) : option share :=
  match r with
@@ -375,6 +375,9 @@ Lemma nonlock_join: forall r1 r2 r,
 Proof.
   intros.
   destruct r1, r2; inv H1; auto.
+  destruct H; [left | right].
+  apply (compcert_rmaps.isVAL_join1 _ _ _ H12); auto.
+  apply (compcert_rmaps.isFUN_join1 _ _ _ H12); auto.
 Qed.
 
 Program Definition nonlockat (l: AV.address): pred rmap :=
@@ -491,10 +494,10 @@ Proof.
     exists w; split; auto.
 Qed.
 
-Lemma make_slice_rmap: forall w (P: address -> Prop) (P_DEC: forall l, {P l} + {~ P l}) sh,
+Lemma make_slice_rmap: forall w (P: address -> Prop) (P_DEC: forall l, {P l} + {~ P l}) (*sh*),
   (forall l : AV.address, ~ P l -> identity (w @ l)) ->
   {w' | level w' = level w /\ compcert_rmaps.R.resource_at w' =
-       (fun l => if P_DEC l then general_slice_resource sh (w @ l) else w @ l)}.
+       (fun l => if P_DEC l then (*general_slice_resource sh*) (w @ l) else w @ l)}.
 Proof.
   intros.
   pose (f l := if P_DEC l then general_slice_resource sh (w @ l) else w @ l).
