@@ -6,10 +6,10 @@ Require Import veric.compcert_rmaps.
 
 Open Local Scope pred.
 
-Definition slice_resource (rsh: share) (sh: pshare) (k:AV.kind) (r: resource) :=
+Definition slice_resource (rsh: share) (sh: pshare) (r: resource) :=
   match r with
    | NO _ => NO rsh
-   | YES _ _ _ pp => YES rsh sh k pp
+   | YES _ _ k pp => YES rsh sh (core k) pp
    | PURE k pp => PURE k pp
  end.
 
@@ -35,9 +35,10 @@ Definition erase_eq_resource r k':=
 Lemma slice_resource_valid:
   forall rsh sh k phi,
     (forall l, erase_eq_resource (phi @ l) (k l)) ->
-    AV.valid (fun l => res_option (slice_resource (rsh l) sh (k l) (phi @ l))).
+    AV.valid (fun l => res_option (slice_resource (rsh l) sh (*k l*) (phi @ l))).
 Proof.
-intros  ? ? ? ? ERASE; intros;
+  intros  ? ?
+          ? ? ERASE; intros;
 unfold slice_resource.
 intro; intros.
 assert (ERASE':= ERASE).
@@ -46,7 +47,20 @@ case_eq (phi @ (b,ofs)); simpl; intros; auto.
 generalize (rmap_valid phi b ofs); unfold compose; intro.
 rewrite H in H0. simpl in H0.
 revert ERASE. destruct k0; simpl; intros; try solve[rewrite <- ERASE; auto].
-- destruct (k (b, ofs)); try solve[inv ERASE]; destruct ERASE as [N T]; subst.
+- pose (ck:= @core AV.kind compcert_rmaps.R.AV.kjoin compcert_rmaps.R.AV.kind_sep
+       (kinds.VAL m)). fold ck.
+  destruct (k (b, ofs)); try solve[inv ERASE]; destruct ERASE as [N T]; subst.
+  assert (HH: ck = (kinds.VAL m)).
+  Set Printing All.
+  {generalize (core_unit kinds.VAL m); intros HH.
+   inversion HH; unfold ck; auto. }
+  unfold core in HH.
+  unfold core.
+  rewrite HH.
+  unfold core, compcert_rmaps.R.AV.kind_sep.
+  
+  kinds.kind_sep. simpl.
+  
   intros i ineq. specialize (H0 i ineq).
   destruct (phi @ (b,ofs+i)) eqn:log; try solve[inv H0].
   revert H0; simpl.
@@ -67,7 +81,7 @@ revert ERASE. destruct k0; simpl; intros; try solve[rewrite <- ERASE; auto].
   f_equal; f_equal.
 Qed.
 
-(*Lemma slice_rmap_valid:
+Lemma slice_rmap_valid:
     forall rsh sh m k, CompCert_AV.valid (res_option oo (fun l => slice_resource (rsh l) sh (m @ l))).
 Proof.
 intros.
@@ -80,7 +94,7 @@ specialize (H0 _ H1).
 destruct (m @ (b,ofs+i)); inv H0; auto.
 destruct H0 as (n&?&A&he&g&vo&?). exists n; split; auto. exists A,he, g, vo.
 destruct (m @ (b,ofs-z)); inv H1; auto.
-Qed.*)
+Qed.
 
 (*Lemma slice_rmap_ok: forall rsh sh m,
   resource_fmap (approx (level m)) oo (fun l => slice_resource (rsh l) sh (m @ l)) =

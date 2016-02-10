@@ -494,7 +494,7 @@ Proof.
     exists w; split; auto.
 Qed.
 
-Lemma make_slice_rmap: forall w (P: address -> Prop) (P_DEC: forall l, {P l} + {~ P l}) (*sh*),
+(*Lemma make_slice_rmap: forall w (P: address -> Prop) (P_DEC: forall l, {P l} + {~ P l}) (*sh*),
   (forall l : AV.address, ~ P l -> identity (w @ l)) ->
   {w' | level w' = level w /\ compcert_rmaps.R.resource_at w' =
        (fun l => if P_DEC l then (*general_slice_resource sh*) (w @ l) else w @ l)}.
@@ -512,7 +512,7 @@ Proof.
     inversion H0.
     simpl; f_equal; f_equal; auto.
   + apply resource_at_approx.
-Qed.
+Qed.*)
 
 Definition is_resource_pred (p: address -> pred rmap) (q: resource -> address -> nat -> Prop) :=
   forall l w, (p l) w = q (w @ l) l (level w).
@@ -530,7 +530,7 @@ Proof.
 Qed.
 
 (* This is about split one segment into two segments. *)
-Lemma allp_jam_split2: forall (P Q R: address -> Prop) (p q r: address -> pred rmap)
+(*Lemma allp_jam_split2: forall (P Q R: address -> Prop) (p q r: address -> pred rmap)
   (P_DEC: forall l, {P l} + {~ P l})
   (Q_DEC: forall l, {Q l} + {~ Q l})
   (R_DEC: forall l, {R l} + {~ R l}),
@@ -571,9 +571,10 @@ Proof.
       * auto.
       * specialize (H4 l).
         rewrite if_false in H4 by firstorder.
-        apply identity_unit_equiv in H4.
-        pose proof unit_core H4.
-        rewrite <- H10; auto.
+        eapply identity_unit_equiv in H4.
+        eapply unit_core in H4.
+        Set Printing All.
+        rewrite H4. ; auto.
     - intros l.
       specialize (H4 l).
       if_tac.
@@ -612,9 +613,9 @@ Proof.
       rewrite if_false in H6 by firstorder.
       apply resource_at_join with (loc := b) in H4.
       apply H5 in H4; rewrite <- H4; auto.
-Qed.
+Qed. *)
 
-Lemma general_slice_resource_resource_share: forall r sh sh',
+(*Lemma general_slice_resource_resource_share: forall r sh sh',
   resource_share r = Some sh ->
   join_sub sh' sh ->
   resource_share (general_slice_resource sh' r) = Some sh'.
@@ -631,9 +632,9 @@ Proof.
       apply share_sub_Lsh; auto.
     - f_equal.
       apply splice_unrel_unrel.
-Qed.
+Qed.*)
 
-Lemma general_slice_resource_nonlock: forall r sh sh',
+(*Lemma general_slice_resource_nonlock: forall r sh sh',
   resource_share r = Some sh ->
   join_sub sh' sh ->
   nonlock r ->
@@ -642,9 +643,9 @@ Proof.
   intros.
   destruct r; inv H; unfold general_slice_resource; simpl; auto.
   destruct (dec_share_identity (Share.unrel Share.Rsh sh')); simpl; auto.
-Qed.
+Qed.*)
 
-Lemma join_sub_is_general_slice_resource: forall r r' sh',
+(*Lemma join_sub_is_general_slice_resource: forall r r' sh',
   join_sub r' r ->
   resource_share r' = Some sh' ->
   r' = general_slice_resource sh' r.
@@ -670,9 +671,9 @@ Proof.
     rewrite mk_share_pshare_sh.
     f_equal.
     symmetry; apply Share.unrel_splice_L.
-Qed.
+Qed.*)
 
-Lemma general_slice_resource_share_join: forall sh1 sh2 sh r,
+(*Lemma general_slice_resource_share_join: forall sh1 sh2 sh r,
   join sh1 sh2 sh ->
   resource_share r = Some sh ->
   join (general_slice_resource sh1 r) (general_slice_resource sh2 r) r.
@@ -706,9 +707,9 @@ Proof.
     - apply res_join_YES; auto.
   + simpl.
     constructor.
-Qed.
+Qed.*)
 
-Definition resource_share_split (p q r: address -> pred rmap): Prop :=
+(*Definition resource_share_split (p q r: address -> pred rmap): Prop :=
   exists p' q' r' p_sh q_sh r_sh,
     is_resource_pred p p' /\
     is_resource_pred q q' /\
@@ -722,7 +723,7 @@ Definition resource_share_split (p q r: address -> pred rmap): Prop :=
       join q_res r_res p_res ->
       q' q_res l n ->
       r' r_res l n ->
-      p' p_res l n).
+      p' p_res l n).*)
 
 (* We should use this lemma to prove all share_join lemmas, also all splittable lemmas. *)
 Lemma allp_jam_share_split: forall (P: address -> Prop) (p q r: address -> pred rmap)
