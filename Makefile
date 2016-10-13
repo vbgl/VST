@@ -21,7 +21,7 @@ COMPCERT ?= compcert
 
 #Note2:  By default, the rules for converting .c files to .v files
 # are inactive.  To activate them, do something like
-CLIGHTGEN=../CompCert-2.7.1/clightgen	
+#CLIGHTGEN=../CompCert-2.7.1/clightgen	
 
 #Note3: for SSReflect, one solution is to install MathComp 1.6
 # somewhere add this line to a CONFIGURE file
@@ -29,7 +29,7 @@ CLIGHTGEN=../CompCert-2.7.1/clightgen
 
 CC_TARGET=compcert/cfrontend/Clight.vo
 CC_DIRS= lib common cfrontend exportclight
-DIRS= msl sepcomp veric concurrency floyd progs sha linking fcf hmacfcf tweetnacl20140427 ccc26x86 hmacdrbg
+DIRS= msl minisepcomp sepcomp veric concurrency floyd progs sha linking fcf hmacfcf tweetnacl20140427 ccc26x86 hmacdrbg
 INCLUDE= $(foreach a,$(DIRS),$(if $(wildcard $(a)), -Q $(a) $(a))) -Q $(COMPCERT) compcert $(if $(MATHCOMP), -Q mathcomp $(MATHCOMP))
 #Replace the INCLUDE above with the following in order to build the linking target:
 #INCLUDE= $(foreach a,$(DIRS),$(if $(wildcard $(a)), -I $(a) -as $(a))) -R $(COMPCERT) -as compcert -I $(SSREFLECT)/src -R $(SSREFLECT)/theories -as Ssreflect \
@@ -88,6 +88,28 @@ MSL_FILES = \
   normalize.v \
   env.v corec.v Coqlib2.v sepalg_list.v op_classes.v \
   simple_CCC.v seplog.v alg_seplog.v alg_seplog_direct.v log_normalize.v ramification_lemmas.v
+
+MINISEPCOMP_FILES = \
+  Ordered.v Decidableplus.v Machregs.v Op.v \
+  Conventions.v Locations.v Conventions1.v Conventions.v \
+  FiniteMaps.v BuiltinEffects.v mini_simulations.v mini_simulations_lemmas.v \
+  mini_diagram_trans.v mem_interpolation_defs.v interpolation_memory.v \
+  mem_interpolation_EI.v mini_interpolation.v \
+  mini_simulations_trans.v transEI.v \
+  RTL_memsem.v Tailcall.v Tailcallproof.v \
+  Inlining.v Inliningspec.v Inliningproof.v \
+  Iteration.v Unusedglob.v \
+  Heaps.v Lattice.v Kildall.v Compopts.v ValueDomain.v \
+  ValueAOp.v Liveness.v ValueAnalysis.v \
+  ConstpropOp.v ConstpropOpproof.v Constprop.v \
+  CSEdomain.v CombineOp.v CombineOpproof.v CSE.v CSEproof.v \
+  Unusedglob.v Unusedglobproof.v \
+  LTL_memsem.v FSetAVLplus.v Unityping.v RTLtyping.v \
+  Allocation.v Allocproof_4_memsem.v Allocproof.v \
+  Switch v. Csharpminor_memsem.v Cminor_memsem.v Cminorgen.v \
+  Cminorgenproof_4_memsem.v Cminorgenproof_locsets.v Cminorgenproof_effects.v \
+  Cminorgenproof_meminjs.v Cminorgenproof_backeffects.v Cminorgenproof.v
+ # ConstpropOp.vp IntvSets.v NeedDomain.v NeedOp.v Deadcode.v Deadcodeproof.v
 
 SEPCOMP_FILES = \
   Address.v \
@@ -317,6 +339,7 @@ C_FILES = reverse.c queue.c queue2.c sumarray.c message.c insertionsort.c float.
 FILES = \
  $(MSL_FILES:%=msl/%) \
  $(SEPCOMP_FILES:%=sepcomp/%) \
+ $(MINISEPCOMP_FILES:%=minisepcomp/%) \
  $(VERIC_FILES:%=veric/%) \
  $(FLOYD_FILES:%=floyd/%) \
  $(PROGS_FILES:%=progs/%) \
@@ -380,6 +403,7 @@ compcert: $(COMPCERT)/exportclight/Clightdefs.vo
 $(COMPCERT)/exportclight/Clightdefs.vo: 
 	cd $(COMPCERT) && $(MAKE) exportclight/Clightdefs.vo
 $(patsubst %.v,sepcomp/%.vo,$(SEPCOMP_FILES)): compcert
+$(patsubst %.v,minisepcomp/%.vo,$(MINISEPCOMP_FILES)): compcert
 $(patsubst %.v,veric/%.vo,$(VERIC_FILES)): compcert
 $(patsubst %.v,floyd/%.vo,$(FLOYD_FILES)): compcert
 msl/Coqlib2.vo: compcert
@@ -387,6 +411,7 @@ endif
 
 msl:     .loadpath version.vo $(MSL_FILES:%.v=msl/%.vo)
 sepcomp: .loadpath $(CC_TARGET) $(SEPCOMP_FILES:%.v=sepcomp/%.vo)
+minisepcomp: .loadpath $(CC_TARGET) $(MINISEPCOMP_FILES:%.v=minisepcomp/%.vo)
 ccc26x86:   .loadpath $(CCC26x86_FILES:%.v=ccc26x86/%.vo)
 concurrency: .loadpath $(CC_TARGET) $(SEPCOMP_FILES:%.v=sepcomp/%.vo) $(CONCUR_FILES:%.v=concurrency/%.vo)
 paco: .loadpath $(PACO_FILES:%.v=concurrency/paco/src/%.vo)
@@ -458,7 +483,7 @@ progs/append.v: progs/append.c
 	$(CLIGHTGEN) ${CGFLAGS} $<
 endif
 
-version.v:  VERSION $(MSL_FILES:%=msl/%) $(SEPCOMP_FILES:%=sepcomp/%) $(VERIC_FILES:%=veric/%) $(FLOYD_FILES:%=floyd/%)
+version.v:  VERSION $(MSL_FILES:%=msl/%) $(SEPCOMP_FILES:%=sepcomp/%) $(MINISEPCOMP_FILES:%=minisepcomp/%) $(VERIC_FILES:%=veric/%) $(FLOYD_FILES:%=floyd/%)
 	sh util/make_version
 
 .loadpath: Makefile

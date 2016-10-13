@@ -251,16 +251,21 @@ intros. apply preserve_mem; trivial.
 eapply mem_forward_preserve; trivial.
 Qed.
 
+Lemma mem_step_readonly m m': mem_step m m' -> mem_forward m m' /\ (forall b, Mem.valid_block m b -> readonly m b m').
+intros ST. apply (preserve_mem (fun m m' => mem_forward m m' /\ (forall b, Mem.valid_block m b -> readonly m b m'))); trivial.
+eapply readonly_preserve'; trivial.
+Qed.
+
 Lemma freelist_perm_inv: forall l m m' (L : Mem.free_list m l = Some m') b (B: Mem.valid_block m b)
       ofs k p (P: Mem.perm m b ofs k p),
-      Mem.perm m b ofs Max Freeable \/ Mem.perm m' b ofs k p.
+      Mem.perm m b ofs Cur Freeable \/ Mem.perm m' b ofs k p.
 Proof. induction l; simpl; intros.
 + inv L. right; trivial. 
 + destruct a. destruct p0.
   remember (Mem.free m b0 z0 z) as w. symmetry in Heqw.
   destruct w; inv L.
   exploit Mem.perm_free_inv; eauto. intros [[HHx HH] | HH]; try subst b0.
-  - left. eapply Mem.perm_max.  eapply Mem.free_range_perm; eassumption.
+  - left. eapply Mem.free_range_perm; eassumption.
   - destruct (IHl _ _  H0 _ (Mem.valid_block_free_1 _ _ _ _ _ Heqw _ B) _ _ _ HH); clear IHl.
     2: right; trivial.
     left. eapply Mem.perm_free_3; eauto.
@@ -270,7 +275,7 @@ Theorem preserves_max_eq_or_free:
    memstep_preserve (fun m m' =>  mem_forward m m' /\ 
                                   forall b (VB: Mem.valid_block m b) ofs, 
                                    (forall k p, Mem.perm m b ofs k p <-> Mem.perm m' b ofs k p) \/ 
-                                   (Mem.perm m b ofs Max Freeable /\ 
+                                   (Mem.perm m b ofs Cur Freeable /\ 
                                     Mem.perm_order'' None ((Mem.mem_access m') !! b ofs Max))).
 Proof. 
 constructor.
@@ -299,7 +304,7 @@ constructor.
   - split; intros. eapply freelist_forward; eassumption.
     destruct (Mem.perm_dec m' b ofs Max Nonempty).
     * left; intros. eapply freelist_perm; eassumption.
-    * destruct (Mem.perm_dec m b ofs Max Freeable); trivial.
+    * destruct (Mem.perm_dec m b ofs Cur Freeable); trivial.
        right; split; trivial. unfold Mem.perm in n; simpl in *.
        destruct ((Mem.mem_access m') !! b ofs Max); trivial.
        elim n; clear n. constructor.
@@ -323,9 +328,11 @@ constructor.
     * right. split; trivial.
 Qed. 
 
+(*This amount to what is called decay in concurrency.permissions.v,
+ and a proof in cl_step_lemmas*)
 Theorem mem_step_max_eq_or_free m m' (STEP: mem_step m m') b (VB: Mem.valid_block m b) ofs:
        (forall k p, Mem.perm m b ofs k p <-> Mem.perm m' b ofs k p) \/ 
-       (Mem.perm m b ofs Max Freeable /\ None = ((Mem.mem_access m') !! b ofs Max)).
+       (Mem.perm m b ofs Cur Freeable /\ None = ((Mem.mem_access m') !! b ofs Max)).
 Proof. intros.
 exploit preserve_mem. apply preserves_max_eq_or_free. eassumption.
 simpl; intros [A B]. destruct (B _ VB ofs). left; trivial. right.
@@ -1031,4 +1038,79 @@ Proof.
 destruct CS. eapply corestepN_rdonly; eassumption.
 Qed.
  
+
+Lemma corestep_one_star_one_star_one_plus:
+  forall (G C M : Type) (Sem : semantics.CoreSemantics G C M)
+    (ge : G) c1 m1 c2 m2 c3 m3 c4 m4 c5 m5 c6 m6,
+  corestep Sem ge c1 m1 c2 m2 ->
+  corestep_star Sem ge c2 m2 c3 m3 ->
+  corestep Sem ge c3 m3 c4 m4 ->
+  corestep_star Sem ge c4 m4 c5 m5 ->
+  corestep Sem ge c5 m5 c6 m6 ->
+  corestep_plus Sem ge c1 m1 c6 m6.
+Proof. intros.
+  eapply corestep_plus_star_trans.
+    eapply corestep_plus_one; eauto. clear H.
+    eapply corestep_star_trans; eauto. clear H0.
+  eapply corestep_star_trans.
+    eapply corestep_star_one; eauto. clear H1.
+    eapply corestep_star_trans; eauto. clear H2.
+    eapply corestep_star_one; eauto.
+Qed.
+
+Lemma corestep_one_star_star_plus:
+  forall (G C M : Type) (Sem : semantics.CoreSemantics G C M)
+    (ge : G) c1 m1 c2 m2 c3 m3 c4 m4,
+  corestep Sem ge c1 m1 c2 m2 ->
+  corestep_star Sem ge c2 m2 c3 m3 ->
+  corestep_star Sem ge c3 m3 c4 m4 ->
+  corestep_plus Sem ge c1 m1 c4 m4.
+Proof. intros.
+  eapply corestep_plus_star_trans.
+    eapply corestep_plus_one; eauto. 
+    eapply corestep_star_trans; eauto.
+Qed.
+
+Lemma corestep_one_star_one_plus:
+  forall (G C M : Type) (Sem : semantics.CoreSemantics G C M)
+    (ge : G) c1 m1 c2 m2 c3 m3 c4 m4,
+  corestep Sem ge c1 m1 c2 m2 ->
+  corestep_star Sem ge c2 m2 c3 m3 ->
+  corestep Sem ge c3 m3 c4 m4 ->
+  corestep_plus Sem ge c1 m1 c4 m4.
+Proof. intros.
+  eapply corestep_one_star_star_plus; eauto.
+    eapply corestep_star_one; eauto. 
+Qed.
+
+Lemma corestep_one_star_plus:
+  forall (G C M : Type) (Sem : semantics.CoreSemantics G C M)
+    (ge : G) c1 m1 c2 m2 c3 m3,
+  corestep Sem ge c1 m1 c2 m2 ->
+  corestep_star Sem ge c2 m2 c3 m3 ->
+  corestep_plus Sem ge c1 m1 c3 m3.
+Proof. intros.
+  eapply corestep_plus_star_trans; eauto.  
+    eapply corestep_plus_one; eauto. 
+Qed.
+
+Lemma corestep_one_plus_plus:
+  forall (G C M : Type) (Sem : semantics.CoreSemantics G C M)
+    (ge : G) c1 m1 c2 m2 c3 m3,
+  corestep Sem ge c1 m1 c2 m2 ->
+  corestep_plus Sem ge c2 m2 c3 m3 ->
+  corestep_plus Sem ge c1 m1 c3 m3.
+Proof. intros.
+  eapply corestep_plus_trans; eauto.  
+    eapply corestep_plus_one; eauto. 
+Qed.
+
+Lemma corestep_star_plus:
+  forall (G C M : Type) (Sem : semantics.CoreSemantics G C M)
+    (ge : G) c1 m1 c2 m2,
+  corestep_plus Sem ge c1 m1 c2 m2 ->
+  corestep_star Sem ge c1 m1 c2 m2.
+Proof. intros. destruct H. eexists; eassumption. Qed.
+
+
 End memstepN.
