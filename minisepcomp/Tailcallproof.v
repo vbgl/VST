@@ -17,6 +17,8 @@ Require Import Values Memory Events Globalenvs Smallstep.
 Require Import minisepcomp.Op minisepcomp.Registers minisepcomp.RTL_memsem minisepcomp.Conventions minisepcomp.Tailcall.
 Require Import minisepcomp.BuiltinEffects.
 
+Require Import minisepcomp.val_casted.
+
 (** * Syntactic properties of the code transformation *)
 
 (** ** Measuring the number of instructions eliminated *)
@@ -799,6 +801,9 @@ econstructor.
   apply funct_ptr_translated in Heqq. rewrite Heqq.
   destruct f; inv H7. simpl.
   rewrite <- (mem_lemmas.Forall2_Zlength H0).
+  remember (val_casted.val_has_type_list_func vals1 (sig_args (fn_sig f)) &&
+       val_casted.vals_defined vals1) as d. symmetry in Heqd.
+  destruct d; inv H6. apply andb_true_iff in Heqd. destruct Heqd.
   destruct (zlt
       match
         match Zlength vals1 with
@@ -810,12 +815,16 @@ econstructor.
       | 0 => 0
       | Z.pos y' => Z.pos y'~0~0
       | Z.neg y' => Z.neg y'~0~0
-      end Int.max_unsigned); inv H6.
+      end Int.max_unsigned); inv H7.
+  rewrite andb_true_r in *.
+  erewrite val_list_lessdef_hastype; try eassumption. simpl.
+  erewrite vals_lessdef_defined; try eassumption.
   eexists; eexists; split. reflexivity.
   split. split. reflexivity.
          split. constructor; eauto. constructor. apply mem_lemmas.forall_lessdef_val_listless; trivial.
          discriminate.
   split; trivial.
+  specialize (sig_preserved (Internal f)). simpl. intros FF; rewrite FF; trivial.
 + (*CoreDiagram*)
   intros. destruct H0 as [MS [MRSrc MRTgt]]; subst.
   exploit effcore_diagram; eauto. intros [st2' [m2' [cd' [L' [HL1' [HL2' [MS' HU]]]]]]].

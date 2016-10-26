@@ -29,6 +29,8 @@ Require Import minisepcomp.Locations.
 Require Import minisepcomp.Conventions.
 Require Import minisepcomp.BuiltinEffects.
 
+Require Import minisepcomp.val_casted.
+
 (** * Abstract syntax *)
 
 (** LTL is close to RTL, but uses machine registers and stack slots
@@ -307,37 +309,16 @@ Definition semantics (p: program) :=
 
 (** COMPCOMP NEW SECTION: Building a MemSem semantics *)
 
-(*CompComp new*) Function setlocs (rl: list loc) (vl: list val) (rs: Locmap.t): Locmap.t:=
-match rl, vl with
-  | r1 :: rl0, v1::vl0 => setlocs rl0 vl0 (Locmap.set r1 v1 rs)
-  | nil, nil => rs
-  | _, _ => (Locmap.init Vundef)
-  end. 
-
-Function setlocs' (rl: list loc) (vl: list val) (rs: Locmap.t): option Locmap.t:=
-match rl, vl with
-  | r1 :: rl0, v1::vl0 => match setlocs' rl0 vl0 rs with None => None 
-                          | Some r => Some (Locmap.set r1 v1 r)
-                          end
-  | nil, nil => Some rs
-  | _, _ => None
-  end.
-
-Function setlocs'' (rl: list loc) (vl: list val) (rs: Locmap.t): option Locmap.t:=
+(*CompComp new*) 
+Function setlocs (rl: list loc) (vl: list val) (rs: Locmap.t): option Locmap.t:=
 match vl with
   | v1::vl0 => match rl with nil => None | r1 :: rl0 => 
-                          match setlocs'' rl0 vl0 rs with None => None 
+                          match setlocs rl0 vl0 rs with None => None 
                           | Some r => Some (Locmap.set r1 v1 r)
                           end
                end
   | nil => match rl with nil => Some rs | _ => None end
 end.
-
-Goal forall rl vl rs, (length rl=length vl) ->  setlocs' rl vl rs = Some (setlocs rl vl rs).
-Proof.
-induction rl; destruct vl; simpl; intros; trivial. inv H. inv H. inv H. 
-rewrite IHrl; trivial. Admitted.
-        
 
 Definition LTL_initial_core (ge:genv) (v: val) (args:list val): option state :=
    match v with
@@ -348,10 +329,10 @@ Definition LTL_initial_core (ge:genv) (v: val) (args:list val): option state :=
                  | Some f => 
                     match f with Internal fi =>
                      let tyl := sig_args (funsig f) in
-                     if (*val_has_type_list_func args (sig_args (funsig f))
+                     if val_has_type_list_func args (sig_args (funsig f))
                         && vals_defined args
-                        &&*) zlt (4*(2*(Zlength args))) Int.max_unsigned
-                     then match setlocs'' (regs_of_rpairs (loc_arguments (funsig f))) args (Locmap.init Vundef)
+                        && zlt (4*(2*(Zlength args))) Int.max_unsigned
+                     then match setlocs (regs_of_rpairs (loc_arguments (funsig f))) args (Locmap.init Vundef)
                           with None => None
                             | Some rs => Some (Callstate
                                       nil

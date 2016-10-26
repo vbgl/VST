@@ -1863,6 +1863,8 @@ Admitted.
 Lemma matchstates_inject L L' j st m st' m' (MS:match_states L L' j st m st' m'): Mem.inject j m m'.
 Proof. inv MS; trivial. Qed.
 
+Require Import minisepcomp.val_casted.
+
 Definition SIM: Mini_simulation_inj.Mini_simulation_inject RTL_eff_sem RTL_eff_sem ge tge.
 eapply inj_simulation_plus_typed.
 + apply senv_preserved. 
@@ -1885,6 +1887,16 @@ eapply inj_simulation_plus_typed.
   destruct f; inv H7. apply Errors.bind_inversion in TR.
   destruct TR as [f' [Tf OKINT]]. inv OKINT. 
   rewrite <- (mem_lemmas.Forall2_Zlength H1).
+  remember (val_has_type_list_func vals1 (sig_args (fn_sig f)) &&
+       vals_defined vals1) as d.
+  symmetry in Heqd; destruct d; try discriminate. simpl in *.
+  apply andb_true_iff in Heqd; destruct Heqd.
+  assert (fn_sig f' = fn_sig f).
+  { unfold transf_function in Tf. remember (expand_function (funenv_program cu) f initstate) as z; destruct z; try discriminate.
+    destruct (zlt (st_stksize s') Int.max_unsigned); try discriminate. inv Tf. simpl in *; trivial. }
+  rewrite H8 in *.
+  erewrite vals_inject_defined; eauto. 2: eapply forall_inject_val_list_inject; eauto.
+  erewrite val_list_inject_hastype; eauto. 2: eapply forall_inject_val_list_inject; eauto.
   destruct (zlt
       match
         match Zlength vals1 with
@@ -1896,7 +1908,7 @@ eapply inj_simulation_plus_typed.
       | 0 => 0
       | Z.pos y' => Z.pos y'~0~0
       | Z.neg y' => Z.neg y'~0~0
-      end Int.max_unsigned); inv H6.
+      end Int.max_unsigned); inv H6; simpl.
   eexists.
   split. reflexivity. 
   split. 

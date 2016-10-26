@@ -19,6 +19,8 @@ Require Import minisepcomp.Op minisepcomp.Registers minisepcomp.RTL_memsem.
 Require Import minisepcomp.ValueDomain minisepcomp.ValueAOp minisepcomp.ValueAnalysis.
 Require Import minisepcomp.CSEdomain minisepcomp.CombineOp minisepcomp.CombineOpproof minisepcomp.CSE.
 
+Require Import minisepcomp.val_casted.
+
 Definition match_prog (prog tprog: RTL_memsem.program) :=
   match_program (fun cu f tf => transf_fundef (romem_for cu) f = OK tf) eq prog tprog.
 
@@ -1336,6 +1338,9 @@ eapply (Mini_simulation_ext.Build_Mini_simulation_extend).
   destruct Heqq as [? [? [FPTR [? ?]]]]. rewrite FPTR.
   destruct f; inv H7. apply bind_inversion in H. destruct H as [tf [TF HOK]]. inv HOK.  
   rewrite <- (mem_lemmas.Forall2_Zlength H0).
+  remember (val_casted.val_has_type_list_func vals1 (sig_args (fn_sig f)) &&
+       val_casted.vals_defined vals1) as d; symmetry in Heqd. destruct d; inv H9. simpl in *.
+  apply andb_true_iff in Heqd. destruct Heqd.
   destruct (zlt
       match
         match Zlength vals1 with
@@ -1347,12 +1352,19 @@ eapply (Mini_simulation_ext.Build_Mini_simulation_extend).
       | 0 => 0
       | Z.pos y' => Z.pos y'~0~0
       | Z.neg y' => Z.neg y'~0~0
-      end Int.max_unsigned); inv H9.
+      end Int.max_unsigned); inv H7.
+  erewrite vals_lessdef_defined; try eassumption.
+  assert (HH: bind (transf_function (romem_for x) f) (fun f' : function => OK (Internal f')) =
+     OK (Internal tf)).
+  { unfold bind. rewrite TF; trivial. }
+  specialize (sig_preserved (romem_for x) (Internal f) (Internal tf)); simpl.
+  intros KK; rewrite (KK HH); clear KK.
+  erewrite val_list_lessdef_hastype; try eassumption. simpl.
   eexists; eexists; split. reflexivity.
   split. reflexivity.
-  split. econstructor; eauto. constructor. simpl. unfold bind. rewrite TF; trivial. apply mem_lemmas.forall_lessdef_val_listless; trivial.
+  split. econstructor; eauto. constructor. apply mem_lemmas.forall_lessdef_val_listless; trivial.
   split. discriminate.
-  split. { econstructor. intros.  admit. (*TODOeconstructor. econstructor.*) }
+  split. { econstructor. intros. admit. (*TODO econstructor. econstructor. *) }
   split; trivial.
 + (*CoreDiagram*)
   intros. simpl. destruct H0 as [? [MS [VBL [SST [MRSrc MRTgt]]]]]; subst cd. 

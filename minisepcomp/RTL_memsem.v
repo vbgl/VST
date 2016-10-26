@@ -29,6 +29,7 @@ Require Import minisepcomp.Op.
 Require Import minisepcomp.Registers.
 Require Import minisepcomp.BuiltinEffects.
 
+Require Import minisepcomp.val_casted.
 
 (** * Abstract syntax *)
 
@@ -338,9 +339,6 @@ Inductive initial_state (p: program): state -> Prop :=
       funsig f = signature_main ->
       initial_state p (Callstate nil f nil m0).*)
 
-(*LENB: TODO: reactivate val_has_type_list_func args (sig_args (funsig f))
-                    && vals_defined args
-  by copying suitable files from CompComp2.1*)
 Definition RTL_initial_core (ge: genv) (v:val)(args: list val): option state:=
   match v with
     | Vptr b i =>
@@ -350,9 +348,9 @@ Definition RTL_initial_core (ge: genv) (v:val)(args: list val): option state:=
              | Some f => 
                match f with Internal fi =>
                  let tyl := sig_args (funsig f) in
-                 if (*val_has_type_list_func args (sig_args (funsig f))
+                 if val_has_type_list_func args (sig_args (funsig f))
                     && vals_defined args
-                    &&*) zlt (4*(2*(Zlength args))) Int.max_unsigned
+                    && zlt (4*(2*(Zlength args))) Int.max_unsigned
                  then Some (Callstate nil f args)
                  else None
                | External _ => None

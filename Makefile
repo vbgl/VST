@@ -95,7 +95,7 @@ MINISEPCOMP_FILES = \
   FiniteMaps.v BuiltinEffects.v mini_simulations.v mini_simulations_lemmas.v \
   mini_diagram_trans.v mem_interpolation_defs.v interpolation_memory.v \
   mem_interpolation_EI.v mini_interpolation.v \
-  mini_simulations_trans.v transEI.v \
+  mini_simulations_trans.v transEI.v val_casted.v \
   RTL_memsem.v Tailcall.v Tailcallproof.v \
   Inlining.v Inliningspec.v Inliningproof.v \
   Iteration.v Unusedglob.v \

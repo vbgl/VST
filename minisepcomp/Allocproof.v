@@ -28,6 +28,8 @@ Require Import sepcomp.effect_semantics.
 Require Import minisepcomp.mini_simulations.
 Require Import minisepcomp.mini_simulations_lemmas.
 
+Require Import minisepcomp.val_casted.
+
 Definition match_prog (p: RTL_memsem.program) (tp: LTL_memsem.program) :=
   match_program (fun _ f tf => transf_fundef f = OK tf) eq p tp.
 
@@ -1407,6 +1409,134 @@ Proof.
   exists (v1'' :: vl'); constructor; auto.
 + eauto.
 Qed.
+Lemma add_equations_debug_args_eval_LD:
+  forall env (ge: RTL_memsem.genv) sp rs ls m tm arg vl,
+  eval_builtin_args ge (fun r => rs#r) sp m arg vl ->
+  forall arg' e e',
+  add_equations_debug_args env arg arg' e = Some e' ->
+  satisf rs ls e' ->
+  wt_regset env rs ->
+  Mem.extends m tm ->
+  exists vl', eval_builtin_args ge ls sp tm arg' vl' /\
+  forall v', In v' vl' -> exists v, In v vl /\ Val.lessdef v v'.
+Proof.
+  induction 1; simpl; intros; destruct arg'; MonadInv.
+- exists (@nil val); split. constructor. contradiction.
+- exists (@nil val); split. constructor. contradiction.
+- destruct (add_equations_builtin_arg env a1 b e) as [e1|] eqn:A.
++ exploit IHlist_forall2; eauto. intros (vl' & B & X).
+  exploit add_equations_builtin_arg_lessdef; eauto.
+  eapply add_equations_debug_args_satisf; eauto. intros (v1' & C & D).
+  exploit (@eval_builtin_arg_lessdef _ ge ls ls); eauto. intros (v1'' & E & F).
+  exists (v1'' :: vl'); split. constructor; auto.
+  intros. destruct H5. subst. exists b1; split. left; trivial. eapply Val.lessdef_trans; eassumption.
+  destruct (X _ H5) as [x [HH1 HH2]]. exists x; split; trivial. right; trivial. 
++ destruct (IHlist_forall2 _ _ _ H1 H2 H3 H4) as [vl' [AA BB]].
+  exists vl'; split. apply AA.
+  intros. destruct (BB _ H5) as [x [CC DD]]. exists x; split; trivial. right; trivial.
+Qed.
+
+Lemma lessdef_list_lessdef_pointwise: forall vargs vargs', Val.lessdef_list vargs vargs' ->
+      forall v', In v' vargs' -> exists v, In v vargs /\ Val.lessdef v v'.
+Proof. induction 1; simpl; intros. contradiction.
+  destruct H1; subst. exists v1; split; trivial. left; trivial.
+  destruct (IHlessdef_list _ H1) as [x [A B]]. exists x; split; trivial. right; trivial.
+Qed.
+(*
+Lemma add_equations_builtin_eval_LD:
+  forall ef env args args' e1 e2 m1 m1' rs ls (ge: RTL_memsem.genv) sp vargs t vres m2,
+  wt_regset env rs ->
+  match ef with
+  | EF_debug _ _ _ => add_equations_debug_args env args args' e1
+  | _              => add_equations_builtin_args env args args' e1
+  end = Some e2 ->
+  Mem.extends m1 m1' ->
+  satisf rs ls e2 ->
+  eval_builtin_args ge (fun r => rs # r) sp m1 args vargs ->
+  external_call ef ge vargs m1 t vres m2 ->
+  satisf rs ls e1 /\
+  exists vargs' vres' m2',
+     eval_builtin_args ge ls sp m1' args' vargs'
+  /\ external_call ef ge vargs' m1' t vres' m2'
+  /\ Val.lessdef vres vres'
+  /\ Mem.extends m2 m2' 
+  /\ forall v', In v' vargs' -> exists v, In v vargs /\ Val.lessdef v v'.
+Proof.
+  intros.
+  assert (DEFAULT: add_equations_builtin_args env args args' e1 = Some e2 ->
+    satisf rs ls e1 /\
+    exists vargs' vres' m2',
+       eval_builtin_args ge ls sp m1' args' vargs'
+    /\ external_call ef ge vargs' m1' t vres' m2'
+    /\ Val.lessdef vres vres'
+    /\ Mem.extends m2 m2'
+    /\ forall v', In v' vargs' -> exists v, In v vargs /\ Val.lessdef v v').
+  {
+    intros. split. eapply add_equations_builtin_args_satisf; eauto.
+    exploit add_equations_builtin_args_lessdef; eauto.
+    intros (vargs' & A & B).
+    exploit external_call_mem_extends; eauto.
+    intros (vres' & m2' & C & D & E & F).
+    specialize (lessdef_list_lessdef_pointwise _ _ B). intros BB.
+    exists vargs', vres', m2'; auto.
+  }
+  destruct ef; auto.
+  split. { eapply add_equations_debug_args_satisf; eauto. }
+  exploit add_equations_debug_args_eval; eauto.
+  intros (vargs' & A).
+  simpl in H4; inv H4.
+  exists vargs', Vundef, m1'. intuition auto. simpl. constructor. clear DEFAULT. 
+  generalize dependent e2.
+  generalize dependent e1.
+  generalize dependent vargs'.
+  generalize dependent vargs.
+  generalize dependent args'.
+  induction args; simpl; intros.
+  + destruct args'; inv H0. inv H3. inv A. contradiction.
+  + inv H3. 
+    destruct args'.
+    - inv H0. inv A. contradiction.
+    - inv A. remember (add_equations_builtin_arg env a b e1). destruct o; symmetry in Heqo.
+      * specialize (IHargs _ _ H9 _ H10).
+        destruct H4; subst. 
+        ++ clear IHargs H9 H10. exists b1; split. left; trivial.
+           exploit add_equations_builtin_arg_lessdef. eassumption. eassumption. 2: eassumption.
+             eapply add_equations_debug_args_satisf. eassumption. eassumption.
+           intros [v [EV LD]]. eapply Val.lessdef_trans. eassumption. clear H7.
+           exploit eval_builtin_arg_lessdef. 2: eassumption. 2: eassumption. intros. apply Val.lessdef_refl.
+           intros [vv [EVV LDVV]]. 
+           exploit eval_builtin_arg_determ. apply H6. apply EVV. intros; subst; trivial.
+        ++ destruct (IHargs H3 _ _ H0 H2) as [ x [AA BB]]. exists x; split; trivial. right; trivial.
+      * destruct H4; subst.
+        ++ clear IHargs H9 H10.
+           destruct a; destruct b; try discriminate.
+           simpl in *. inv H7. inv H6. destruct args; simpl in H0. discriminate.  unfold eval_builtin_arg in H7. inv H6; inv H7.
+           red in H. red in H2.
+ exists b1; split. left; trivial.
+           exploit add_equations_builtin_arg_lessdef. eassumption. eassumption. 2: eassumption.
+             eapply add_equations_debug_args_satisf. eassumption. eassumption.
+           intros [v [EV LD]]. eapply Val.lessdef_trans. eassumption. clear H7.
+           exploit eval_builtin_arg_lessdef. 2: eassumption. 2: eassumption. intros. apply Val.lessdef_refl.
+           intros [vv [EVV LDVV]]. 
+           exploit eval_builtin_arg_determ. apply H6. apply EVV. intros; subst; trivial.
+        ++ destruct (IHargs H3 _ _ H0 H2) as [ x [AA BB]]. exists x; split; trivial. right; trivial.
+      * des destruct args; simpl in *. discriminate.
+           remember (add_equations_builtin_arg env b0 b e1). destruct o. inv H9. unfold add_equations_debug_args in H0. inv H0. exists b1; split. left; trivial. 
+           clear IHargs H9 H10. (* exists b1; split. left; trivial.*)
+           destruct a; destruct b; simpl in *; try discriminate. inv H7. inv H6. inv H0.
+           exploit add_equations_builtin_arg_lessdef. eassumption. eassumption. 2: eassumption.
+             eapply add_equations_debug_args_satisf. eassumption. eassumption.
+           intros [v [EV LD]]. eapply Val.lessdef_trans. eassumption. clear H7.
+           exploit eval_builtin_arg_lessdef. 2: eassumption. 2: eassumption. intros. apply Val.lessdef_refl.
+           intros [vv [EVV LDVV]]. 
+           exploit eval_builtin_arg_determ. apply H6. apply EVV. intros; subst; trivial.
+        ++ destruct (IHargs H3 _ _ H0 H2) as [ x [AA BB]]. exists x; split; trivial. right; trivial.
+      *
+  exploit (eval_builtin_args_lessdef). 2: eassumption. 2: eassumption.
+  Focus 2. intros [vl [EB LD]].  eval_builtin_args_lessdef
+  destruct (DEFAULT  intuition.
+Qed.
+*)
 
 Lemma add_equations_builtin_eval:
   forall ef env args args' e1 e2 m1 m1' rs ls (ge: RTL_memsem.genv) sp vargs t vres m2,
@@ -1817,7 +1947,11 @@ Proof.
   induction 1; simpl; intros; econstructor; eauto.
   destruct Lsp as [b [z [HSP Hb]]]. subst. apply HL in Hb. exists b, z; split; trivial.
 Qed.
-
+(*
+Lemma add_equations_builtin_args_LD: forall args args' e e1 e2,
+  add_equations_builtin_args e args args' e1 = Some e2 ->
+  Val.list_
+*)
 (*CompComp adptation: state refactoring, elimination of trace t*)
 Lemma core_diagram:
   forall U S1 m1 S2 m2 , RTL_memsem.estep ge U S1 m1 S2 m2 -> wt_state S1 m1 ->
@@ -2176,8 +2310,9 @@ Proof.
     destruct Lsp as [b [z [Hsp Hb]]]. subst. exists b, z; rewrite Hb; split; trivial.
   * simpl; intros. rewrite orb_false_r in H2.
     apply andb_true_iff in H2. destruct H2.
-    apply andb_true_iff in H2. destruct H2.
+    apply andb_true_iff in H2. destruct H2. clear H3 H4 X U.
     destruct a; try discriminate. inv G2. inv G1.
+    destruct Lsp as [spb [zz [SP Lsp]]]. subst sp.
     remember (StoreEffect (Vptr b0 i) (encode_val Mint32 (ls1 (R src1'))) b ofs) as d1.
     destruct d1; simpl; trivial; apply eq_sym in Heqd1.
     + clear H2.
@@ -2186,42 +2321,28 @@ Proof.
       destruct (eq_block b b); simpl in *; try congruence.
       destruct (zle (Int.unsigned ii) ofs); simpl; try omega.
       destruct (zlt ofs (Int.unsigned ii + 8)); trivial; try omega.
-    + simpl in *. right.
+    + simpl in *. right. rewrite encode_val_length in *; simpl in *.
+(*      apply Mem.store_valid_access_3 in  H1. simpl in H1. destruct H1 as [VA1 VA2]. unfold align_chunk in VA2. simpl in VA2.
+      apply Mem.store_valid_access_3 in STORE2. simpl in STORE2. destruct STORE2 as [VA1' VA2']. unfold align_chunk in VA2'. simpl in VA2'.*)
+(*      unfold offset_addressing, offset_addressing_total in H11. simpl in H11. inv H11.
+      destruct addr; simpl in *. clear H2 F2'' H0.*)
       apply andb_true_iff in H2. destruct H2.
+      apply andb_true_iff in H2. destruct H2. clear F1 F1' F2 F2'.
+      destruct (eq_block b0 b); simpl in *; try discriminate. subst b0.
       apply andb_true_iff in H2. destruct H2.
-      destruct (eq_block b0 b); simpl in *; try discriminate. subst.
-      destruct (zle (Int.unsigned (Int.add i (Int.repr 4))) ofs); simpl in *; try discriminate.
-      destruct (zlt ofs
-       (Int.unsigned (Int.add i (Int.repr 4)) +
-        Z.of_nat (length (encode_val Mint32 (ls3 (R src2')))))); simpl in *; try discriminate.
-      rewrite encode_val_length in *; simpl in *.
-      destruct (zle (Int.unsigned i) ofs); simpl in *.
-      -- destruct (zlt ofs (Int.unsigned i + 4)); simpl in *; try discriminate.
-         destruct (zlt ofs (Int.unsigned i + 8)); trivial. 
-         assert (Int.unsigned (Int.add i (Int.repr 4)) = Int.unsigned i + 4).
-         { rewrite Int.add_unsigned. rewrite (Int.unsigned_repr 4). apply Int.unsigned_repr.
-           destruct (Int.unsigned_range i). split. omega.  
-            admit. (*TODO*)
-            admit. (*TODO*) }
-         rewrite H7 in *; omega.
-      -- admit. (*TODO*)
- (* right. unfold StoreEffect. red. 
-      eapply Mem.valid_access_valid_block. eapply Mem.valid_access_implies. eapply STORE1'. constructor.
-        remember (StoreEffect (Val.add a2' (Vint (Int.repr 4))) (encode_val Mint32 (ls3 (R src2'))) bb z) as d2.
-        destruct d2; simpl; trivial; apply eq_sym in Heqd2.
-          apply StoreEffectD in Heqd2. destruct Heqd2 as [ii [VV Arith]].
-          subst. destruct a2'; inv STORE2'. simpl in VV. inv VV.
-          destruct (valid_block_dec m1' bb); simpl.
-            destruct a1'; inv STORE1'.
-            apply (Mem.store_valid_block_2 _ _ _ _ _ _ H4) in v.
-            destruct (valid_block_dec m2 bb); trivial; contradiction.
-          elim n; clear n.
-            apply Mem.store_valid_access_3 in H3. 
-            eapply Mem.valid_access_valid_block. eapply Mem.valid_access_implies. eapply H3. constructor.
-
-    apply andb_true_iff in H2. destruct H2.
-    apply andb_true_iff in H2. destruct H2.
-    eapply StoreEffect_propagate_ext; eauto.*) 
+      destruct (zle (Int.unsigned (Int.add i (Int.repr 4))) ofs); try discriminate. clear H2.
+      destruct (zlt ofs (Int.unsigned (Int.add i (Int.repr 4)) + 4)); try discriminate. clear H5.
+      apply Mem.store_valid_access_3 in  H1. simpl in H1. destruct H1 as [VA1 VA2]. unfold align_chunk in VA2. clear VA1 STORE1 STORE2 STORE2' STORE1' F2'' H0 WT H3 H4 LD3 LD4 EXT2. 
+      assert (MAXUNS: Int.max_unsigned = 4294967295) by reflexivity.
+      assert (FOUR: Int.unsigned (Int.add i (Int.repr 4)) = Int.unsigned i + 4).
+         { rewrite Int.add_unsigned, (Int.unsigned_repr 4). 2: rewrite MAXUNS; omega.
+           apply Int.unsigned_repr.
+           destruct (Int.unsigned_range_2 i). split. omega. 
+           destruct VA2. rewrite H2, MAXUNS in *. omega. }
+      rewrite FOUR in *. 
+      destruct (zle (Int.unsigned i) ofs); simpl in *; try omega.
+      destruct (zlt ofs (Int.unsigned i + 4)); try discriminate. 
+      destruct (zlt ofs (Int.unsigned i + 8)); trivial. omega.
 
 (* call *)
 - set (sg := RTL_memsem.funsig fd) in *.
@@ -2295,10 +2416,11 @@ Proof.
     left. destruct Lsp as [? [? [LSP Hsp]]]. inv LSP. trivial.
 
 (* builtin *)
-- exploit (exec_moves mv1); eauto. intros [ls1 [A1 B1]].
+- specialize (exec_moves mv1 env rs ts tf sp (Lbuiltin ef args' res' :: expand_moves mv2 (Lbranch pc' :: k)) m1' e2 e ls retty).
+  intros [ls1 [A1 B1]]; eauto. 
   exploit add_equations_builtin_eval; eauto.
   intros (C & vargs' & vres' & m'' & D & E & F & G).
-  admit. (*TODO maybe use this? exploit (BuiltinEffects.nonobservables_mem_extends ge tge). apply H1. assumption. eassumption. eassumption.
+  exploit (external_call_symbols_preserved). apply senv_preserved. apply E. clear E. intros E.
   assert (WTRS': wt_regset env (regmap_setres res vres rs)) by (eapply wt_exec_Ibuiltin; eauto).
   set (ls2 := Locmap.setres res' vres' (undef_regs (destroyed_by_builtin ef) ls1)).
   assert (satisf (regmap_setres res vres rs) ls2 e0).
@@ -2311,7 +2433,7 @@ Proof.
     eexact A1.
     econstructor. trivial.
       eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
-      eapply external_call_symbols_preserved. apply senv_preserved. eauto.
+      (*eapply external_call_symbols_preserved. apply senv_preserved. eauto.*) eassumption.
       instantiate (1 := ls2); auto.
     eexact A3.
     econstructor. reflexivity.
@@ -2321,14 +2443,17 @@ Proof.
     eapply match_stackframes_sub; try eassumption. intros b Hb; rewrite Hb; trivial.
     destruct Lsp as [? [? [SP Lsp]]]. subst sp.
       exists x, x0; rewrite Lsp. split; trivial.
-  * simpl; intros. apply andb_true_iff in H4; destruct H4.
-    apply andb_true_iff in H4; destruct H4. rewrite orb_false_r in H4.
-    right. exploit (BuiltinEffects.BuiltinEffects_propagate_extends ge tge). apply H1. eassumption. 2: eassumption.
-    exploit add_equations_builtin_args_lessdef.
-    exploit eval_builtin_args_lessdef.
-    assert (eval_builtin_args ge env args args' e1).
-    exploit eval_builtin_args_lessdef.
-      exploit add_equations_builtin_args_lessdef; eauto. destruct ef; eauto. unfold add_equations_builtin_args. simpl. simpl.*)
+  * simpl; intros. clear A3 A1. apply andb_true_iff in H4; destruct H4.
+    apply andb_true_iff in H4; destruct H4. rewrite orb_false_r in H4. right.
+    eapply (BuiltinEffects.BuiltinEffects_propagate_extends ge tge); try eassumption.
+    destruct ef; try discriminate. simpl in *.
+    -- (*EF_free*) exploit (add_equations_builtin_args_lessdef env ge sp rs); eauto.
+       intros [vl' [EV LD]].
+       exploit eval_builtin_args_determ. apply EV.  apply D. intros; subst vl'; trivial.    
+    -- (*EF_memcpy*) exploit (add_equations_builtin_args_lessdef env ge sp rs); eauto.
+       intros [vl' [EV LD]].
+       exploit eval_builtin_args_determ. apply EV.  apply D. intros; subst vl'; trivial.
+
 (* cond *)
 - exploit (exec_moves mv); eauto. intros [ls1 [A1 B1]].
   eexists; eexists; econstructor; split; [|split].
@@ -2440,9 +2565,10 @@ Proof.
 (* external function *)
 - exploit external_call_mem_extends; eauto. intros [v' [m'' [F [G [J K]]]]].
   simpl in FUN; inv FUN.
+  exploit (external_call_symbols_preserved). apply senv_preserved. apply F. clear F. intros F.
   eexists; eexists; econstructor; split; [|split].
   * apply effstep_plus_one. econstructor; eauto.
-    eapply external_call_symbols_preserved with (ge1 := ge); eauto. apply senv_preserved.
+    (*eapply external_call_symbols_preserved with (ge1 := ge); eauto. apply senv_preserved.*)
   * econstructor; eauto. 
     eapply match_stackframes_sub; try eassumption. intros bb Hb; rewrite Hb; trivial.
     simpl. destruct (loc_result (ef_sig ef)) eqn:RES; simpl.
@@ -2451,14 +2577,14 @@ Proof.
     exploit external_call_well_typed; eauto. unfold proj_sig_res; rewrite B. intros WTRES'.
     rewrite Locmap.gss. rewrite Locmap.gso by (red; auto). rewrite Locmap.gss. 
     rewrite val_longofwords_eq by auto. auto.
-    red; intros. rewrite (AG l H0).
+    red; intros. rewrite (AG l); trivial.
     symmetry; apply Locmap.gpo. 
     assert (X: forall r, is_callee_save r = false -> Loc.diff l (R r)).
     { intros. destruct l; simpl in *. congruence. auto. }
     generalize (loc_result_caller_save (ef_sig ef)). destruct (loc_result (ef_sig ef)); simpl; intuition auto.
     eapply external_call_well_typed; eauto.
-  * simpl; intros bb z Eff. admit. (*BuiltinEffects*)
-
+  * simpl; intros bb z Eff. right.
+    eapply (BuiltinEffects.BuiltinEffects_propagate_extends ge tge); try eassumption.
 (* return *)
 - inv STACKS. 
   exploit (STEPS vres ls m1' retty); eauto. rewrite WTRES0; auto. intros [ls2 [A B]].
@@ -2476,8 +2602,7 @@ Proof.
 
     + destruct Lsp as [b [z [SP Lsp]]]; subst. exists b, z; rewrite Lsp; split; trivial.
   * discriminate.
-(*Grab Existential Variables. all shelfed goals seem to be about the "known admits."*)
-Admitted.
+Qed.
 
 (*CcompComp: initial and final states handled diffferently
 Lemma initial_states_simulation:
@@ -2542,6 +2667,105 @@ Proof.
 - constructor.
 Qed.
 
+Lemma lessdef_map: forall l t n v k ty, n+(typesize ty) <= k ->
+  Val.lessdef_list
+     (map (fun p : rpair loc => Locmap.getpair p t) (loc_arguments_rec l k))
+     (map (fun p : rpair loc => Locmap.getpair p (Locmap.set (S Outgoing n ty) v t)) (loc_arguments_rec l k)).
+Proof. induction l; simpl; intros. constructor.
+  destruct a; simpl.
++ constructor. rewrite Locmap.gso. apply Val.lessdef_refl. simpl. right. left. omega. simpl in IHl.
+    apply (IHl t n v). omega.
++ constructor. rewrite Locmap.gso. apply Val.lessdef_refl. simpl. right. left. omega. simpl in IHl.
+    apply (IHl t n v). omega.
++ constructor. apply Val.longofwords_lessdef. rewrite Locmap.gso. apply Val.lessdef_refl. simpl. right. left. omega.
+               rewrite Locmap.gso. apply Val.lessdef_refl. simpl. right. left. omega.
+    apply (IHl t n v). simpl. omega.
++ constructor. rewrite Locmap.gso. apply Val.lessdef_refl. simpl. right. left. omega. simpl in IHl.
+    apply (IHl t n v). omega.
++ constructor. rewrite Locmap.gso. apply Val.lessdef_refl. simpl. right. left. omega. simpl in IHl.
+    apply (IHl t n v). omega.
++ constructor. rewrite Locmap.gso. apply Val.lessdef_refl. simpl. right. left. omega. simpl in IHl.
+    apply (IHl t n v). omega.
+Qed.
+
+Lemma setlocs_lessdef: forall vals2 sigargs n s t,  
+  setlocs (regs_of_rpairs (loc_arguments_rec sigargs n)) vals2 s = Some t ->
+  val_has_type_list_func vals2 sigargs = true ->
+  vals_defined vals2 = true ->
+  Val.lessdef_list vals2 (map (fun p : rpair loc => Locmap.getpair p t) (loc_arguments_rec sigargs n)).
+Proof. induction vals2; simpl; intros; destruct sigargs; try discriminate; simpl in *.
++ constructor.
++ apply andb_true_iff in H0. destruct H0.
+  destruct a; try discriminate.
+  - destruct t0; simpl in *; try discriminate.
+    * clear H0. remember (setlocs (regs_of_rpairs (loc_arguments_rec sigargs (n + 1))) vals2 s).
+      symmetry in Heqo; destruct o; inv H.
+      specialize (IHvals2 _ _ _ _ Heqo H2 H1). 
+      constructor. rewrite Locmap.gss. simpl. constructor.
+      eapply Val.lessdef_list_trans. eassumption. apply lessdef_map; simpl. omega.
+    * clear H0. remember (setlocs (regs_of_rpairs (loc_arguments_rec sigargs (n + 1))) vals2 s).
+      symmetry in Heqo; destruct o; inv H.
+      specialize (IHvals2 _ _ _ _ Heqo H2 H1). 
+      constructor. rewrite Locmap.gss. simpl. constructor.
+      eapply Val.lessdef_list_trans. eassumption. apply lessdef_map; simpl. omega.
+    * clear H0. remember (setlocs (regs_of_rpairs (loc_arguments_rec sigargs (n + 2))) vals2 s).
+      symmetry in Heqo; destruct o; inv H.
+      specialize (IHvals2 _ _ _ _ Heqo H2 H1). 
+      constructor. rewrite Locmap.gss. simpl. constructor.
+      eapply Val.lessdef_list_trans. eassumption. apply lessdef_map; simpl. omega.
+  - destruct t0; try discriminate.
+    * simpl in H0. clear H0. simpl in H. destruct vals2; try discriminate. simpl in *.
+      remember (setlocs (regs_of_rpairs (loc_arguments_rec sigargs (n + 2))) vals2 s).
+      symmetry in Heqo; destruct o; try discriminate. inv H.
+      constructor.
+      ++ rewrite Locmap.gss. simpl. admit. (*WRONG - mistake may be in the def of setlocs, or in the use of vargs in Builtineffects?*)
+      ++ admit.
+    * admit.
+  - destruct t0; simpl in *; try discriminate.
+    * clear H0. remember (setlocs (regs_of_rpairs (loc_arguments_rec sigargs (n + 2))) vals2 s).
+      symmetry in Heqo; destruct o; inv H.
+      specialize (IHvals2 _ _ _ _ Heqo H2 H1). 
+      constructor. rewrite Locmap.gss. simpl. constructor.
+      eapply Val.lessdef_list_trans. eassumption. apply lessdef_map; simpl. omega.
+    * clear H0. remember (setlocs (regs_of_rpairs (loc_arguments_rec sigargs (n + 2))) vals2 s).
+      symmetry in Heqo; destruct o; inv H.
+      specialize (IHvals2 _ _ _ _ Heqo H2 H1). 
+      constructor. rewrite Locmap.gss. simpl. constructor.
+      eapply Val.lessdef_list_trans. eassumption. apply lessdef_map; simpl. omega.
+  - destruct t0; simpl in *; try discriminate.
+    * clear H0. remember (setlocs (regs_of_rpairs (loc_arguments_rec sigargs (n + 1))) vals2 s).
+      symmetry in Heqo; destruct o; inv H.
+      specialize (IHvals2 _ _ _ _ Heqo H2 H1). 
+      constructor. rewrite Locmap.gss. simpl. constructor.
+      eapply Val.lessdef_list_trans. eassumption. apply lessdef_map; simpl. omega.
+    * clear H0. remember (setlocs (regs_of_rpairs (loc_arguments_rec sigargs (n + 1))) vals2 s).
+      symmetry in Heqo; destruct o; inv H.
+      specialize (IHvals2 _ _ _ _ Heqo H2 H1). 
+      constructor. rewrite Locmap.gss. simpl. constructor.
+      eapply Val.lessdef_list_trans. eassumption. apply lessdef_map; simpl. omega.
+    * clear H0. remember (setlocs (regs_of_rpairs (loc_arguments_rec sigargs (n + 2))) vals2 s).
+      symmetry in Heqo; destruct o; inv H.
+      specialize (IHvals2 _ _ _ _ Heqo H2 H1). 
+      constructor. rewrite Locmap.gss. simpl. constructor.
+      eapply Val.lessdef_list_trans. eassumption. apply lessdef_map; simpl. omega.
+  - destruct t0; simpl in *; try discriminate.
+    * clear H0. remember (setlocs (regs_of_rpairs (loc_arguments_rec sigargs (n + 1))) vals2 s).
+      symmetry in Heqo; destruct o; inv H.
+      specialize (IHvals2 _ _ _ _ Heqo H2 H1). 
+      constructor. rewrite Locmap.gss. simpl. constructor.
+      eapply Val.lessdef_list_trans. eassumption. apply lessdef_map; simpl. omega.
+    * clear H0. remember (setlocs (regs_of_rpairs (loc_arguments_rec sigargs (n + 1))) vals2 s).
+      symmetry in Heqo; destruct o; inv H.
+      specialize (IHvals2 _ _ _ _ Heqo H2 H1). 
+      constructor. rewrite Locmap.gss. simpl. constructor.
+      eapply Val.lessdef_list_trans. eassumption. apply lessdef_map; simpl. omega.
+    * clear H0. remember (setlocs (regs_of_rpairs (loc_arguments_rec sigargs (n + 2))) vals2 s).
+      symmetry in Heqo; destruct o; inv H.
+      specialize (IHvals2 _ _ _ _ Heqo H2 H1). 
+      constructor. rewrite Locmap.gss. simpl. constructor.
+      eapply Val.lessdef_list_trans. eassumption. apply lessdef_map; simpl. omega.
+Admitted. 
+
 Definition SIM: Mini_simulation_ext.Mini_simulation_extend RTL_eff_sem LTL_eff_sem ge tge.
 econstructor.
 + apply well_founded_ltof. 
@@ -2562,6 +2786,9 @@ econstructor.
   destruct (function_ptr_translated _ _ Heqq) as [x [TFP TF]]; rewrite TFP. 
   destruct f; inv H7. exploit bind_inversion. apply TF. intros [tf [HTF OKx]]; inv OKx.
   rewrite <- (mem_lemmas.Forall2_Zlength H0).
+  remember (val_casted.val_has_type_list_func vals1 (sig_args (RTL_memsem.fn_sig f)) &&
+       val_casted.vals_defined vals1) as d. symmetry in Heqd.
+  destruct d; inv H6. apply andb_true_iff in Heqd. destruct Heqd.
   destruct (zlt
       match
         match Zlength vals1 with
@@ -2573,36 +2800,63 @@ econstructor.
       | 0 => 0
       | Z.pos y' => Z.pos y'~0~0
       | Z.neg y' => Z.neg y'~0~0
-      end Int.max_unsigned); inv H6.
-  remember ( setlocs'' (regs_of_rpairs (loc_arguments (funsig (Internal tf)))) vals2
-      (Locmap.init Vundef)). symmetry in Heqo; destruct o.
-  eexists; eexists; split. reflexivity.
-  split. reflexivity.
-         split. constructor; eauto. constructor. 
-         { remember (loc_arguments (funsig (Internal tf))) as A. remember (Locmap.init Vundef) as q.  clear -H0 Heqo.
-           apply forall_lessdef_val_listless in H0. generalize dependent t. generalize dependent q. generalize dependent A. generalize dependent vals1.
-           induction vals2; simpl; intros ? ?.
-           + inv H0. simpl; intros. induction A; simpl; intros. constructor.
-             destruct a; simpl in *; discriminate.
-           + inv H0. specialize (IHvals2 _ H4). simpl. intros.
-             destruct A; simpl in Heqo. discriminate.
-             destruct r; simpl in *.
-             --  remember (setlocs'' (regs_of_rpairs A) vals2 q) as d. destruct d; inv Heqo.
-                 symmetry in Heqd. specialize (IHvals2 _ _ _ Heqd).
-                 constructor. 
-                 rewrite Locmap.gss_typed; trivial. admit. (*need typing check in RTL/LTL initcore-clause for this...*)
-                 admit. (*need that locs generated from signature are distinct?*) 
-             -- destruct vals2; try discriminate.
-                remember (setlocs'' (regs_of_rpairs A) vals2 q) as d. destruct d; inv Heqo.
-                admit. }
+      end Int.max_unsigned); inv H7. simpl. simpl in H.
+  specialize (sig_function_translated _ _ TF); simpl. intros HH; rewrite <- HH in *.
+  erewrite val_list_lessdef_hastype; try eassumption.
+  erewrite vals_lessdef_defined; try eassumption; simpl.
+  remember (setlocs (regs_of_rpairs (loc_arguments (fn_sig tf))) vals2 (Locmap.init Vundef)).
+  symmetry in Heqo; destruct o.
+  - eexists; eexists; split. reflexivity.
+    split. reflexivity.
+         split. constructor; eauto. constructor. clear l H4 H5 HH.
+         eapply Val.lessdef_list_trans. apply forall_lessdef_val_listless; apply H0. 
+         eapply val_list_lessdef_hastype in H; eauto.
+         eapply vals_lessdef_defined in H6; try eassumption. clear H0 vals1 HTF TF Heqq TFP H1 H2 H3 f m1 m2.
+         simpl in *. unfold loc_arguments in *.
+         remember (sig_args (fn_sig tf)) as sigargs. clear Heqsigargs. remember (Locmap.init Vundef) as s. clear Heqs.
+         eapply setlocs_lessdef; eassumption.
            admit. (*TODO in initialcore clause*)
-           admit. (*TODO in initialcore clause*)
-           admit. (*TODO in initialcore clause*)
-          specialize (sig_function_translated _ _ TF). intros HH _; rewrite HH; trivial. 
+           simpl. apply val_has_type_list_func_charact. assumption.
+           constructor. 
+           simpl. rewrite <- HH; trivial.
           intuition. constructor. constructor. 
           destruct (Genv.find_funct_ptr_inversion prog _  Heqq) as [ID HID]. eapply wt_prog; eassumption.
-          admit. (*hastype assumption -- see CompComp2.1*)
-   admit. (*need to ensure that length of vals matches length/types of (loc_arguments (funsig (Internal tf)*)
+     simpl in H. simpl. rewrite <- HH. rewrite <- val_has_type_list_func_charact in H.  trivial.
+  - exfalso. unfold loc_arguments in Heqo. remember (sig_args (fn_sig tf)). (*clear - H0 H Heqo.
+Goal forall vals1 vals2 (H :Forall2 Val.lessdef vals1 vals2) l (L:val_has_type_list_func vals1 l = true) M n,
+      exists x, setlocs (regs_of_rpairs (loc_arguments_rec l n)) vals2 M = Some x.
+Proof. induction vals1; simpl; intros; inv H.
++ destruct l; try discriminate. simpl. eexists; reflexivity.
++ destruct l; try discriminate. apply andb_true_iff in L. destruct L. simpl in *.
+(*  specialize (IHForall2 _ H2).*)
+  destruct t; inv H; simpl in *.
+  -  unfold val_has_type_func in H3. destruct a; try discriminate; simpl.
+     * destruct (IHvals1 _ H4 _ H0 M (n+1)) as [q Q]; rewrite Q. eexists; reflexivity.
+     * destruct (IHvals1 _ H4 _ H0 M (n+1)) as [q Q]; rewrite Q. eexists; reflexivity.
+     * destruct (IHvals1 _ H4 _ H0 M (n+1)) as [q Q]; rewrite Q. eexists; reflexivity.
+  -  unfold val_has_type_func in H3. destruct a; try discriminate; simpl.
+     * destruct (IHvals1 _ H4 _ H0 M (n+2)) as [q Q]; rewrite Q. eexists; reflexivity.
+     * destruct (IHvals1 _ H4 _ H0 M (n+2)) as [q Q]; rewrite Q. eexists; reflexivity.
+  -  unfold val_has_type_func in H3. destruct a; try discriminate; simpl. 
+     * clear H3. destruct l'.
+       ++ inv H4. simpl in *. destruct l; try discriminate.
+          assert (Forall2 Val.lessdef nil nil) by constructor.
+          specialize (IHvals1 _ H nil (eq_refl _)). simpl in *.  _ H0 M (n+2)) as [q Q]. rewrite Q. eexists; reflexivity.invForall2 Val.lessdef nil vals2  destruct (IHvals1 _ H4 _ H0 M (n+2)) as [q Q]; rewrite Q. eexists; reflexivity.
+     * destruct (IHvals1 _ H4 _ H0 M (n+1)) as [q Q]; rewrite Q. eexists; reflexivity.
+     * destruct (IHvals1 _ H4 _ H0 M (n+1)) as [q Q]; rewrite Q. eexists; reflexivity.
+     * destruct (IHvals1 _ H4 _ H0 M (n+1)) as [q Q]; rewrite Q. eexists; reflexivity.
+  
+     * destruct (IHForall2 _ H2 M (n+1)) as [q Q]; rewrite Q. eexists; reflexivity.
+     * destruct (IHForall2 _ H2 M (n+1)) as [q Q]; rewrite Q. eexists; reflexivity.
+  - unfold val_has_type_func in H4. destruct x; try discriminate; simpl.
+     * destruct (IHForall2 M (n+2)) as [q Q]; rewrite Q. eexists; reflexivity.
+     * destruct (IHForall2 M (n+2)) as [q Q]; rewrite Q. eexists; reflexivity.
+  - unfold val_has_type_func in H4. destruct x; try discriminate; simpl.
+     * destruct (IHForall2 M (n+2)) as [q Q]; rewrite Q. eexists; reflexivity.
+     * destruct (IHForall2 M (n+2)) as [q Q]; rewrite Q. eexists; reflexivity.
+     * destruct (IHForall2 M (n+1)) as [q Q]; rewrite Q. eexists; reflexivity.
+     * destruct (IHForall2 M (n+1)) as [q Q]; rewrite Q. eexists; reflexivity.
+  -  destruct (IHForall2 M (n+1)) as [q Q]; rewrite Q. eexists; reflexivity.*) admit. (*property of setlocs*)       
 + (*diagram*)
   intros. destruct H0 as [? [MS [HL [MRSrc MRTgt]]]]; subst.
   exploit core_diagram; eauto. intros [st2' [m2' [U' [STEP' [MS' HU']]]]].
@@ -2641,14 +2895,26 @@ econstructor.
      inv STACKS. unfold agree_retty in AGRTY. simpl in AGRTY. clear AGRTY. *)
      eexists; eexists; eexists. split. reflexivity. split. reflexivity.
      split. reflexivity.  
-     split. econstructor; eauto. admit.
-     { red; intros. rewrite (AG _ H). destruct l; simpl in *.
-       destruct r; inv H; simpl;
-         unfold loc_result; destruct (sig_res (ef_sig e)); try destruct t; simpl; reflexivity.
-       unfold loc_result; destruct (sig_res (ef_sig e)); try destruct t; simpl; reflexivity. }
-     red. red in AGRTY. destruct stack; simpl in *; trivial. 
-         destruct s; simpl in *; trivial. destruct stack; simpl in *; trivial. rewrite AGRTY. inv H3. inv H12. unfold proj_sig_res in H11. 
-     admit. (*e and f got confused - maybe add retty in rtltyping.wt_stackframes_nil after all??*) admit.
+     split. { econstructor; eauto.
+              + unfold proj_sig_res in *. unfold loc_result.
+                remember (sig_res (ef_sig e)) as sr; destruct sr; simpl.
+                - destruct t; try rewrite Locmap.gss_reg; trivial. simpl. 
+                  rewrite Locmap.gss_reg. rewrite Locmap.gso. rewrite Locmap.gss_reg, val_longofwords_eq; trivial.
+                  simpl. discriminate.
+                - rewrite Locmap.gss; trivial.
+              + red; intros. rewrite (AG _ H). destruct l; simpl in *.
+                destruct r; inv H; simpl;
+                unfold loc_result; destruct (sig_res (ef_sig e)); try destruct t; simpl; reflexivity.
+                unfold loc_result; destruct (sig_res (ef_sig e)); try destruct t; simpl; reflexivity.
+              + red. red in AGRTY. destruct stack; simpl in *; trivial. 
+                destruct s; simpl in *; trivial. clear AGNIL. inv H3. inv STACKS. destruct Lsp as [bsp [z [ Lsp]]]. subst.
+                rewrite <- H11 in *.
+                destruct stack; simpl in *; trivial.
+                - rewrite AGRTY. inv STACKS0. inv H12.  unfold transf_function in FUN.
+                  remember (type_function f). destruct r; try discriminate.  
+                  remember (regalloc f). destruct r0; try discriminate. apply bind_inversion in FUN. destruct FUN as [? [? ?]]. inv H1. simpl in *.
+                  admit. (*e and f got confused - maybe add retty in rtltyping.wt_stackframes_nil after all??*) 
+                - inv STACKS0. admit. }
      split. econstructor. eassumption. apply HasTy1.  
      split. intros. apply FwdSrc; eauto.
      split; eapply mem_respects_readonly_forward'; try eassumption. 
