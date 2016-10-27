@@ -108,7 +108,10 @@ MINISEPCOMP_FILES = \
   Allocation.v Allocproof_4_memsem.v Allocproof.v \
   Switch v. Csharpminor_memsem.v Cminor_memsem.v Cminorgen.v \
   Cminorgenproof_4_memsem.v Cminorgenproof_locsets.v Cminorgenproof_effects.v \
-  Cminorgenproof_meminjs.v Cminorgenproof_backeffects.v Cminorgenproof.v
+  Cminorgenproof_meminjs.v Cminorgenproof_backeffects.v Cminorgenproof.v \
+  mini_simulations_MatchInfo.v mini_simulations_lemmas_MatchInfo.v \
+  mini_interpolation_MatchInfo.v mini_diagram_trans_MatchInfo.v \
+  mini_simulations_trans_MatchInfo.v
  # ConstpropOp.vp IntvSets.v NeedDomain.v NeedOp.v Deadcode.v Deadcodeproof.v
 
 SEPCOMP_FILES = \
