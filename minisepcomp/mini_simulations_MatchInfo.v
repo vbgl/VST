@@ -34,16 +34,7 @@ Proof. unfold freshblock, freshblockProp, asProp.
 extensionality b. apply prop_ext.
 destruct (valid_block_dec m b); destruct (valid_block_dec m' b); intuition.
 Qed.
-(*
-Definition info_locally_allocated E1 E2 m1 m2 E1' E2' m1' m2' :=
-  match E1, E2, E1', E2' with (M1, L1), (M2, L2), (M1', L1'), (M2', L2') =>
-   L1' = (fun b : block => L1 b || freshblock m1 m1' b) /\
-   L2' = (fun b : block => L2 b || freshblock m2 m2' b) /\
-   M1' = (fun b z => M1/\
-   M2' = 
-   L1' = (fun b : block => L1 b || freshblock m1 m1' b) /\
-   L2' = (fun b : block => L2 b || freshblock m2 m2' b).
-*)
+
 Definition mini_intern_incr (j j':meminj) L1' L2':= 
  inject_incr j j' /\
  (forall b1 b2 d (J: j b1 = None) (J': j' b1 = Some(b2, d)),
@@ -291,6 +282,12 @@ Definition genv_next_eq {F1 V1 F2 V2: Type}
         (g1 : Genv.t F1 V1)
         (g2 : Genv.t F2 V2) := Genv.genv_next g1 = Genv.genv_next g2.
 
+Definition MatchInfoE:Type := ((block -> Z -> bool) * (block -> bool) * (block -> Z -> bool))%type.
+Definition EmptyInfoE:MatchInfoE := (fun b z => false, fun b => false, fun b z => false).
+
+Definition EffectsPropagateE (M1 M2:block -> Z -> bool) :=
+  forall b ofs, M2 b ofs = true -> M1 b ofs = true.
+
 Module Mini_simulation_ext. 
 Section Mini_simulation_extends. 
 Context
@@ -303,21 +300,24 @@ Context
   Record Mini_simulation_extend :=
   { core_data : Type;
 
-    match_state : core_data -> C1 -> mem -> (block -> bool) -> C2 -> mem -> Prop;
+    match_state : core_data -> C1 -> mem -> MatchInfoE -> C2 -> mem -> Prop;
     core_ord : core_data -> core_data -> Prop;
     core_ord_wf : well_founded core_ord;
 
     senvs_dom_eq : Senv.equiv ge1 ge2 /\ genv_next_eq ge1 ge2;
 
-    match_localblocks: forall d c1 m1 L c2 m2,  match_state d c1 m1 L c2 m2 -> 
+    match_localblocks: forall d c1 m1 M1 L M2 c2 m2,  match_state d c1 m1 (M1,L,M2) c2 m2 -> 
       forall b, L b = true -> (Mem.valid_block m1 b /\ Mem.valid_block m2 b);
 
-    match_validblocks: forall d c1 m1 L c2 m2,  match_state d c1 m1 L c2 m2 -> 
-      forall b, Mem.valid_block m1 b <-> Mem.valid_block m2 b;
+
+    match_validblocks: forall d c1 m1 M1 L M2 c2 m2,  match_state d c1 m1 (M1,L,M2) c2 m2 -> 
+      (forall b, Mem.valid_block m1 b <-> Mem.valid_block m2 b) /\
+     (forall b z, M1 b z = true -> Mem.valid_block m1 b /\ L b = false) /\
+     (forall b z, M2 b z = true -> Mem.valid_block m2 b /\ L b = false);
 
     (*ginfo_preserved : (*gvar_infos_eq ge1 ge2 /\*) findsymbols_preserved ge1 ge2;*)
 
-    match_genv : forall d c1 m1 L c2 m2 (MC : match_state d c1 m1 L c2 m2),
+    match_genv : forall d c1 m1 M1 L M2 c2 m2 (MC : match_state d c1 m1 (M1,L,M2) c2 m2),
       symbols_inject (Mem.flat_inj (Mem.nextblock m1)) ge1 ge2 /\
       meminj_preserves_globals ge1 (Mem.flat_inj (Mem.nextblock m1)) /\
       (forall b, isGlobalBlock ge1 b = true -> Mem.valid_block m1 b);
@@ -332,47 +332,47 @@ Context
        mem_respects_readonly ge1 m1 -> mem_respects_readonly ge2 m2 ->
        exists cd, exists c2,
             initial_core Sem2 ge2 v vals2 = Some c2 /\
-            match_state cd c1 m1 (fun b => false) c2 m2;
+            match_state cd c1 m1 EmptyInfoE c2 m2;
 
     effcore_diagram : forall st1 m1 st1' m1' U1, 
       effstep Sem1 ge1 U1 st1 m1 st1' m1' ->
-        forall cd st2 m2 L,
-      match_state cd st1 m1 L st2 m2 ->
-      exists st2', exists m2', exists cd', exists L',
-
-        L' = (fun b : block => L b || freshblock m1 m1' b) /\
-        L' = (fun b : block => L b || freshblock m2 m2' b) /\
-
-        match_state cd' st1' m1' L' st2' m2' /\
-        exists U2,              
+        forall cd st2 m2 M1 L M2,
+      match_state cd st1 m1 (M1,L,M2) st2 m2 ->
+      exists st2', exists m2', exists cd', exists U2,        
           (effstep_plus Sem2 ge2 U2 st2 m2 st2' m2' \/
             (effstep_star Sem2 ge2 U2 st2 m2 st2' m2' /\ core_ord cd' cd)) /\
-          (forall b ofs (Ub: U2 b ofs = true),
-            L b = true \/ U1 b ofs = true);
+        let L' := fun b : block => L b || freshblock m1 m1' b in
+        let M1' := (fun b z => valid_block_dec m1 b && negb (L b) && (M1 b z || U1 b z)) in
+        let M2' := (fun b z => valid_block_dec m2 b && negb (L b) && (M2 b z || U2 b z)) in
+
+        L' = (fun b : block => L b || freshblock m2 m2' b) /\
+
+        match_state cd' st1' m1' (M1',L',M2') st2' m2';
 
     core_halted : 
-      forall cd st1 m1 st2 L m2 v1,
-        match_state cd st1 m1 L st2 m2 ->
+      forall cd st1 m1 st2 M1 L M2 m2 v1,
+        match_state cd st1 m1 (M1,L,M2) st2 m2 ->
         halted Sem1 st1 = Some v1 -> 
         exists v2, Val.lessdef v1 v2 /\
             mem_respects_readonly ge1 m1 /\ 
             mem_respects_readonly ge2 m2 /\
             halted Sem2 st2 = Some v2 /\
-            Mem.extends m1 m2;
+            Mem.extends m1 m2 /\ EffectsPropagateE M1 M2;
 
     core_at_external : 
-      forall cd st1 m1 L st2 m2 e vals1 efsig,
-        match_state cd st1 m1 L st2 m2 ->
+      forall cd st1 m1 M1 L M2 st2 m2 e vals1 efsig,
+        match_state cd st1 m1 (M1,L,M2) st2 m2 ->
         at_external Sem1 st1 = Some (e,efsig,vals1) ->
-        Mem.extends m1 m2 /\ mem_respects_readonly ge1 m1 /\ mem_respects_readonly ge2 m2 /\
+        Mem.extends m1 m2 /\ mem_respects_readonly ge1 m1 /\ 
+        mem_respects_readonly ge2 m2 /\ EffectsPropagateE M1 M2 /\
         exists vals2,
           Forall2 Val.lessdef vals1 vals2 /\
-          at_external Sem2 st2 = Some (e,efsig,vals2)
+          at_external Sem2 st2 = Some (e,efsig,vals2) 
           (*maybe add /\ efsig = ef_sig e?*);
 
     core_after_external :
-      forall cd st1 m1 L st2 m2 e vals1 vals2 efsig
-      (MatchMu: match_state cd st1 m1 L st2 m2)
+      forall cd st1 m1 M1 L M2 st2 m2 e vals1 vals2 efsig
+      (MatchMu: match_state cd st1 m1 (M1,L,M2) st2 m2)
       (AtExtSrc: at_external Sem1 st1 = Some (e,efsig,vals1))
       (AtExtTgt: at_external Sem2 st2 = Some (e,efsig,vals2))
       (ARGSLD: Forall2 Val.lessdef vals1 vals2),
@@ -394,7 +394,8 @@ Context
         exists cd' st1' st2',
           after_external Sem1 (Some ret1) st1 = Some st1' /\
           after_external Sem2 (Some ret2) st2 = Some st2' /\
-          match_state cd' st1' m1' L st2' m2'
+          match_state cd' st1' m1' (M1,L,M2) st2' m2'
+          (*potential alternative here: reset M1 and M2 to fun b z => false*)
 
 }.
 

@@ -111,6 +111,7 @@ MINISEPCOMP_FILES = \
   Cminorgenproof_meminjs.v Cminorgenproof_backeffects.v Cminorgenproof.v \
   mini_simulations_MatchInfo.v mini_simulations_lemmas_MatchInfo.v \
   mini_interpolation_MatchInfo.v mini_diagram_trans_MatchInfo.v \
+  mem_interpolation_EI_MatchInfo.v transEI_MatchInfo.v \
   mini_simulations_trans_MatchInfo.v
  # ConstpropOp.vp IntvSets.v NeedDomain.v NeedOp.v Deadcode.v Deadcodeproof.v
 

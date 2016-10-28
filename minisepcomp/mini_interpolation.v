@@ -855,8 +855,8 @@ Proof. intros.
                 subst p ofs'.
                 assert (e12'_b1': e12' b1' = Some (b2', d1')).
                 { destruct (joinD_Some _ _ _ _ _ j12'b1') as [LOC | [_ EXT]]; trivial.
-                  destruct (local_of_ESome _ _ _ _ LOC) as [L1' J1].
-                  rewrite (WDmu12 _ _ _ J1) in L1'. congruence. }
+                  destruct (local_of_ESome _ _ _ _ LOC) as [L1b1' J1].
+                  rewrite (WDmu12 _ _ _ J1) in L1b1'. congruence. }
                 exploit MKI_Some12. eassumption. apply e12'_b1'. intros [E12' | [E12' [bb3 [dd2' [E' [Bb2' D']]]]]].
                 { destruct (extern_of_ESome _ _ _ _ E12') as [? J12'].
                   elim n. eapply mu12_valid; eassumption. }
@@ -882,7 +882,44 @@ Proof. intros.
                 { apply MiniINC12 in j12b1.  
                   subst j'. unfold compose_meminj. rewrite j12b1, j23'b2; reflexivity. }
                 rewrite Zplus_assoc. intros [X | X]. elim X; trivial. right; omega. 
-              * admit. (*symmetric diagonal case*)
+              * (*symmetric diagonal case*) destruct (extern_of_ESome _ _ _ _ e23_b2') as [_ j23_b2'].
+                unfold Mem.perm in Pb2, Pb2'. rewrite Acc2' in *; clear Acc2' Cont2'. unfold mem_add_acc in *.
+                destruct (valid_block_dec m2 b2'). 2 : solve [ elim n; eapply Mem.valid_block_inject_1; eassumption].
+                destruct (valid_block_dec m2 b2). { clear - v0 GTb1. unfold Mem.valid_block in v0; xomega. }
+                rewrite L2b2' in *.
+                remember (source j12' m1' b2 ofs) as src.
+                destruct src; [ | contradiction].
+                destruct (source_SomeE _ _ _ _ _ Heqsrc) as [b1 [d1 [zz [HP [Hb1 [j12'b1 [PP ZZ]]]]]]]; clear Heqsrc.
+                subst p ofs.
+                assert (e12'_b1: e12' b1 = Some (b2, d1)).
+                { destruct (joinD_Some _ _ _ _ _ j12'b1) as [LOC | [_ EXT]]; trivial.
+                  destruct (local_of_ESome _ _ _ _ LOC) as [L1b1 J1].
+                  rewrite (WDmu12 _ _ _ J1) in L1b1. congruence. }
+                exploit MKI_Some12. eassumption. apply e12'_b1. intros [E12 | [E12 [bb3 [dd2 [E [Bb2 D]]]]]].
+                { destruct (extern_of_ESome _ _ _ _ E12) as [? J12].
+                  elim n. eapply Mem.valid_block_inject_2; eassumption. }
+                subst d1 b2. rewrite Pos.add_sub in *. rewrite E'b1 in E. inversion E; clear E; subst bb3 dd2.
+                assert (J'b1 : j' b1 = Some (b3, d2)).
+                { subst j'. unfold compose_meminj. rewrite j12'b1, j23'b2; trivial. }
+                clear Pb2. rewrite <- Zplus_assoc; simpl.
+                remember (B2 b2') as B2_b2'; symmetry in HeqB2_b2'; destruct B2_b2'.
+                { destruct (B2_B3 _ HeqB2_b2') as [bb3' [dd2' [JJ23b2' B3_b3']]].
+                  rewrite j23_b2' in JJ23b2'. inversion JJ23b2'; clear JJ23b2'; subst bb3' dd2'.
+                  admit. (*readonly *) }
+                rewrite j23_b2' in Pb2'.
+                remember (source j12 m1 b2' ofs') as src'.
+                destruct src'; [ | contradiction].
+                destruct (source_SomeE _ _ _ _ _ Heqsrc') as [b1' [d1' [zz' [HP' [Hb1' [j12b1' [PP' ZZ']]]]]]]; clear Heqsrc'.
+                subst p ofs'.
+                assert (e12_b1': e12 b1' = Some (b2', d1')).
+                { rewrite <- (WDmu12 _ _ _ j12b1') in L2b2'.
+                  subst e12. rewrite extern_of_Ifalse; trivial. }
+                clear PP'.
+                exploit Mem.mi_no_overlap. apply MemInjNu'. 2: eassumption. 3: eassumption. 3: apply Pb2'.
+                { clear - e12_b1 e12_b1'. intros N; subst b1. congruence. }
+                { apply MiniINC12 in j12b1'.  
+                  subst j'. unfold compose_meminj. rewrite j12b1', j23'b2'; reflexivity. }
+                rewrite Zplus_assoc. intros [X | X]. elim X; trivial. right; omega.
               * destruct (extern_of_ESome _ _ _ _ E'b1) as [L1_b1 J'_b1].
                 destruct (extern_of_ESome _ _ _ _ E'b1') as [L1_b1' J'_b1'].
                 unfold Mem.perm in Pb2. 

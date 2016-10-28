@@ -35,7 +35,6 @@ Context {F1 V1 C1 F2 V2 C2 F3 V3 C3:Type}
         (g3 : Genv.t F3 V3).
 
 Lemma ext_inj_diagram: forall 
-(GNE12: genv_next_eq g1 g2)
 (core_data12 : Type)
 (match_core12 : core_data12 -> C1 -> mem -> (block -> bool) -> C2 -> mem -> Prop)
 (core_ord12 : core_data12 -> core_data12 -> Prop)
@@ -183,7 +182,7 @@ Proof. intros.
       right; exists b1, d; split; trivial.
   -  
   clear MC12 MC12' HL1' MOD12. 
-  clear st1 m1 st1' m1' GNE12. 
+  clear st1 m1 st1' m1'. 
   clear match_localblocks12 C1 Sem1 match_core12 g1 U1. clear HL2' HL2' L1'.
   revert U2 j d23 st2 m2 st3 m3 H L1 L3 MC23. 
   induction x; intros. 
