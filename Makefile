@@ -106,13 +106,13 @@ MINISEPCOMP_FILES = \
   Unusedglob.v Unusedglobproof.v \
   LTL_memsem.v FSetAVLplus.v Unityping.v RTLtyping.v \
   Allocation.v Allocproof_4_memsem.v Allocproof.v \
-  Switch v. Csharpminor_memsem.v Cminor_memsem.v Cminorgen.v \
+  Switch.v Csharpminor_memsem.v Cminor_memsem.v Cminorgen.v \
   Cminorgenproof_4_memsem.v Cminorgenproof_locsets.v Cminorgenproof_effects.v \
   Cminorgenproof_meminjs.v Cminorgenproof_backeffects.v Cminorgenproof.v \
   mini_simulations_MatchInfo.v mini_simulations_lemmas_MatchInfo.v \
   mini_interpolation_MatchInfo.v mini_diagram_trans_MatchInfo.v \
   mem_interpolation_EI_MatchInfo.v transEI_MatchInfo.v \
-  mini_simulations_trans_MatchInfo.v
+  mini_simulations_trans_MatchInfo.v Inliningproof_MatchInfo.v
  # ConstpropOp.vp IntvSets.v NeedDomain.v NeedOp.v Deadcode.v Deadcodeproof.v
 
 SEPCOMP_FILES = \
