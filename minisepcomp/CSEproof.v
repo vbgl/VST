@@ -1315,6 +1315,404 @@ Definition measure (st: state) : nat := 0.
 Definition core_ord :  core_data -> core_data -> Prop:=
   fun s2 s1 => (measure s2 < measure s1)%nat.
 
+Theorem external_call_match'':
+  forall (g: genv) vargs m vres m' bc rm am
+  (FWD : mem_forward m m')
+  (GENV : genv_match bc g)
+  (RO : romatch bc m rm)
+  (MM : mmatch bc m am)
+  (NOSTACK : bc_nostack bc)
+  (j' : meminj)
+  (vres' : val)
+  (m'' : mem)
+  (IRES : val_inject j' vres vres')
+  (IMEM : Mem.inject j' m' m'')
+  (UNCH1 : Mem.unchanged_on (loc_unmapped (inj_of_bc bc)) m m')
+(*  (UNCH2 : Mem.unchanged_on (loc_out_of_reach (inj_of_bc bc) m) m m'')*)
+  (IINCR : inject_incr (inj_of_bc bc) j') mm
+  (ISEP : inject_separated (inj_of_bc bc) j' m mm)
+  (ARGS : forall v : val, In v vargs -> vmatch bc v Vtop)
+  (RDO : Mem.unchanged_on (loc_not_writable m) m m'),
+exists bc' : block_classification,
+  bc_incr bc bc' /\
+  (forall b : positive, Plt b (Mem.nextblock m) -> bc' b = bc b) /\
+  vmatch bc' vres Vtop /\
+  genv_match bc' g /\
+  romatch bc' m' rm /\
+  mmatch bc' m' mtop /\
+  bc_nostack bc' /\
+  (forall (b : block) (ofs n : Z),
+   Mem.valid_block m b -> bc b = BCinvalid -> Mem.loadbytes m' b ofs n = Mem.loadbytes m b ofs n).
+Proof. intros.
+  assert (JBELOW: forall b, Plt b (Mem.nextblock m) -> j' b = inj_of_bc bc b).
+  {
+    intros. destruct (inj_of_bc bc b) as [[b' delta] | ] eqn:EQ.
+    eapply IINCR; eauto.
+    destruct (j' b) as [[b'' delta'] | ] eqn:EQ'; auto. 
+    exploit ISEP; eauto. tauto.
+  }
+  (* Part 2: constructing bc' from j' *)
+  set (f := fun b => if plt b (Mem.nextblock m)
+                     then bc b
+                     else match j' b with None => BCinvalid | Some _ => BCother end).
+  assert (F_stack: forall b1 b2, f b1 = BCstack -> f b2 = BCstack -> b1 = b2).
+  {
+    assert (forall b, f b = BCstack -> bc b = BCstack).
+    { unfold f; intros. destruct (plt b (Mem.nextblock m)); auto. destruct (j' b); discriminate. }
+    intros. apply (bc_stack bc); auto.
+  }
+  assert (F_glob: forall b1 b2 id, f b1 = BCglob id -> f b2 = BCglob id -> b1 = b2).
+  {
+    assert (forall b id, f b = BCglob id -> bc b = BCglob id).
+    { unfold f; intros. destruct (plt b (Mem.nextblock m)); auto. destruct (j' b); discriminate. }
+    intros. eapply (bc_glob bc); eauto.
+  }
+  set (bc' := BC f F_stack F_glob). unfold f in bc'.
+  assert (INCR: bc_incr bc bc').
+  {
+    red; simpl; intros. apply pred_dec_true. eapply mmatch_below; eauto.
+  }
+  assert (BC'INV: forall b, bc' b <> BCinvalid -> exists b' delta, j' b = Some(b', delta)).
+  {
+    simpl; intros. destruct (plt b (Mem.nextblock m)).
+    exists b, 0. rewrite JBELOW by auto. apply inj_of_bc_valid; auto.
+    destruct (j' b) as [[b' delta] | ].
+    exists b', delta; auto.
+    congruence.
+  }
+
+  (* Part 3: injection wrt j' implies matching with top wrt bc' *)
+  assert (PMTOP: forall b b' delta ofs, j' b = Some (b', delta) -> pmatch bc' b ofs Ptop).
+  {
+    intros. constructor. simpl; unfold f.
+    destruct (plt b (Mem.nextblock m)).
+    rewrite JBELOW in H by auto. eapply inj_of_bc_inv; eauto.
+    rewrite H; congruence.
+  }
+  assert (VMTOP: forall v v', Val.inject j' v v' -> vmatch bc' v Vtop).
+  {
+    intros. inv H; constructor. eapply PMTOP; eauto.
+  }
+  assert (SMTOP: forall b, bc' b <> BCinvalid -> smatch bc' m' b Ptop).
+  {
+    intros; split; intros.
+  - exploit BC'INV; eauto. intros (b' & delta & J').
+    exploit Mem.load_inject. eexact IMEM. eauto. eauto. intros (v' & A & B).
+    eapply VMTOP; eauto.
+  - exploit BC'INV; eauto. intros (b'' & delta & J').
+    exploit Mem.loadbytes_inject. eexact IMEM. eauto. eauto. intros (bytes & A & B).
+    inv B. inv H3. inv H7. eapply PMTOP; eauto.
+  }
+  (* Conclusions *)
+  exists bc'; splitall.
+- (* incr *)
+  exact INCR.
+- (* unchanged *)
+  simpl; intros. apply pred_dec_true; auto.
+- (* vmatch res *)
+  eapply VMTOP; eauto.
+- (* genv match *)
+  apply genv_match_exten with bc; auto.
+  simpl; intros; split; intros.
+  rewrite pred_dec_true by (eapply mmatch_below; eauto with va). auto.
+  destruct (plt b (Mem.nextblock m)). auto. destruct (j' b); congruence.
+  simpl; intros. rewrite pred_dec_true by (eapply mmatch_below; eauto with va). auto.
+- (* romatch m' *)
+  red; simpl; intros. destruct (plt b (Mem.nextblock m)).
+  exploit RO; eauto. intros (R & P & Q).
+  split; auto.
+  split. apply bmatch_incr with bc; auto. apply bmatch_inv with m; auto.
+  intros. eapply Mem.loadbytes_unchanged_on_1. apply RDO. (*Check  external_call_readonly. eapply external_call_readonly; eauto.*)
+  auto. intros; red. apply Q.
+  intros; red; intros; elim (Q ofs).
+  apply FWD; trivial. (*eapply external_call_max_perm with (m2 := m'); eauto.*)
+  destruct (j' b); congruence.
+- (* mmatch top *)
+  constructor; simpl; intros.
+  + apply ablock_init_sound. apply SMTOP. simpl; congruence.
+  + rewrite PTree.gempty in H0; discriminate.
+  + apply SMTOP; auto.
+  + apply SMTOP; auto.
+  + red; simpl; intros. destruct (plt b (Mem.nextblock m)).
+    eapply Plt_le_trans. eauto. apply forward_nextblock; trivial. (*eapply external_call_nextblock; eauto.*)
+    destruct (j' b) as [[bx deltax] | ] eqn:J'.
+    eapply Mem.valid_block_inject_1; eauto.
+    congruence.
+- (* nostack *)
+  red; simpl; intros. destruct (plt b (Mem.nextblock m)).
+  apply NOSTACK; auto.
+  destruct (j' b); congruence.
+- (* unmapped blocks are invariant *)
+  intros. eapply Mem.loadbytes_unchanged_on_1; auto.
+  apply UNCH1; auto. intros; red. unfold inj_of_bc; rewrite H0; auto.
+Qed.
+
+Theorem external_call_match':
+  forall ef (g: genv) vargs m t vres m' bc rm am
+  (RDO: Mem.unchanged_on (loc_not_writable m) m m')
+  (FWD: mem_forward m m'),
+  external_call ef g vargs m t vres m' ->
+  genv_match bc g ->
+  (forall v, In v vargs -> vmatch bc v Vtop) ->
+  romatch bc m rm ->
+  mmatch bc m am ->
+  bc_nostack bc ->
+  exists bc',
+     bc_incr bc bc'
+  /\ (forall b, Plt b (Mem.nextblock m) -> bc' b = bc b)
+  /\ vmatch bc' vres Vtop
+  /\ genv_match bc' g
+  /\ romatch bc' m' rm
+  /\ mmatch bc' m' mtop
+  /\ bc_nostack bc'
+  /\ (forall b ofs n, Mem.valid_block m b -> bc b = BCinvalid -> Mem.loadbytes m' b ofs n = Mem.loadbytes m b ofs n).
+Proof.
+  intros until am; intros RDO FWD EC GENV ARGS RO MM NOSTACK . 
+  (* Part 1: using ec_mem_inject *)
+  exploit (@external_call_mem_inject ef _ _ g vargs m t vres m' (inj_of_bc bc) m vargs).
+  apply inj_of_bc_preserves_globals; auto.
+  exact EC.
+  eapply mmatch_inj; eauto. eapply mmatch_below; eauto.
+  revert ARGS. generalize vargs.
+  induction vargs0; simpl; intros; constructor.
+  eapply vmatch_inj; eauto. auto.
+  intros (j' & vres' & m'' & EC' & IRES & IMEM & UNCH1 & UNCH2 & IINCR & ISEP). clear EC EC'.
+  eapply  external_call_match''; eassumption.
+Qed.
+
+
+Theorem external_call_match_extends:
+  forall (g: genv) vargs m vres m' bc rm am
+  (FWD : mem_forward m m')
+  (GENV : genv_match bc g)
+  (RO : romatch bc m rm)
+  (MM : mmatch bc m am)
+  (NOSTACK : bc_nostack bc)
+(*  (j' : meminj)*)
+  (vres' : val)
+  (m'' : mem)(*
+  (IRES : val_inject j' vres vres')
+  (IMEM : Mem.inject j' m' m'')*)
+  (IRES : Val.lessdef vres vres')
+  (IMEM : Mem.extends m' m'')
+  (UNCH1 : Mem.unchanged_on (loc_unmapped (inj_of_bc bc)) m m')
+(*  (UNCH2 : Mem.unchanged_on (loc_out_of_reach (inj_of_bc bc) m) m m'')*)
+(*  (IINCR : inject_incr (inj_of_bc bc) j') mm
+  (ISEP : inject_separated (inj_of_bc bc) j' m mm)*) 
+  (*(ISEP : forall b b2 delta, inj_of_bc bc b = None ->
+       Mem.flat_inj (Mem.nextblock m') b = Some (b2, delta) ->
+       ~ Mem.valid_block m b)*)
+  (ARGS : forall v : val, In v vargs -> vmatch bc v Vtop)
+  (RDO : Mem.unchanged_on (loc_not_writable m) m m'),
+exists bc' : block_classification,
+  bc_incr bc bc' /\
+  (forall b : positive, Plt b (Mem.nextblock m) -> bc' b = bc b) /\
+  vmatch bc' vres Vtop /\
+  genv_match bc' g /\
+  romatch bc' m' rm /\
+  mmatch bc' m' mtop /\
+  bc_nostack bc' /\
+  (forall (b : block) (ofs n : Z),
+   Mem.valid_block m b -> bc b = BCinvalid -> Mem.loadbytes m' b ofs n = Mem.loadbytes m b ofs n).
+Proof. intros.
+  set (j' := fun b => if plt b (Mem.nextblock m)
+                      then inj_of_bc bc b else if plt b (Mem.nextblock m') then Some (b,0) else None).
+  assert (JBELOW: forall b, Plt b (Mem.nextblock m) -> j' b = inj_of_bc bc b).
+  {
+    intros. subst j'. unfold inj_of_bc.
+    destruct (plt b (Mem.nextblock m)); try contradiction. trivial. }
+
+  (* Part 2: constructing bc' from j' *)
+  set (f := fun b => if plt b (Mem.nextblock m)
+                     then bc b
+                     else if plt b (Mem.nextblock m') then BCother else BCinvalid).
+  assert (F_stack: forall b1 b2, f b1 = BCstack -> f b2 = BCstack -> b1 = b2).
+  {
+    assert (forall b, f b = BCstack -> bc b = BCstack).
+    { unfold f; intros. destruct (plt b (Mem.nextblock m)); auto. destruct (plt b (Mem.nextblock m')); discriminate. }
+    intros. apply (bc_stack bc); auto.
+  }
+  assert (F_glob: forall b1 b2 id, f b1 = BCglob id -> f b2 = BCglob id -> b1 = b2).
+  {
+    assert (forall b id, f b = BCglob id -> bc b = BCglob id).
+    { unfold f; intros. destruct (plt b (Mem.nextblock m)); auto. destruct (plt b (Mem.nextblock m')); discriminate. }
+    intros. eapply (bc_glob bc); eauto.
+  }
+  set (bc' := BC f F_stack F_glob). unfold f in bc'.
+  assert (INCR: bc_incr bc bc').
+  {
+    red; simpl; intros. apply pred_dec_true. eapply mmatch_below; eauto.
+  }
+  assert (BC'INV: forall b, bc' b <> BCinvalid -> exists b' delta, j' b = Some(b', delta)).
+  {
+    simpl; intros. subst j'; simpl. destruct (plt b (Mem.nextblock m)).
+    exists b, 0. (*rewrite JBELOW by auto.*) apply inj_of_bc_valid; auto.
+    destruct (plt b (Mem.nextblock m')); try congruence. eexists; eexists; reflexivity. 
+  }
+
+  (* Part 3: injection wrt j' implies matching with top wrt bc' *)
+  assert (PMTOP: forall b b' delta ofs, j' b = Some (b', delta) -> pmatch bc' b ofs Ptop).
+  {
+    intros. constructor. subst j'; simpl in *; unfold f.
+    destruct (plt b (Mem.nextblock m)).
+(*    rewrite JBELOW in H by auto. *)eapply inj_of_bc_inv; eauto.
+    destruct (plt b (Mem.nextblock m')); congruence.
+  }
+
+  assert (VMTOP: forall v v', Val.inject j' v v' -> vmatch bc' v Vtop).
+  {
+    intros. inv H; constructor. eapply PMTOP; eauto.
+  }
+  assert (VMTOP1: forall v v', Val.lessdef v v' -> 
+          match v with Vptr b i => Plt b (Mem.nextblock m') | _ => True end ->
+          vmatch bc' v Vtop).
+  {
+    intros. destruct v. constructor. constructor. constructor. constructor. constructor. constructor. inv H.        
+        eapply PMTOP; eauto. instantiate (1:=0). instantiate (1:=b). subst j'. simpl.
+          destruct (plt b (Mem.nextblock m)). unfold inj_of_bc. case_eq (bc b); intros HH; trivial. admit.
+          destruct (plt b (Mem.nextblock m')); trivial. contradiction. 
+  } 
+  assert (SMTOP: forall b, bc' b <> BCinvalid -> smatch bc' m' b Ptop).
+  {
+    intros; split; intros.
+  - exploit BC'INV; eauto. intros (b' & delta & J').
+    (*exploit Mem.load_inject. eexact IMEM. eauto. eauto. intros (v' & A & B).*)
+    exploit Mem.load_extends. 2: eassumption. eassumption. intros (v' & A & B).
+    * specialize (VMTOP1 _ _  destruct v; try constructor.  x eapply VMTOP1; eauto. destruct v; trivial.
+      clear - H0 IMEM. 
+      exploit Mem.load_valid_access; eauto. intros [RP AL]. inv IMEM. clear mext_next mext_perm_inv.
+      inv mext_inj. clear mi_perm mi_align.
+      apply Mem.load_result in H0. 
+      assert (P: Mem.perm m' b ofs Cur Readable). apply RP. specialize (size_chunk_pos chunk); omega.
+      specialize (mi_memval b ofs _ _ (eq_refl _) P).
+      remember ((Mem.mem_contents m') # b) as q. unfold decode_val in H0. 
+      destruct chunk; simpl in *; try solve [destruct (ZMap.get ofs q); try discriminate]. 
+      + destruct (ZMap.get ofs q); try discriminate.
+        destruct (ZMap.get (ofs +1) q); try discriminate.
+      + destruct (ZMap.get ofs q); try discriminate.
+        destruct (ZMap.get (ofs +1) q); try discriminate.
+      + destruct (ZMap.get ofs q); try discriminate.
+        ++ destruct (ZMap.get (ofs +1) q); try discriminate.
+           destruct (ZMap.get (ofs +1+1) q); try discriminate.
+           destruct (ZMap.get (ofs +1+1 +1) q); try discriminate.
+        ++ destruct (Val.eq v v && quantity_eq Q32 q0 &&
+         match n with
+         | 0%nat => false
+         | 1%nat => false
+         | 2%nat => false
+         | 3%nat => true
+         | S (S (S (S _))) => false
+         end &&
+         match ZMap.get (ofs + 1) q with
+         | Undef => false
+         | Byte _ => false
+         | Fragment v' q' m' =>
+             Val.eq v v' && quantity_eq Q32 q' &&
+             match m' with
+             | 0%nat => false
+             | 1%nat => false
+             | 2%nat => true
+             | S (S (S _)) => false
+             end &&
+             match ZMap.get (ofs + 1 + 1) q with
+             | Undef => false
+             | Byte _ => false
+             | Fragment v'0 q'0 m'0 =>
+                 Val.eq v v'0 && quantity_eq Q32 q'0 &&
+                 match m'0 with
+                 | 0%nat => false
+                 | 1%nat => true
+                 | S (S _) => false
+                 end &&
+                 match ZMap.get (ofs + 1 + 1 + 1) q with
+                 | Undef => false
+                 | Byte _ => false
+                 | Fragment v'1 q'1 m'1 =>
+                     Val.eq v v'1 && quantity_eq Q32 q'1 &&
+                     match m'1 with
+                     | 0%nat => true
+                     | S _ => false
+                     end && true
+                 end
+             end
+         end). -- destruct v; try discriminate. inv H0. inv mi_memval. inv H0. simpl in H2.
+      + destruct (ZMap.get ofs q); try discriminate.
+      + destruct (ZMap.get ofs q); try discriminate.
+      + destruct (ZMap.get ofs q); try discriminate.
+      +
+        try destruct (ZMap.get (ofs +1+1) q); try discriminate;
+        try destruct (ZMap.get (ofs +1+1+1) q); try discriminate.
+      + destruct (ZMap.get ofs (m, t)); try discriminate.
+        destruct (ZMap.get (ofs+1) (m, t)); try discriminate.
+      + destruct (ZMap.get ofs (m, t)); try discriminate.
+        destruct (ZMap.get (ofs+1) (m, t)); try discriminate.
+      + destruct (ZMap.get ofs (m, t)); try discriminate.
+      + destruct (ZMap.get ofs (m, t)); try discriminate.
+      destruct q; simpl in *. destruct chunk; simpl in *.
+      + destruct (ZMap.get ofs (m, t)); try discriminate.
+      + destruct (ZMap.get ofs (m, t)); try discriminate.
+      + destruct (ZMap.get ofs (m, t)); try discriminate.
+        destruct (ZMap.get (ofs+1) (m, t)); try discriminate.
+      + destruct (ZMap.get ofs (m, t)); try discriminate.
+        destruct (ZMap.get (ofs+1) (m, t)); try discriminate.
+      + destruct (ZMap.get ofs (m, t)); try discriminate.
+      + destruct (ZMap.get ofs (m, t)); try discriminate.
+ subst j'. instantiate (1:=v').
+      inv B. simpl. constructor.
+    inv B; try econstructor. Print vmatch.
+    red. econstructor. simpl.
+    subst j'. + destruct v; inv B; try constructor.
+    apply flatinj_E in J'. destruct J' as [? [? ?]]; subst. eapply PMTOP. apply flatinj_I. 
+    eapply VMTOP; eauto. constructor.
+  - exploit BC'INV; eauto. intros (b'' & delta & J').
+    exploit Mem.loadbytes_inject. eexact IMEM. eauto. eauto. intros (bytes & A & B).
+    inv B. inv H3. inv H7. eapply PMTOP; eauto.
+  }*)
+  (* Conclusions *)
+  exists bc'; splitall.
+- (* incr *)
+  exact INCR.
+- (* unchanged *)
+  simpl; intros. apply pred_dec_true; auto.
+- (* vmatch res 
+  eapply VMTOP; eauto.*)
+   subst j'. simpl in *. 
+- (* genv match *)
+  apply genv_match_exten with bc; auto.
+  simpl; intros; split; intros.
+  rewrite pred_dec_true by (eapply mmatch_below; eauto with va). auto.
+  destruct (plt b (Mem.nextblock m)). auto. destruct (j' b); congruence.
+  simpl; intros. rewrite pred_dec_true by (eapply mmatch_below; eauto with va). auto.
+- (* romatch m' *)
+  red; simpl; intros. destruct (plt b (Mem.nextblock m)).
+  exploit RO; eauto. intros (R & P & Q).
+  split; auto.
+  split. apply bmatch_incr with bc; auto. apply bmatch_inv with m; auto.
+  intros. eapply Mem.loadbytes_unchanged_on_1. apply RDO. (*Check  external_call_readonly. eapply external_call_readonly; eauto.*)
+  auto. intros; red. apply Q.
+  intros; red; intros; elim (Q ofs).
+  apply FWD; trivial. (*eapply external_call_max_perm with (m2 := m'); eauto.*)
+  destruct (j' b); congruence.
+- (* mmatch top *)
+  constructor; simpl; intros.
+  + apply ablock_init_sound. apply SMTOP. simpl; congruence.
+  + rewrite PTree.gempty in H0; discriminate.
+  + apply SMTOP; auto.
+  + apply SMTOP; auto.
+  + red; simpl; intros. destruct (plt b (Mem.nextblock m)).
+    eapply Plt_le_trans. eauto. apply forward_nextblock; trivial. (*eapply external_call_nextblock; eauto.*)
+    destruct (j' b) as [[bx deltax] | ] eqn:J'.
+    eapply Mem.valid_block_inject_1; eauto.
+    congruence.
+- (* nostack *)
+  red; simpl; intros. destruct (plt b (Mem.nextblock m)).
+  apply NOSTACK; auto.
+  destruct (j' b); congruence.
+- (* unmapped blocks are invariant *)
+  intros. eapply Mem.loadbytes_unchanged_on_1; auto.
+  apply UNCH1; auto. intros; red. unfold inj_of_bc; rewrite H0; auto.
+Qed.
+*)
 Definition SIM: Mini_simulation_ext.Mini_simulation_extend RTL_eff_sem RTL_eff_sem ge tge.
 eapply (Mini_simulation_ext.Build_Mini_simulation_extend).
 + instantiate (1:= core_ord). apply well_founded_ltof. 
@@ -1400,14 +1798,32 @@ eapply (Mini_simulation_ext.Build_Mini_simulation_extend).
   split. intros. apply FwdSrc; eauto.
   split.
   { inv SST. constructor. intros. specialize (H _ H0).
-    inv H. red in RO. destruct MM.
-    econstructor.
+    inv H. (* red in RO. destruct MM.*)
+    exploit external_call_match''. eapply FwdSrc. apply GE. apply RO. apply MM. apply NOSTK.
+    Focus 2. eapply Mem.extends_inject_compose. eassumption. eapply Mem.neutral_inject.
+             red.
+Lemma 
+val_inject_id
+    Focus 2. assert (NI: Mem.inject (Mem.flat_inj (Mem.nextblock m1'))  m1' m2'). admit. apply NI.
+     (inj_of_bc bc)
+{ red in RDO1. admit. (*should hold*) }
+       apply GE. 2: apply RO. 2: apply MM. 2: trivial.
+    econstructor; eauto.
     + eapply sound_stack_ext. eapply sound_stack_new_bound.  eassumption.
+       apply forward_nextblock; eauto.
+       intros. (*
+    + eapply sound_stack_new_bound. instantiate (1:=Mem.nextblock m1).
+      2: eapply mem_forward_nextblock; apply FwdSrc.
+      red in NOSTK.
+      eapply sound_stack_inv. eassumption.
+      intros. red in mmatch_below.
+
+ eapply sound_stack_ext. eapply sound_stack_new_bound.  eassumption.
        apply forward_nextblock; eauto.
       intros. admit. (*ValueAnalysis not directyly applicable any longer here it seems
 (*here's an attemt to specialize what's done in ValueAnalysis - but the auxiliary
 use of an etxern_inject doesn't seem to work. Thjis may be a problem for all ValueAnalysis phases.
-Or do I miss a fact that bc b = BCinvalid  is a conflict with Plt b (Mem.nextblock m1') ??
+Or do I miss a fact that bc b = BCinvalid  is a conflict with Plt b (Mem.nextblock m1') ?? *)*)*)
   assert (IINCR: inject_incr (inj_of_bc bc) (Mem.flat_inj (Mem.nextblock m1'))).
   { red; intros. unfold inj_of_bc in H4. remember (bc b0) as d.
     destruct d; inv H4; apply flatinj_I; eapply FwdSrc; apply mmatch_below; congruence. }
@@ -1456,10 +1872,10 @@ Or do I miss a fact that bc b = BCinvalid  is a conflict with Plt b (Mem.nextblo
   }
   (* Part 3: injection wrt j' implies matching with top wrt bc' *)
   assert (PMTOP: forall b b' delta ofs, j' b = Some (b', delta) -> pmatch bc' b ofs Ptop).
-  {
+  { clear BC'INV.
     intros. constructor. simpl; unfold f.
     destruct (plt b0 (Mem.nextblock m1)).
-    + intros N. subst j'. apply flatinj_E in H4. destruct H4 as [? [? ?]]; subst.
+    + intros N. subst j'. apply flatinj_E in H4. destruct H4 as [? [? ?]]; subst. 
        admit. (*Contradiction?*)
     + rewrite H4. congruence.
   }
