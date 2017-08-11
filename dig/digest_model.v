@@ -8,8 +8,8 @@ Definition bind {A B C: Type} (f:A -> option B) (g: B -> C) (a:A): option C :=
 Definition bind' {A B C: Type} (f:A -> option B) (g: B -> option C) (a:A): option C :=
   match f a with None => None | Some b => (g b) end.
 
-Parameter data: Type. (*hardcode to be Z?*)
-Axiom data_dec: forall (d1 d2: data), { d1=d2 } + { ~  d1=d2 }.
+Definition data:Type:= Z.
+Lemma data_dec: forall (d1 d2: data), { d1=d2 } + { ~  d1=d2 }. Proof. apply zeq. Qed. 
 Lemma listdata_dec: forall (d1 d2: list data), { d1=d2 } + { ~  d1=d2 }. 
 Proof. apply (list_eq_dec data_dec). Qed.
 
@@ -79,7 +79,7 @@ Section cryptoSlashdigestSlashinternalDoth.
 (******************* Model of the materal in digest/internal.h *********)
 Definition mddataTp:Type:= list data.
 
-Parameter md_ctxt_size: EVP_MD -> Z.
+Parameter md_ctxt_size: EVP_MD -> Z. (*TODO: fill in*)
 Definition FlagsTP:=Z. (*maybe int?*)
 Definition InitTP:=mddataTp.
 Definition UpdateTP:=mddataTp -> list data -> mddataTp.
@@ -96,11 +96,6 @@ Record EVP_MD_record :=
   EVP_MD_rec_block_size:Z;
   EVP_MD_rec_ctx_size:Z
 }.
-
-Record ENV_MD_CTX := { digest_of_ctx: EVP_MD_record ; mddata_of_ctx: mddataTp}.
-(*VST invariant will need to ensure that Contexts contain the correct record, ie carry around the 
-  PROP get_md_record md = Some digest_of_ctx*)
-
 (**********************End of digest/internal.h model **************)
 End cryptoSlashdigestSlashinternalDoth.
 
@@ -172,11 +167,15 @@ Defined.
 
 End cryptoSlashdigestSlashdisgestsDotc_DigestDefinitions.*)
 
-Definition get_md_record md :=
+Definition get_md_record (md:EVP_MD): option EVP_MD_record :=
   match md with
     sha256_md => Some SHA256_MD
   | _ => None
   end.
+
+Lemma get_md_record_sound md r (R:get_md_record md = Some r):
+      EVP_get_digestbynid (EVP_MD_rec_type r) = Some md.
+Proof. destruct md; inv R; trivial. Qed.
 
 (*The digest function accessors, declared in lines 180-191 of include/openssl/digest.h, 
   implemented in lines 69,73,75,77 of crypto/digest/digest.c.*)
@@ -192,35 +191,36 @@ Definition EVP_MD_final:= bind get_md_record EVP_MD_rec_final.
 Definition EVP_MD_ctx_size:= bind get_md_record EVP_MD_rec_ctx_size.
 
 (*The states of the abstract digest automaton*)
-Inductive EVP_MD_CTX_state :=
+Inductive EVP_MD_CTX :=
   EVP_MD_CTX_emp
 | EVP_MD_CTX_allocated
 | EVP_MD_CTX_initialized
-| EVP_MD_CTX_hashed: EVP_MD -> list data -> EVP_MD_CTX_state
+| EVP_MD_CTX_hashed: EVP_MD -> list data -> EVP_MD_CTX
 | EVP_MD_CTX_finished.
 
-Lemma EVP_MD_CTX_state_dec (e1 e2: EVP_MD_CTX_state): { e1 = e2 } + {~ e1 = e2}.
+Lemma EVP_MD_CTX_dec (e1 e2: EVP_MD_CTX): { e1 = e2 } + {~ e1 = e2}.
 Proof. destruct e1; destruct e2; try solve [right; congruence]; try solve [left; auto].
-destruct (EVP_MD_dec e e0); destruct (listdata_dec l l0); subst; 
+destruct (EVP_MD_dec e e0); try solve [right; congruence]; subst.
+destruct (listdata_dec l l0); subst; 
 try solve [right; congruence]; try solve [left; auto].
 Qed.
 
-Definition EVP_MD_CTX_configured (t:EVP_MD): EVP_MD_CTX_state :=
+Definition EVP_MD_CTX_configured (t:EVP_MD): EVP_MD_CTX :=
   EVP_MD_CTX_hashed t nil.
 
-Definition ctx_initialized (e:EVP_MD_CTX_state):Prop :=
+Definition ctx_initialized (e:EVP_MD_CTX):Prop :=
   match e with EVP_MD_CTX_emp => False | EVP_MD_CTX_allocated => False | _ => True end.
 
 Lemma ctx_initialized_dec: forall e, { ctx_initialized e } + { ~ ctx_initialized e }.
 Proof. destruct e; simpl; try solve [left; auto]; right; auto. Qed. 
 
-Definition ctx_allocated (e:EVP_MD_CTX_state):Prop :=
+Definition ctx_allocated (e:EVP_MD_CTX):Prop :=
   match e with EVP_MD_CTX_emp => False | _ => True end.
 
 Lemma ctx_allocated_dec: forall e, { ctx_allocated e } + { ~ ctx_allocated e }.
 Proof. destruct e; simpl; try solve [left; auto]; right; auto. Qed. 
 
-Definition ctx_configured (e:EVP_MD_CTX_state):option EVP_MD :=
+Definition ctx_configured (e:EVP_MD_CTX):option EVP_MD :=
   match e with EVP_MD_CTX_hashed md _ => Some md | _ => None end.
 (*Question to Adam: should calls to DigestOperationAccessors succeed when invoked
   on a context in state EVP_MD_CTX_finished? If so, we need to tweak the above constructor  
@@ -259,7 +259,7 @@ Proof. destruct doa; simpl in *.
   destruct (DigestNID_dec d d0); subst; try solve [left; trivial]; try solve [right; intros N; congruence].
 Qed.
 
-Inductive doastep: forall (e1:EVP_MD_CTX_state) (op:DigestOperationAccessor) (r: DOAResultTp op), Prop :=
+Inductive doastep: forall (e1:EVP_MD_CTX) (op:DigestOperationAccessor) (r: DOAResultTp op), Prop :=
 | doa_md: forall e, doastep e EVP_MD_CTX_md (ctx_configured e)
 | doa_size: forall e, doastep e EVP_MD_CTX_size (bind' ctx_configured EVP_MD_size e)
 | doa_blocksize: forall e, doastep e EVP_MD_CTX_block_size (bind' ctx_configured EVP_MD_block_size e)
@@ -297,7 +297,7 @@ Inductive EvpCtxtOp:=
 | MdCtxt_init
 | MdCtxt_cleanup
 | MdCtxt_destroy
-| MdCtxt_copy_ex: EVP_MD_CTX_state -> EvpCtxtOp (*the argument here is the "in" parameter*)
+| MdCtxt_copy_ex: EVP_MD_CTX -> EvpCtxtOp (*the argument here is the "in" parameter*)
 | DigestInit_ex: EVP_MD -> EvpCtxtOp
 | DigestInit: EVP_MD -> EvpCtxtOp
 | DigestUpdate: list data -> EvpCtxtOp
@@ -309,7 +309,7 @@ Inductive EvpCtxtOp:=
 
 Lemma EvpCtxtOp_dec (x y : EvpCtxtOp): {x = y} + {x <> y}.
 Proof. destruct x; destruct y; try solve [left; trivial]; try solve [right; intros N; congruence].
-  destruct (EVP_MD_CTX_state_dec e e0); try solve [subst; left; trivial]; try solve [right; intros N; congruence].
+  destruct (EVP_MD_CTX_dec e e0); try solve [subst; left; trivial]; try solve [right; intros N; congruence].
   destruct (EVP_MD_dec e e0); try solve [subst; left; trivial]; try solve [right; intros N; congruence].
   destruct (EVP_MD_dec e e0); try solve [subst; left; trivial]; try solve [right; intros N; congruence].
   destruct (listdata_dec l l0); try solve [subst; left; trivial]; try solve [right; intros N; congruence].
@@ -334,7 +334,7 @@ Proof. destruct r; destruct r'; try solve [left; trivial]; try solve [right; int
   right; intros N; inv N. apply (Eqdep_dec.inj_pair2_eq_dec _ DOA_dec) in H0; congruence.
    Qed.
 
-Inductive step: forall (e1:EVP_MD_CTX_state) (op:EvpCtxtOp) (r:OpResult) (e2:EVP_MD_CTX_state), Prop :=
+Inductive step: forall (e1:EVP_MD_CTX) (op:EvpCtxtOp) (r:OpResult) (e2:EVP_MD_CTX), Prop :=
 | doa_step: forall e doa r, doastep e doa r -> step e (DigestOpAcc doa) (DOARes _ r) e
 | create_fail: step EVP_MD_CTX_emp MdCtxt_create Fail EVP_MD_CTX_emp
 | create: step EVP_MD_CTX_emp MdCtxt_create Success EVP_MD_CTX_allocated
@@ -386,84 +386,84 @@ Lemma step_dec e1 x r e2: {step e1 x r e2} + {~step e1 x r e2}.
 Proof. intros.
 destruct x; destruct r;
 
-try solve [destruct (EVP_MD_CTX_state_dec e1 e2); subst;
+try solve [destruct (EVP_MD_CTX_dec e1 e2); subst;
    first [solve [right; intros N; inv N; trivial] | solve [left; constructor; try congruence; try simpl; trivial] ]];
 
 try solve [destruct e2; first [right; intros N; inv N; trivial | left; constructor; try congruence; try simpl; trivial]];
 
 try first [
   solve [
-   destruct (EVP_MD_CTX_state_dec e2 EVP_MD_CTX_allocated); subst;
+   destruct (EVP_MD_CTX_dec e2 EVP_MD_CTX_allocated); subst;
    first [solve [right; intros N; inv N; trivial] | solve [left; constructor; try congruence; try simpl; trivial]] ]
 | solve [
-   destruct (EVP_MD_CTX_state_dec e2 EVP_MD_CTX_emp); subst;
+   destruct (EVP_MD_CTX_dec e2 EVP_MD_CTX_emp); subst;
    first [solve [right; intros N; inv N; trivial] | solve [left; constructor; try congruence; try simpl; trivial]] ]
 | solve [
-   destruct (EVP_MD_CTX_state_dec e2 EVP_MD_CTX_initialized); subst;
+   destruct (EVP_MD_CTX_dec e2 EVP_MD_CTX_initialized); subst;
    first [solve [right; intros N; inv N; trivial] | solve [left; constructor; try congruence; try simpl; trivial]] ]
 | solve [
-   destruct (EVP_MD_CTX_state_dec e e2); subst;
+   destruct (EVP_MD_CTX_dec e e2); subst;
    first [solve [right; intros N; inv N; trivial] | solve [left; constructor; try congruence; try simpl; trivial]] ]
 ].
-+ destruct (EVP_MD_CTX_state_dec e1 EVP_MD_CTX_emp); subst;
++ destruct (EVP_MD_CTX_dec e1 EVP_MD_CTX_emp); subst;
     try solve [right; intros N; inv N; trivial]. 
-  destruct (EVP_MD_CTX_state_dec e2 EVP_MD_CTX_allocated); subst;
+  destruct (EVP_MD_CTX_dec e2 EVP_MD_CTX_allocated); subst;
     try solve [right; intros N; inv N; trivial]; try solve [left; constructor; try congruence; try simpl; trivial].
-+ destruct (EVP_MD_CTX_state_dec e1 EVP_MD_CTX_emp); subst;
++ destruct (EVP_MD_CTX_dec e1 EVP_MD_CTX_emp); subst;
     try solve [right; intros N; inv N; trivial]. 
-  destruct (EVP_MD_CTX_state_dec e2 EVP_MD_CTX_emp); subst;
+  destruct (EVP_MD_CTX_dec e2 EVP_MD_CTX_emp); subst;
     try solve [right; intros N; inv N; trivial]; try solve [left; constructor; try congruence; try simpl; trivial].
 + destruct (ctx_allocated_dec e1); subst;
     try solve [right; intros N; inv N; trivial]. 
-  destruct (EVP_MD_CTX_state_dec e2 EVP_MD_CTX_initialized); subst;
+  destruct (EVP_MD_CTX_dec e2 EVP_MD_CTX_initialized); subst;
     try solve [right; intros N; inv N; trivial]; try solve [left; constructor; try congruence; try simpl; trivial].
-+ destruct (EVP_MD_CTX_state_dec e1 EVP_MD_CTX_emp); subst;
++ destruct (EVP_MD_CTX_dec e1 EVP_MD_CTX_emp); subst;
     try solve [right; intros N; inv N; trivial]. 
-  destruct (EVP_MD_CTX_state_dec e2 EVP_MD_CTX_initialized); subst;
-    try solve [right; intros N; inv N; trivial]; try solve [left; constructor; try congruence; try simpl; trivial].
-+ destruct (ctx_initialized_dec e1); subst;
-    try solve [right; intros N; inv N; trivial]. 
-  destruct (EVP_MD_CTX_state_dec e e2); subst;
+  destruct (EVP_MD_CTX_dec e2 EVP_MD_CTX_initialized); subst;
     try solve [right; intros N; inv N; trivial]; try solve [left; constructor; try congruence; try simpl; trivial].
 + destruct (ctx_initialized_dec e1); subst;
     try solve [right; intros N; inv N; trivial]. 
-  destruct (EVP_MD_CTX_state_dec e2 (EVP_MD_CTX_configured e)); subst;
+  destruct (EVP_MD_CTX_dec e e2); subst;
+    try solve [right; intros N; inv N; trivial]; try solve [left; constructor; try congruence; try simpl; trivial].
++ destruct (ctx_initialized_dec e1); subst;
+    try solve [right; intros N; inv N; trivial]. 
+  destruct (EVP_MD_CTX_dec e2 (EVP_MD_CTX_configured e)); subst;
     try solve [right; intros N; inv N; trivial]; try solve [left; constructor; try congruence; try simpl; trivial].
 + destruct (ctx_allocated_dec e1); try solve [right; intros N; inv N].
-  destruct (EVP_MD_CTX_state_dec e2 (EVP_MD_CTX_configured e)); subst.
+  destruct (EVP_MD_CTX_dec e2 (EVP_MD_CTX_configured e)); subst.
   - left. constructor. trivial. econstructor; simpl; trivial. 
   - right; intros N; inv N. inv H2.
 + destruct (ctx_allocated_dec e1); try solve [right; intros N; inv N].
   assert (step EVP_MD_CTX_initialized (DigestInit_ex e) Fail EVP_MD_CTX_initialized).
   - constructor.
-  - destruct (EVP_MD_CTX_state_dec e2 EVP_MD_CTX_initialized); subst.
+  - destruct (EVP_MD_CTX_dec e2 EVP_MD_CTX_initialized); subst.
     * left. constructor; trivial.
     * right; intros N; inv N. inv H3.
 + right; intros N; inv N. inv H2. 
 + right; intros N; inv N. inv H2.
 + right; intros N; inv N. inv H2. 
 + destruct e1; try solve [ right; intros N; inv N].
-  destruct (EVP_MD_CTX_state_dec e2 (EVP_MD_CTX_hashed e (l0++l))); subst; try solve [ right; intros N; inv N].
+  destruct (EVP_MD_CTX_dec e2 (EVP_MD_CTX_hashed e (l0++l))); subst; try solve [ right; intros N; inv N].
   left; constructor.
 + destruct e1; try solve [ right; intros N; inv N].
-  destruct (EVP_MD_CTX_state_dec e2 EVP_MD_CTX_finished); subst; try solve [ right; intros N; inv N].
+  destruct (EVP_MD_CTX_dec e2 EVP_MD_CTX_finished); subst; try solve [ right; intros N; inv N].
   destruct (EVP_MD_dec t e); subst; try solve [ right; intros N; inv N].
   destruct (listdata_dec l d); subst; try solve [ right; intros N; inv N].
   left; constructor.
 + destruct e1; try solve [ right; intros N; inv N].
-  destruct (EVP_MD_CTX_state_dec e2 EVP_MD_CTX_initialized); subst; try solve [ right; intros N; inv N].
+  destruct (EVP_MD_CTX_dec e2 EVP_MD_CTX_initialized); subst; try solve [ right; intros N; inv N].
   destruct (EVP_MD_dec t e); subst; try solve [ right; intros N; inv N].
   destruct (listdata_dec l d); subst; try solve [ right; intros N; inv N].
   left; constructor.
 + destruct (DOA_dec d doa); subst; try solve [ right; intros N; inv N].
   destruct (doastep_dec e1 doa r); subst.
-  - destruct (EVP_MD_CTX_state_dec e1 e2); subst. left; econstructor; trivial.
+  - destruct (EVP_MD_CTX_dec e1 e2); subst. left; econstructor; trivial.
     right; intros N; inv N.
   - right; intros N; inv N. apply (Eqdep_dec.inj_pair2_eq_dec _ DOA_dec) in H1; congruence.
 Qed.
 
 (*Results of single steps are hidden, as long as the sequence of states fits together*)
-Inductive step_star: EVP_MD_CTX_state -> list EvpCtxtOp -> list OpResult -> EVP_MD_CTX_state -> Prop :=
+Inductive step_star: EVP_MD_CTX -> list EvpCtxtOp -> list OpResult -> EVP_MD_CTX -> Prop :=
   step_zero: forall e, step_star e nil nil e
 | step_one: forall e1 x e2 l r rs e3, step e1 x r e2 -> step_star e2 l rs e3 -> step_star e1 (x::l) (r::rs) e3.
 
@@ -473,13 +473,13 @@ Ltac step_star_dec_aux:= try solve [right; intros N; inv N;
 Lemma step_star_dec: forall l rs e1 e2, {step_star e1 l rs e2} + {~step_star e1 l rs e2}.
 Proof.
   induction l; simpl; intros.
-+ destruct (EVP_MD_CTX_state_dec e1 e2); subst; step_star_dec_aux. 
++ destruct (EVP_MD_CTX_dec e1 e2); subst; step_star_dec_aux. 
   destruct rs; subst; step_star_dec_aux.  
   left; constructor.
 + destruct rs; step_star_dec_aux.  
   destruct a.
   - (*MdCtxt_create*)
-    destruct (EVP_MD_CTX_state_dec e1 EVP_MD_CTX_emp); subst; step_star_dec_aux.  
+    destruct (EVP_MD_CTX_dec e1 EVP_MD_CTX_emp); subst; step_star_dec_aux.  
     destruct (OpResult_dec o Fail); subst.
     * destruct (IHl rs EVP_MD_CTX_emp e2); step_star_dec_aux. 
       left. econstructor. apply create_fail; trivial. trivial.
@@ -492,7 +492,7 @@ Proof.
     destruct (IHl rs EVP_MD_CTX_initialized e2); step_star_dec_aux.
     left. econstructor. apply init; trivial. trivial.
   - (*MdCtxt_cleanup*)
-    destruct (EVP_MD_CTX_state_dec e1 EVP_MD_CTX_emp); subst; step_star_dec_aux.  
+    destruct (EVP_MD_CTX_dec e1 EVP_MD_CTX_emp); subst; step_star_dec_aux.  
     destruct (IHl rs EVP_MD_CTX_initialized e2); step_star_dec_aux.  
     destruct (OpResult_dec o Success); subst; step_star_dec_aux.  
     left. econstructor. apply cleanup; trivial. trivial.

@@ -29,7 +29,7 @@ COMPCERT ?= compcert
 
 CC_TARGET=compcert/cfrontend/Clight.vo
 CC_DIRS= lib common cfrontend exportclight
-DIRS= msl sepcomp veric floyd progs wand_demo sha fcf hmacfcf tweetnacl20140427 ccc26x86 hmacdrbg aes mailbox concurrency
+DIRS= msl sepcomp veric floyd progs wand_demo sha fcf hmacfcf tweetnacl20140427 ccc26x86 hmacdrbg aes mailbox concurrency dig
 INCLUDE= $(foreach a,$(DIRS),$(if $(wildcard $(a)), -Q $(a) $(a))) -R $(COMPCERT) compcert -as compcert $(if $(MATHCOMP), -Q mathcomp $(MATHCOMP))
 #Replace the INCLUDE above with the following in order to build the linking target:
 #INCLUDE= $(foreach a,$(DIRS),$(if $(wildcard $(a)), -I $(a) -as $(a))) -R $(COMPCERT) -as compcert -I $(SSREFLECT)/src -R $(SSREFLECT)/theories -as Ssreflect \
@@ -331,6 +331,9 @@ TWEETNACL_FILES = \
   verif_crypto_stream_salsa20_xor.v verif_crypto_stream.v \
   verif_verify.v
 
+DIGEST_FILES = \
+  digest.v digests.v digest_model.v spec_digests.v 
+
 HMACDRBG_FILES = \
   entropy.v entropy_lemmas.v DRBG_functions.v HMAC_DRBG_algorithms.v \
   HMAC256_DRBG_functional_prog.v HMAC_DRBG_pure_lemmas.v \
@@ -374,6 +377,7 @@ FILES = \
  $(HMACEQUIV_FILES:%=sha/%) \
  $(CCC26x86_FILES:%=ccc26x86/%) \
  $(TWEETNACL_FILES:%=tweetnacl20140427/%) \
+ $(DIGEST_FILES:%=dig/%) \
  $(CONCUR_FILES:%=concurrency/%) \
  $(HMACDRBG_Files:%=hmacdrbg/%)
 # $(DRBG_FILES:%=verifiedDrbg/spec/%)
@@ -391,6 +395,7 @@ CLEANFILES = \
  $(HMACFCF_FILES:%=hmacfcf/.%o.aux) \
  $(HMACEQUIV_FILES:%=sha/.%o.aux) \
  $(CCC26x86_FILES:%=ccc26x86/.%o.aux) \
+ $(DIGEST_FILES:%=dig/.%o.aux) \
  $(TWEETNACL_FILES:%=tweetnacl20140427/.%o.aux) \
  $(CONCUR_FILES:%=concurrency/.%o.aux) \
  $(HMACDRBG_Files:%=hmacdrbg/.%o.aux)
@@ -476,6 +481,7 @@ hmac:    .loadpath $(HMAC_FILES:%.v=sha/%.vo)
 hmacequiv:    .loadpath $(HMAC_FILES:%.v=sha/%.vo)
 fcf:     .loadpath $(FCF_FILES:%.v=fcf/%.vo)
 hmacfcf: .loadpath $(HMACFCF_FILES:%.v=hmacfcf/%.vo)
+dig: .loadpath $(DIGEST_FILES:%.v=dig/%.vo)
 tweetnacl: .loadpath $(TWEETNACL_FILES:%.v=tweetnacl20140427/%.vo)
 hmac0: .loadpath sha/verif_hmac_init.vo sha/verif_hmac_cleanup.vo sha/verif_hmac_final.vo sha/verif_hmac_simple.vo  sha/verif_hmac_double.vo sha/verif_hmac_update.vo sha/verif_hmac_crypto.vo
 hmacdrbg:   .loadpath $(HMACDRBG_FILES:%.v=hmacdrbg/%.vo)
