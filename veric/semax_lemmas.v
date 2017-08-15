@@ -279,9 +279,7 @@ repeat intro.
 unfold frame_ret_assert.
 rewrite sepcon_comm.
 eapply sepcon_derives; try apply H0; auto.
-unfold ghost_update_ret_assert.
-(* !! to finish *)
-
+eapply derives_trans, ghost_update_now; auto.
 
 repeat intro.
 specialize (H0 ora jm H1 H2).
@@ -380,7 +378,7 @@ Lemma semax_unfold {CS: compspecs}:
           (HGG: genv_cenv psi = cenv_cs)
            (Prog_OK: believe Espec Delta' psi Delta' w) (k: cont) (F: assert),
         closed_wrt_modvars c F ->
-       rguard Espec psi (exit_tycon c Delta') (frame_ret_assert R F) k w ->
+       rguard Espec psi (exit_tycon c Delta') (frame_ret_assert (ghost_update_ret_assert R) F) k w ->
        guard Espec psi Delta' (fun rho => F rho * P rho) (Kseq c :: k) w.
 Proof.
 unfold semax; rewrite semax_fold_unfold.
@@ -432,7 +430,53 @@ eapply semax_pre; eauto.
 eapply semax_post; eauto.
 Qed.
 
-(* ghost state and view shifts *)(* !! START HERE !! *)
+Lemma semax'_view_shift_post:
+ forall {CS: compspecs} (R': ret_assert) Delta (R: ret_assert) P c,
+   (forall ek vl rho,  view_shift (R' ek vl rho) (R ek vl rho)) ->
+   semax' Espec Delta P c R' |-- semax' Espec Delta P c R.
+Proof.
+intros.
+rewrite semax_fold_unfold.
+apply allp_derives; intro psi.
+apply allp_derives; intro Delta'.
+apply prop_imp_derives; intros [TS HGG].
+apply imp_derives; auto.
+apply allp_derives; intro k.
+apply allp_derives; intro F.
+apply imp_derives; auto.
+unfold rguard, guard.
+apply andp_derives; auto.
+apply allp_derives; intro ek.
+apply allp_derives; intro vl.
+apply allp_derives; intro te.
+apply allp_derives; intro ve.
+intros ? ?.
+intros ? ? ? ? ?.
+specialize (H0 _ H1 _ H2).
+apply H0.
+destruct H3 as [[? ?] ?].
+split; auto.
+split; auto.
+specialize (H ek vl (construct_rho (filter_genv psi) ve te)).
+destruct H4 as [w1 [w2 [? [? ?]]]].
+exists w1; exists w2; split3; auto.
+destruct H6 as [w' [? HR']].
+destruct (H _ HR') as [w'' []].
+exists w''; split; auto.
+etransitivity; eauto.
+Qed.
+
+Lemma semax_view_shift_post {CS: compspecs}:
+ forall (R': ret_assert) Delta (R: ret_assert) P c,
+   (forall ek vl rho, view_shift (R' ek vl rho) (R ek vl rho)) ->
+   semax Espec Delta P c R' ->  semax Espec Delta P c R.
+Proof.
+unfold semax.
+intros.
+spec H0 n. revert n H0.
+apply semax'_view_shift_post.
+auto.
+Qed.
 
 Lemma semax_skip {CS: compspecs}:
    forall Delta P, semax Espec Delta P Sskip (normal_ret_assert P).
@@ -672,8 +716,10 @@ unfold F0F; clear - H1.
 intros ek vl tx vx; specialize (H1 ek vl tx vx).
 red in H1.
 remember ((construct_rho (filter_genv psi) vx tx)) as rho.
-unfold frame_ret_assert in *.
-rewrite (sepcon_comm (F0 rho)).
+unfold frame_ret_assert, ghost_update_ret_assert in *.
+intros ???? [[? HR]]; eapply H1; eauto.
+split; auto; split; auto.
+rewrite (sepcon_comm (F0 rho)), <- sepcon_assoc in HR.
 rewrite <- sepcon_assoc; auto.
 unfold F0F.
 extensionality rho.

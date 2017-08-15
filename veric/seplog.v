@@ -242,6 +242,98 @@ Definition switch_ret_assert (R: ret_assert) : ret_assert :=
  | EK_return => R EK_return vl
  end.
 
+(* ghost updates and view shifts *)
+
+Definition frame_preserving_update (a b : GP.M) := forall c, joins a c -> joins b c.
+
+(* This uses unsquash to make the interaction with age more obvious. *)
+Definition ghost_move' (r r' : rmap') := forall l, proj1_sig r' l = proj1_sig r l \/
+  exists m m', proj1_sig r l = GHOST m /\ proj1_sig r' l = GHOST m' /\ frame_preserving_update m m'.
+
+Definition ghost_move r r' := let '(n, f) := unsquash r in let '(n', f') := unsquash r' in
+  n = n' /\ ghost_move' f f'.
+
+Lemma age1_ghost_move : forall x y x' : rmap, ghost_move x y -> age x x' ->
+  exists y', ghost_move x' y' /\ age y y'.
+Proof.
+  intros.
+  unfold age in *; simpl in *.
+  rewrite rmap_age1_eq in H0 |- *.
+  unfold ghost_move in *.
+  destruct (unsquash x) as [n f].
+  destruct (unsquash y) as [n0 f0].
+  destruct n; [discriminate|].
+  destruct H; inv H0.
+  eexists; split; [|eauto].
+  repeat rewrite unsquash_squash.
+  split; auto.
+  intro l; specialize (H1 l).
+  destruct f0 as [f1], f as [f2]; simpl in *.
+  unfold compose.
+  destruct H1 as [-> | H]; auto.
+  destruct H as [? [? [-> [->]]]]; simpl.
+  right; eauto.
+Qed.
+
+Program Definition ghost_update (P : pred rmap) : pred rmap := fun r => exists r', ghost_move r r' /\ P r'.
+Next Obligation.
+  intros ???? [r' [Hmove HP]].
+  destruct (age1_ghost_move _ _ _ Hmove H) as [r1 []].
+  do 2 eexists; eauto.
+  eapply pred_hereditary; eauto.
+Qed.
+
+Instance ghost_move_refl : RelationClasses.Reflexive ghost_move.
+Proof.
+  unfold ghost_move.
+  intro a; destruct (unsquash a).
+  split; auto; intro; auto.
+Qed.
+
+Instance ghost_move'_trans : RelationClasses.Transitive ghost_move'.
+Proof.
+  unfold ghost_move'; repeat intro.
+  destruct (H l).
+  { rewrite <- H1 in *; auto. }
+  destruct (H0 l).
+  { rewrite <- H2 in *; auto. }
+  destruct H1 as (? & ? & -> & Hy & ?).
+  destruct H2 as (? & ? & Hy' & -> & ?).
+  rewrite Hy' in Hy; inv Hy.
+  right; do 3 eexists; eauto; split; eauto.
+  repeat intro; eauto.
+Qed.
+
+Instance ghost_move_trans : RelationClasses.Transitive ghost_move.
+Proof.
+  unfold ghost_move; repeat intro.
+  destruct (unsquash x), (unsquash y), (unsquash z).
+  destruct H, H0; subst; split; auto.
+  etransitivity; eauto.
+Qed.
+
+Lemma ghost_update_now : forall P, P |-- ghost_update P.
+Proof.
+  repeat intro.
+  exists a; split; auto.
+  apply ghost_move_refl.
+Qed.
+
+Definition view_shift (P Q : pred rmap) := forall x, P x -> ghost_update Q x.
+
+Lemma ghost_update_view_shift : forall P Q, view_shift P Q -> P |-- ghost_update Q.
+Proof.
+  repeat intro; auto.
+Qed.
+
+(*Lemma ghost_shift : forall g g' p, frame_preserving_update g g' -> view_shift (ghost_at g p) (ghost_at g' p).
+Proof.
+  repeat intro.
+  simpl in H0.
+  Print make_rmap.
+  Print frame_preserving_update.
+*)
+
 Definition ghost_update_ret_assert (R: ret_assert) := fun ek vl rho => ghost_update (R ek vl rho).
 
 Require Import msl.normalize.
