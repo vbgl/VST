@@ -1390,8 +1390,7 @@ Definition composites : list composite_definition :=
              (tptr (Tstruct _evp_pkey_ctx_st noattr)) cc_default))) :: nil)
    noattr :: nil).
 
-Definition prog : Clight.program := {|
-prog_defs :=
+Definition global_definitions :=
 ((___stringlit_1, Gvar v___stringlit_1) ::
  (___builtin_fabs,
    Gfun(External (EF_builtin "__builtin_fabs"
@@ -1684,8 +1683,9 @@ prog_defs :=
  (_EVP_MD_CTX_size, Gfun(Internal f_EVP_MD_CTX_size)) ::
  (_EVP_MD_CTX_block_size, Gfun(Internal f_EVP_MD_CTX_block_size)) ::
  (_EVP_MD_CTX_type, Gfun(Internal f_EVP_MD_CTX_type)) ::
- (_EVP_add_digest, Gfun(Internal f_EVP_add_digest)) :: nil);
-prog_public :=
+ (_EVP_add_digest, Gfun(Internal f_EVP_add_digest)) :: nil).
+
+Definition public_idents :=
 (_EVP_add_digest :: _EVP_MD_CTX_type :: _EVP_MD_CTX_block_size ::
  _EVP_MD_CTX_size :: _EVP_MD_CTX_md :: _EVP_Digest :: _EVP_DigestFinal ::
  _EVP_DigestFinal_ex :: _EVP_DigestUpdate :: _EVP_DigestInit ::
@@ -1708,10 +1708,9 @@ prog_public :=
  ___compcert_va_float64 :: ___compcert_va_int64 :: ___compcert_va_int32 ::
  ___builtin_va_end :: ___builtin_va_copy :: ___builtin_va_arg ::
  ___builtin_va_start :: ___builtin_membar :: ___builtin_annot_intval ::
- ___builtin_annot :: ___builtin_memcpy_aligned :: ___builtin_fabs :: nil);
-prog_main := _main;
-prog_types := composites;
-prog_comp_env := make_composite_env composites;
-prog_comp_env_eq := refl_equal _
-|}.
+ ___builtin_annot :: ___builtin_memcpy_aligned :: ___builtin_fabs :: nil).
+
+Definition prog : Clight.program := 
+  mkprogram composites global_definitions public_idents _main Logic.I.
+
 

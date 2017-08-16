@@ -21,25 +21,31 @@ Qed.
 
 Lemma semax_orp_SEPx (cs : compspecs) (Espec : OracleKind)
       (Delta : tycontext) (P : list Prop) (Q : list localdef)
-      (R1 R2 : mpred) (T : ret_assert) (c : statement)
+      (R1 R2 : mpred) (R:list mpred) (T : ret_assert) (c : statement)
   (HR1 : semax Delta
-         (PROPx P (LOCALx Q (SEPx (cons R1 nil)))) c T)
+         (PROPx P (LOCALx Q (SEPx (cons R1 R)))) c T)
   (HR2 : semax Delta
-         (PROPx P (LOCALx Q (SEPx (cons R2 nil)))) c T):
+         (PROPx P (LOCALx Q (SEPx (cons R2 R)))) c T):
 semax Delta
-  (PROPx P (LOCALx Q (SEPx (cons (orp R1 R2) nil)))) c T.
+  (PROPx P (LOCALx Q (SEPx (cons (orp R1 R2) R)))) c T.
 Proof.
  eapply semax_pre; [| apply (semax_orp HR1 HR2)].
- old_go_lower. normalize. 
-(* destruct Q; solve 
+ old_go_lower.
+ rewrite distrib_orp_sepcon. normalize. 
+ (* destruct Q; solve 
    [ apply orp_left; [apply orp_right1| apply orp_right2]; entailer! ].*)
 Qed.
-Lemma semax_orp_SEP cs Espec Delta P Q R1 R2 T c
+Lemma semax_orp_SEPnil cs Espec Delta P Q R1 R2 T c
   (HR1: @semax cs Espec Delta (PROP (P) LOCAL (Q) SEP (R1)) c T)
   (HR2: @semax cs Espec Delta (PROP (P) LOCAL (Q) SEP (R2)) c T):
   @semax cs Espec Delta (PROP (P) LOCAL (Q) SEP (R1 || R2)) c T.
 Proof. apply semax_orp_SEPx; trivial. Qed.
- 
+Lemma semax_orp_SEP cs Espec Delta P Q R1 R2 R T c
+  (HR1: @semax cs Espec Delta (PROP (P) LOCAL (Q) SEP (R1; R)) c T)
+  (HR2: @semax cs Espec Delta (PROP (P) LOCAL (Q) SEP (R2; R)) c T):
+  @semax cs Espec Delta (PROP (P) LOCAL (Q) SEP ((R1 || R2); R)) c T.
+Proof. apply semax_orp_SEPx; trivial. Qed.
+
 Instance CompSpecs : compspecs. make_compspecs prog. Defined.
 Definition Vprog : varspecs. mk_varspecs prog. Defined.
 
@@ -255,7 +261,7 @@ Definition OPENSSL_malloc_SPEC := DECLARE _malloc
      LOCAL (temp ret_temp v)
      SEP ((!!(v=nullval) && emp) || (!!(malloc_compatible n v) && memory_block Tsh n v)).
 
-(*Again taken from verif_bst*)
+(*verif_bst has this:
 Definition OPENSSL_free_SPEC := DECLARE _free
   WITH p : val , n : Z
   PRE [ 1%positive OF tptr tvoid , 2%positive OF tint]
@@ -263,7 +269,16 @@ Definition OPENSSL_free_SPEC := DECLARE _free
       PROP() LOCAL (temp 1%positive p; temp 2%positive (Vint (Int.repr n)))
       SEP (memory_block Tsh n p)
   POST [ tvoid ]
+    PROP () LOCAL () SEP ().*)
+Definition OPENSSL_free_SPEC := DECLARE _free
+  WITH p : val , n : Z
+  PRE [ 1%positive OF tptr tvoid]
+     (* we should also require natural_align_compatible (eval_id 1) *)
+      PROP() LOCAL (temp 1%positive p)
+      SEP (memory_block Tsh n p)
+  POST [ tvoid ]
     PROP () LOCAL () SEP ().
+
 
 (* Specification in mem.h: OPENSSL_cleanse zeros out |len| bytes of memory at |ptr|. 
                            This is similar to |memset_s| from C11.
@@ -344,75 +359,74 @@ Qed.
 
 (****** Specs of the four Digest Operation Accessors. *******)
 (*nonnull node*)
-Definition EVP_MD_CTX_NNnode (vals:val*(val*(val*val))) (p:val):mpred :=
+Definition EVP_MD_CTX_NNnode (sh:share) (vals:val*(val*(val*val))) (p:val):mpred :=
   match vals with (d, (mddata, (pctx, pctxops))) =>
-  EX sh:share, 
-  !!(readable_share sh /\ is_pointer_or_null d) &&
+  !!(is_pointer_or_null d /\ is_pointer_or_null mddata) &&
   data_at sh (Tstruct _env_md_ctx_st noattr) (d,(mddata,(pctx, pctxops))) p
   end.
 
-Lemma EVP_MD_CTX_NNnode_isptr vals p:
-  EVP_MD_CTX_NNnode vals p |-- !!(isptr p).
+Lemma EVP_MD_CTX_NNnode_isptr sh vals p:
+  EVP_MD_CTX_NNnode sh vals p |-- !!(isptr p).
 Proof.
   unfold EVP_MD_CTX_NNnode. destruct vals as [d [mdd [pc pcops]]]. normalize.
   rewrite data_at_isptr. entailer!.
 Qed.
-Lemma EVP_MD_CTX_NNnode_isptr' vals p:
-  EVP_MD_CTX_NNnode vals p  = (!!(isptr p) &&  EVP_MD_CTX_NNnode vals p).
+Lemma EVP_MD_CTX_NNnode_isptr' sh vals p:
+  EVP_MD_CTX_NNnode sh vals p  = (!!(isptr p) &&  EVP_MD_CTX_NNnode sh vals p).
 Proof.
   apply pred_ext; [ entailer; apply EVP_MD_CTX_NNnode_isptr | entailer!].
 Qed.
 
 (*a possibly null node*)
-Definition EVP_MD_CTX_node (vals:val*(val*(val*val))) (p:val):mpred :=
- (!!(p = nullval) && emp) || EVP_MD_CTX_NNnode vals p.
+Definition EVP_MD_CTX_node sh (vals:val*(val*(val*val))) (p:val):mpred :=
+ (!!(p = nullval) && emp) || EVP_MD_CTX_NNnode sh vals p.
 
 (*According to digest.h, EVP_MD_CTX_md may be invoked even if no digest has not been set, 
   returning null in this case. The other 3 functions are specified to crash in such a 
   situation - we hence strengthen the precondition to rule out these situations*)
 Definition EVP_MD_CTX_md_SPEC := DECLARE _EVP_MD_CTX_md
-  WITH ctx:val, d:val, x:val * (val * val)
+  WITH ctx:val, sh:share, d:val, x:val * (val * val)
   PRE [ _ctx OF (tptr (Tstruct _env_md_ctx_st noattr)) ]
-      PROP ()
+      PROP (readable_share sh)
       LOCAL (temp _ctx ctx)
-      SEP (EVP_MD_CTX_node (d, x) ctx)
+      SEP (EVP_MD_CTX_node sh (d, x) ctx)
   POST [ tptr (Tstruct _env_md_st noattr) ]
        PROP ()
        LOCAL (temp ret_temp (if Val.eq ctx nullval then nullval else d))
-       SEP (EVP_MD_CTX_node (d, x) ctx).
+       SEP (EVP_MD_CTX_node sh (d, x) ctx).
 
 Definition EVP_MD_CTX_size_SPEC := DECLARE _EVP_MD_CTX_size
-  WITH ctx:val, r:EVP_MD_record, d:val, x:val * (val * val)
+  WITH ctx:val, sh:share, r:EVP_MD_record, d:val, x:val * (val * val)
   PRE [ _ctx OF (tptr (Tstruct _env_md_ctx_st noattr)) ]
-      PROP ()
+      PROP (readable_share sh)
       LOCAL (temp _ctx ctx)
-      SEP (EVP_MD_CTX_NNnode (d, x) ctx;  EVP_MD_rep r d)
+      SEP (EVP_MD_CTX_NNnode sh (d, x) ctx;  EVP_MD_rep r d)
   POST [ tptr (Tstruct _env_md_st noattr) ]
-       PROP ()
+       PROP (readable_share sh)
        LOCAL (temp ret_temp (Vint (Int.repr (EVP_MD_rec_md_size r))))
-       SEP (EVP_MD_CTX_NNnode (d, x) ctx;  EVP_MD_rep r d).
+       SEP (EVP_MD_CTX_NNnode sh (d, x) ctx;  EVP_MD_rep r d).
 
 Definition EVP_MD_CTX_block_size_SPEC := DECLARE _EVP_MD_CTX_block_size
-  WITH ctx:val, r:EVP_MD_record, d:val, x:val * (val * val)
+  WITH ctx:val, sh:share, r:EVP_MD_record, d:val, x:val * (val * val)
   PRE [ _ctx OF (tptr (Tstruct _env_md_ctx_st noattr)) ]
-      PROP ()
+      PROP (readable_share sh)
       LOCAL (temp _ctx ctx)
-      SEP (EVP_MD_CTX_NNnode (d, x) ctx;  EVP_MD_rep r d)
+      SEP (EVP_MD_CTX_NNnode sh (d, x) ctx;  EVP_MD_rep r d)
   POST [ tptr (Tstruct _env_md_st noattr) ]
-       PROP ()
+       PROP (readable_share sh)
        LOCAL (temp ret_temp (Vint (Int.repr (EVP_MD_rec_block_size r))))
-       SEP (EVP_MD_CTX_NNnode (d, x) ctx;  EVP_MD_rep r d).
+       SEP (EVP_MD_CTX_NNnode sh (d, x) ctx;  EVP_MD_rep r d).
 
 Definition EVP_MD_CTX_type_SPEC := DECLARE _EVP_MD_CTX_type
-  WITH ctx:val, r:EVP_MD_record, d:val, x:val * (val * val)
+  WITH ctx:val, sh:share, r:EVP_MD_record, d:val, x:val * (val * val)
   PRE [ _ctx OF (tptr (Tstruct _env_md_ctx_st noattr)) ]
-      PROP ()
+      PROP (readable_share sh)
       LOCAL (temp _ctx ctx)
-      SEP (EVP_MD_CTX_NNnode (d, x) ctx;  EVP_MD_rep r d)
+      SEP (EVP_MD_CTX_NNnode sh (d, x) ctx;  EVP_MD_rep r d)
   POST [ tptr (Tstruct _env_md_st noattr) ]
        PROP ()
        LOCAL (temp ret_temp (Vint (Int.repr (NID_of_DigestNID (EVP_MD_rec_type r)))))
-       SEP (EVP_MD_CTX_NNnode (d, x) ctx;  EVP_MD_rep r d).
+       SEP (EVP_MD_CTX_NNnode sh (d, x) ctx;  EVP_MD_rep r d).
 
 Definition Gprog_DigAccessOps : funspecs :=
   (*FAILS TO TERMINATE: ltac:(with_library prog [EVP_MD_type_SPEC]). *)
@@ -422,9 +436,9 @@ Definition Gprog_DigAccessOps : funspecs :=
 Lemma body_EVP_MD_CTX_block_size: semax_body Vprog Gprog_DigAccessOps f_EVP_MD_CTX_block_size EVP_MD_CTX_block_size_SPEC.
 Proof.
   start_function. 
-  rewrite  EVP_MD_CTX_NNnode_isptr'; Intros. 
-  forward_call (ctx, d, x).
-    apply sepcon_derives; [apply orp_right2; trivial | cancel]. 
+  rewrite  EVP_MD_CTX_NNnode_isptr'; Intros.  
+  forward_call (ctx, sh, d, x).
+    apply sepcon_derives; [apply orp_right2; trivial | cancel].   
   rewrite if_false by (destruct ctx; try contradiction; discriminate). 
   forward_call (d,r).
   forward.
@@ -436,7 +450,7 @@ Lemma body_EVP_MD_CTX_type: semax_body Vprog Gprog_DigAccessOps f_EVP_MD_CTX_typ
 Proof.
   start_function. 
   rewrite  EVP_MD_CTX_NNnode_isptr'; Intros.
-  forward_call (ctx, d, x).
+  forward_call (ctx, sh, d, x).
     apply sepcon_derives; [apply orp_right2; trivial | cancel]. 
   rewrite if_false by (destruct ctx; try contradiction; discriminate).
   forward_call (d, r).
@@ -449,7 +463,7 @@ Lemma body_EVP_MD_CTX_size: semax_body Vprog Gprog_DigAccessOps f_EVP_MD_CTX_siz
 Proof.
   start_function. 
   rewrite  EVP_MD_CTX_NNnode_isptr'; Intros.
-  forward_call (ctx, d, x).
+  forward_call (ctx, sh, d, x).
     apply sepcon_derives; [apply orp_right2; trivial | cancel]. 
   rewrite if_false by (destruct ctx; try contradiction; discriminate).
   forward_call (d, r).
@@ -464,20 +478,206 @@ Proof.
   forward_if (
       PROP ()
       LOCAL (temp _ctx ctx)
-      SEP (EVP_MD_CTX_NNnode (d, (mddata, (pctx, pctxops))) ctx)). 
-+ clear H. apply orp_left; [ entailer! | unfold EVP_MD_CTX_NNnode; normalize; entailer!]. 
+      SEP (EVP_MD_CTX_NNnode sh (d, (mddata, (pctx, pctxops))) ctx)). 
++ clear H. apply orp_left; [ entailer! | unfold EVP_MD_CTX_NNnode; normalize; entailer!].
 + subst. forward.
-+ forward. entailer!. destruct ctx; trivial; try contradiction.
-  simpl in *; subst. elim H; trivial.
-  apply orp_left; [ normalize | trivial].
-+ unfold EVP_MD_CTX_NNnode. Intros sh. rename H into RSH.
-  forward.
++ forward. entailer. apply orp_left; normalize.
++ unfold EVP_MD_CTX_NNnode. Intros. 
+  forward. forward.
   rewrite data_at_isptr; normalize. 
-  forward. rewrite if_false. 2: destruct ctx; try contradiction; discriminate.
-  normalize. apply orp_right2. Exists sh. entailer!.
+  rewrite if_false. 2: destruct ctx; try contradiction; discriminate.
+  normalize. apply orp_right2. unfold EVP_MD_CTX_NNnode. entailer!.
 Qed.  
 
-(*Continiue here
+(*nonnull node*)
+Definition EVP_MD_NNnode (vals:reptype (Tstruct _env_md_st noattr)) (p:val):mpred :=
+  EX sh:share, 
+  !!(readable_share sh) &&
+  data_at sh (Tstruct _env_md_st noattr) vals p.
+
+Lemma EVP_MD_NNnode_isptr vals p:
+  EVP_MD_NNnode vals p |-- !!(isptr p).
+Proof.
+  unfold EVP_MD_NNnode. destruct vals. normalize.
+  rewrite data_at_isptr. entailer!.
+Qed.
+Lemma EVP_MD_NNnode_isptr' vals p:
+  EVP_MD_NNnode vals p  = (!!(isptr p) &&  EVP_MD_NNnode vals p).
+Proof.
+  apply pred_ext; [ entailer; apply EVP_MD_NNnode_isptr | entailer!].
+Qed.
+
+Lemma EVP_MD_NNnode_validptr vals p:  EVP_MD_NNnode vals p |-- valid_pointer p.
+Proof. unfold EVP_MD_NNnode. Intros sh. entailer!. Qed.
+
+(*a possibly null node*)
+Definition EVP_MD_node (vals:reptype (Tstruct _env_md_st noattr))(p:val):mpred :=
+ (!!(p = nullval) && emp) || EVP_MD_NNnode vals p.
+
+Definition get_ctxsize (vals:reptype (Tstruct _env_md_st noattr)):=
+  match vals with
+    (type, (mds, (flags, (ini, (upd, (fin, (blsize, ctxsize))))))) => ctxsize
+  end.
+
+Lemma Valeq_Vint {A} i j (a b:A):
+      (if Val.eq (Vint i) (Vint j) then a else b) =
+      (if Int.eq i j then a else b).
+Proof. 
+ remember (Int.eq i j). destruct b0.
++ rewrite ( binop_lemmas2.int_eq_true _ _ Heqb0). rewrite if_true; trivial.
++ remember (Val.eq (Vint i )(Vint j)) as d.
+  destruct d; trivial.
+  inversion e; subst; simpl in *.
+  specialize (int_eq_false_e j j); intuition.
+Qed. 
+
+Definition Gprog_cleanup : funspecs :=
+  (*FAILS TO TERMINATE: ltac:(with_library prog [EVP_MD_type_SPEC]). *)
+  [OPENSSL_cleanse_SPEC; OPENSSL_free_SPEC; EVP_MD_CTX_init_SPEC].
+
+(*crashes if ctx==null, so require NNode*)
+(*Case 1 (representative case:: ctx->digest==nullref)*)
+Definition EVP_MD_CTX_cleanup_SPEC1 := DECLARE _EVP_MD_CTX_cleanup
+  WITH ctx:val, sh:share, d:val, mdd:val, pv1:val, pv2:val, 
+       vals:reptype (Tstruct _env_md_st noattr)
+  PRE [ _ctx OF (tptr (Tstruct _env_md_ctx_st noattr)) ]
+      PROP (writable_share sh; d=nullval; pv2=nullval)
+      LOCAL (temp _ctx ctx)
+      SEP (EVP_MD_CTX_NNnode sh (d, (mdd, (pv1, pv2))) ctx)
+  POST [ tint ]
+       PROP ()
+       LOCAL (temp ret_temp (Vint (Int.one)))
+       SEP (data_at_ sh (tarray tuchar (sizeof (Tstruct _env_md_ctx_st noattr))) ctx).
+
+(*Case 2: md and mdd point to reasonable data*)
+Definition EVP_MD_CTX_cleanup_SPEC2 := DECLARE _EVP_MD_CTX_cleanup
+  WITH ctx:val, sh:share, d:val, mdd:val, pv1:val, pv2:val, ctxsz: int,
+       vals:reptype (Tstruct _env_md_st noattr)
+  PRE [ _ctx OF (tptr (Tstruct _env_md_ctx_st noattr)) ]
+      PROP (writable_share sh; pv2=nullval;
+            get_ctxsize vals = Vint ctxsz; Int.eq ctxsz Int.zero=false)
+      LOCAL (temp _ctx ctx)
+      SEP (EVP_MD_CTX_NNnode sh (d, (mdd, (pv1, pv2))) ctx; EVP_MD_NNnode vals d; 
+           memory_block Tsh (Int.unsigned ctxsz) mdd)
+  POST [ tint ]
+       PROP ()
+       LOCAL (temp ret_temp (Vint (Int.one)))
+       SEP (data_at_ sh (tarray tuchar (sizeof (Tstruct _env_md_ctx_st noattr))) ctx; 
+            EVP_MD_NNnode vals d).
+
+Lemma body_EVP_MD_CTX_cleanup1: semax_body Vprog Gprog_cleanup f_EVP_MD_CTX_cleanup EVP_MD_CTX_cleanup_SPEC1.
+Proof. 
+  start_function. unfold EVP_MD_CTX_NNnode. subst. 
+  Intros. 
+  forward. 
+  forward_if (
+   PROP ( )
+   LOCAL (temp _t'1 (Vint Int.zero); temp _t'12 nullval; temp _ctx ctx)
+   SEP (data_at sh (Tstruct _env_md_ctx_st noattr)
+          (nullval, (mdd, (pv1, nullval))) ctx)).
+{ simpl in H; contradiction. }
+{ clear H. forward. entailer!. }
+  forward_if (
+   PROP ( )
+   LOCAL (temp _t'2 (Vint Int.zero); temp _t'1 (Vint Int.zero); temp _t'12 nullval; 
+   temp _ctx ctx)
+   SEP (data_at sh (Tstruct _env_md_ctx_st noattr)
+          (nullval, (mdd, (pv1,nullval))) ctx)).
+{ elim H; trivial. }
+{ clear H. forward. entailer!. }
+  forward_if (
+  PROP ( )
+  LOCAL (temp _t'2 (Vint Int.zero); temp _t'1 (Vint Int.zero);
+         temp _t'12 nullval; temp _ctx ctx)
+  SEP (data_at sh (Tstruct _env_md_ctx_st noattr)
+       (nullval, (mdd, (pv1,nullval))) ctx)).
+{ elim H; trivial. }
+{ clear H. forward. entailer!. }
+  forward.
+  forward_if (
+  (PROP ( )
+   LOCAL (temp _ctx ctx)
+   SEP (data_at sh (Tstruct _env_md_ctx_st noattr)
+          (nullval, (mdd, (pv1, nullval))) ctx))).
+{ inv H. }
+{ forward. entailer!. }
+forward_call (ctx, sh, sizeof (Tstruct _env_md_ctx_st noattr)).
+forward.
+Qed.
+
+Lemma body_EVP_MD_CTX_cleanup2: semax_body Vprog Gprog_cleanup f_EVP_MD_CTX_cleanup EVP_MD_CTX_cleanup_SPEC2.
+Proof. 
+  start_function. unfold EVP_MD_CTX_NNnode. subst. rename H0 into CTXsize. rename H1 into CTXsizeNonzero. 
+  rewrite  EVP_MD_NNnode_isptr'. Intros. 
+  forward. 
+  forward_if (
+   PROP ( )
+   LOCAL (temp _t'1 (Vint Int.one); 
+          temp _t'12 d; temp _ctx ctx)
+   SEP (data_at sh (Tstruct _env_md_ctx_st noattr)
+          (d, (mdd, (pv1, nullval))) ctx; EVP_MD_NNnode vals d;
+        memory_block Tsh (Int.unsigned ctxsz) mdd)).
+{ clear H. 
+  apply denote_tc_test_eq_split; try apply valid_pointer_null.
+  apply sepcon_valid_pointer1. apply sepcon_valid_pointer2.
+    apply EVP_MD_NNnode_validptr. }
+{ clear H. forward. 
+  unfold EVP_MD_NNnode; Intros sh1. rename H into Rsh1.
+  destruct vals as [type [mds [flags [ini [upd [fin [blsize ctxsize]]]]]]]; simpl in *. subst.
+  forward. forward. entailer!. simpl. rewrite CTXsizeNonzero; trivial. 
+  unfold EVP_MD_NNnode. Exists sh1. entailer!. }
+{ subst; contradiction. }
+  forward_if 
+  (PROP ( )
+   LOCAL (temp _t'2 (if Val.eq mdd nullval then Vint Int.zero else Vint Int.one); temp _t'1 (Vint Int.one); temp _t'12 d; 
+   temp _ctx ctx)
+   SEP (data_at sh (Tstruct _env_md_ctx_st noattr)
+          (d, (mdd, (pv1, nullval))) ctx; EVP_MD_NNnode vals d;
+        memory_block Tsh (Int.unsigned ctxsz) mdd)).
+{ clear H. forward.
+  forward. 
+  + entailer.
+    apply denote_tc_test_eq_split; try apply valid_pointer_null.
+    apply sepcon_valid_pointer2. apply memory_block_valid_ptr. intuition.
+    specialize (Int.unsigned_range ctxsz); intros.
+    destruct (zeq 0 (Int.unsigned ctxsz)). 2: omega.
+    apply int_eq_false_e in CTXsizeNonzero. elim CTXsizeNonzero. unfold Int.zero. 
+    rewrite e, Int.repr_unsigned; trivial.
+  + entailer. destruct mdd; try contradiction. rewrite if_false; [ entailer! | discriminate]. }
+{ inv H. }
+rewrite memory_block_isptr. Intros. rewrite if_false. 2: destruct mdd; try contradiction; discriminate.
+forward_if 
+  (PROP ( )
+   LOCAL (temp _ctx ctx)
+   SEP (data_at sh (Tstruct _env_md_ctx_st noattr) (d, (mdd, (pv1, nullval))) ctx; EVP_MD_NNnode vals d)).
++ clear H. forward. forward.
+  unfold EVP_MD_NNnode; Intros sh1. rename H into Rsh1.
+  destruct vals as [type [mds [flags [ini [upd [fin [blsize ctxsize]]]]]]].
+  simpl in type, mds, flags, ini, upd, fin, blsize, ctxsize, CTXsize; subst.
+  forward.
+  forward_call (mdd,  Tsh, Int.unsigned ctxsz).
+  { simpl. rewrite Int.repr_unsigned. entailer!. }
+  { split. apply writable_share_top. apply Int.unsigned_range_2. }
+  forward.
+  forward_call (mdd, Int.unsigned ctxsz).
+  rewrite sepcon_assoc. apply sepcon_derives. 
+  { eapply derives_trans. apply data_at_memory_block. simpl. rewrite Z.mul_1_l, Z.max_r; trivial.
+    apply Int.unsigned_range. }
+  { cancel. }
+  entailer!. Exists sh1. entailer!.
++ inv H.
++ forward.
+  forward_if (PROP ( )
+   LOCAL (temp _t'3 nullval; temp _ctx ctx)
+   SEP (data_at sh (Tstruct _env_md_ctx_st noattr)
+          (d, (mdd, (pv1, nullval))) ctx;
+   EVP_MD_NNnode vals d)).
+  { contradiction. }
+  { clear H. forward. entailer!. }
+  forward_call (ctx, sh, sizeof (Tstruct _env_md_ctx_st noattr)).
+  forward.
+Time Qed. (*Slow; > 40s*)
+(*Continue here
 Parameter contentmodels (*bytes specdata*): list val ->  EVP_MD_CTX -> Prop.
 
 Definition EVP_MD_data_rep (M:EVP_MD)  (C: EVP_MD_CTX) (p:val): mpred :=

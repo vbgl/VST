@@ -2154,74 +2154,7 @@ Definition composites : list composite_definition :=
     (_sha1, (Tstruct _sha_state_st noattr)) :: nil)
    noattr :: nil).
 
-(* BEGIN stuff to put in Clightdefs.v *)
-Definition not_error {A} (x: Errors.res A) : Prop :=
-  match x with Errors.Error _ => False | _ => True end.
-
-Lemma not_error_composite_env: forall x,
-  not_error (build_composite_env x) ->
- build_composite_env x = Errors.OK (make_composite_env x).
-Proof.
- intros.
- unfold make_composite_env.
- destruct (build_composite_env x); auto.
- simpl in H. contradiction H.
-Qed.
-
-Lemma not_error_add_composite: 
-  forall env id su ms a defs, 
-    Maps.PTree.get id env = None ->
-    complete_members env ms = true -> 
-    Coqlib.align (sizeof_composite env su ms) (align_attr a (alignof_composite env ms)) >= 0 ->
-     not_error (add_composite_definitions 
-                (Maps.PTree.set id 
-                  {| co_su := su; co_members := ms; co_attr := a; 
-                     co_sizeof := Coqlib.align (sizeof_composite env su ms)
-                                         (align_attr a (alignof_composite env ms));
-                     co_alignof := align_attr a (alignof_composite env ms);
-                     co_rank := rank_members env ms;
-                     co_sizeof_pos := Ctypes.composite_of_def_obligation_1 env su ms a;
-                     co_alignof_two_p := Ctypes.composite_of_def_obligation_2 env ms a;
-                     co_sizeof_alignof := Ctypes.composite_of_def_obligation_3 env su ms a |}
-                  env) defs) ->
-    not_error (add_composite_definitions env (Composite id su ms a :: defs)).
-Proof.
-intros.
-unfold add_composite_definitions; fold add_composite_definitions.
-unfold composite_of_def.
-rewrite H.
-rewrite H0.
-unfold Errors.bind.
-apply H2.
-Qed.
-
-Ltac check_add_composite :=
-simple apply not_error_add_composite;
-  [reflexivity | reflexivity | compute; intro Hx; inversion Hx | ];
-match goal with |- 
-  not_error (add_composite_definitions (Maps.PTree.set _ 
-         {|  co_members := ?M; co_sizeof := ?S1; co_alignof := ?S2; co_rank := ?S3 |} _) _)  =>
-  let s := fresh "s" in
-  set (s := S1); compute in s; subst s;
-  set (s := S2); compute in s; subst s;
-  set (s := S3); compute in s; subst s;
-  let m := fresh "m" in set (m:=M)
-end;
- simpl Maps.PTree.set;
-match goal with |- 
-  not_error (add_composite_definitions ?E _) =>
-    let e := fresh "e" in set (e:=E)
-end.
-
-Ltac prove_composites_ok :=
-  apply not_error_composite_env;
-  unfold composites, build_composite_env, Maps.PTree.empty;
-  repeat check_add_composite; apply Logic.I.
-
-(* END stuff to put in Clightdefs.v *)
-
-Definition prog : Clight.program := {|
-prog_defs :=
+Definition global_definitions :=
 ((___builtin_fabs,
    Gfun(External (EF_builtin "__builtin_fabs"
                    (mksignature (AST.Tfloat :: nil) (Some AST.Tfloat)
@@ -2664,8 +2597,9 @@ prog_defs :=
  (_EVP_md5_sha1_once_bss_get, Gfun(Internal f_EVP_md5_sha1_once_bss_get)) ::
  (_EVP_md5_sha1_init, Gfun(Internal f_EVP_md5_sha1_init)) ::
  (_EVP_md5_sha1, Gfun(Internal f_EVP_md5_sha1)) ::
- (_EVP_md5_sha1_do_init, Gfun(Internal f_EVP_md5_sha1_do_init)) :: nil);
-prog_public :=
+ (_EVP_md5_sha1_do_init, Gfun(Internal f_EVP_md5_sha1_do_init)) :: nil).
+
+Definition public_idents :=
 (_EVP_md5_sha1 :: _EVP_sha512 :: _EVP_sha384 :: _EVP_sha256 :: _EVP_sha224 ::
  _EVP_sha1 :: _EVP_md5 :: _EVP_md4 :: _CRYPTO_once :: _SHA512_Final ::
  _SHA512_Update :: _SHA512_Init :: _SHA384_Final :: _SHA384_Update ::
@@ -2687,10 +2621,9 @@ prog_public :=
  ___compcert_va_float64 :: ___compcert_va_int64 :: ___compcert_va_int32 ::
  ___builtin_va_end :: ___builtin_va_copy :: ___builtin_va_arg ::
  ___builtin_va_start :: ___builtin_membar :: ___builtin_annot_intval ::
- ___builtin_annot :: ___builtin_memcpy_aligned :: ___builtin_fabs :: nil);
-prog_main := _main;
-prog_types := composites;
-prog_comp_env := make_composite_env composites;
-prog_comp_env_eq := ltac:(prove_composites_ok)
-|}.
+ ___builtin_annot :: ___builtin_memcpy_aligned :: ___builtin_fabs :: nil).
+
+Definition prog : Clight.program := 
+  mkprogram composites global_definitions public_idents _main Logic.I.
+
 
