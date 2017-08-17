@@ -141,7 +141,7 @@ CONCUR_FILES= \
   semax_preservation_jspec.v \
   semax_preservation_local.v \
   semax_preservation_acquire.v \
-  semax_preservation_release.v \
+  semax_safety_release.v \
   semax_safety_makelock.v \
   semax_safety_freelock.v \
   semax_safety_spawn.v \
