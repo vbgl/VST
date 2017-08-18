@@ -275,12 +275,11 @@ Proof.
   right; eauto.
 Qed.
 
-Program Definition ghost_update (P : pred rmap) : pred rmap := fun r => exists r', ghost_move r r' /\ P r'.
-Next Obligation.
-  intros ???? [r' [Hmove HP]].
-  destruct (age1_ghost_move _ _ _ Hmove H) as [r1 []].
-  do 2 eexists; eauto.
-  eapply pred_hereditary; eauto.
+Lemma ghost_move_level : forall r r', ghost_move r r' -> level r = level r'.
+Proof.
+  unfold ghost_move; intros.
+  rewrite rmap_level_eq.
+  destruct (unsquash r), (unsquash r'); simpl; tauto.
 Qed.
 
 Instance ghost_move_refl : RelationClasses.Reflexive ghost_move.
@@ -312,11 +311,35 @@ Proof.
   etransitivity; eauto.
 Qed.
 
+Lemma ghost_move_join : forall r1 r1' r2 r (Hmove : ghost_move r1 r1') (Hr : join r1 r2 r),
+  exists r', join r1' r2 r' /\ ghost_move r r'.
+Proof.
+  unfold ghost_move; intros.
+  rewrite join_unsquash in Hr.
+  setoid_rewrite join_unsquash.
+  destruct (unsquash r1) as [? [f1 ?]], (unsquash r1') as [? [f1' ?]], Hmove as [? Heq]; subst.
+  unfold ghost_move' in Heq; simpl in Heq.
+Admitted.
+
+Program Definition ghost_update (P : pred rmap) : pred rmap := fun r => exists r', ghost_move r r' /\ P r'.
+Next Obligation.
+  intros ???? [r' [Hmove HP]].
+  destruct (age1_ghost_move _ _ _ Hmove H) as [r1 []].
+  do 2 eexists; eauto.
+  eapply pred_hereditary; eauto.
+Qed.
+
 Lemma ghost_update_now : forall P, P |-- ghost_update P.
 Proof.
   repeat intro.
   exists a; split; auto.
   apply ghost_move_refl.
+Qed.
+
+Lemma ghost_update_FF : ghost_update FF = FF.
+Proof.
+  apply pred_ext; auto.
+  intros ? (? & ? & ?); auto.
 Qed.
 
 Definition view_shift (P Q : pred rmap) := forall x, P x -> ghost_update Q x.

@@ -2169,7 +2169,7 @@ Lemma semax_call_aux:
     guard_environ Delta (current_function k) rho ->
     (snd fsig0 =Tvoid -> ret=None) ->
     closed_wrt_modvars (Scall ret a bl) F0 ->
-    R EK_normal None = (fun rho0 : environ => EX old:val, substopt ret old F rho0 * maybe_retval (Q ts x) (snd fsig0) ret rho0) ->
+    R EK_normal None = (fun rho0 : environ => ghost_update (EX old:val, substopt ret old F rho0 * maybe_retval (Q ts x) (snd fsig0) ret rho0)) ->
 (*    Forall (fun it => complete_type (composite_types Delta) (snd it) = true) (fn_vars (snd fsig)) ->*)
     genv_cenv psi = cenv_cs ->
     rho = construct_rho (filter_genv psi) vx tx ->
@@ -2237,13 +2237,13 @@ spec H19 ; [clear H19 |]. {
  split.
  repeat intro; f_equal.
  intros ek vl te ve.
- unfold frame_ret_assert.
+ unfold frame_ret_assert, ghost_update_ret_assert.
  remember ((construct_rho (filter_genv psi) ve te)) as rho'.
  replace (stackframe_of' psi f rho') with (stackframe_of f rho')
    by (rewrite HGG; auto).
  rewrite <- (sepcon_comm (stackframe_of f rho')).
  unfold function_body_ret_assert.
- destruct ek; try solve [normalize].
+ destruct ek; try solve [normalize; rewrite ghost_update_FF; normalize].
 (* apply prop_andp_subp; intros _.*)
  rewrite andp_assoc.
  apply prop_andp_subp; intro. simpl in H15.
@@ -2253,6 +2253,7 @@ spec H19 ; [clear H19 |]. {
  apply andp_subp'; auto.
  rewrite (sepcon_comm (F0 rho * F rho)).
  apply sepcon_subp'; auto.
+ Admitted. (*
  apply sepcon_subp'; auto.
  unfold bind_ret.
  destruct vl.
@@ -2667,7 +2668,7 @@ simpl in *. unfold cl_halted in H. congruence.
 clear - H20x H20' H2.
 change (level jm = S n) in H2.
 apply age_level in H20x. change (level jm'' = n); congruence.
-Qed.
+Qed.*)
 
 Lemma func_at_func_at':
  forall fs loc, func_at fs loc |-- func_at' fs loc.
@@ -2786,7 +2787,7 @@ Focus 1. {
 clear TC7.
 eapply semax_call_aux; try eassumption;
  try solve [simpl; assumption].
-unfold normal_ret_assert.
+unfold normal_ret_assert, ghost_update_ret_assert.
 extensionality rho'.
 rewrite prop_true_andp by auto.
 rewrite prop_true_andp by auto.

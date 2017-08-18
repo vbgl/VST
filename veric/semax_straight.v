@@ -77,10 +77,12 @@ split; auto.
 split; auto.
 subst rho'; auto.
 unfold normal_ret_assert.
-unfold frame_ret_assert in *.
+unfold frame_ret_assert, ghost_update_ret_assert in *.
 rewrite prop_true_andp by auto.
 rewrite prop_true_andp by auto.
-rewrite sepcon_comm; subst rho'; auto.
+rewrite sepcon_comm; subst rho'.
+destruct H as (r1 & r2 & ? & ? & ?); exists r1, r2; split3; auto.
+exists r2; split; auto; apply ghost_move_refl.
 replace (funassert (exit_tycon c Delta' EK_normal)) with (funassert Delta'); auto.
 apply same_glob_funassert; simpl; auto.
 rewrite glob_specs_update_tycon; auto.

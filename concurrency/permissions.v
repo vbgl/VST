@@ -172,7 +172,7 @@ Section permMapDefs.
   Proof.
     intros a b H.
     destruct H as [c H].
-    inversion H; subst; simpl.
+    inversion H; subst; simpl; auto.
     - apply perm_coh_empty_1.
     - apply perm_coh_empty_1.
     - destruct k; try apply perm_coh_empty_1.
@@ -209,7 +209,6 @@ Section permMapDefs.
           exfalso; eapply glb_Rsh_not_top; eauto.
         * apply perm_of_sh_Freeable_top in AA; inversion AA; subst.
           exfalso; eapply glb_Rsh_not_top; eauto.
-    - constructor.
   Qed.
 
   

@@ -478,6 +478,9 @@ apply semax'_view_shift_post.
 auto.
 Qed.
 
+(* The pre version of this uses semax_seq from semax_loop. Maybe this should all
+   go in a separate file. *)
+
 Lemma semax_skip {CS: compspecs}:
    forall Delta P, semax Espec Delta P Sskip (normal_ret_assert P).
 Proof.
@@ -530,7 +533,8 @@ apply andp_derives; auto.
 apply andp_derives; auto.
 (* apply later_derives. *)
 apply sepcon_derives; auto.
-intros ? ?.
+intros ? [? []].
+eexists; split; eauto.
 exists x; auto.
 eapply H; eauto.
 split; auto.
@@ -644,7 +648,7 @@ specialize (H5 gx Delta'' _ (necR_refl _)
 
 intros k F w4 Hw4 [? ?].
 specialize (H5 k F w4 Hw4).
-assert ((rguard Espec gx (exit_tycon c Delta'') (frame_ret_assert R F) k) w4).
+assert ((rguard Espec gx (exit_tycon c Delta'') (frame_ret_assert (ghost_update_ret_assert R) F) k) w4).
 do 9 intro.
 apply (H9 b b0 b1 b2 y H10 a' H11).
 destruct H12; split; auto; clear H13.
@@ -654,7 +658,12 @@ unfold frame_ret_assert in H14|-*.
 clear H12 H13.
 revert a' H11 H14.
 apply sepcon_subp' with (level w2).
-apply H3.
+intros ? Hy ? Hy' [? [Hghost ?]].
+do 2 eexists; eauto.
+eapply H3; auto.
+apply ghost_move_level in Hghost.
+apply necR_level in Hy'.
+hnf; etransitivity; [|eauto]; omega.
 auto.
 apply necR_level in H6.
 apply necR_level in Hw4.
@@ -720,7 +729,11 @@ unfold frame_ret_assert, ghost_update_ret_assert in *.
 intros ???? [[? HR]]; eapply H1; eauto.
 split; auto; split; auto.
 rewrite (sepcon_comm (F0 rho)), <- sepcon_assoc in HR.
-rewrite <- sepcon_assoc; auto.
+destruct HR as (r1 & r0 & ? & (? & r & Hj & (r' & Hr' & HR) & ?) & ?).
+exists r1, r0; split3; auto.
+destruct (ghost_move_join _ _ _ _ Hr' Hj) as (x' & ? & ?).
+exists x'; split; auto.
+exists r', r; auto.
 unfold F0F.
 extensionality rho.
 rewrite sepcon_assoc.
