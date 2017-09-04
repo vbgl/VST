@@ -329,6 +329,15 @@ Definition OPENSSL_cleanse_SPEC := DECLARE _OPENSSL_cleanse
     PROP () LOCAL () 
     SEP (data_at sh (tarray tuchar n) (list_repeat (Z.to_nat n) (Vint Int.zero)) p).
 
+Definition type_of_ctx (v:reptype (Tstruct _env_md_ctx_st noattr)) :=
+  match v with
+    (type, (mddata, pv)) => type
+  end.
+Definition mddata_of_ctx (v:reptype (Tstruct _env_md_ctx_st noattr)) :=
+  match v with
+    (type, (mddata, pv)) => mddata
+  end.
+
 Definition EVP_MD_CTX_init_SPEC := DECLARE _EVP_MD_CTX_init
    WITH ctx:val, sh:share, n:Z
    PRE [ _ctx OF tptr (Tstruct _env_md_ctx_st noattr) ]
@@ -559,9 +568,13 @@ Proof. unfold EVP_MD_node.
   apply EVP_MD_NNnode_validptr. 
 Qed.
 
-Definition get_ctxsize (vals:reptype (Tstruct _env_md_st noattr)):=
+Definition get_type (vals:reptype (Tstruct _env_md_st noattr)):=
   match vals with
-    (type, (mds, (flags, (ini, (upd, (fin, (blsize, ctxsize))))))) => ctxsize
+    (type, (mds, (flags, (ini, (upd, (fin, (blsize, ctxsize))))))) => type
+  end.
+Definition get_md (vals:reptype (Tstruct _env_md_st noattr)):=
+  match vals with
+    (type, (mds, (flags, (ini, (upd, (fin, (blsize, ctxsize))))))) => mds
   end.
 Definition get_iniptr (vals:reptype (Tstruct _env_md_st noattr)):=
   match vals with
@@ -574,6 +587,10 @@ Definition get_updptr (vals:reptype (Tstruct _env_md_st noattr)):=
 Definition get_finptr (vals:reptype (Tstruct _env_md_st noattr)):=
   match vals with
     (type, (mds, (flags, (ini, (upd, (fin, (blsize, ctxsize))))))) => fin
+  end.
+Definition get_ctxsize (vals:reptype (Tstruct _env_md_st noattr)):=
+  match vals with
+    (type, (mds, (flags, (ini, (upd, (fin, (blsize, ctxsize))))))) => ctxsize
   end.
 
 Lemma Valeq_Vint {A} i j (a b:A):
@@ -1185,59 +1202,99 @@ Proof. apply ptr_comp_Cne_f in H; trivial.
   rewrite if_true; trivial.
 Qed.
 
+Parameter preInit postInit: val -> mpred.
+Parameter preInit_fresh: forall ctxsz m, memory_block Tsh (Int.unsigned ctxsz) m |--preInit m.
+(*TODO: adapt this axiom to respect size*)
+
+Definition ini_spec:funspec :=
+  WITH ctx: val, (*history: list Z, *) sh:share, 
+       CTX: reptype (Tstruct _env_md_ctx_st noattr),
+       dsh: share, dvals: reptype (Tstruct _env_md_st noattr)
+  PRE [ 1%positive OF tptr (Tstruct _env_md_ctx_st noattr)]
+          PROP (writable_share sh; readable_share dsh)
+          LOCAL (temp 1%positive ctx)
+          SEP (data_at sh (Tstruct _env_md_ctx_st noattr) CTX ctx;
+               preInit (mddata_of_ctx CTX);
+               data_at dsh (Tstruct _env_md_st noattr) dvals (type_of_ctx CTX))
+  POST [ tvoid ]
+          PROP() LOCAL () 
+          SEP(data_at sh (Tstruct _env_md_ctx_st noattr) CTX ctx;
+              postInit (mddata_of_ctx CTX);
+              data_at dsh (Tstruct _env_md_st noattr) dvals (type_of_ctx CTX)).
+
 Inductive digestInitEx_cases :=
-  DT_eq: forall (sh:share) (md pv2:val), digestInitEx_cases
-| D_null: forall (sh:share) (md pv2:val), digestInitEx_cases
+  DT_eq: forall (sh:share) (md pv2:val) (tsh:share)
+                (tvals:reptype (Tstruct _env_md_st noattr)) (ctxsz':int), digestInitEx_cases
+| D_null: forall (sh:share) (md pv2:val) (tsh:share)
+                 (tvals:reptype (Tstruct _env_md_st noattr)) (ctxsz':int), digestInitEx_cases
 | DT_neq: forall (sh:share) (d md pv2:val) (dvals:reptype (Tstruct _env_md_st noattr))
-                 (ctxsz : int) (dsh:share), digestInitEx_cases.
+                 (ctxsz : int) (dsh:share) (tsh:share)
+                 (tvals:reptype (Tstruct _env_md_st noattr)) (ctxsz':int), digestInitEx_cases.
 
 Definition digestInitEx_pre (c: digestInitEx_cases) (ctx t:val):mpred  :=
 match c with
-  DT_eq sh md pv2 => !!(writable_share sh)
-                     && EVP_MD_CTX_NNnode sh (t, (md, (nullval, pv2))) ctx
-| D_null sh md pv2  => !!(writable_share sh)
-                     && EVP_MD_CTX_NNnode sh (nullval, (md, (nullval, pv2))) ctx
-| DT_neq sh d md pv2 dvals ctxsz dsh => 
-      !!(d<>t /\ writable_share sh /\ get_ctxsize dvals = Vint ctxsz /\ 
-         Int.ltu Int.zero ctxsz = true)
+  DT_eq sh md pv2 tsh tvals ctxsz'=> 
+       !!(get_ctxsize tvals = Vint ctxsz' /\
+                      ((*Int.unsigned ctxsz' <= 0 \/ *)4 <= Int.unsigned ctxsz' <= Int.max_unsigned)
+                      /\ is_pointer_or_null (get_iniptr tvals) /\ writable_share sh)
+                   && EVP_MD_CTX_NNnode sh (t, (md, (nullval, pv2))) ctx *
+                      preInit md * EVP_MD_NNnode tsh tvals t *
+                      func_ptr' ini_spec (get_iniptr tvals)
+| D_null sh md pv2 tsh tvals ctxsz'=>
+      !!(get_ctxsize tvals = Vint ctxsz' /\
+                      ((*Int.unsigned ctxsz' <= 0 \/ *)4 <= Int.unsigned ctxsz' <= Int.max_unsigned)
+                      /\ is_pointer_or_null (get_iniptr tvals) /\ writable_share sh)
+                   && EVP_MD_CTX_NNnode sh (nullval, (md, (nullval, pv2))) ctx *
+                      EVP_MD_NNnode tsh tvals t *
+                      func_ptr' ini_spec (get_iniptr tvals)
+| DT_neq sh d md pv2 dvals ctxsz dsh tsh tvals ctxsz'=> 
+      !!(get_ctxsize tvals = Vint ctxsz' /\
+                      ((*Int.unsigned ctxsz' <= 0 \/ *)4 <= Int.unsigned ctxsz' <= Int.max_unsigned)
+                      /\ is_pointer_or_null (get_iniptr tvals) /\ d<>t /\ writable_share sh
+                      /\ get_ctxsize dvals = Vint ctxsz /\  Int.ltu Int.zero ctxsz = true)
       && (EVP_MD_CTX_NNnode sh (d, (md, (nullval, pv2))) ctx *
-          EVP_MD_NNnode dsh dvals d *
+          EVP_MD_NNnode dsh dvals d * EVP_MD_NNnode tsh tvals t *
+          func_ptr' ini_spec (get_iniptr tvals) *
           (!!(md=nullval)&&emp || memory_block Tsh (Int.unsigned ctxsz) md))
 end.
 
-Parameter POST33 POST44 POST55: mpred. 
 Definition digestInitEx_post (c: digestInitEx_cases) (ctx t rv:val):mpred  :=
 match c with
-  DT_eq sh md pv2 => !!(rv = Vint (Int.repr 33)) && POST33
-| D_null sh md pv2 => (!!(rv= nullval) && 
-             data_at sh (Tstruct _env_md_ctx_st noattr) (t, (nullval, (nullval, pv2))) ctx)
-         || (!!(rv= Vint (Int.repr 44)) && POST44)
-| DT_neq sh d md pv2 dvals ctxsz dsh => 
+  DT_eq sh md pv2 tsh tvals  ctxsz' => !!(rv = Vint Int.one) 
+                     && data_at sh (Tstruct _env_md_ctx_st noattr) (t, (md, (nullval, pv2))) ctx
+                     * postInit md * EVP_MD_NNnode tsh tvals t * func_ptr' ini_spec (get_iniptr tvals)
+| D_null sh md pv2 tsh tvals  ctxsz' => (!!(rv= nullval) && 
+             data_at sh (Tstruct _env_md_ctx_st noattr) (t, (nullval, (nullval, pv2))) ctx 
+             * EVP_MD_NNnode tsh tvals t * func_ptr' ini_spec (get_iniptr tvals))
+         || EX m :_, (!!(rv= Vint Int.one /\ malloc_compatible (Int.unsigned ctxsz') m) 
+             && data_at sh (Tstruct _env_md_ctx_st noattr) (t, (m, (nullval, pv2))) ctx * 
+                postInit m * EVP_MD_NNnode tsh tvals t*  func_ptr' ini_spec (get_iniptr tvals))
+| DT_neq sh d md pv2 dvals ctxsz dsh tsh tvals  ctxsz'=> 
      (!!(rv= Vint (Int.repr 0)) 
-      && data_at dsh (Tstruct _env_md_st noattr) dvals d * 
+      && data_at dsh (Tstruct _env_md_st noattr) dvals d 
+         * EVP_MD_NNnode tsh tvals t * func_ptr' ini_spec (get_iniptr tvals) *
          data_at sh (Tstruct _env_md_ctx_st noattr) (t, (nullval, (nullval, pv2))) ctx)
-  || (!!(rv= Vint (Int.repr 55)) && POST55)
+  || (EX m:_, !!(rv= Vint Int.one /\ malloc_compatible (Int.unsigned ctxsz') m)
+       && data_at sh (Tstruct _env_md_ctx_st noattr) (t, (m, (nullval, pv2))) ctx * 
+          postInit m * data_at dsh (Tstruct _env_md_st noattr) dvals d * 
+          EVP_MD_NNnode tsh tvals t * func_ptr' ini_spec (get_iniptr tvals))
 end.
 
 Definition EVP_DigestInit_ex_SPEC := DECLARE _EVP_DigestInit_ex
-  WITH ep: val, ctx:val, t:val, e:val, (*d: val, md:val, pv2:val,
-       sh:share,*) tsh:share, c: digestInitEx_cases,
-       tvals:reptype (Tstruct _env_md_st noattr)
+  WITH ep: val, ctx:val, t:val, e:val, (*tsh:share,*) c: digestInitEx_cases(*,
+       tvals:reptype (Tstruct _env_md_st noattr)*)
   PRE [ _ctx OF tptr (Tstruct _env_md_ctx_st noattr), 
         _type OF tptr (Tstruct _env_md_st noattr),
         _engine OF tptr (Tstruct _engine_st noattr) ]
-      PROP (exists ctxsz', get_ctxsize tvals = Vint ctxsz' /\
-               (Int.unsigned ctxsz' <= 0 \/ 4 <= Int.unsigned ctxsz' <= Int.max_unsigned);
-            exists ini', get_iniptr tvals = ini' /\ is_pointer_or_null ini')
+      PROP ()
       LOCAL (gvar ___stringlit_1 ep; temp _type t; temp _ctx ctx; temp _engine e)
       SEP (ERR ep; 
-           (*EVP_MD_CTX_NNnode sh (d, (md, (nullval, pv2))) ctx;*)
-           EVP_MD_NNnode tsh tvals t; 
            digestInitEx_pre c ctx t)
   POST [ tint] EX rv:_,
        PROP ()
        LOCAL (temp ret_temp rv)
-       SEP (ERR ep; EVP_MD_NNnode tsh tvals t; digestInitEx_post c ctx t rv).
+       SEP (ERR ep; 
+            digestInitEx_post c ctx t rv).
 
 Definition Gprog_DigestInit_ex : funspecs :=
   (*FAILS TO TERMINATE: ltac:(with_library prog [EVP_MD_type_SPEC]). *)
@@ -1245,50 +1302,65 @@ Definition Gprog_DigestInit_ex : funspecs :=
 
 Lemma body_DigestInit_ex: semax_body Vprog Gprog_DigestInit_ex f_EVP_DigestInit_ex EVP_DigestInit_ex_SPEC.
 Proof. 
-  start_function. destruct H as [ctxsz' [CTXSZ1' CTXSZ2']] .
-  destruct H0 as [ini'' [ getini' Ini']].
-  rewrite EVP_MD_NNnode_isptr'; unfold EVP_MD_NNnode; Intros. rename H into TSH.
+  start_function. 
   destruct c; normalize.
-+ (* Case DT_eq*)
-  simpl; Intros; subst. rename H into SH.
++ (* Case DT_eq*) 
+  simpl; Intros; subst.
+  rename H into CTXSZ1'. 
+  rename H0 into CTXSZ2'. (*destruct H as [ctxsz' [CTXSZ1' CTXSZ2']] .*)
+  rename H1 into Ini'. (*destruct H0 as [ini'' [ getini' Ini']].*)
+  rename H2 into SH.
+  rewrite EVP_MD_NNnode_isptr'; unfold EVP_MD_NNnode; Intros. rename H into TSH.
+  freeze [4] FUNCS. 
   rewrite data_at_isptr with (p:=ctx); Intros.
   forward.
   forward_if (
     PROP ( )
     LOCAL (gvar ___stringlit_1 ep; temp _type t;
            temp _ctx ctx; temp _engine e)
-    SEP (ERR ep;
+    SEP (ERR ep; FRZL FUNCS; preInit md;
          data_at sh (Tstruct _env_md_ctx_st noattr) (t, (md, (nullval, pv2))) ctx;
          data_at tsh (Tstruct _env_md_st noattr) tvals t)).
   - apply ptr_comp_Cne_t in H; congruence.
   - forward. entailer!.
   - forward.
-    destruct tvals as [type' [mds' [flags' [ini'' [upd' [fin' [blsize' ctxsize'']]]]]]]. 
-    simpl in type', mds', flags', ini'', upd', fin', ctxsize'', blsize', CTXSZ1', CTXSZ2', Ini'; subst.
-    simpl. forward. admit. (*Call ini'*) 
+    destruct tvals as [type' [mds' [flags' [ini' [upd' [fin' [blsize' ctxsize'']]]]]]]. 
+    simpl in type', mds', flags', ini', upd', fin', ctxsize'', blsize', CTXSZ1', CTXSZ2', Ini'; subst.
+    simpl. forward. thaw FUNCS. simpl.
+    forward_call (ctx, sh, (t, (md, (nullval, pv2))), tsh, 
+                   (type', (mds', (flags', (ini', (upd', (fin', (blsize', Vint ctxsz')))))))).
+    { simpl. cancel. } 
+    simpl; forward. Exists (Vint (Int.one)); unfold EVP_MD_NNnode; entailer!.
+
 + (* Case D_null*)
-  simpl; Intros; subst. rename H into SH.
+  simpl; Intros; subst. 
+  rename H into CTXSZ1'. 
+  rename H0 into CTXSZ2'. (*destruct H as [ctxsz' [CTXSZ1' CTXSZ2']] .*)
+  rename H1 into Ini'. (*destruct H0 as [ini'' [ getini' Ini']].*)
+  rename H2 into SH. 
+  rewrite EVP_MD_NNnode_isptr'; unfold EVP_MD_NNnode; Intros. rename H into TSH. 
+  freeze [3] FUNCS.
   rewrite data_at_isptr with (p:=ctx); Intros.
   forward.
   forward_if (
      PROP ( )
      LOCAL (gvar ___stringlit_1 ep;
             temp _type t; temp _ctx ctx; temp _engine e)
-     SEP (ERR ep;
+     SEP (ERR ep; FRZL FUNCS; 
           data_at tsh (Tstruct _env_md_st noattr) tvals t;
-          ( !!(Int.unsigned ctxsz' <= 0)
+          (*( !!(Int.unsigned ctxsz' <= 0)
              && data_at sh (Tstruct _env_md_ctx_st noattr) (t, (md, (nullval, pv2))) ctx)
-           || (!!(0 < Int.unsigned ctxsz')
+           || *)(!!(0 < Int.unsigned ctxsz')
                && EX m:_, !!(malloc_compatible (Int.unsigned ctxsz') m) &&
                   data_at sh (Tstruct _env_md_ctx_st noattr) (t, (m, (nullval, pv2))) ctx *
                   memory_block Tsh (Int.unsigned ctxsz') m))).
-  2: solve [apply ptr_comp_Cne_f in H; simpl; trivial; subst; try contradiction; destruct t; try contradiction; trivial]. 
+  2: solve [ apply ptr_comp_Cne_f in H; simpl; trivial; subst; try contradiction; destruct t; try contradiction; trivial]. 
   - clear H.
     forward.
     forward_if (PROP ( )
       LOCAL (temp _t'1 nullval; gvar ___stringlit_1 ep; temp _type t; 
              temp _ctx ctx; temp _engine e)
-      SEP (ERR ep;
+      SEP (ERR ep; FRZL FUNCS; 
            data_at sh (Tstruct _env_md_ctx_st noattr) (nullval, (md, (nullval, pv2))) ctx;
            data_at tsh (Tstruct _env_md_st noattr) tvals t));
      [ solve [contradiction] | solve [forward ; entailer!] | ].
@@ -1296,7 +1368,7 @@ Proof.
       PROP ( )
       LOCAL (gvar ___stringlit_1 ep;
              temp _type t; temp _ctx ctx; temp _engine e)
-      SEP (ERR ep;
+      SEP (ERR ep; FRZL FUNCS; 
            data_at sh (Tstruct _env_md_ctx_st noattr) (nullval, (md, (nullval, pv2))) ctx;
            data_at tsh (Tstruct _env_md_st noattr) tvals t));
      [ elim H; trivial | forward; entailer! | ].
@@ -1309,16 +1381,16 @@ Proof.
       PROP ( )
       LOCAL (gvar ___stringlit_1 ep; temp _type t; 
              temp _ctx ctx; temp _engine e)
-      SEP (ERR ep;
+      SEP (ERR ep; FRZL FUNCS; 
            data_at tsh (Tstruct _env_md_st noattr)
               (type', (mds', (flags', (ini', (upd', (fin', (blsize', Vint ctxsz'))))))) t;
-           ( !!(Int.unsigned ctxsz' <= 0)
+           (*( !!(Int.unsigned ctxsz' <= 0)
              && data_at sh (Tstruct _env_md_ctx_st noattr) (t, (md, (nullval, pv2))) ctx)
-           || (!!(0 < Int.unsigned ctxsz')
+           || *)(!!(0 < Int.unsigned ctxsz')
                && EX m:_, !!(malloc_compatible (Int.unsigned ctxsz') m) &&
                   data_at sh (Tstruct _env_md_ctx_st noattr) (t, (m, (nullval, pv2))) ctx *
                   memory_block Tsh (Int.unsigned ctxsz') m))).
-    { destruct CTXSZ2'; [ omega | clear H]. forward.
+    { (*destruct CTXSZ2'; [ omega | clear H].*)clear H. forward.
       forward_call (Int.unsigned ctxsz'). rewrite Int.repr_unsigned; entailer!. 
       Intros m. forward. forward. deadvars.
       apply semax_orp_SEPx; Intros; subst.
@@ -1328,7 +1400,8 @@ Proof.
         * clear H.
           forward_call (Vint (Int.repr 29), Vint (Int.repr 0), Vint (Int.or (Int.repr 1) (Int.repr 64)),
                  ep, Vint (Int.repr 177)). 
-          forward. Exists nullval. entailer!.
+          freeze [0;1;2;3] FRALL. forward.
+          Exists nullval. thaw FRALL; thaw FUNCS. simpl. entailer!.
           unfold EVP_MD_NNnode; entailer!. apply orp_right1. cancel. 
         * inv H.
         * intros. unfold POSTCONDITION, abbreviate, overridePost; clear POSTCONDITION.
@@ -1342,40 +1415,63 @@ Proof.
           LOCAL (gvar ___stringlit_1 ep; temp _type t; 
                  temp _ctx ctx; temp _engine e)
           SEP (memory_block Tsh (Int.unsigned ctxsz') m; 
-               ERR ep;
+               ERR ep; FRZL FUNCS; 
                data_at sh (Tstruct _env_md_ctx_st noattr) (t, (m, (nullval, pv2))) ctx;
                data_at tsh (Tstruct _env_md_st noattr)
                  (type', (mds', (flags', (ini', (upd', (fin', (blsize', Vint ctxsz'))))))) t)).
         * clear H.
           apply denote_tc_test_eq_split; [ apply sepcon_valid_pointer1 | apply valid_pointer_null].
-          apply sepcon_valid_pointer1. apply sepcon_valid_pointer1.
-          apply memory_block_valid_ptr. intuition. omega.
+          apply sepcon_valid_pointer1. apply sepcon_valid_pointer1. apply sepcon_valid_pointer1.
+          (*apply sepcon_valid_pointer1. *) apply memory_block_valid_ptr. intuition. omega.
         * subst m; contradiction.
         * clear H. forward. entailer!.
         * intros. unfold POSTCONDITION, abbreviate, overridePost; clear POSTCONDITION.
           old_go_lower. clear H. destruct ek; simpl; normalize. entailer!. 
-          apply orp_right2. Exists m; entailer!. } 
-    { destruct CTXSZ2'; [ clear H | omega ]. forward. entailer!.
-      apply orp_right1; trivial. }
+          (*apply orp_right2. *) Exists m; entailer!. } 
+    { omega. (*destruct CTXSZ2'; [ clear H | omega ]. clear H. forward. entailer!.
+      apply orp_right1; trivial.*)  }
     intros. unfold POSTCONDITION, abbreviate, overridePost; clear POSTCONDITION.
-    old_go_lower. clear H. destruct ek; simpl; normalize. entailer!.
-  - focus_SEP 2.
+    old_go_lower. clear H. destruct ek; simpl; normalize. Exists m; entailer!.
+  - Intros m. clear H; rename H0 into M. 
     destruct tvals as [type' [mds' [flags' [ini' [upd' [fin' [blsize' ctxsize'']]]]]]]. 
     simpl in type', mds', flags', ini', upd', fin', ctxsize'', blsize', CTXSZ1', CTXSZ2', Ini'; subst; simpl.
-    apply semax_orp_SEPx; Intros.
-    * rename H into NONPOS. forward. forward. admit. (*Call ini'*)
-    * rename H into POS. Intros m. rename H into M. forward. forward. admit. (*Call ini'*)
+    (*apply semax_orp_SEPx; Intros.
+    * rename H into NONPOS. forward. forward. thaw FUNCS. simpl.
+      forward_call (ctx, sh, (t, (md, (nullval, pv2))), tsh, 
+                   (type', (mds', (flags', (ini', (upd', (fin', (blsize', Vint ctxsz')))))))).
+      { simpl. cancel. } 
+      simpl; forward. Exists (Vint (Int.one)); unfold EVP_MD_NNnode; entailer!.
+      apply orp_right2. entailer!. (*Vint Int.one = Vint (Int.repr 44)*) admit.
+      admit. (*data_at sh (Tstruct _env_md_ctx_st noattr)
+  (t, (md, (nullval, pv2))) ctx |-- POST44*) *)
+
+    (** Intros. rename H into POS. Intros m. rename H into M.*) forward.
+      forward. thaw FUNCS. simpl.
+      replace_SEP 4 (preInit m). { entailer!. apply preInit_fresh. } 
+      forward_call (ctx, sh, (t, (m, (nullval, pv2))), tsh, 
+                   (type', (mds', (flags', (ini', (upd', (fin', (blsize', Vint ctxsz')))))))).
+      { simpl. cancel. } 
+      simpl; forward. Exists (Vint (Int.one)); unfold EVP_MD_NNnode; entailer!.
+      apply orp_right2. Exists m. entailer!.
 + (*Case DT_neq*)
-  simpl; Intros; subst. rename H into DT. rename H0 into SH. 
-  rename H1 into CTXSZ1. rename H2 into CTXSZ2.
-  rewrite EVP_MD_NNnode_isptr'; unfold EVP_MD_NNnode; Intros. rename H into DSH.
-  freeze [4] MD. freeze [4] D.
+  simpl; Intros; subst.
+  rename H into CTXSZ1'. 
+  rename H0 into CTXSZ2'. (*destruct H as [ctxsz' [CTXSZ1' CTXSZ2']] .*)
+  rename H1 into Ini'. (*destruct H0 as [ini'' [ getini' Ini']].*)
+  rename H2 into DT.
+  rename H3 into SH.
+  rename H4 into CTXSZ1. rename H5 into CTXSZ2.
+  rewrite EVP_MD_NNnode_isptr'; unfold EVP_MD_NNnode; Intros.
+  rename H into DSH. rename H0 into TSH.
+  freeze [4] FUNCS. 
+  rewrite data_at_isptr with (p:=ctx); Intros.
+  freeze [5] MD. freeze [4] D.
   (*destruct dvals as [type [mds [flags [ini [upd [fin [blsize ctxsize]]]]]]]. 
   simpl in type, mds, flags,ini, upd, fin, ctxsize, blsize, CTXSZ1.
   destruct tvals as [type' [mds' [flags' [ini' [upd' [fin' [blsize' ctxsize'']]]]]]]. 
   simpl in type', mds', flags',ini', upd', fin', ctxsize'', blsize', CTXSZ1', CTXSZ2', Ini'; subst; simpl.
   *)
-  forward. thaw D. freeze [4] CTX.
+  forward. thaw D. freeze [4] CTX. freeze [0;2;3;4] REST. rewrite data_at_isptr with (p:=t); Intros.
   forward_if (
     PROP ( )
     LOCAL (gvar ___stringlit_1 ep;
@@ -1384,40 +1480,42 @@ Proof.
           !! (0 < Int.unsigned ctxsz' /\ malloc_compatible (Int.unsigned ctxsz') m)
           && data_at sh (Tstruct _env_md_ctx_st noattr) (t, (m, (nullval, pv2))) ctx *
              memory_block Tsh (Int.unsigned ctxsz') m)
-        || !! (0 >= Int.unsigned ctxsz')
-           && data_at sh (Tstruct _env_md_ctx_st noattr) (t, (nullval, (nullval, pv2))) ctx;
-         ERR ep; 
+        (*|| !! (0 >= Int.unsigned ctxsz')
+           && data_at sh (Tstruct _env_md_ctx_st noattr) (t, (nullval, (nullval, pv2))) ctx*);
+         ERR ep; FRZL FUNCS;
          data_at tsh (Tstruct _env_md_st noattr) tvals (*(type', (mds', (flags', (ini', (upd', (fin', (blsize', Vint ctxsz')))))))*) t;
          data_at dsh (Tstruct _env_md_st noattr) dvals (*(type, (mds, (flags, (ini, (upd, (fin, (blsize, Vint ctxsz)))))))*) d)).
-  2: solve [apply ptr_comp_Cne_f in H; trivial; try contradiction; destruct t; try contradiction; trivial].
+  2: solve [ apply ptr_comp_Cne_f in H; trivial; try contradiction; destruct t; try contradiction; trivial].
   { clear H.
     unfold POSTCONDITION, abbreviate; clear POSTCONDITION.
-    thaw CTX. 
-    freeze [1;4] DTFR. forward.
+    thaw REST; thaw CTX. 
+    freeze [4;5] DTFR. forward.
     forward_if (
       PROP ( )
       LOCAL (temp _t'1 (Vint Int.one); gvar ___stringlit_1 ep; temp _type t; temp _ctx ctx; temp _engine e)
-      SEP (FRZL DTFR; FRZL MD; ERR ep;
+      SEP (FRZL DTFR; FRZL MD; ERR ep; FRZL FUNCS;
            data_at sh (Tstruct _env_md_ctx_st noattr) (d, (md, (nullval, pv2))) ctx)).
     { clear H. apply denote_tc_test_eq_split; 
           [apply sepcon_valid_pointer1 | apply valid_pointer_null].
-      apply sepcon_valid_pointer1; apply sepcon_valid_pointer1.
+      apply sepcon_valid_pointer1; apply sepcon_valid_pointer1. apply sepcon_valid_pointer1.
       thaw DTFR. apply sepcon_valid_pointer1. entailer!. }
     { clear H. forward. unfold POSTCONDITION, abbreviate; clear POSTCONDITION; thaw DTFR.
-      freeze [1;2;3;4] REST.
+      freeze [1;2;3;4;5] REST.
       destruct dvals as [type [mds [flags [ini [upd [fin [blsize ctxsize]]]]]]]. 
       simpl in type, mds, flags,ini, upd, fin, ctxsize, blsize, CTXSZ1. subst; simpl.
-      forward. forward. entailer!. simpl. unfold Int.zero in CTXSZ2; rewrite CTXSZ2; trivial.
-      thaw REST. cancel. }
+      forward. forward.
+      go_lower. normalize. unfold Int.zero in CTXSZ2. simpl; rewrite CTXSZ2. 
+      apply andp_right; [ apply prop_right; repeat split; trivial | cancel ]. 
+      thaw REST; cancel. }
     { subst d; contradiction. }
     forward_if (
       PROP ( )
       LOCAL (gvar ___stringlit_1 ep; 
              temp _type t; temp _ctx ctx; temp _engine e)
-      SEP (FRZL DTFR; ERR ep;
+      SEP (FRZL DTFR; ERR ep; FRZL FUNCS;
            data_at sh (Tstruct _env_md_ctx_st noattr) (d, (nullval, (nullval, pv2))) ctx)).
     { clear H. forward. unfold POSTCONDITION, abbreviate; clear POSTCONDITION; thaw DTFR. thaw MD.
-      freeze [0;1;3] REST.
+      freeze [0;1;3;4] REST.
       (*free*) forward_call (md, Int.unsigned ctxsz).
       forward. entailer!. thaw REST. cancel. }
     { inv H. }
@@ -1430,25 +1528,25 @@ Proof.
      PROP ( )
      LOCAL (gvar ___stringlit_1 ep;
             temp _type t; temp _ctx ctx; temp _engine e)
-     SEP (FRZL FR_D; ERR ep;data_at tsh (Tstruct _env_md_st noattr)
+     SEP (FRZL FR_D; ERR ep; FRZL FUNCS; data_at tsh (Tstruct _env_md_st noattr)
      (type',
      (mds',
      (flags', (ini', (upd', (fin', (blsize', Vint ctxsz'))))))) t;
           (!!(0 < Int.unsigned ctxsz') 
            && (EX m:val, !!(malloc_compatible (Int.unsigned ctxsz') m) &&
                  data_at sh (Tstruct _env_md_ctx_st noattr) (t, (m, (nullval, pv2))) ctx *
-                 memory_block Tsh (Int.unsigned ctxsz') m))
-          || (!!(0 >= Int.unsigned ctxsz') 
+                 memory_block Tsh (Int.unsigned ctxsz') m)))).
+          (*|| (!!(0 >= Int.unsigned ctxsz') 
               && data_at sh (Tstruct _env_md_ctx_st noattr)
-                 (t, (nullval, (nullval, pv2))) ctx))).
+                 (t, (nullval, (nullval, pv2))) ctx))).*)
      + (*0 < Int.unsigned ctxsz'*)
-       rename H into CTXSZ'. 
+       clear H. (*rename H into CTXSZ'. *)
        forward. 
        forward_call (Int.unsigned ctxsz').
        { rewrite Int.repr_unsigned; entailer!. }
-       { destruct CTXSZ2'; omega. } 
+(*       { destruct CTXSZ2'; omega. } *)
        Intros m. freeze [4] FR_T.
-       forward. forward. deadvars. simpl.
+       forward. forward. deadvars!. simpl.
        focus_SEP 1. apply semax_orp_SEPx; Intros; subst.
        { (*m==null*)
          forward_if (PROP (False) LOCAL () SEP ()).
@@ -1457,13 +1555,13 @@ Proof.
                 ep, Vint (Int.repr 177)). 
             forward. Exists nullval. entailer!. 
             unfold EVP_MD_NNnode. entailer!. thaw FR_T. cancel.
-            apply orp_right1. thaw FR_D. cancel. 
+            apply orp_right1. thaw FR_D. cancel. clear MD. thaw FUNCS; simpl. cancel.
        * inv H. 
        * intros. unfold overridePost. old_go_lower. clear H.
              destruct (EqDec_exitkind ek EK_normal). entailer!. cancel. }
        { (*m <> null*)
          rename H into M. rewrite memory_block_isptr; Intros.
-         freeze [1;2;3;4] FR3. 
+         freeze [1;2;3;4;5] FR3. 
          forward_if (PROP ( )
             LOCAL (temp _t'7 m; gvar ___stringlit_1 ep; temp _type t; temp _ctx ctx; temp _engine e) 
             SEP (FRZL FR3; memory_block Tsh (Int.unsigned ctxsz') m)).
@@ -1477,300 +1575,88 @@ Proof.
            old_go_lower. clear H.
            destruct ek; simpl; normalize. entailer!.
            thaw FR3; thaw FR_T; normalize. cancel. 
-           apply orp_right1. Exists (eval_id _t'7 rho). entailer!. } 
+           (*apply orp_right1. *) Exists (eval_id _t'7 rho). entailer!. } 
      + (*Case 0 >= Int.unsigned ctxsz' *)
-       rename H into CTXSZ'.
-       forward. entailer!. apply orp_right2. cancel.
+       omega. (*rename H into CTXSZ'.
+       forward. entailer!. apply orp_right2. cancel.*)
      + intros. unfold POSTCONDITION, abbreviate, overridePost; clear POSTCONDITION.
            old_go_lower. clear H.
            destruct ek; simpl; normalize. entailer!.
-           thaw FR_D. cancel. apply orp_left; Intros.
+           thaw FR_D. cancel. Exists m. normalize.
+           apply andp_right; [apply prop_right; repeat split; trivial | cancel]. (*apply orp_left; Intros.
        - Intros m. apply orp_right1. Exists m. entailer!.
-       - apply orp_right2. entailer!. } 
-  apply semax_orp_SEPx. 
-  - Intros m. freeze [1;2;4] FR5. forward.
+       - apply orp_right2. entailer!.*) } 
+  (*apply semax_orp_SEPx. 
+  - *)Intros m. clear H; rename H0 into M. 
+    freeze [1;2;3;5] FR5. forward.
     destruct tvals as [type' [mds' [flags' [ini' [upd' [fin' [blsize' ctxsize'']]]]]]]. 
     simpl in type', mds', flags',ini', upd', fin', ctxsize'', blsize', CTXSZ1', CTXSZ2', Ini'; subst; simpl.
-    forward. admit. (*call ini'*)
+    forward. thaw FR5. clear REST CTX MD. thaw FUNCS. simpl. freeze [1;3] REST1.
+      replace_SEP 1 (preInit m). { entailer!. apply preInit_fresh. } 
+      forward_call (ctx, sh, (t, (m, (nullval, pv2))), tsh, 
+                   (type', (mds', (flags', (ini', (upd', (fin', (blsize', Vint ctxsz')))))))).
+      { simpl. cancel. } 
+      simpl; forward. Exists (Vint (Int.one)); unfold EVP_MD_NNnode; entailer!.
+      thaw REST1. cancel. apply orp_right2. Exists m. normalize.
+      apply andp_right; [ apply prop_right; repeat split; trivial | cancel]. (*
   - Intros. freeze [1;3] FR5. forward.
     destruct tvals as [type' [mds' [flags' [ini' [upd' [fin' [blsize' ctxsize'']]]]]]]. 
     simpl in type', mds', flags',ini', upd', fin', ctxsize'', blsize', CTXSZ1', CTXSZ2', Ini'; subst; simpl.
-    forward. admit. (*call ini'*)
-Admitted.
-(*
-admit. thaw FR; thaw FR_T; normalize. cancel. 
-           apply orp_right1. Exists (eval_id _t'7 rho). entailer!. 
-      
+    forward. admit. (*call ini'*)*)
+Time Qed.
 
-         Exists m. destruct (eq_dec ek EK_normal); simpl; entailer!.
-         subst; simpl. Intros. entailer!. admit. 
-         admit. } }
-  { (*Case t=d*)
-    apply ptr_comp_Cne_f in H; subst; trivial.
-    forward. entailer!. }
-
-
-     apply orp_right2. Exists (type, (mds, (flags, (ini, (upd, (fin, (blsize, Vint ctxsz))))))) ctxsz dsh. 
-     simpl. entailer!. } forward_call 
-
- forward. ; apply EVP_MD_NNnode_validptr.
-      rewrite (ptr_comp_Cne_t' _ _ HT); trivial. apply ptr_comp_Cne_t in HT; trivial.
-    assert (Auxvals: exists auxvals1: reptype (Tstruct _env_md_ctx_st noattr),
-        auxvals1 = (d, (md, (nullval, pv2)))).
-    { eexists; reflexivity. }
-    destruct Auxvals as [auxvals1 Auxvals1].
-    apply semax_seq with (Q:= EX mdd:_,
+Definition EVP_DigestInit_SPEC := DECLARE _EVP_DigestInit
+  WITH ep: val, ctx:val, t:val, sh:share, tsh:share, 
+       tvals:reptype (Tstruct _env_md_st noattr), ctxsz':int
+  PRE [ _ctx OF tptr (Tstruct _env_md_ctx_st noattr), 
+        _type OF tptr (Tstruct _env_md_st noattr) ]
+      PROP (get_ctxsize tvals = Vint ctxsz';
+            4 <= Int.unsigned ctxsz' <= Int.max_unsigned;
+            is_pointer_or_null (get_iniptr tvals); writable_share sh)
+      LOCAL (gvar ___stringlit_1 ep; temp _type t; temp _ctx ctx)
+      SEP (ERR ep; func_ptr' ini_spec (get_iniptr tvals);
+           data_at_ sh (Tstruct _env_md_ctx_st noattr) ctx;
+           EVP_MD_NNnode tsh tvals t )
+  POST [ tint] EX rv:_,
        PROP ()
-       LOCAL (gvar ___stringlit_1 ep; temp _type t; temp _ctx ctx; 
-              temp _t'1 mdd; temp _engine e)
-       SEP ((!! (d = nullval /\ mdd=nullval) && emp)
-            || (EX dvals : reptype (Tstruct _env_md_st noattr),
-                (EX ctxsz : int,
-                 (EX dsh : share,
-                  !! (get_ctxsize dvals = Vint ctxsz /\
-                      Int.ltu Int.zero ctxsz = true /\ mdd=Vint Int.one) 
-                  && (EVP_MD_NNnode dsh dvals d *
-                      (!! (md = nullval) && emp || memory_block Tsh (Int.unsigned ctxsz) md)))));
-            ERR ep; EVP_MD_NNnode tsh tvals t;
-            data_at sh (Tstruct _env_md_ctx_st noattr) auxvals1 ctx)). 
-    { apply semax_orp_SEPx; Intros; subst.
-      + (*d==null*)
-        clear HT; rewrite EVP_MD_NNnode_isptr'; Intros. 
-        forward_if  (PROP ( )
-           LOCAL (temp _t'1 nullval; gvar ___stringlit_1 ep;
-                  temp _type t; temp _ctx ctx; temp _engine e)
-           SEP (ERR ep;
-                data_at sh (Tstruct _env_md_ctx_st noattr) (nullval, (md, (nullval, pv2))) ctx;
-                EVP_MD_NNnode tsh tvals t)); 
-         [ solve [contradiction] | solve [clear H; forward; entailer!] | ].
-        - intros. old_go_lower. clear H. unfold overridePost.
-          destruct ek; simpl; entailer!. Exists nullval. entailer!. apply orp_right1; entailer!.
-      + (*isptr d*)
-        Intros dvals ctxsz dsh. rename H into CTXSZ1. rename H0 into CTXSZ2. freeze [1;2;4] FR1.
-        rewrite EVP_MD_NNnode_isptr'; Intros. 
-        forward_if (PROP ( )
-           LOCAL (temp _t'1 (Vint Int.one); gvar ___stringlit_1 ep; 
-                  temp _type t; temp _ctx ctx; temp _engine e)
-           SEP (EVP_MD_NNnode dsh dvals d; FRZL FR1;
-                data_at sh (Tstruct _env_md_ctx_st noattr) (d, (md, (nullval, pv2))) ctx));
-          [ clear H | clear H | subst; contradiction |].
-        - apply denote_tc_test_eq_split; 
-          [apply sepcon_valid_pointer1 | apply valid_pointer_null].
-          apply sepcon_valid_pointer2; apply EVP_MD_NNnode_validptr.
-        - forward. 
-          destruct dvals as [type [mds [flags [ini [upd [fin [blsize ctxsize]]]]]]]. 
-          simpl in type, mds, flags,ini, upd, fin, ctxsize, blsize, CTXSZ1.
-          unfold EVP_MD_NNnode; Intros. subst. forward. forward.
-          entailer!. simpl. unfold Val.of_bool. unfold Int.zero in CTXSZ2; rewrite CTXSZ2; trivial. 
-          unfold EVP_MD_NNnode. entailer!. 
-        - intros. old_go_lower. clear H. unfold overridePost. 
-          destruct ek; simpl; entailer!. Exists (Vint Int.one). (* rewrite if_false. 2: destruct d; try contradiction; discriminate.*)
-          thaw FR1. entailer!. apply orp_right2. Exists dvals ctxsz dsh. entailer!. } 
-    unfold MORE_COMMANDS, abbreviate. Intros mdd.
-    assert (Auxvals: exists auxvals2: reptype (Tstruct _env_md_ctx_st noattr),
-        auxvals2 = (d, (if Val.eq d nullval then md else nullval, (nullval, pv2)))).
-    { eexists; reflexivity. }
-    destruct Auxvals as [auxvals2 Auxvals2].
-    forward_if ( PROP ()
-      LOCAL (gvar ___stringlit_1 ep; temp _type t; 
-             temp _ctx ctx; temp _engine e)
-      SEP (!! (d = nullval /\ mdd = nullval) && emp
-           || (EX dvals : reptype (Tstruct _env_md_st noattr),
-              (EX ctxsz : int,
-               (EX dsh : share,
-                !! (get_ctxsize dvals = Vint ctxsz /\
-                    Int.ltu Int.zero ctxsz = true) &&
-                (EVP_MD_NNnode dsh dvals d))));
-           ERR ep; EVP_MD_NNnode tsh tvals t;
-           data_at sh (Tstruct _env_md_ctx_st noattr) auxvals2 ctx)).
-   { apply semax_orp_SEPx; Intros; subst; [ inv H |].
-     Intros dvals ctxsz dsh. rewrite EVP_MD_NNnode_isptr'; Intros. 
-     destruct dvals as [type [mds [flags [ini [upd [fin [blsize ctxsize]]]]]]]. 
-     simpl in type, mds, flags,ini, upd, fin, ctxsize, blsize, H0. subst; simpl.
-     freeze [0;2;3] FR1. forward.
-     (*free*)forward_call (md, Int.unsigned ctxsz).
-     forward. rewrite if_false by (destruct d; try contradiction; discriminate). 
-     entailer!. thaw FR1. cancel.
-     apply orp_right2. Exists (type, (mds, (flags, (ini, (upd, (fin, (blsize, Vint ctxsz))))))) ctxsz dsh. 
-     simpl. entailer!. }
-   { apply semax_orp_SEPx; Intros; subst.
-     + clear H. forward. entailer!. apply orp_right1. entailer!.
-     + Intros dvals ctxsz dsh. subst; inv H. }
-   
-   (*Line 173 ctx->digest = type;*)
-   subst auxvals2 auxvals1. forward.
-   freeze [0;1;3] FR1.
-   destruct tvals as [type' [mds' [flags' [ini' [upd' [fin' [blsize' ctxsize'']]]]]]]. 
-   simpl in type', mds', flags',ini', upd', fin', ctxsize'', blsize', CTXSZ'; subst.
-   unfold EVP_MD_NNnode; Intros. rename H into TSH.
-   forward. thaw FR1. rewrite data_at_isptr with (p:=t). Intros.
-   simpl. freeze [0] FR2. freeze [0;3] FR3. 
-   forward_if (
-     PROP ( )
-     LOCAL (temp _t'6 (Vint ctxsz'); gvar ___stringlit_1 ep;
-            temp _type t; temp _ctx ctx; temp _engine e)
-     SEP (FRZL FR3; ERR ep;
-          (!!(0 < Int.unsigned ctxsz') 
-           && (EX m:val, !!(malloc_compatible (Int.unsigned ctxsz') m) &&
-                 data_at sh (Tstruct _env_md_ctx_st noattr) (t, (m, (nullval, pv2))) ctx *
-                 data_at_ Tsh (tarray tuchar (Int.unsigned ctxsz')) m))
-          || (!!(0 >= Int.unsigned ctxsz') 
-              && data_at sh (Tstruct _env_md_ctx_st noattr)
-                 (t, (if Val.eq d nullval then md else nullval, (nullval, pv2))) ctx))).
-   + (*0 < Int.unsigned ctxsz'*)
-     rename H into CTXSZ'. unfold POSTCONDITION; clear POSTCONDITION. thaw FR3.
-     forward. 
-     forward_call (Int.unsigned ctxsz'). rewrite Int.repr_unsigned; entailer!. 
-     admit. (*4 <= Int.unsigned ctxsz' <= Int.max_unsigned*) 
-     Intros m. forward. forward. deadvars.
-     apply semax_orp_SEPx; Intros; subst.
-     { (*m==null*)
-       forward_if (PROP (False) LOCAL () SEP ()).
-       *  clear H.
-          forward_call (Vint (Int.repr 29), Vint (Int.repr 0), Vint (Int.or (Int.repr 1) (Int.repr 64)),
-                ep, Vint (Int.repr 177)). 
-          forward. Exists nullval. entailer!. thaw FR2.
-          rewrite <- exp_sepcon2. cancel. 
-          rewrite <- exp_sepcon1. unfold EVP_MD_NNnode. entailer!.
-          admit. (*POSTCOND*)
-       * inv H.
-       * intros. unfold overridePost. old_go_lower. clear H.
-             destruct (EqDec_exitkind ek EK_normal). entailer!. trivial. }
-     { (*m <> null*)
-       rename H into M. rewrite memory_block_isptr; Intros.
-       freeze [1;2;3;4] FR3. 
-       forward_if (PROP ( )
-          LOCAL (temp _t'7 (force_val (sem_cast (tptr tvoid) (tptr tvoid) m));
-             temp _t'6 (Vint ctxsz'); 
-             gvar ___stringlit_1 ep; temp _type t; temp _ctx ctx; temp _engine e) 
-          SEP (FRZL FR3; memory_block Tsh (Int.unsigned ctxsz') m)).
-       * clear H.
-         apply denote_tc_test_eq_split; 
-          [apply sepcon_valid_pointer2 | apply valid_pointer_null].
-         apply memory_block_valid_ptr. intuition. admit. (*Int.unsigned ctxsz' > 0*)
-       * destruct m; try contradiction. subst; inv H.
-       * forward. entailer!. 
-       * intros. old_go_lower. clear H.
-         unfold POSTCONDITION, abbreviate, overridePost; clear POSTCONDITION.
-         destruct (eq_dec ek EK_normal).
-         subst; simpl. Intros. entailer!. admit. 
-         admit. } }
-  { (*Case t=d*)
-    apply ptr_comp_Cne_f in H; subst; trivial.
-    forward. entailer!. }
+       LOCAL (temp ret_temp rv)
+       SEP (ERR ep; func_ptr' ini_spec (get_iniptr tvals); EVP_MD_NNnode tsh tvals t;
+            ( !!(rv=nullval) 
+               && data_at sh (Tstruct _env_md_ctx_st noattr)(t, (nullval, (nullval, nullval))) ctx)
+         || ( EX m:val,
+              !!(rv=Vint Int.one /\ malloc_compatible (Int.unsigned ctxsz') m) 
+               && postInit m * 
+                  data_at sh (Tstruct _env_md_ctx_st noattr)(t, (m, (nullval, nullval))) ctx)).
 
-  forward. thaw FR1.
-  destruct (Val.eq d t).
-  + subst.
-    destruct tvals as [type' [mds' [flags' [ini' [upd' [fin' [blsize' ctxsize'']]]]]]]. 
-    simpl in type', mds', flags',ini', upd', fin', ctxsize'', blsize', CTXSZ'; subst.
-    unfold EVP_MD_NNnode; Intros. rename H into TSH.
-    forward. entailer!. admit. (* is_pointer_or_null ini'*) 
-    admit. (*invocation of ini'*) 
-  + focus_SEP 2.
-    apply semax_orp_SEPx; Intros.
-    - (*d=null*)
-      subst. admit. (*FAILS!*)
-    - Intros dvals ctxsz dsh.
-      destruct dvals as [type [mds [flags [ini [upd [fin [blsize ctxsize]]]]]]]. 
-    simpl in type, mds, flags, ini, upd, fin, ctxsize, blsize, H; subst.
-    unfold EVP_MD_NNnode; Intros. forward. entailer!. admit. (* is_pointer_or_null ini*) 
-    admit. (*invocation of ini*)  rename H into TSH.
-    forward. entailer!. admit. (* is_pointer_or_null ini'*)  forward.
-     - forward. omega. } entailer!.
-          apply sepcon_valid_pointer2; apply EVP_MD_NNnode_validptr.  deadvars!. normalize. cancel. ! sepcon_assoc. rewrite sepcon_comm. rewrite <- ! sepcon_assoc.
-          normalize. apply orp_left; Intros. cancel. 
-          Exists (default_val (Tstruct _env_md_st noattr)). 
-          ; entailer!.
-             apply orp_right1. entailer!. 
-           * inv H. 
-           * intros. unfold overridePost. old_go_lower. clear H.
-             destruct (EqDec_exitkind ek EK_normal). entailer!. trivial.
-         - normalize. assert_PROP (isptr m) as Hm by entailer!. thaw FR3.
-   + (*0 >= Int.unsigned ctxsz'*)
-     rename H into CTXSZ'.
-     forward. entailer!. apply orp_right2. cancel. Exists  remember (Int.lt Int.zero ctxsz') as q.
-     destruct q. rewrite if_false at 2.
-   forward_if ( EX m: val,
-     PROP ( )
-     LOCAL (temp _t'6 (Vint ctxsz'); gvar ___stringlit_1 ep;
-            temp _type t; temp _ctx ctx; temp _engine e)
-     SEP (FRZL FR2; ERR ep;
-          data_at sh (Tstruct _env_md_ctx_st noattr) 
-            (t, m, (nullval, pv2))) ctx).
+Definition Gprog_DigestInit : funspecs :=
+  (*FAILS TO TERMINATE: ltac:(with_library prog [EVP_MD_type_SPEC]). *)
+  [EVP_DigestInit_ex_SPEC; EVP_MD_CTX_init_SPEC].
 
+Axiom convert: forall sh p, data_at sh (tarray tuchar 16)
+  [Vint Int.zero; Vint Int.zero; Vint Int.zero;
+  Vint Int.zero; Vint Int.zero; Vint Int.zero;
+  Vint Int.zero; Vint Int.zero; Vint Int.zero;
+  Vint Int.zero; Vint Int.zero; Vint Int.zero;
+  Vint Int.zero; Vint Int.zero; Vint Int.zero;
+  Vint Int.zero] p
+|-- data_at sh (Tstruct _env_md_ctx_st noattr)
+      (nullval, (nullval, (nullval, nullval))) p.
 
-          data_at tsh (Tstruct _env_md_st noattr)
-            (type', (mds', (flags', (ini', (upd', (fin', (blsize', Vint ctxsz'))))))) t)).
-
-   { entailer!. subst; simpl.
-     freeze [0;2;3] FR1. forward. forward. Focus 2. 2: inv H. |]. dvals  normalize.
-        - thaw FR2. cancel. Intros dvals, ctx unfold typed_true in H.  simpl in H.
-      
-   freeze [0;2;3] FR2.
-        forward_if (PROP ( )
-          LOCAL (gvar ___stringlit_1 ep;  temp _type t; temp _ctx ctx; temp _engine e)
-          SEP (FRZL FR2;
-               data_at sh (Tstruct _env_md_ctx_st noattr) (d, (nullval, (nullval, pv2))) ctx));
-        [ clear H | solve [inv H] | ].
-        - forward. 
-          (*free*)forward_call (md, Int.unsigned ctxsz).
-          forward. entailer!.
-        - thaw FR2. cancel.
-remember (Int.ltu (Int.repr 0) ctxsize).
-        destruct b.x eadmit. 
-      + }
-    - apply sepcon_valid_pointer1. 
-
-    assert (exists XX: environ -> mpred, XX =
-     (EX t1v:val,
-      PROP ( )
-      LOCAL (gvar ___stringlit_1 ep;  
-             temp _t'1 t1v;
-             temp _type t; temp _ctx ctx; temp _engine e)
-      SEP (ERR ep;
-           data_at sh (Tstruct _env_md_ctx_st noattr) (d, (md, (nullval, pv2))) ctx; 
-           EVP_MD_NNnode tsh tvals t;
-           if Val.eq d nullval then !!(t1v=nullval)&&emp 
-           else EX dsh:share, EX ctxsz : int,
-                !!(get_ctxsize dvals = Vint ctxsz /\
-                   Int.eq ctxsz Int.zero = false /\ t1v=Vint ctxsz)
-                && EVP_MD_NNnode dsh dvals d))).  environ -> mpred as XX.
-    { clear H. 
-      apply denote_tc_test_eq_split; [ apply sepcon_valid_pointer2; apply EVP_MD_node_validptr | apply valid_pointer_null]. }
-    { forward. focus_SEP 3.
-      apply semax_orp_SEPx; Intros; [ subst; contradiction | unfold EVP_MD_NNnode; Intros dsh].
-      rename H into Pd. rename H0 into TSH. rename H1 into DSH.
-      destruct dvals as [type [mds [flags [ini [upd [fin [blsize ctxsize]]]]]]]. 
-      simpl in type, mds, flags,ini, upd, fin, ctxsize, blsize, HD.
-      destruct (HD Pd) as [ctxsz [? ?]]; clear HD; subst.      
-      forward. forward. rewrite if_false by (destruct d; try contradiction; discriminate).
-      go_lower. Exists dsh ctxsz. unfold EVP_MD_NNnode. normalize.
-      apply andp_right; [ apply prop_right; repeat split; trivial | cancel ]. }
-    { forward. subst. rewrite if_true; trivial. entailer!. cancel. }
-    
-x
- cancel.
-      apply orp_left; entailer!. unfold 
-       entailer!.
-        apply sepcon_valid_pointer2. apply EVP_MD_NNnode_validptr.
-      apply sepcon_valid_pointer2. normalize. 
-    - apply sepcon_valid_pointer1. 
-  { apply ptr_comp_Cne_f in H; trivial; subst d. 
-    forward. entailer!. }
-
-  (*call init*)
-  forward. forward.
-    Intros dvals. admit. }
-  {  
-    apply semax_orp_SEPx; Intros; subst.
-    + admit.
-    + Intros dsh. rewrite if_true.
-   ). 
-  focus_SEP 2.
-(*Case t==nullval*)
-apply 
-*)
+Lemma body_DigestInit: semax_body Vprog Gprog_DigestInit f_EVP_DigestInit EVP_DigestInit_SPEC.
+Proof. 
+  start_function.
+  assert_PROP (field_compatible (Tstruct _env_md_ctx_st noattr) [] ctx) as FC by entailer!.
+  forward_call (ctx, sh, sizeof (Tstruct _env_md_ctx_st noattr)); simpl. 
+  replace_SEP 0 (data_at sh (Tstruct _env_md_ctx_st noattr) (nullval, (nullval, (nullval, nullval))) ctx).
+    entailer. apply convert.
+  forward_call (ep, ctx, t, nullval, D_null sh nullval nullval tsh tvals ctxsz').
+  { simpl; entailer!. }
+  Intros rv. simpl. forward. entailer!. Exists (Vint rv). entailer!.
+  apply orp_left. 
+  - Intros. cancel. apply orp_right1; entailer!.
+  - Intros m. cancel. apply orp_right2; entailer!.
+    Exists m; entailer!.
+Qed.
 
 Definition mdDATA sh sz data md: mpred :=
   (!!(md=nullval) && emp) || ((!!isptr md) && data_at sh (tarray tuchar (Int.unsigned sz)) data md).
@@ -2075,13 +1961,10 @@ Proof.
 + assert_PROP (isptr d) by entailer!.
   replace_SEP 2 (data_at osh (Tstruct _env_md_ctx_st noattr)
       (nullval, (nullval, (nullval, nullval))) octx).
-  { (*holds because of FCout*) entailer.
-    unfold_data_at 2%nat. simpl. at 2. erewrite field_at_Tarray.
-     3: simpl.
-     admit. (*eapply derives_trans. apply data_at_memory_block. simpl. *) }
+  { (*holds because of FCout*) entailer. apply convert. }
   (*unfold data_at_, field_at_. simpl. unfold default_val.x simpl. *)
   forward_call (ep, octx, ictx, inDataNull ish d nullval pv2 dsh vals osh nullval nullval nullval).
-  simpl. entailer!. simpl. destruct H2 as [ctxsz [H2a Hb2]]. Exists ctxsz. entailer. cancel. 
+  { simpl. destruct H1 as [ctxsz [H1a H1b]]. entailer!. simpl. Exists ctxsz. entailer!. }
   Intros v. forward. unfold POST3. 
   destruct vals as [type [mds [flags [ini [upd [fin [blsize ctxsize]]]]]]]. 
   simpl in type, mds, flags,ini, upd, fin, ctxsize, blsize.
@@ -2089,12 +1972,12 @@ Proof.
   Intros ctxsz. Exists (Vint v); entailer!. cancel.
 + replace_SEP 3 (data_at osh (Tstruct _env_md_ctx_st noattr)
       (nullval, (nullval, (nullval, nullval))) octx).
-  { admit. (*see previous case*) }
+  { (*holds because of FCout*) entailer. apply convert. }
   forward_call (ep, octx, ictx, 
                 outDigest_Null ish d md nullval pv2 dsh vals osh nullval nullval imdsh idata ctxsz).
   { simpl. entailer!. } 
   Intros v. forward. Exists (Vint v); entailer!. 
-Admitted.
+Qed.
 
 Definition Gprog_copy_ex : funspecs :=
   (*FAILS TO TERMINATE: ltac:(with_library prog [EVP_MD_type_SPEC]). *)
@@ -3006,7 +2889,7 @@ Proof.
   forward. Exists (Vint Int.one); entailer!. unfold POST7. normalize.
   apply orp_right2; Exists m. entailer!.
 Time Qed. 
-
+(*
 (*| equalDigests_outDataNull: forall (ish:share) (d md pv1 pv2:val) (dsh:share) 
                       (vals : reptype (Tstruct _env_md_st noattr))
                       (osh:share) (pv1': val)
@@ -3024,7 +2907,7 @@ Time Qed.
                       (vals : reptype (Tstruct _env_md_st noattr))
                       (osh:share) (d' md' pv1': val)
                       (imdsh:share) (idata:list int) (ctxsz: int)
-                      (dsh':share) (vals' : reptype (Tstruct _env_md_st noattr))(ctxsz': int), copy_cases*).
+                      (dsh':share) (vals' : reptype (Tstruct _env_md_st noattr))(ctxsz': int), copy_cases*)
 
 Definition copyPost (c: copy_cases) (ictx octx:val) rv : mpred := 
 match c with
@@ -4965,5 +4848,7 @@ Definition EVP_MD_CTX_rep (p:val):mpred :=
   EX sh:_, 
   !!readable_share sh &&
   data_at sh sh (Tstruct _env_md_ctx_st noattr)
+*)
+*)
 *)
 *)
