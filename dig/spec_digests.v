@@ -363,6 +363,20 @@ Definition OPENSSL_cleanse_SPEC := DECLARE _OPENSSL_cleanse
     PROP () LOCAL () 
     SEP (data_at sh (tarray tuchar n) (list_repeat (Z.to_nat n) (Vint Int.zero)) p).
 
+Definition EVP_add_digest_SPEC := DECLARE _EVP_add_digest
+  WITH v:val
+  PRE [_digest OF tptr (Tstruct _env_md_st noattr)]
+      PROP () LOCAL (temp _digest v) SEP ()
+  POST [tint] PROP () LOCAL (temp ret_temp (Vint Int.one)) SEP ().
+
+Definition Gprog_EVP_add_digest : funspecs :=
+  (*FAILS TO TERMINATE: ltac:(with_library prog [EVP_MD_type_SPEC]). *)
+  [].
+
+Lemma body_EVP_add_digest: semax_body Vprog Gprog_EVP_add_digest
+                           f_EVP_add_digest EVP_add_digest_SPEC.
+Proof. start_function. forward. Qed. 
+
 Definition type_of_ctx (v:reptype (Tstruct _env_md_ctx_st noattr)) :=
   match v with
     (type, (mddata, pv)) => type
@@ -1888,7 +1902,6 @@ Proof. apply orp_left; normalize. apply valid_pointer_null. apply data_at_valid_
   intuition. trivial.
 Qed. 
 
-
 Inductive copyEx_cases :=
   ictxNull: copyEx_cases
 | inDigestNull: forall (ish:share) (md pv1 pv2 :val), copyEx_cases
@@ -3109,6 +3122,163 @@ Proof.
   forward. Exists (Vint Int.one); entailer!. unfold POST7. normalize.
   apply orp_right2; Exists m. entailer!.
 Time Qed. 
+
+Definition EVP_Digest_SPEC := DECLARE _EVP_Digest
+  WITH ep:val, d:val, cnt:int, md:val, sz:val, t:val, e:val,
+       tsh:share, tvals:reptype (Tstruct _env_md_st noattr), ctxsz':int, mdsize:int,
+       dsh:share, Data: list val, osh:share
+  PRE [_data OF tptr tvoid, _count OF tuint, _out_md OF (tptr tuchar),
+        _out_size OF (tptr tuint), _type OF (tptr (Tstruct _env_md_st noattr)),
+        _impl OF (tptr (Tstruct _engine_st noattr)) ]
+      PROP (get_ctxsize tvals = Vint ctxsz'; get_mdsize tvals = Vint mdsize;
+            4 <= Int.unsigned ctxsz' <= Int.max_unsigned;
+            is_pointer_or_null (get_iniptr tvals);
+            readable_share dsh; readable_share tsh; writable_share osh)
+      LOCAL (gvar ___stringlit_1 ep; temp _data d; temp _count (Vint cnt);
+             temp _out_md md; temp _out_size sz; temp _type t; temp _impl e)
+      SEP (ERR ep; EVP_MD_NNnode tsh tvals t;
+           data_at dsh (tarray tuchar (Int.unsigned cnt)) Data d;
+           func_ptr' ini_spec (get_iniptr tvals);
+           func_ptr' upd_spec (get_updptr tvals);
+           func_ptr' fin_spec (get_finptr tvals);
+            if Val.eq sz nullval then emp else data_at_ Tsh tuint sz;
+            memory_block osh (Int.unsigned mdsize) md)
+  POST [tint] EX rv:int,
+      PROP () LOCAL (temp ret_temp (Vint rv)) 
+      SEP (ERR ep; EVP_MD_NNnode tsh tvals t;
+           data_at dsh (tarray tuchar (Int.unsigned cnt)) Data d;
+           func_ptr' ini_spec (get_iniptr tvals);
+           func_ptr' upd_spec (get_updptr tvals);
+           func_ptr' fin_spec (get_finptr tvals);
+           (  (!!(rv=Int.zero) 
+               && (memory_block osh (Int.unsigned mdsize) md *
+                   if Val.eq sz nullval then emp 
+                   else data_at_ Tsh tuint sz))
+           || (!!(rv=Int.one)
+               && (Finresult Data md *
+                   if Val.eq sz nullval then emp 
+                   else data_at Tsh tuint (Vint mdsize) sz)))).
+
+Definition Gprog_EVP_Digest : funspecs :=
+  (*FAILS TO TERMINATE: ltac:(with_library prog [EVP_MD_type_SPEC]). *)
+  [EVP_MD_CTX_init_SPEC; EVP_DigestInit_ex_SPEC; EVP_DigestUpdate_SPEC;
+   EVP_DigestFinal_ex_SPEC; EVP_MD_CTX_cleanup_SPEC4].
+
+Axiom Ini2Upd: forall sz m, postInit sz m |-- preUpd sz m.
+Axiom Upd2Fin: forall sz Data m, postUpd Data sz m |-- preFin Tsh sz Data m.
+
+Lemma body_EVP_Digest: semax_body Vprog Gprog_EVP_Digest
+                           f_EVP_Digest EVP_Digest_SPEC.
+Proof. start_function. rename lvar0 into ctx.
+  rename H into CTXSZ1. rename H0 into MDSZ.
+  rename H1 into CTXSZ2. rename H2 into iniPN.
+  rename SH into DSH. rename SH0 into TSH. rename SH1 into OSH.
+  assert_PROP (field_compatible (Tstruct _env_md_ctx_st noattr) [] ctx) as FCctx by entailer!.
+  rewrite (EVP_MD_NNnode_isptr'); Intros. 
+  assert (CTXSZ3: Int.eq ctxsz' Int.zero = false).
+  { destruct (Int.eq_dec ctxsz' Int.zero); subst.
+    unfold Int.zero in CTXSZ2; rewrite Int.unsigned_repr in CTXSZ2; omega.
+    rewrite Int.eq_false; trivial. }
+  freeze [6;7;8] FRFin. freeze [4;6] FRUpd.
+  forward_call (ctx, Tsh, sizeof (Tstruct _env_md_ctx_st noattr)).
+  replace_SEP 0 (data_at Tsh (Tstruct _env_md_ctx_st noattr)
+      (nullval, (nullval, (nullval, nullval))) ctx).
+  { entailer!. apply convert. }
+  simpl. 
+  forward_call (ep, ctx, t, e, D_null Tsh nullval nullval tsh tvals ctxsz').
+  { simpl. entailer!. }
+  Intros ret1. simpl. focus_SEP 1.
+  apply semax_orp_SEPx.
++ (* ret1 == null*)
+  Intros; subst. freeze [0;1;2;3;4;5] FR3.
+  forward_if (
+   PROP ( )
+   LOCAL (temp _t'2 (Vint Int.zero); lvar _ctx (Tstruct _env_md_ctx_st noattr) ctx;
+          gvar ___stringlit_1 ep; temp _data d; 
+          temp _count (Vint cnt); temp _out_md md; temp _out_size sz;
+          temp _type t; temp _impl e)  SEP (FRZL FR3)).
+  { elim H; trivial. }
+  { clear H. forward. entailer!. }
+  forward_if (
+   PROP ( )
+   LOCAL (temp _t'4 (Vint Int.zero); lvar _ctx (Tstruct _env_md_ctx_st noattr) ctx;
+          gvar ___stringlit_1 ep; temp _data d; 
+          temp _count (Vint cnt); temp _out_md md; temp _out_size sz;
+          temp _type t; temp _impl e)  SEP (FRZL FR3)).
+  { elim H; trivial. }
+  { clear H. forward. entailer!. }
+  forward. thaw FR3.
+  forward_call (ctx, Tsh, nullval, nullval,
+       @inr unit (share * val * reptype (Tstruct _env_md_st noattr)) (tsh,t,tvals)).
+  { Exists ctxsz'; unfold EVP_MD_CTX_NNnode. entailer!.
+    assert (Frame = [func_ptr' ini_spec (get_iniptr tvals); ERR ep; FRZL FRUpd; FRZL FRFin]).
+    - subst Frame; reflexivity.
+    - subst Frame. simpl; cancel. apply orp_right1; trivial. }
+  replace_SEP 0 (data_at_ Tsh (Tstruct _env_md_ctx_st noattr) ctx).
+  { entailer!. rewrite 2 data_at__memory_block. simpl; entailer!. }
+  forward. Exists ctx Int.zero. entailer!.
+  thaw FRUpd; thaw FRFin. cancel.
+  apply orp_right1. cancel. 
++ Intros m; subst. rename H0 into M.
+  thaw FRUpd; thaw FRFin. freeze [3;4] FRIni. freeze [6;7;8] FRFin.
+  forward_if (
+    PROP ( )
+    LOCAL (temp _t'2 (Vint Int.one);
+           lvar _ctx (Tstruct _env_md_ctx_st noattr) ctx;
+           gvar ___stringlit_1 ep; temp _data d; 
+           temp _count (Vint cnt); temp _out_md md; temp _out_size sz;
+           temp _type t; temp _impl e)
+    SEP (data_at Tsh (Tstruct _env_md_ctx_st noattr) (t, (m, (nullval, nullval))) ctx;
+         data_at dsh (tarray tuchar (Int.unsigned cnt)) Data d;
+         postUpd Data (Int.unsigned ctxsz') m; EVP_MD_NNnode tsh tvals t;
+         func_ptr' upd_spec (get_updptr tvals);  FRZL FRFin; FRZL FRIni ));
+    [ clear H | solve [inv H] |].
+  { forward_call (ctx, Tsh, (t, (m, (nullval, nullval))), d, dsh, Data, Int.unsigned ctxsz', cnt, tsh, tvals).
+    { assert (Frame = [FRZL FRFin; FRZL FRIni]).
+      subst Frame; reflexivity. subst Frame; clear H; simpl; cancel.
+      cancel. apply Ini2Upd. 
+      (*Maybe add case to updspec for d==nullval? maybe 
+        enforce ctxsz=get_ctxsize tvals again in precond of update?*) }
+    forward. entailer!. }
+  thaw FRFin. freeze [1;4;8] FRUpdIni.
+  forward_if (
+    PROP ( )
+    LOCAL (temp _t'4 (Vint Int.one);
+           lvar _ctx (Tstruct _env_md_ctx_st noattr) ctx;
+           gvar ___stringlit_1 ep; temp _data d; 
+           temp _count (Vint cnt); temp _out_md md; temp _out_size sz;
+           temp _type t; temp _impl e)
+    SEP (data_at Tsh (Tstruct _env_md_ctx_st noattr) (t, (m, (nullval, nullval))) ctx;
+         postFin Tsh (Int.unsigned ctxsz') m;
+         if Val.eq sz nullval
+            then emp
+            else data_at Tsh tuint (Vint mdsize) sz;
+         Finresult Data md;
+         EVP_MD_NNnode tsh tvals t;
+         func_ptr' fin_spec (get_finptr tvals); FRZL FRUpdIni));
+    [ clear H | solve [inv H] |].
+  { forward_call (ctx, Tsh, (t, (m, (nullval, nullval))), md, osh, sz, tsh, tvals, ctxsz', Data, Tsh, mdsize).
+    { assert (Frame = [FRZL FRUpdIni]); subst Frame; [ reflexivity | clear H; simpl; cancel].
+      apply Upd2Fin. }
+    { repeat split; trivial; try omega; intuition. }
+    forward. entailer!. }
+  forward.
+  replace_SEP 1 (memory_block Tsh (Int.unsigned ctxsz') m).
+  { entailer!. apply postFin_memory_block. }
+  freeze [2;3;5;6] REST.
+  forward_call (ctx,Tsh,m, nullval, @inr unit (share * val * reptype (Tstruct _env_md_st noattr)) (tsh,t,tvals)).
+  { assert (Frame = [FRZL REST]); subst Frame; [ reflexivity | clear H; simpl].
+    Exists ctxsz'; unfold EVP_MD_CTX_NNnode; entailer!.
+    apply orp_right2; cancel. }
+  replace_SEP 0 (data_at_ Tsh (Tstruct _env_md_ctx_st noattr) ctx).
+  { entailer!. rewrite 2 data_at__memory_block. simpl; entailer!. }
+  forward. Exists ctx Int.one. entailer!.
+  thaw REST; thaw FRUpdIni; thaw FRIni; cancel.
+  apply orp_right2. entailer!.
+Time Qed.
+
+
+
 
 (*Continue here
 Parameter contentmodels (*bytes specdata*): list val ->  EVP_MD_CTX -> Prop.
