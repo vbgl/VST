@@ -4,7 +4,7 @@
 default_target: .loadpath version.vo msl veric floyd
 
 COMPCERT ?= compcert
--include CONFIGURE
+#-include CONFIGURE
 #Note:  You can make a CONFIGURE file with the definition
 #   COMPCERT=../compcert
 # if, for example, you want to build from a compcert distribution
@@ -21,7 +21,7 @@ COMPCERT ?= compcert
 
 #Note2:  By default, the rules for converting .c files to .v files
 # are inactive.  To activate them, do something like
-#CLIGHTGEN=$(COMPCERT)/clightgen 
+#CLIGHTGEN=$(COMPCERT)/clightgen -normalize
 
 #Note3: for SSReflect, one solution is to install MathComp 1.6
 # somewhere add this line to a CONFIGURE file
@@ -332,7 +332,7 @@ TWEETNACL_FILES = \
   verif_verify.v
 
 DIGEST_FILES = \
-  digest.v digests.v digest_model.v spec_digests.v 
+  digest.v digests.v digest_model.v spec_digests.v abstractspec_digests.v digestProposal1.v digestsProposal1.v  abstractspec_digestsProposal1.v
 
 HMACDRBG_FILES = \
   entropy.v entropy_lemmas.v DRBG_functions.v HMAC_DRBG_algorithms.v \
