@@ -20,6 +20,7 @@ Require Import sepcomp.mem_lemmas.
 Require Import concurrency.I64Helpers.
 Require Import concurrency.BuiltinEffects.
 
+
 Definition cl_halted (c: regset) : option val := None.
 
 Definition empty_function : function := 
@@ -432,6 +433,257 @@ Qed.
 
 End ASM_MEMSEM.
 
+(* ** Core semantics in an axiomatic (LTS) style *)
+Module AxCoreSem.
+
+  Import ia32.Asm.AxiomSem.
+  Import AST. (* Quick hack to shadow some definitions *)
+  
+  Inductive get_extcall_arg (rs: regset) (l: Locations.loc) : event -> val -> Prop :=
+  | LocR : forall r (Hloc: l = Locations.R r),
+      get_extcall_arg rs l tau (rs (preg_of r))
+  | LocS : forall inout ofs ty b0 ofs0 mv ev
+             (Hloc: l = Locations.S inout ofs ty),
+      let bofs := (Stacklayout.fe_ofs_arg + 4 * ofs)%Z in
+      Vptr b0 ofs0 = Val.add (rs (IR ESP)) (Vint (Int.repr bofs)) ->
+      load (chunk_of_type ty) b0 (Int.unsigned ofs0) mv ev ->
+      get_extcall_arg rs l ev (decode_val (chunk_of_type ty) mv).
+
+  Inductive get_extcall_arguments (rs: regset) : list (rpair Locations.loc) -> list event -> list val -> Prop :=
+  | NilArg: get_extcall_arguments rs nil nil nil
+  | OneArg: forall al l ev v evl vl
+              (Harg: get_extcall_arg rs l ev v)
+              (Hargs: get_extcall_arguments rs al evl vl),
+      get_extcall_arguments rs (One l :: al) (ev :: evl) (v :: vl)
+  | TwoArg: forall al lo hi evlo evhi vlo vhi evl vl
+              (Harg_lo: get_extcall_arg rs lo evlo vlo)
+              (Harg_hi: get_extcall_arg rs hi evhi vhi)
+              (Hargs: get_extcall_arguments rs al evl vl),
+      get_extcall_arguments rs (Twolong hi lo :: al) (evhi :: evlo :: evl) (Val.longofwords vhi vlo :: vl).
+
+  Inductive store_arguments (loc: val) : list typ -> list val -> list event -> Prop :=
+  | ArgNil: store_arguments loc nil nil nil
+  | ArgCons: forall ty tys v vl ev evl b ofs
+               (Hloc: loc = Vptr b ofs)
+               (Hty: ty <> Tlong)
+               (Hstore: store (chunk_of_type ty) b (Int.unsigned ofs) v ev)
+               (Hstore_args: store_arguments (Val.add loc (Vint (Int.repr (typesize ty)))) tys vl evl),
+      store_arguments loc (ty :: tys) (v :: vl) (ev :: evl).
+                  
+  Inductive cl_initial_core (ge: genv) (v: val) (args: list val) : regset -> list event -> Prop :=
+  | NoArgs: forall b f
+              (Hptr: v = Vptr b Int.zero)
+              (Hf: Genv.find_funct_ptr ge b = Some f),
+      let fsig := funsig f in
+      forall eva stk
+        (Halloc: alloc 0 (Conventions1.size_arguments fsig) eva stk)
+        (Hstore_args: ~ exists evl, evl <> nil /\ store_arguments (Vptr stk Int.zero) fsig.(sig_args) args evl),
+        cl_initial_core ge v args ((Pregmap.init Vundef)
+                                     # PC <- v
+                                     # ESP <- (Vptr stk Int.zero)
+                                     # RA <- Vzero) nil
+  | InitialArgs: forall b f
+                   (Hptr: v = Vptr b Int.zero)
+                   (Hf: Genv.find_funct_ptr ge b = Some f),
+      let fsig := funsig f in
+      forall eva stk evl
+        (Halloc: alloc 0 (Conventions1.size_arguments fsig) eva stk)
+        (Hstore_args: store_arguments (Vptr stk Int.zero) fsig.(sig_args) args evl),
+        cl_initial_core ge v args ((Pregmap.init Vundef)
+                                     # PC <- v
+                                     # ESP <- (Vptr stk Int.zero)
+                                     # RA <- Vzero) evl.
+
+  Inductive cl_at_external (ge: genv) (rs : regset) : external_function -> list val -> list event -> Prop :=
+  | AtExternal: forall b ef args name sig evl
+                  (Hpc: rs PC = Vptr b (Int.zero))
+                  (Hf: Genv.find_funct_ptr ge b = Some (External ef))
+                  (Hef: ef = EF_external name sig)
+                  (Hargs: get_extcall_arguments rs (Conventions1.loc_arguments (ef_sig ef)) evl args),
+      cl_at_external ge rs ef args evl.
+
+
+  (** Analogous to [compcert.common.Events.eval_builtin_arg]*)
+  Inductive eval_builtin_arg {A : Type} (ge : Senv.t) (e : A -> val) (sp : val)
+    : builtin_arg A -> val -> list event -> Prop :=
+    eval_BA : forall x : A, eval_builtin_arg ge e sp (BA x) (e x) nil
+  | eval_BA_int : forall n : int,
+                  eval_builtin_arg ge e sp (BA_int n) (Vint n) nil
+  | eval_BA_long : forall n : int64,
+                   eval_builtin_arg ge e sp (BA_long n) (Vlong n) nil
+  | eval_BA_float : forall n : Floats.float,
+                    eval_builtin_arg ge e sp (BA_float n) (Vfloat n) nil
+  | eval_BA_single : forall n : Floats.float32,
+                     eval_builtin_arg ge e sp (BA_single n) (Vsingle n) nil
+  | eval_BA_loadstack : forall (chunk : memory_chunk) b (ofs ofs' : int) (mv : list memval) ev
+                          (Hptr: Val.add sp (Vint ofs) = Vptr b ofs')
+                          (Hload: load chunk b (Int.unsigned ofs') mv ev),
+                        eval_builtin_arg ge e sp (BA_loadstack chunk ofs) (decode_val chunk mv) (ev::nil)
+  | eval_BA_addrstack : forall ofs : int,
+                        eval_builtin_arg ge e sp 
+                          (BA_addrstack ofs) (Val.add sp (Vint ofs)) nil
+  | eval_BA_loadglobal : forall (chunk : memory_chunk) 
+                           (id : ident) b (ofs ofs' : int)
+                           (mv : list memval) (ev: event)
+                           (Hptr: Senv.symbol_address ge id ofs = Vptr b ofs')
+                           (Hload: load chunk b (Int.unsigned ofs') mv ev),
+                         eval_builtin_arg ge e sp 
+                           (BA_loadglobal chunk id ofs) (decode_val chunk mv) (ev :: nil)
+  | eval_BA_addrglobal : forall (id : ident) (ofs : int),
+                         eval_builtin_arg ge e sp
+                           (BA_addrglobal id ofs)
+                           (Senv.symbol_address ge id ofs) nil
+  | eval_BA_splitlong : forall (hi lo : builtin_arg A) (vhi vlo : val) evlo evhi,
+                        eval_builtin_arg ge e sp hi vhi evlo ->
+                        eval_builtin_arg ge e sp lo vlo evhi ->
+                        eval_builtin_arg ge e sp 
+                                         (BA_splitlong hi lo) (Val.longofwords vhi vlo) (evlo ++ evhi).
+
+  (** Analogous to [compcert.common.Events.eval_builtin_args]*)
+  Inductive eval_builtin_args {A : Type} (ge : Senv.t) (e : A -> val) (sp : val) :
+    list (builtin_arg A) -> list val -> list event -> Prop :=
+  | eval_BA_nil: eval_builtin_args ge e sp nil nil nil
+  | eval_BA_cons: forall a v ev al vl evl
+                    (Harg: eval_builtin_arg ge e sp a v ev)
+                    (Hargs: eval_builtin_args ge e sp al vl evl),
+      eval_builtin_args ge e sp al vl evl.
+
+  (** Analogous to [Asm_core.builtin_event]*)
+  Inductive builtin_event: external_function -> list val -> list event -> Prop :=
+    BE_malloc: forall n b eva evw
+                 (ALLOC: alloc (-4) (Int.unsigned n) eva b)
+                 (ALGN : (align_chunk Mint32 | (-4)))
+                 (ST: store Mint32 b (-4) (Vint n) evw),
+      builtin_event EF_malloc [Vint n] (eva :: evw :: nil)
+  | BE_free: forall b lo bytes sz evl
+               (POS: Int.unsigned sz > 0)
+               (LB: load Mint32 b (Int.unsigned lo - 4) bytes evl)
+               (ALGN : (align_chunk Mint32 | Int.unsigned lo - 4))
+               (SZ : Vint sz = decode_val Mint32 bytes),
+      builtin_event EF_free [Vptr b lo] (evl :: nil)
+  (* | BE_memcpy: forall m al bsrc bdst sz bytes osrc odst *)
+  (*         (AL: al = 1 \/ al = 2 \/ al = 4 \/ al = 8) *)
+  (*         (POS : sz >= 0) *)
+  (*         (DIV : (al | sz)) *)
+  (*         (OSRC : sz > 0 -> (al | Int.unsigned osrc)) *)
+  (*         (ODST: sz > 0 -> (al | Int.unsigned odst)) *)
+  (*         (RNG: bsrc <> bdst \/ *)
+  (*                 Int.unsigned osrc = Int.unsigned odst \/ *)
+  (*                 Int.unsigned osrc + sz <= Int.unsigned odst \/ Int.unsigned odst + sz <= Int.unsigned osrc) *)
+  (*         (LB: Mem.load m bsrc (Int.unsigned osrc) sz = Some bytes) *)
+  (*         (ST: Mem.storebytes m bdst (Int.unsigned odst) bytes = Some m'), *)
+  (*         builtin_event (EF_memcpy sz al) m [Vptr bdst odst; Vptr bsrc osrc] *)
+  (*               [Read bsrc (Int.unsigned osrc) sz bytes; *)
+  (*                Write bdst (Int.unsigned odst) bytes] *)
+  | BE_EFexternal: forall name sg vargs,
+      I64Helpers.is_I64_helperS name sg ->
+      builtin_event (EF_external name sg) vargs []
+  | BE_EFbuiltin: forall name sg vargs, is_I64_builtinS name sg ->
+                                   builtin_event (EF_builtin name sg) vargs [].
+
+
+  (** Analogous to [compcert.common.events.extcall_sem]*)
+  Definition extcall_sem : Type :=
+    Senv.t -> list val -> val -> list event -> Prop.
+
+  Parameter external_functions_sem: String.string -> signature -> extcall_sem.
+
+  (** Analogous to [compcert.common.events.external_call]*)
+  Definition external_call (ef: external_function): extcall_sem :=
+  match ef with
+  | EF_external name sg  => external_functions_sem name sg
+  | EF_builtin name sg   => external_functions_sem name sg
+  | EF_runtime name sg   => external_functions_sem name sg
+  | _ => fun _ _ _ _ => False
+  (* | EF_vload chunk       => volatile_load_sem chunk *)
+  (* | EF_vstore chunk      => volatile_store_sem chunk *)
+  (* | EF_malloc            => extcall_malloc_sem *)
+  (* | EF_free              => extcall_free_sem *)
+  (* | EF_memcpy sz al      => extcall_memcpy_sem sz al *)
+  (* | EF_annot txt targs   => extcall_annot_sem txt targs *)
+  (* | EF_annot_val txt targ => extcall_annot_val_sem txt targ *)
+  (* | EF_inline_asm txt sg clb => inline_assembly_sem txt sg *)
+  (* | EF_debug kind txt targs => extcall_debug_sem *)
+  end.
+  
+  Inductive cl_step ge: regset -> regset -> list event -> Prop :=
+  | cl_step_internal:
+      forall b ofs f i rs rs' evl,
+      rs PC = Vptr b ofs ->
+      Genv.find_funct_ptr ge b = Some (Internal f) ->
+      find_instr (Int.unsigned ofs) f.(fn_code) = Some i ->
+      step_instr ge f rs i rs' evl ->
+      cl_step ge rs rs' evl
+  | exec_step_builtin:
+      forall b ofs f ef args res rs vargs t vres rs' evargs evext,
+      rs PC = Vptr b ofs ->
+      Genv.find_funct_ptr ge b = Some (Internal f) ->
+      find_instr (Int.unsigned ofs) f.(fn_code) = Some (Pbuiltin ef args res) ->
+      eval_builtin_args ge rs (rs ESP) args vargs evargs ->
+      builtin_event ef vargs t ->
+      external_call ef ge vargs vres evext ->
+      rs' = nextinstr_nf
+             (set_res res vres
+                      (undef_regs (map preg_of (backend.Machregs.destroyed_by_builtin ef)) rs)) ->
+      cl_step ge rs rs' (evargs ++ t ++ evext).
+
+  Lemma cl_corestep_not_at_external:
+    forall ge rs rs' ev,
+      cl_step ge rs rs' ev ->
+      ~ exists ef args evl, cl_at_external ge rs ef args evl.
+  Proof.
+    intros.
+    intros Hcontra.
+    destruct Hcontra as (ef & args & evl & Hcontra).
+    inv Hcontra.
+    inv H;
+      rewrite Hpc in H0; inv H0;
+      clear - Hf H1;
+      unfold Asm.fundef in *;
+      rewrite Hf in H1;
+      now inv H1.
+  Qed.
+
+  Lemma cl_corestep_not_halted :
+    forall ge rs rs' ev,
+      cl_step ge rs rs' ev ->
+      cl_halted rs = None.
+  Proof.
+    intros.
+    inv H; auto.
+  Qed.
+
+  (** Analogous to [sepcomp.semantics.CoreSemantics]*)
+  Record AxiomaticCoreSemantics (G C E : Type) : Type :=
+    Build_AxiomaticCoreSemantics
+      { initial_core : nat -> G -> val -> list val -> regset -> list E -> Prop;
+        at_external : G -> C -> external_function -> list val -> list E -> Prop;
+        after_external : G -> option val -> C -> option C;
+        halted : C -> option val;
+        corestep : G -> C -> C -> list E -> Prop;
+        corestep_not_at_external : forall (ge : G) (q q' : C) (ev : list E),
+            corestep ge q q' ev ->
+            ~ exists ef args evl, at_external ge q ef args evl;
+        corestep_not_halted : forall (ge : G) (q q' : C) (ev : list E),
+            corestep ge q q' ev -> halted q = None;
+        at_external_halted_excl : forall (ge : G) (q : C),
+            (~ exists ef vl ev, at_external ge q ef vl ev) \/ halted q = None }.
+
+  Program Definition cl_core_sem :
+    @AxiomaticCoreSemantics genv regset event :=
+    @Build_AxiomaticCoreSemantics _ _ _
+                                  (fun _ =>  cl_initial_core)
+                                  cl_at_external
+                                  cl_after_external
+                                  cl_halted
+                                  cl_step
+                                  cl_corestep_not_at_external
+                                  cl_corestep_not_halted _.
+  
+  
+End AxCoreSem.  
+                          
+
 Require Import concurrency.load_frame.
 Lemma load_frame_store_args_rec_nextblock:
   forall args m m2 stk ofs tys
@@ -465,3 +717,4 @@ Proof.
   eapply load_frame_store_args_rec_nextblock; eauto.
 Qed.
 
+  

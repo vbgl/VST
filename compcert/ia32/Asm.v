@@ -1011,3 +1011,457 @@ Definition data_preg (r: preg) : bool :=
   | RA => false
   end.
 
+Module AxiomSem.
+
+  (* Definition actid := nat. *)
+  (* Definition actid_eq := beq_nat. *)
+
+  Inductive event :=  
+  | Alloc (block : positive) (ofs : Z)  (size : Z)
+  | Read  (block : positive) (ofs : Z)  (chunk : memory_chunk) (mv : list memval) 
+  | Write (block: positive) (ofs : Z) (chunk : memory_chunk) (mv : list memval) 
+  | Mfence
+  | Lock
+  | Unlock
+  | tau.
+
+  Definition compare_ints (x y: val) (rs: regset): regset :=
+    rs #ZF  <- (Val.cmpu (fun _ _ => true) Ceq x y)
+       #CF  <- (Val.cmpu (fun _ _ => true) Clt x y)
+       #SF  <- (Val.negative (Val.sub x y))
+       #OF  <- (Val.sub_overflow x y)
+       #PF  <- Vundef.
+
+Definition goto_label (f: function) (lbl: label) (rs: regset) (rs':regset) : Prop :=
+  match label_pos lbl 0 (fn_code f) with
+  | None => False
+  | Some pos =>
+    match rs#PC with
+    | Vptr b ofs =>
+      rs' = rs#PC <- (Vptr b (Int.repr pos)) 
+    | _ => False
+    end
+  end.
+
+(** Auxiliaries for memory accesses. *)
+
+Inductive load (chunk: memory_chunk) (b: block) (ofs: Z) (mv: list memval): event -> Prop :=
+| LoadVal:
+    forall (Hvalid_access: (align_chunk chunk | ofs)%Z)
+      (Hsize: size_chunk_nat chunk = length mv),
+      load chunk b ofs mv (Read b ofs chunk mv).
+
+Inductive store (chunk: memory_chunk) (b: block) (ofs: Z) (v:val): event -> Prop :=
+| StoreVal:
+    forall (Hvalid_access: (align_chunk chunk | ofs)%Z),
+      store chunk b ofs v (Write b ofs chunk (encode_val chunk v)).
+
+Inductive alloc (ofs : Z) (sz : Z) : event -> block -> Prop :=
+| AllocSuccess:
+    forall b,
+      alloc ofs sz (Alloc b ofs sz) b.
+
+
+Section AxiomSem.
+
+  Variable ge : genv.
+
+  Inductive load_nf (chunk: memory_chunk) (a: addrmode)
+            (rs: regset) (rd: preg) : regset -> event -> Prop :=
+  | LoadNF:
+      forall b ofs mv o
+        (Haddr: eval_addrmode ge a rs = Vptr b ofs)
+        (Hload: load chunk b (Int.unsigned ofs) mv o),
+        load_nf chunk a rs rd (nextinstr_nf (rs#rd <- (decode_val chunk mv))) o.
+
+  Inductive store_nf (chunk: memory_chunk) (a: addrmode) (rs: regset) (r1: preg)
+            (destroyed: list preg) : regset -> event -> Prop :=
+  | StoreNF:
+      forall b ofs o
+        (Haddr: eval_addrmode ge a rs = Vptr b ofs)
+        (Hstore: store chunk b (Int.unsigned ofs) (rs r1) o),
+        store_nf chunk a rs r1 destroyed (nextinstr_nf (undef_regs destroyed rs)) o.
+
+  Inductive step_instr (f: function) (rs: regset) : instruction ->
+                                                    regset -> list event -> Prop :=
+  (** Moves *)
+  | Mov_rr:
+      forall rd r1,
+        step_instr f rs (Pmov_rr rd r1) (nextinstr (rs#rd <- (rs r1))) (tau :: nil) 
+  | Mov_ri:
+      forall rd n,
+        step_instr f rs (Pmov_ri rd n) (nextinstr_nf (rs#rd <- (Vint n))) (tau :: nil)
+  | Mov_ra:
+      forall rd id,
+        step_instr f rs (Pmov_ra rd id)
+                   (nextinstr_nf (rs#rd <- (Genv.symbol_address ge id Int.zero))) (tau :: nil)
+  | Mov_rm:
+      forall (rd : ireg) a rs' o
+        (Hload: load_nf Mint32 a rs rd rs' o),
+        step_instr f rs (Pmov_rm rd a) rs' (o :: nil)
+  | Mov_mr:
+      forall a (r1:ireg) rs' o
+        (Hstore: store_nf Mint32 a rs r1 nil rs' o),
+        step_instr f rs (Pmov_mr a r1) rs' (o :: nil)
+  | Movsd_ff:
+      forall rd r1,
+        step_instr f rs (Pmovsd_ff rd r1) (nextinstr (rs#rd <- (rs r1))) (tau :: nil)
+  | Movsd_fi:
+      forall rd n,
+        step_instr f rs (Pmovsd_fi rd n) (nextinstr (rs#rd <- (Vfloat n))) (tau :: nil)
+  | Movsd_fm:
+      forall (rd:freg) a rs' o
+        (Hload: load_nf Mfloat64 a rs rd rs' o),
+        step_instr f rs (Pmovsd_fm rd a) rs' (o :: nil)
+  | Movsd_mf:
+      forall a (r1:freg) rs' o
+        (Hstore: store_nf Mfloat64 a rs r1 nil rs' o),
+        step_instr f rs (Pmovsd_mf a r1) rs' (o :: nil)
+  | Movss_fi:
+      forall rd n,
+        step_instr f rs (Pmovss_fi rd n) (nextinstr (rs#rd <- (Vsingle n))) (tau :: nil)
+  | Movss_fm:
+      forall (rd:freg) a rs' o
+        (Hload: load_nf Mfloat32 a rs rd rs' o),
+        step_instr f rs (Pmovss_fm rd a) rs' (o :: nil)
+  | Movss_mf:
+      forall a (r1:freg) rs' o
+        (Hstore: store_nf Mfloat32 a rs r1 nil rs' o),
+        step_instr f rs (Pmovss_mf a r1) rs' (o :: nil)
+  | Fldl_m:
+      forall a rs' o
+        (Hload: load_nf Mfloat64 a rs ST0 rs' o),
+        step_instr f rs (Pfldl_m a) rs' (o :: nil)
+  | Fstpl_m:
+      forall a rs' o
+        (Hstore: store_nf Mfloat64 a rs ST0 (ST0 :: nil) rs' o),
+        step_instr f rs (Pfstpl_m a) rs' (o :: nil)
+  | Flds_m:
+      forall a rs' o
+        (Hload: load_nf Mfloat32 a rs ST0 rs' o),
+        step_instr f rs (Pflds_m a) rs' (o :: nil)
+  | Fstps_m:
+      forall a rs' o
+        (Hstore: store_nf Mfloat32 a rs ST0 (ST0 :: nil) rs' o),
+        step_instr f rs (Pfstps_m a) rs' (o :: nil)
+  | Xchg_rr:
+      forall r1 r2,
+        step_instr f rs (Pxchg_rr r1 r2)
+                   (nextinstr (rs#r1 <- (rs r2) #r2 <- (rs r1))) (tau :: nil)
+  (** Moves with conversion *)
+  | Movb_mr:
+      forall a (r1:ireg) rs' o
+        (Hstore: store_nf Mint8unsigned a rs r1 nil rs' o),
+        step_instr f rs (Pmovb_mr a r1) rs' (o :: nil)
+  | Movw_mr:
+      forall a (r1:ireg) rs' o
+        (Hstore: store_nf Mint16unsigned a rs r1 nil rs' o),
+        step_instr f rs (Pmovw_mr a r1) rs' (o :: nil)
+  | Movzb_rr:
+      forall rd r1,
+        step_instr f rs (Pmovzb_rr rd r1)
+                   (nextinstr (rs#rd <- (Val.zero_ext 8 rs#r1))) (tau :: nil)
+  | Movzb_rm:
+      forall (rd:ireg) a rs' o
+        (Hload: load_nf Mint8unsigned a rs rd rs' o),
+        step_instr f rs (Pmovzb_rm rd a) rs' (o :: nil)
+  | Movsb_rr:
+      forall rd r1,
+        step_instr f rs (Pmovsb_rr rd r1)
+                   (nextinstr (rs#rd <- (Val.sign_ext 8 rs#r1))) (tau :: nil)
+  | Movsb_rm:
+      forall (rd:ireg) a rs' o
+        (Hload: load_nf Mint8signed a rs rd rs' o),
+        step_instr f rs (Pmovsb_rm rd a) rs' (o :: nil)
+  | Movzw_rr:
+      forall rd r1,
+        step_instr f rs (Pmovzw_rr rd r1)
+                   (nextinstr (rs#rd <- (Val.zero_ext 16 rs#r1))) (tau :: nil)
+  | Movzw_rm:
+      forall (rd:ireg) a rs' o
+        (Hload: load_nf Mint16unsigned a rs rd rs' o),
+        step_instr f rs (Pmovzw_rm rd a) rs' (o :: nil)
+  | Movsw_rr:
+      forall rd r1,
+        step_instr f rs (Pmovsw_rr rd r1)
+                   (nextinstr (rs#rd <- (Val.sign_ext 16 rs#r1))) (tau :: nil)
+  | Movsw_rm:
+      forall (rd:ireg) a rs' o
+        (Hload: load_nf Mint16signed a rs rd rs' o),
+        step_instr f rs (Pmovsw_rm rd a) rs' (o :: nil)
+  | Cvtsd2ss_ff:
+      forall rd r1,
+        step_instr f rs (Pcvtsd2ss_ff rd r1)
+                   (nextinstr (rs#rd <- (Val.singleoffloat rs#r1))) (tau :: nil)
+  | Cvtss2sd_ff:
+      forall rd r1,
+        step_instr f rs (Pcvtsd2ss_ff rd r1)
+                   (nextinstr (rs#rd <- (Val.floatofsingle rs#r1))) (tau :: nil)
+  | Cvttsd2si_rf:
+      forall rd r1,
+        step_instr f rs (Pcvttsd2si_rf rd r1)
+                   (nextinstr (rs#rd <- (Val.maketotal (Val.intoffloat rs#r1)))) (tau :: nil)
+  | Cvtsi2sd_fr:
+      forall rd r1,
+        step_instr f rs (Pcvtsi2sd_fr rd r1)
+                   (nextinstr (rs#rd <- (Val.maketotal (Val.floatofint rs#r1)))) (tau :: nil)
+  | Cvttss2si_rf:
+      forall rd r1,
+        step_instr f rs (Pcvttss2si_rf rd r1)
+                   (nextinstr (rs#rd <- (Val.maketotal (Val.intofsingle rs#r1)))) (tau :: nil)
+  | Cvtsi2ss_fr:
+      forall rd r1,
+        step_instr f rs (Pcvtsi2ss_fr rd r1)
+                   (nextinstr (rs#rd <- (Val.maketotal (Val.singleofint rs#r1)))) (tau :: nil)
+  (** Integer arithmetic *)
+  | Lea:
+      forall rd a,
+        step_instr f rs (Plea rd a)
+                   (nextinstr (rs#rd <- (eval_addrmode ge a rs))) (tau :: nil)
+  | Neg:
+      forall rd,
+        step_instr f rs (Pneg rd)
+                   (nextinstr_nf (rs#rd <- (Val.neg rs#rd))) (tau :: nil)
+  | Sub_rr:
+      forall rd r1,
+        step_instr f rs (Psub_rr rd r1)
+                   (nextinstr_nf (rs#rd <- (Val.sub rs#rd rs#r1))) (tau :: nil)
+  | Imul_rr:
+      forall rd r1,
+        step_instr f rs (Pimul_rr rd r1)
+                   (nextinstr_nf (rs#rd <- (Val.mul rs#rd rs#r1))) (tau :: nil)
+  | Imul_ri:
+      forall rd n,
+        step_instr f rs (Pimul_ri rd n)
+                   (nextinstr_nf (rs#rd <- (Val.mul rs#rd (Vint n)))) (tau :: nil)
+  | Imul_r:
+      forall r1,
+        step_instr f rs (Pimul_r r1)
+                   (nextinstr_nf (rs#EAX <- (Val.mul rs#EAX rs#r1)
+                                    #EDX <- (Val.mulhs rs#EAX rs#r1))) (tau :: nil)
+  | Mul_r:
+      forall r1,
+        step_instr f rs (Pmul_r r1)
+                   (nextinstr_nf (rs#EAX <- (Val.mul rs#EAX rs#r1)
+                                    #EDX <- (Val.mulhu rs#EAX rs#r1))) (tau :: nil)
+  | Div:
+      forall (r1:ireg) vq vr,
+        let vn := rs#EAX in
+        let vd := (rs#EDX <- Vundef)#r1 in
+        Val.divu vn vd = Some vq ->
+        Val.modu vn vd = Some vr ->
+        step_instr f rs (Pdiv r1) (nextinstr_nf (rs#EAX <- vq #EDX <- vr)) (tau :: nil)
+  | And_rr:
+      forall rd r1,
+        step_instr f rs (Pand_rr rd r1) (nextinstr_nf (rs#rd <- (Val.and rs#rd rs#r1))) (tau :: nil)
+  | And_ri:
+      forall rd n,
+        step_instr f rs (Pand_ri rd n) (nextinstr_nf (rs#rd <- (Val.and rs#rd (Vint n)))) (tau :: nil)
+  | Or_rr:
+      forall rd r1,
+        step_instr f rs (Por_rr rd r1) (nextinstr_nf (rs#rd <- (Val.or rs#rd rs#r1))) (tau :: nil)
+  | Or_ri:
+      forall rd n,
+        step_instr f rs (Por_ri rd n) (nextinstr_nf (rs#rd <- (Val.or rs#rd (Vint n)))) (tau :: nil)
+  | Xor_r:
+      forall rd,
+        step_instr f rs (Pxor_r rd) (nextinstr_nf (rs#rd <- Vzero)) (tau :: nil)
+  | Xor_rr:
+      forall rd r1,
+        step_instr f rs (Pxor_rr rd r1) (nextinstr_nf (rs#rd <- (Val.xor rs#rd rs#r1))) (tau :: nil)
+  | Xor_ri:
+      forall rd n,
+        step_instr f rs (Pxor_ri rd n) (nextinstr_nf (rs#rd <- (Val.xor rs#rd (Vint n)))) (tau :: nil)
+  | Not:
+      forall rd,
+        step_instr f rs (Pnot rd) (nextinstr_nf (rs#rd <- (Val.notint rs#rd))) (tau :: nil)
+  | Sal_rcl:
+      forall rd,
+        step_instr f rs (Psal_rcl rd) (nextinstr_nf (rs#rd <- (Val.shl rs#rd rs#ECX))) (tau :: nil)
+  | Sal_ri:
+      forall rd n,
+        step_instr f rs (Psal_ri rd n) (nextinstr_nf (rs#rd <- (Val.shl rs#rd (Vint n)))) (tau :: nil)
+  | Shr_rcl:
+      forall rd,
+        step_instr f rs (Pshr_rcl rd) (nextinstr_nf (rs#rd <- (Val.shru rs#rd rs#ECX))) (tau :: nil)
+  | Shr_ri:
+      forall rd n,
+        step_instr f rs (Pshr_ri rd n) (nextinstr_nf (rs#rd <- (Val.shru rs#rd (Vint n)))) (tau :: nil)
+  | Sar_rcl:
+      forall rd,
+        step_instr f rs (Psar_rcl rd) (nextinstr_nf (rs#rd <- (Val.shr rs#rd rs#ECX))) (tau :: nil)
+  | Sar_ri:
+      forall rd n,
+        step_instr f rs (Psar_ri rd n) (nextinstr_nf (rs#rd <- (Val.shr rs#rd (Vint n)))) (tau :: nil)
+  | Shld_ri:
+      forall rd r1 n,
+        step_instr f rs (Pshld_ri rd r1 n)
+                   (nextinstr_nf (rs#rd <- (Val.or (Val.shl rs#rd (Vint n))
+                                                  (Val.shru rs#r1 (Vint (Int.sub Int.iwordsize n))))))
+                   (tau :: nil)
+  | Ror_ri:
+      forall rd n,
+        step_instr f rs (Pror_ri rd n) (nextinstr_nf (rs#rd <- (Val.ror rs#rd (Vint n)))) (tau :: nil)
+  | Cmp_rr:
+      forall r1 r2,
+        step_instr f rs (Pcmp_rr r1 r2) (nextinstr (compare_ints (rs r1) (rs r2) rs)) (tau :: nil)
+  | Cmp_ri:
+      forall r1 n,
+        step_instr f rs (Pcmp_ri r1 n) (nextinstr (compare_ints (rs r1) (Vint n) rs)) (tau :: nil)
+  | Test_rr:
+      forall r1 r2,
+        step_instr f rs (Ptest_rr r1 r2) (nextinstr (compare_ints (Val.and (rs r1) (rs r2)) Vzero rs)) (tau :: nil)
+  | Test_ri:
+      forall r1 n,
+        step_instr f rs (Ptest_ri r1 n) (nextinstr (compare_ints (Val.and (rs r1) (Vint n)) Vzero rs)) (tau :: nil)
+  | Cmov:
+      forall c rd r1,
+        step_instr f rs (Pcmov c rd r1)
+                   (match eval_testcond c rs with
+                    | Some true =>  nextinstr (rs#rd <- (rs#r1))
+                    | Some false => nextinstr rs
+                    | None => nextinstr (rs#rd <- Vundef)
+                    end) (tau :: nil)
+  | Setcc:
+      forall c rd,
+        step_instr f rs (Psetcc c rd) (nextinstr (rs#rd <- (Val.of_optbool (eval_testcond c rs)))) (tau :: nil)
+  (** Arithmetic operations over double-precision floats *)
+  | Addd_ff:
+      forall rd r1,
+        step_instr f rs (Paddd_ff rd r1) (nextinstr (rs#rd <- (Val.addf rs#rd rs#r1))) (tau :: nil)
+  | Subd_ff:
+      forall rd r1,
+        step_instr f rs (Psubd_ff rd r1) (nextinstr (rs#rd <- (Val.subf rs#rd rs#r1))) (tau :: nil)
+  | Muld_ff:
+      forall rd r1,
+        step_instr f rs (Pmuld_ff rd r1)  (nextinstr (rs#rd <- (Val.mulf rs#rd rs#r1))) (tau :: nil)
+  | Divd_ff:
+      forall rd r1,
+        step_instr f rs (Pdivd_ff rd r1) (nextinstr (rs#rd <- (Val.divf rs#rd rs#r1))) (tau :: nil)
+  | Negd:
+      forall rd, 
+        step_instr f rs (Pnegd rd) (nextinstr (rs#rd <- (Val.negf rs#rd))) (tau :: nil)
+  | Absd:
+      forall rd,
+        step_instr f rs (Pabsd rd) (nextinstr (rs#rd <- (Val.absf rs#rd))) (tau :: nil)
+  | Comisd_ff:
+      forall r1 r2,
+        step_instr f rs (Pcomisd_ff r1 r2) (nextinstr (compare_floats (rs r1) (rs r2) rs)) (tau :: nil)
+  | Xorpd_f:
+      forall rd,
+        step_instr f rs (Pxorpd_f rd) (nextinstr_nf (rs#rd <- (Vfloat Float.zero))) (tau :: nil)
+  (** Arithmetic operations over single-precision floats *)
+  | Adds_ff:
+      forall rd r1,
+        step_instr f rs (Padds_ff rd r1) (nextinstr (rs#rd <- (Val.addfs rs#rd rs#r1))) (tau :: nil)
+  | Subs_ff:
+      forall rd r1,
+        step_instr f rs (Psubs_ff rd r1) (nextinstr (rs#rd <- (Val.subfs rs#rd rs#r1))) (tau :: nil)
+  | Muls_ff:
+      forall rd r1,
+        step_instr f rs (Pmuls_ff rd r1) (nextinstr (rs#rd <- (Val.mulfs rs#rd rs#r1))) (tau :: nil)
+  | Divs_ff:
+      forall rd r1,
+        step_instr f rs (Pdivs_ff rd r1) (nextinstr (rs#rd <- (Val.divfs rs#rd rs#r1))) (tau :: nil)
+  | Negs:
+      forall rd,
+        step_instr f rs (Pnegs rd) (nextinstr (rs#rd <- (Val.negfs rs#rd))) (tau :: nil)
+  | Abss:
+      forall rd,
+        step_instr f rs (Pabss rd) (nextinstr (rs#rd <- (Val.absfs rs#rd))) (tau :: nil)
+  | Comiss_ff:
+      forall r1 r2,
+        step_instr f rs (Pcomiss_ff r1 r2) (nextinstr (compare_floats32 (rs r1) (rs r2) rs)) (tau :: nil)
+  | Xorps_f:
+      forall rd,
+        step_instr f rs (Pxorps_f rd) (nextinstr_nf (rs#rd <- (Vsingle Float32.zero))) (tau :: nil)
+  (** Branches and calls *)
+  | Jmp_l:
+      forall lbl rs'
+        (Hgoto: goto_label f lbl rs rs'),
+        step_instr f rs (Pjmp_l lbl) rs' (tau :: nil)
+  | Jmp_s:
+      forall id sg,
+        step_instr f rs (Pjmp_s id sg) (rs#PC <- (Genv.symbol_address ge id Int.zero)) (tau :: nil)
+  | Jmp_r:
+      forall r sg,
+        step_instr f rs (Pjmp_r r sg)  (rs#PC <- (rs r)) (tau :: nil)
+  | Jcc:
+      forall cond lbl rs'
+        (Heval_cond: match eval_testcond cond rs with
+                     | Some true => goto_label f lbl rs rs'
+                     | Some false => rs' = nextinstr rs
+                     | None => False
+                     end),
+        step_instr f rs (Pjcc cond lbl) rs' (tau :: nil)
+  | Jcc2:
+      forall cond1 cond2 lbl rs'
+        (Heval_cond: match eval_testcond cond1 rs, eval_testcond cond2 rs with
+                     | Some true, Some true =>
+                       goto_label f lbl rs rs'
+                     | Some _, Some _ => rs' = nextinstr rs
+                     | _, _ => False
+                     end),
+        step_instr f rs (Pjcc2 cond1 cond2 lbl) rs' (tau :: nil)
+  | Jmptbl:
+      forall (r:ireg) tbl n lbl rs'
+        (Hrs: rs#r = Vint n)
+        (Htbl: list_nth_z tbl (Int.unsigned n) = Some lbl)
+        (Hgoto: goto_label f lbl rs rs'),
+        step_instr f rs (Pjmptbl r tbl) rs' (tau :: nil)
+  | Call_s:
+      forall id sg,
+        step_instr f rs (Pcall_s id sg) 
+                   (rs#RA <- (Val.add rs#PC Vone) #PC <- (Genv.symbol_address ge id Int.zero)) (tau :: nil)
+  | Call_r:
+      forall r sg,
+        step_instr f rs (Pcall_r r sg) (rs#RA <- (Val.add rs#PC Vone) #PC <- (rs r)) (tau :: nil)
+  | Ret:
+      step_instr f rs Pret (rs#PC <- (rs#RA)) (tau :: nil)
+  (** Saving and restoring registers *)
+  | Mov_rm_a:
+      forall (rd:ireg) a rs' o
+        (Hload: load_nf Many32 a rs rd rs' o),
+        step_instr f rs (Pmov_rm_a rd a) rs' (o :: nil)
+  | Mov_mr_a:
+      forall a (r1:ireg) rs' o
+        (Hstore: store_nf Many32 a rs r1 nil rs' o),
+        step_instr f rs (Pmov_mr_a a r1) rs' (o :: nil)
+  | Movsd_fm_a:
+      forall (rd:freg) a rs' o
+        (Hload: load_nf Many64 a rs rd rs' o),
+        step_instr f rs (Pmovsd_fm_a rd a) rs' (o :: nil)
+  | Movsd_mf_a:
+      forall a (r1:freg) rs' o
+        (Hstore: store_nf Many64 a rs r1 nil rs' o),
+        step_instr f rs (Pmovsd_mf_a a r1) rs' (o :: nil)
+  (** Pseudo-instructions *)
+  | Label:
+      forall lbl,
+        step_instr f rs (Plabel lbl) (nextinstr rs) (tau :: nil)
+  | Allocframe:
+      forall sz stk ofs_ra ofs_link b1 ofs1 b2 ofs2 oalloc ostore1 ostore2,
+        let sp := Vptr stk Int.zero in
+        forall (Halloc: alloc 0 sz oalloc stk)
+          (Haddr1: Val.add sp (Vint ofs_link) = Vptr b1 ofs1)
+          (Hstore1: store Mint32 b1 (Int.unsigned ofs1) rs#ESP ostore1)
+          (Haddr2: Val.add sp (Vint ofs_ra) = Vptr b2 ofs2)
+          (Hstore2: store Mint32 b2 (Int.unsigned ofs2) rs#RA ostore2),
+          step_instr f rs (Pallocframe sz ofs_ra ofs_link)
+                     (nextinstr (rs #EDX <- (rs#ESP) #ESP <- sp))
+                     (oalloc :: ostore1 :: ostore2 :: nil)
+  | Freeframe:
+      forall sz ofs_ra ofs_link b1 ofs1 ra oload1 b2 ofs2 sp oload2 stk ofs
+        (Haddr1: Val.add rs#ESP (Vint ofs_ra) = Vptr b1 ofs1)
+        (Hload1: load Mint32 b1 (Int.unsigned ofs1) ra oload1)
+        (Haddr2: Val.add rs#ESP (Vint ofs_link) = Vptr b2 ofs2)
+        (Hload2: load Mint32 b2 (Int.unsigned ofs2) sp oload2)
+        (Hesp: rs#ESP = Vptr stk ofs),
+        (* free seems like a no-op*)
+        step_instr f rs (Pfreeframe sz ofs_ra ofs_link)
+                   (nextinstr (rs#ESP <- (decode_val Mint32 sp)
+                                 #RA <- (decode_val Mint32 ra)))
+                   (oload1 :: oload2 :: nil).
+
+End AxiomSem.
+End AxiomSem.

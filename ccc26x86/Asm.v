@@ -1005,4 +1005,3 @@ Definition data_preg (r: preg) : bool :=
   | CR _ => false
   | RA => false
   end.
-

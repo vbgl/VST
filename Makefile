@@ -104,7 +104,7 @@ SEPCOMP_FILES = \
 # what is:  erasure.v context.v context_equiv.v jstep.v
 
 CONCUR_FILES= \
-  Asm_core.v Asm_event.v load_frame.v I64Helpers.v BuiltinEffects.v \
+  X86_ax.v Asm_core.v Asm_event.v load_frame.v I64Helpers.v BuiltinEffects.v \
   Clight_new2core.v \
   addressFiniteMap.v cast.v compcert_imports.v \
   compcert_threads_lemmas.v threadPool.v  \
@@ -383,7 +383,7 @@ else
 endif
 
 # you can also write, COQVERSION= 8.6 or-else 8.6pl2 or-else 8.6pl3   (etc.)
-COQVERSION= 8.6
+COQVERSION= 8.6 or-else 8.6.1
 COQV=$(shell $(COQC) -v)
 ifeq ("$(filter $(COQVERSION),$(COQV))","")
  $(error FAILURE: You need Coq $(COQVERSION) but you have this version: $(COQV))
