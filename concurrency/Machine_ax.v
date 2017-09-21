@@ -3,18 +3,26 @@ Require Import concurrency.Asm_core. (* for AxiomaticCoreSem.
                             stop importing Asm_core *)
 Import AxCoreSem.
 
-Module Type Semantics.
-  Parameter G: Type.
-  Parameter C: Type.
-  Parameter E:Type.
-  Parameter Sem: @AxiomaticCoreSemantics G C E.
-End Semantics.
+Class Semantics :=
+ {
+   G: Type;
+   C: Type;
+   E:Type;
+   Sem: @AxiomaticCoreSemantics G C E
+ }.
 
-Module Type ThreadPoolSig.
-  Declare Module SEM: Semantics.
-
-  Definition tid := nat.
-  Parameter t : Type.
+Class ThreadPool (SEM: Semantics) :=
+  {
+    tid := nat;
+    t : Type;
+    getThread: tid -> t -> option C;
+    updThread: tid -> C -> t -> t;
+    gsoThread:
+      forall i j t c (Hneq: i <> j),
+        getThread i (updThread j c t) = getThread i t;
+    gssThread:
+      forall i t c,
+        getThread i (updThread i c t) = Some c }.
 
   Parameter getThread: tid -> t -> option SEM.C.
   Parameter updThread: tid -> SEM.C -> t -> t.
@@ -85,10 +93,9 @@ Module AxLockMachine (SEM:Semantics)
 
   Parameter lockE: list E.
   Parameter unlockE: list E.
+  Parameter mkLockE: list E.
   Parameter 
 
   Inductive cstep {genv:G} (tp : t) (i : tid): list E
     
-
-
 
