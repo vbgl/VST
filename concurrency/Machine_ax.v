@@ -1,77 +1,68 @@
 Require Import concurrency.Asm_core. (* for AxiomaticCoreSem.
                             TODO: Move it out of there and
                             stop importing Asm_core *)
+Require Import compcert.common.Values.
+Require Import compcert.common.AST.
+Import List.
+Import List.ListNotations.
 Import AxCoreSem.
 
+
+(** Thread identifiers -- assume natural numbers *)
+Notation tid := nat. 
+
+(** Class of threadwise semantics *)
 Class Semantics :=
  {
-   G: Type;
-   C: Type;
-   E:Type;
-   Sem: @AxiomaticCoreSemantics G C E
+   G: Type; (** Type of global environment *)
+   C: Type; (** Type of state/core *)
+   E: Type; (** Type of events *)
+   Sem: @AxiomaticCoreSemantics G C E (** Threadwise semantics *)
  }.
 
-Class ThreadPool (SEM: Semantics) :=
+Class ThreadPool (Sem : Semantics) :=
   {
-    tid := nat;
-    t : Type;
-    getThread: tid -> t -> option C;
-    updThread: tid -> C -> t -> t;
+    t : Type; (** type of thread pool *)
+    getThread: tid -> t -> option C; (** get state of thread *)
+    updThread: tid -> C -> t -> t; (** set state of thread *)
     gsoThread:
-      forall i j t c (Hneq: i <> j),
-        getThread i (updThread j c t) = getThread i t;
+      forall i j tp c (Hneq: i <> j),
+        getThread i (updThread j c tp) = getThread i tp;
     gssThread:
-      forall i t c,
-        getThread i (updThread i c t) = Some c }.
+      forall i tp c,
+        getThread i (updThread i c tp) = Some c
+  }.
 
-  Parameter getThread: tid -> t -> option SEM.C.
-  Parameter updThread: tid -> SEM.C -> t -> t.
-  Parameter gsoThread:
-    forall i j t c (Hneq: i <> j),
-      getThread i (updThread j c t) = getThread i t.
-  Parameter gssThread:
-    forall i t c,
-      getThread i (updThread i c t) = Some c.
-End ThreadPoolSig.
+Notation "tp # i " := (getThread i tp) (at level 10).
+Notation "tp <- i , c" := (updThread i c tp) (at level 20).
+Notation tstep := (corestep Sem).
 
-Module ThreadPool <: ThreadPoolSig.
+(** Definition of a generic axiomatic concurrency machine *)
+Module AxSem.
+Section AxSem.
 
-  Declare Module SEM:Semantics.
-  Definition tid := nat.
-  Definition t := tid -> option SEM.C.
-
-  Definition getThread i (tp: t) := tp i.
-  Definition updThread i c (tp : t) :=
-    fun j => if (PeanoNat.Nat.eq_dec i j) then Some c else tp j.
-
-  Lemma gsoThread:
-    forall i j t c (Hneq: i <> j),
-      getThread i (updThread j c t) = getThread i t.
-  Proof.
-    intros.
-    unfold getThread, updThread.
-    destruct eq_dec.EqDec_nat; subst;
-      [exfalso|]; now auto.
-  Qed.
-
-  Lemma gssThread:
-    forall i t c,
-      getThread i (updThread i c t) = Some c.
-  Proof.
-    intros.
-    unfold getThread, updThread.
-    destruct (PeanoNat.Nat.eq_dec i i); now tauto.
-  Qed.
-End ThreadPool.
-
-Module Type AxMachine (SEM:Semantics)
-       (ThreadPool : ThreadPoolSig with Module SEM := SEM).
-  Import ThreadPool SEM.
-
-  Notation tstep := (corestep G C E Sem).
+  Context {sem : Semantics}
+          {threadpool : ThreadPool sem}.
+  
+  (* Instance FunPool : ThreadPool. *)
+  (* Proof. *)
+  (*   eapply Build_ThreadPool with *)
+  (*   (t := nat -> option C) *)
+  (*     (getThread := fun i tp => tp i) *)
+  (*     (updThread := fun i c tp => *)
+  (*                     fun j => if (PeanoNat.Nat.eq_dec i j) *)
+  (*                           then Some c else tp j). *)
+  (*   - intros. *)
+  (*     unfold getThread, updThread. *)
+  (*     destruct eq_dec.EqDec_nat; subst; *)
+  (*       [exfalso|]; now auto. *)
+  (*   - intros. *)
+  (*     unfold getThread, updThread. *)
+  (*     destruct (PeanoNat.Nat.eq_dec i i); now tauto. *)
+  (* Defined. *)
 
   (** Parameterized over external (concurrent) steps*)
-  Parameter cstep: G -> t -> tid -> list E -> t -> Prop.
+  Variable cstep: G -> t -> tid -> list E -> t -> Prop.
 
   Inductive step {genv:G} (tp : t) (i: tid): list E -> t -> Prop :=
   | InternalStep:
@@ -84,18 +75,89 @@ Module Type AxMachine (SEM:Semantics)
          (Hcstep: cstep genv tp i evl tp'),
         step tp i evl tp'.
 
-End AxMachine.
+End AxSem.
+End AxSem.
 
-Module AxLockMachine (SEM:Semantics)
-       (ThreadPool : ThreadPoolSig with Module SEM := SEM) <:
-  AxMachine SEM ThreadPool.
-  Import ThreadPool SEM.
+Require Import compcert.lib.Integers.
+Import Int.
 
-  Parameter lockE: list E.
-  Parameter unlockE: list E.
-  Parameter mkLockE: list E.
-  Parameter 
+(** Definition of an axiomatic concurrency machine consisting of lock operations *)
+Module AxLockMachine.
+Section AxLockMachine.
 
-  Inductive cstep {genv:G} (tp : t) (i : tid): list E
-    
+  (** Externals symbols and signatures. *)
+  Notation EXIT :=
+    (EF_external "EXIT" (mksignature (AST.Tint::nil) None)).
+
+  Notation CREATE_SIG := (mksignature (AST.Tint::AST.Tint::nil) None cc_default).
+  Notation CREATE := (EF_external "spawn" CREATE_SIG).
+
+  Notation MKLOCK :=
+    (EF_external "makelock" (mksignature (AST.Tint::nil) None cc_default)).
+  Notation FREELOCK :=
+    (EF_external "freelock" (mksignature (AST.Tint::nil) None cc_default)).
+
+  Notation LOCK_SIG := (mksignature (AST.Tint::nil) None cc_default).
+  Notation LOCK := (EF_external "acquire" LOCK_SIG).
+  Notation UNLOCK_SIG := (mksignature (AST.Tint::nil) None cc_default).
+  Notation UNLOCK := (EF_external "release" UNLOCK_SIG).
+
+  (** Assume some threadwise semantics*)
+  Context {sem: Semantics}.
+
+  (** Parameterize over the events generated for each step of the
+      Lock machine (e.g. x86 generates different events than Power) *)
+  Class LockSem :=
+    { lockE     : block -> int -> list E; (** Given the lock address *) 
+      unlockE   : block -> int -> list E; 
+      mklockE   : block -> int -> list E;
+      freelockE : block -> int -> list E;
+      spawnE    : block -> int -> val -> tid -> list E (** Given the address of the code to be executed
+                                                  an argument passed by parent thread and
+                                                  the tid of the new thread*)
+     }.
+  
+  Context {threadpool: ThreadPool sem}
+          {lockSem: LockSem}.
+
+  Inductive cstep {genv:G} (tp : t) (i : tid): list E -> t -> Prop :=
+  | StepAcq:
+      forall c c' b ofs evargs
+        (Hcode: tp # i = Some c)
+        (Hat_external: at_external Sem genv c LOCK ((Vptr b ofs) :: nil) evargs)
+        (Hafter_external: after_external Sem genv None c = Some c'),
+        cstep tp i (evargs ++ (lockE b ofs)) (tp <- i,c')
+  | StepRel:
+      forall c c' b ofs evargs
+        (Hcode: tp # i = Some c)
+        (Hat_external: at_external Sem genv c UNLOCK ((Vptr b ofs) :: nil) evargs)
+        (Hafter_external: after_external Sem genv None c = Some c'),
+        cstep tp i (evargs ++ (unlockE b ofs)) (tp <- i,c')
+  | StepMkLock:
+      forall c c' b ofs evargs
+        (Hcode: tp # i = Some c)
+        (Hat_external: at_external Sem genv c MKLOCK ((Vptr b ofs) :: nil) evargs)
+        (Hafter_external: after_external Sem genv None c = Some c'),
+        cstep tp i (evargs ++ (mklockE b ofs)) (tp <- i,c')
+  | StepFreeLock:
+      forall c c' b ofs evargs
+        (Hcode: tp # i = Some c)
+        (Hat_external: at_external Sem genv c FREELOCK ((Vptr b ofs) :: nil) evargs)
+        (Hafter_external: after_external Sem genv None c = Some c'),
+        cstep tp i (evargs ++ (freelockE b ofs)) (tp <- i,c')
+  | StepSpawn:
+      forall c c' c'' b ofs arg evargs evinit j
+        (Hcode: tp # i = Some c)
+        (Hat_external: at_external Sem genv c CREATE ((Vptr b ofs) :: arg :: nil) evargs)
+        (Hafter_external: after_external Sem genv None c = Some c')
+        (Hinitial: initial_core Sem j genv (Vptr b ofs) [arg] c'' evinit)
+        (Hfresh: tp # j = None),
+        cstep tp i (evargs ++ (spawnE b ofs arg j)) ((tp <- i,c') <- j,c'').
+
+  Import AxSem.
+
+  Notation step := (step cstep). 
+
+End AxLockMachine.
+End AxLockMachine.
 

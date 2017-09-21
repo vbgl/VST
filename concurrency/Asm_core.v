@@ -654,9 +654,9 @@ Module AxCoreSem.
   Qed.
 
   (** Analogous to [sepcomp.semantics.CoreSemantics]*)
-  Record AxiomaticCoreSemantics (G C E : Type) : Type :=
+  Record AxiomaticCoreSemantics {G C E : Type} : Type :=
     Build_AxiomaticCoreSemantics
-      { initial_core : nat -> G -> val -> list val -> regset -> list E -> Prop;
+      { initial_core : nat -> G -> val -> list val -> C -> list E -> Prop;
         at_external : G -> C -> external_function -> list val -> list E -> Prop;
         after_external : G -> option val -> C -> option C;
         halted : C -> option val;
