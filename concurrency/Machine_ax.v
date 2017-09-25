@@ -33,8 +33,8 @@ Class ThreadPool (Sem : Semantics) :=
         getThread i (updThread i c tp) = Some c
   }.
 
-Notation "tp # i " := (getThread i tp) (at level 10).
-Notation "tp <- i , c" := (updThread i c tp) (at level 20).
+Notation "tp # i " := (getThread i tp) (at level 1) : Ax_scope.
+Notation "tp <- i , c" := (updThread i c tp) (at level 1) : Ax_scope.
 Notation tstep := (corestep Sem).
 
 (** Definition of a generic axiomatic concurrency machine *)
@@ -120,6 +120,8 @@ Section AxLockMachine.
   Context {threadpool: ThreadPool sem}
           {lockSem: LockSem}.
 
+  Open Scope Ax_scope.
+  (** Concurrent steps of the lock machine *)
   Inductive cstep {genv:G} (tp : t) (i : tid): list E -> t -> Prop :=
   | StepAcq:
       forall c c' b ofs evargs
