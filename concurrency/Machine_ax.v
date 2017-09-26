@@ -12,15 +12,14 @@ Import AxCoreSem.
 Notation tid := nat. 
 
 (** Class of threadwise semantics *)
-Class Semantics :=
+Class Semantics (E: Type) :=
  {
    G: Type; (** Type of global environment *)
    C: Type; (** Type of state/core *)
-   E: Type; (** Type of events *)
    Sem: @AxiomaticCoreSemantics G C E (** Threadwise semantics *)
  }.
 
-Class ThreadPool (Sem : Semantics) :=
+Class ThreadPool (C: Type) :=
   {
     t : Type; (** type of thread pool *)
     getThread: tid -> t -> option C; (** get state of thread *)
@@ -34,15 +33,17 @@ Class ThreadPool (Sem : Semantics) :=
   }.
 
 Notation "tp # i " := (getThread i tp) (at level 1) : Ax_scope.
-Notation "tp <- i , c" := (updThread i c tp) (at level 1) : Ax_scope.
+Notation "tp <- i , c" := (updThread i c tp) (at level 1): Ax_scope.
 Notation tstep := (corestep Sem).
 
 (** Definition of a generic axiomatic concurrency machine *)
 Module AxSem.
 Section AxSem.
 
-  Context {sem : Semantics}
-          {threadpool : ThreadPool sem}.
+  Context
+    {E : Type}
+    {sem : Semantics E}
+    {threadpool : ThreadPool C}.
   
   (* Instance FunPool : ThreadPool. *)
   (* Proof. *)
@@ -64,16 +65,16 @@ Section AxSem.
   (** Parameterized over external (concurrent) steps*)
   Variable cstep: G -> t -> tid -> list E -> t -> Prop.
 
-  Inductive step {genv:G} (tp : t) (i: tid): list E -> t -> Prop :=
+  Inductive step (genv:G) (tp : t) (i: tid): list E -> t -> Prop :=
   | InternalStep:
       forall c c' evl
         (Hget: getThread i tp = Some c)
         (Hstep: tstep genv c c' evl),
-        step tp i evl (updThread i c' tp)
+        step genv tp i evl (updThread i c' tp)
   | ExternalStep:
       forall  evl tp'
          (Hcstep: cstep genv tp i evl tp'),
-        step tp i evl tp'.
+        step genv tp i evl tp'.
 
 End AxSem.
 End AxSem.
@@ -103,7 +104,9 @@ Section AxLockMachine.
   Notation UNLOCK := (EF_external "release" UNLOCK_SIG).
 
   (** Assume some threadwise semantics*)
-  Context {sem: Semantics}.
+  Context 
+    {E : Type}
+    {sem : Semantics E}.
 
   (** Parameterize over the events generated for each step of the
       Lock machine (e.g. x86 generates different events than Power) *)
@@ -117,7 +120,7 @@ Section AxLockMachine.
                                                   the tid of the new thread*)
      }.
   
-  Context {threadpool: ThreadPool sem}
+  Context {threadpool: ThreadPool C}
           {lockSem: LockSem}.
 
   Open Scope Ax_scope.
@@ -155,10 +158,6 @@ Section AxLockMachine.
         (Hinitial: initial_core Sem j genv (Vptr b ofs) [arg] c'' evinit)
         (Hfresh: tp # j = None),
         cstep tp i (evargs ++ (spawnE b ofs arg j)) ((tp <- i,c') <- j,c'').
-
-  Import AxSem.
-
-  Notation step := (step cstep). 
 
 End AxLockMachine.
 End AxLockMachine.

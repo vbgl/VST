@@ -1045,7 +1045,7 @@ Module AxiomSem.
     match e with
     | Read b ofs chunk mv
     | Write b ofs chunk mv =>
-      Some (b, ofs, size_chunk_nat chunk)
+      Some (b, ofs, length mv)
     | _ => None
     end.
 
