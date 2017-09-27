@@ -15,14 +15,51 @@ Import AxCoreSem.
 (** Thread identifiers -- assume natural numbers *)
 Notation tid := nat. 
 
-(** Labels should satisfy this interface *)
-Class Labels :=
-  { E       :> Type;
-    isRead  : E -> bool;
-    isWrite : E -> bool;
-    loc     : E -> option (block * Z * Z);
-    mval    : E -> option (list memval)
-  }.
+Section Labels.
+  (** Labels should satisfy this interface *)
+  Class Labels :=
+    { E        :> Type;
+      isReadE  : E -> bool;
+      isWriteE : E -> bool;
+      locE     : E -> option (block * Z * Z);
+      mvalE    : E -> option (list memval)
+    }.
+
+  Context {lbl : Labels}.
+
+  (** Lifting labels to a concurrency with spawning of new threads *)
+  Inductive ConcLabels : Type :=
+  | Spawn : tid -> ConcLabels
+  | Ev    : E -> ConcLabels.
+
+  Definition concLabelsofE (es : list E) :=
+    List.map (fun ev => Ev ev) es.
+
+  Definition isRead (e : ConcLabels) :=
+    match e with
+    | Spawn _ => false
+    | Ev e => isReadE e
+    end.
+
+  Definition isWrite (e : ConcLabels) :=
+    match e with
+    | Spawn _ => false
+    | Ev e => isWriteE e
+    end.
+
+  Definition loc (e : ConcLabels) :=
+    match e with
+    | Spawn _ => None
+    | Ev e => locE e
+    end.
+
+  Definition mval (e : ConcLabels) :=
+    match e with
+    | Spawn _ => None
+    | Ev e => mvalE e
+    end.
+
+End Labels.
 
 (** Class of threadwise semantics *)
 Class Semantics `{lbl:Labels} :=
@@ -61,13 +98,6 @@ Section AxSem.
     {Lab : Labels}
     {sem : Semantics}
     {threadpool : ThreadPool C}.
-
-  Inductive ConcLabels : Type :=
-  | Spawn : tid -> ConcLabels
-  | Ev    : E -> ConcLabels.
-
-  Definition concLabelsofE (es : list E) :=
-    List.map (fun ev => Ev ev) es.
 
   (** External (sync) steps*)
   Variable syncStep: G -> C ->  C -> list E -> Prop.

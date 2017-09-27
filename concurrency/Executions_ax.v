@@ -20,8 +20,9 @@ Inductive stepN {A B: Type} (R : A -> B -> A -> B -> Prop) : nat -> A -> B -> A 
 Module Execution.
 
   Notation id := nat.
-  Class Execution (E:Type) :=
-    { lab    : id -> E;
+  Import AxSem.
+  Class Execution `{lbl:Labels} :=
+    { lab    : id -> ConcLabels;
       thread : id -> tid
     }.
 
@@ -46,15 +47,13 @@ Module Execution.
 
   Section Semantics.
     
-    Import AxSem.
-    
     Context
-      {E : Type}
-      {sem : Semantics E}
+      {Lab : Labels}
+      {sem : Semantics}
       {threadpool : ThreadPool C}
-      {exec : Execution E}.
+      {exec : Execution}.
 
-    Variable cstep: G -> t -> tid -> list E -> t -> Prop.
+    Variable cstep: G -> C -> C -> list E -> Prop.
   
     Infix " \ " := (Setminus id) (at level 70, no associativity) : Execution_scope.
 
@@ -83,8 +82,7 @@ Module ValidSC.
   
   Section ValidSC.
     Context {lbl : Labels}.
-    Context {exec : Execution E}.
-
+    Context {exec : Execution}.
 
     Record strict_partial_order {A:Type} (R: relation A) :=
       { antisym : antisymmetric _ R;
@@ -109,6 +107,7 @@ Module ValidSC.
         po_strict_PO : strict_partial_order po;
         (** events on the same thread are related by [po] *)
         po_same_thread : forall e1 e2, thread e1 = thread e2 ->
+                                  e1 <> e2 ->
                                   po e1 e2 \/ po e2 e1;
         (** Thread spawning induces [po] order between parent-children threads*)
         po_spawn : forall e1 e2,
@@ -117,7 +116,8 @@ Module ValidSC.
       }.
 
     Definition lab := lab.
-    Coercion lab : id >-> E.
+    Coercion lab : id >-> ConcLabels.
+
 
     (** Validity of read events in the execution:
         - Every read reads from some write that is on
