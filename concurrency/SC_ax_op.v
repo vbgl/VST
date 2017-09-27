@@ -19,7 +19,7 @@ Module AxiomaticIntermediate.
 
   Import Execution.
   Import ValidSC.
-  
+
   Section AxiomaticIntermediate.
     Context
       {lbl : Labels}
@@ -54,6 +54,29 @@ Module AxiomaticIntermediate.
         po_sc    : inclusion _ po sc
       }.
 
+    Lemma commute_step_sc:
+      forall tp Ex Ex' tp' es e' es' tp''
+        (HstepSC: [tp, Ex] ==>sc [tp', Ex'])
+        (Hstep: tp' [thread e', List.map lab (e' :: es')]==> tp'')
+        (Henum: enumerate po es (e' :: es')%list)
+        (Hdisjoint: Disjoint _ es Ex)
+        (HminSC: forall e, e \in Ex -> sc e' e)
+        (Hpo: forall e, e \in Ex -> ~ po e' e),
+      exists tp0,
+        [tp, Union _ Ex es] ==>sc [tp0, Ex] /\
+        [tp0, Ex] ==>sc [tp'', Ex'].
+    Proof.
+      intros.
+      inversion HstepSC; subst.
+      
+      Lemma step_gsoThread:
+        forall tp i ev tp' j
+          (Hstep: tp [i, es]==> tp')
+
+
+      Notation " c '[' ls ']'-->' c' " :=
+        (tstep genv po sc tp1 Ex1 tp2 Ex2) (at level 40).
+          
     Lemma commute_sc:
       forall n tp Ex es e' es' tp' Ex' tp''
         (Hsc_steps: [tp, Ex] ==>{n} [tp', Ex'])
@@ -80,7 +103,7 @@ Module AxiomaticIntermediate.
         assert (Disjoint _ Ex0 es)
           by admit.
         specialize (IHn _ _ _ _ _ _ _ _ HRstepN' Hp_step Henum H Hincl H0).
-        
+
 
 
         specialize (IHn _ 

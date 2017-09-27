@@ -65,6 +65,7 @@ Module Execution.
                (Henum: enumerate po es (e' :: es'))
                (Hmin: e' \in (min R (Union _ Ex es)))
                (Hincl: inclusion _ po R)
+               (Hdis: Disjoint _ Ex es)
                (Hstep: @step _ _ _ cstep genv tp (thread e') (List.map lab (e' :: es')) tp'),
         Rstep genv po R tp (Union _ Ex es) tp' Ex.
 
@@ -80,16 +81,6 @@ Module ValidSC.
 
   Import Execution.
   
-  (** Labels should satisfy this interface *)
-  Class Labels :=
-    { E       :> Type;
-      isRead  : E -> bool;
-      isWrite : E -> bool;
-      Spawn   : tid -> E;
-      loc     : E -> option (block * Z * Z);
-      mval    : E -> option (list memval)
-    }.
-
   Section ValidSC.
     Context {lbl : Labels}.
     Context {exec : Execution E}.
