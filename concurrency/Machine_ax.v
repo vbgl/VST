@@ -20,7 +20,6 @@ Class Labels :=
   { E       :> Type;
     isRead  : E -> bool;
     isWrite : E -> bool;
-    Spawn   : tid -> E;
     loc     : E -> option (block * Z * Z);
     mval    : E -> option (list memval)
   }.
@@ -30,12 +29,7 @@ Class Semantics `{lbl:Labels} :=
  {
    G: Type; (** Type of global environment *)
    C: Type; (** Type of state/core *)
-   Sem: @AxiomaticCoreSemantics G C E; (** Threadwise semantics *)
-   NoSpawn_threadstep:
-     forall genv c c' evl,
-       corestep Sem genv c c' evl ->
-       ~ exists j, In (Spawn j) evl;
-   NoSpawn_atexternal
+   Sem: @AxiomaticCoreSemantics G C E (** Threadwise semantics *)
  }.
 
 Class ThreadPool (C: Type) :=
@@ -67,32 +61,29 @@ Section AxSem.
     {Lab : Labels}
     {sem : Semantics}
     {threadpool : ThreadPool C}.
-  
-  Class SyncSteps :=
-    {
-      (** External (sync) steps*)
-      syncStep: G -> C ->  C -> list E -> Prop;
-      NoSpawn_sync:
-        forall genv c c' evl,
-          corestep Sem genv c c' evl ->
-          ~ exists j, In (Spawn j) evl
-    }.
 
+  Inductive ConcLabels : Type :=
+  | Spawn : tid -> ConcLabels
+  | Ev    : E -> ConcLabels.
 
-  Context {ssteps : SyncSteps}.
+  Definition concLabelsofE (es : list E) :=
+    List.map (fun ev => Ev ev) es.
+
+  (** External (sync) steps*)
+  Variable syncStep: G -> C ->  C -> list E -> Prop.
 
   Open Scope tp_scope.
-  Inductive step (genv:G) (tp : t) (i: tid): list E -> t -> Prop :=
+  Inductive step (genv:G) (tp : t) (i: tid): list ConcLabels -> t -> Prop :=
   | ThreadStep:
       forall c c' evl
         (Hget: getThread i tp = Some c)
         (Hstep: threadStep genv c c' evl),
-        step genv tp i evl (updThread i c' tp)
+        step genv tp i (concLabelsofE evl) (updThread i c' tp)
   | SyncStep:
       forall  c c' evl
         (Hget: getThread i tp = Some c)
         (Hstep: syncStep genv c c' evl),
-        step genv tp i evl (updThread i c' tp)
+        step genv tp i (concLabelsofE evl) (updThread i c' tp)
   | StepSpawn:
       forall c c' c'' b ofs arg evargs evinit j
         (Hcode: tp # i = Some c)
@@ -101,7 +92,7 @@ Section AxSem.
         (Hafter_external: after_external Sem genv None c = Some c')
         (Hinitial: initial_core Sem j genv (Vptr b ofs) [arg] c'' evinit)
         (Hfresh: tp # j = None),
-        step genv tp i (evargs ++ [Spawn j]) ((tp <- i,c') <- j,c'').
+        step genv tp i ((concLabelsofE evargs) ++ [Spawn j]) ((tp <- i,c') <- j,c'').
 
 End AxSem.
 End AxSem.
@@ -110,6 +101,7 @@ End AxSem.
 (** Definition of an axiomatic concurrency machine consisting of lock operations *)
 Module AxLockMachine.
 
+  Import AxSem.
   (** Symbols and signatures for externals of the locks machine. *)
   Notation EXIT :=
     (EF_external "EXIT" (mksignature (AST.Tint::nil) None)).
@@ -145,39 +137,27 @@ Module AxLockMachine.
 
   Open Scope tp_scope.
   (** Sync steps of the lock machine *)
-  Inductive cstep {genv:G} (tp : t) (i : tid): list E -> t -> Prop :=
+  Inductive syncStep {genv:G} (c:C) : C -> list E -> Prop :=
   | StepAcq:
-      forall c c' b ofs evargs
-        (Hcode: tp # i = Some c)
+      forall b ofs evargs c'
         (Hat_external: at_external Sem genv c LOCK ((Vptr b ofs) :: nil) evargs)
         (Hafter_external: after_external Sem genv None c = Some c'),
-        cstep tp i (evargs ++ (lockE b ofs)) (tp <- i,c')
+        syncStep c c' (evargs ++ (lockE b ofs))
   | StepRel:
-      forall c c' b ofs evargs
-        (Hcode: tp # i = Some c)
+      forall b ofs evargs c'
         (Hat_external: at_external Sem genv c UNLOCK ((Vptr b ofs) :: nil) evargs)
         (Hafter_external: after_external Sem genv None c = Some c'),
-        cstep tp i (evargs ++ (unlockE b ofs)) (tp <- i,c')
+        syncStep c c' (evargs ++ (unlockE b ofs))
   | StepMkLock:
-      forall c c' b ofs evargs
-        (Hcode: tp # i = Some c)
+      forall b ofs evargs c'
         (Hat_external: at_external Sem genv c MKLOCK ((Vptr b ofs) :: nil) evargs)
         (Hafter_external: after_external Sem genv None c = Some c'),
-        cstep tp i (evargs ++ (mklockE b ofs)) (tp <- i,c')
+        syncStep c c' (evargs ++ (mklockE b ofs))
   | StepFreeLock:
-      forall c c' b ofs evargs
-        (Hcode: tp # i = Some c)
+      forall b ofs evargs c'
         (Hat_external: at_external Sem genv c FREELOCK ((Vptr b ofs) :: nil) evargs)
         (Hafter_external: after_external Sem genv None c = Some c'),
-        cstep tp i (evargs ++ (freelockE b ofs)) (tp <- i,c')
-  | StepSpawn:
-      forall c c' c'' b ofs arg evargs evinit j
-        (Hcode: tp # i = Some c)
-        (Hat_external: at_external Sem genv c CREATE ((Vptr b ofs) :: arg :: nil) evargs)
-        (Hafter_external: after_external Sem genv None c = Some c')
-        (Hinitial: initial_core Sem j genv (Vptr b ofs) [arg] c'' evinit)
-        (Hfresh: tp # j = None),
-        cstep tp i (evargs ++ (spawnE b ofs arg j)) ((tp <- i,c') <- j,c'').
+        syncStep c c' (evargs ++ (freelockE b ofs)).
 
 End AxLockMachine.
 End AxLockMachine.
