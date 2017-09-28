@@ -79,8 +79,38 @@ Class ThreadPool (C: Type) :=
         getThread i (updThread j c tp) = getThread i tp;
     gssThread:
       forall i tp c,
-        getThread i (updThread i c tp) = Some c
+        getThread i (updThread i c tp) = Some c;
+    updComm: forall i j c c' tp,
+        i <> j ->
+        updThread i c (updThread j c' tp) =
+        updThread j c' (updThread i c tp)
   }.
+
+(* Section Bla. *)
+(* Context {l : Labels} {sem : Semantics}. *)
+(* Instance FunPool : ThreadPool C. *)
+(* Proof. *)
+(*   eapply Build_ThreadPool with *)
+(*   (t := nat -> option C) *)
+(*     (getThread := fun i tp => tp i) *)
+(*     (updThread := fun i c tp => *)
+(*                     fun j => if (PeanoNat.Nat.eq_dec i j) *)
+(*                           then Some c else tp j). *)
+(*   - intros. *)
+(*     unfold getThread, updThread. *)
+(*     destruct eq_dec.EqDec_nat; subst; *)
+(*       [exfalso|]; now auto. *)
+(*   - intros. *)
+(*     unfold getThread, updThread. *)
+(*     destruct (PeanoNat.Nat.eq_dec i i); now tauto. *)
+(*   - intros. *)
+(*     eapply FunctionalExtensionality.functional_extensionality. *)
+(*     intros. *)
+(*     destruct (PeanoNat.Nat.eq_dec i x), (PeanoNat.Nat.eq_dec j x); *)
+(*       subst; eauto. *)
+(*     now exfalso. *)
+(* Defined. *)
+
 
 Notation "tp # i " := (getThread i tp) (at level 1) : tp_scope.
 Notation "tp <- i , c" := (updThread i c tp) (at level 1): tp_scope.

@@ -19,6 +19,7 @@ Module AxiomaticIntermediate.
 
   Import Execution.
   Import ValidSC.
+  Import AxSem.
 
   Section AxiomaticIntermediate.
     Context
@@ -54,99 +55,218 @@ Module AxiomaticIntermediate.
         po_sc    : inclusion _ po sc
       }.
 
+
+    Lemma enumerate_In:
+      forall {A:Type} R es es' e
+        (Henum: enumerate R es es'),
+        List.In e es' <-> In A es e.
+    Proof.
+      intros.
+      induction Henum.
+      - simpl.
+        split; intros HIn;
+          [now exfalso | inv HIn].
+      - simpl.
+        split; intros HIn.
+        destruct HIn; subst;
+          [now eauto | now exfalso].
+        inversion HIn;
+          now auto.
+      - destruct IHHenum as [IHHIn IHHIn'].
+        split; intros HIn.
+        + apply List.in_inv in HIn.
+          destruct HIn; subst;
+            now eauto with Ensembles_DB.
+        + apply In_Union_inv in HIn.
+          destruct HIn as [HIn | HIn];
+            [right; now eauto| inv HIn; left; reflexivity].
+    Qed.
+
+    Lemma enumerate_spec:
+      forall {A:Type} R es es' es'' e e'
+        (Htrans: transitive A R)
+        (Henum: enumerate R es (es' ++ (e::nil) ++ es'')) 
+        (HIn: List.In e' es''),
+        R e e'.
+    Proof.
+      intros A R es es'.
+      generalize dependent es.
+      induction es'; intros; simpl in Henum.
+      - destruct es''.
+        simpl in HIn; now exfalso.
+        simpl in HIn.
+        destruct HIn; subst.
+        inv Henum. now eapply HR.
+        generalize dependent es.
+        generalize dependent a.
+        generalize dependent e.
+        induction es''; intros.
+        + simpl in H; now exfalso.
+        + inv Henum.
+          simpl in H.
+          destruct H; subst.
+          * inv Henum0.
+            eapply Htrans;
+              [now apply HR | now apply HR0].
+          * eapply Htrans;
+              [now apply HR| now eauto].
+      - destruct es'.
+        + simpl in *.
+          inv Henum.
+          now eauto.
+        + inv Henum.
+          eapply (IHes' _ _ _ _ Htrans Henum0 HIn).
+    Qed.
+
     Import PeanoNat.Nat.
+
+    (** Not in [po] implies different threads *)
+    Lemma no_po_thread_neq:
+      forall e e'
+        (Hneq: e <> e')
+        (HpoWF: po_well_formed po)
+        (Hpo1: ~ po e e')
+        (Hpo2: ~ po e' e),
+        thread e <> thread e'.
+    Proof.
+      intros.
+      destruct (eq_dec (thread e) (thread e')) as [Htid_eq | Htid_neq];
+        [destruct (po_same_thread _ HpoWF _ _ Htid_eq);
+         now auto | assumption].
+    Qed.
+
+    (** Not in po implies that events are not related by Spawn *)
+    Lemma no_po_spawn_neq:
+      forall e e' es
+        (Hneq: e <> e')
+        (HpoWF: po_well_formed po)
+        (Hpo1: ~ po e e')
+        (Hpo2: ~ po e' e)
+        (Henum: forall e'', List.In e'' es -> po e e''),
+        ~ List.In (Spawn (thread e')) (List.map lab (e :: es)).
+    Proof.
+      intros.
+      intros Hcontra.
+      (** Since there was a [Spawn (thread e')] event in the trace (say e''),
+              it is the case that (e'', e') \in po and (e, e'') \in po? *)
+      assert (He'': lab e = Spawn (thread e') \/
+                    exists e'', List.In e'' es /\ lab e'' = Spawn (thread e')).
+      { clear - Hcontra.
+        simpl in Hcontra.
+        destruct Hcontra.
+        eauto.
+        right.
+        apply List.in_map_iff in H.
+        destruct H as [? [? ?]]; eexists; eauto.
+      }
+      destruct He'' as [? | [e'' [HIn Heq]]]; [destruct HpoWF; now eauto|].
+      pose proof (po_spawn _ HpoWF _ _ Heq).
+      specialize (Henum _ HIn).
+      apply Hpo1.
+      eapply trans;
+        now eauto with Relations_db Po_db.
+    Qed.
+
     (** ThreadPool invariant with respect to thread of event e' when
             thread of event e steps and the two events are not in [po]. *)
     Lemma no_po_gsoThread:
       forall e e' es tp tp'
         (Hneq: e <> e')
-        (HpoPO: strict_partial_order po)
+        (HpoWF: po_well_formed po)
         (Hpo1: ~ po e e')
         (Hpo2: ~ po e' e)
         (Henum: forall e'', List.In e'' es -> po e e'') 
-        (Hstep: tp [thread e, List.map lab (e :: es) ]==> tp')
-        (Hsame_thread: forall e1 e2, thread e1 = thread e2 ->
-                                po e1 e2 \/ po e2 e1)
-        (Hspawn: forall e1 e2, lab e1 = Spawn (thread e2) ->
-                          po e1 e2),
+        (Hstep: tp [thread e, List.map lab (e :: es) ]==> tp'),
         getThread (thread e') tp' = getThread (thread e') tp.
     Proof.
       intros.
       assert (Htid_neq: thread e <> thread e')
-        by (destruct (eq_dec (thread e) (thread e')) as [Htid_eq | Htid_neq];
-            [destruct (Hsame_thread _ _ Htid_eq);
-             now auto | assumption]).
+        by (eapply no_po_thread_neq; eauto).
       inv Hstep;
         try (erewrite gsoThread; now eauto).
-
       (** Spawn thread case*)
       erewrite! gsoThread; eauto.
       intros Hcontra; subst.
-      (** Since there was a [Spawn (thread e')] event in the trace (say e''),
-              it is the case that (e'', e') \in po and (e, e'') \in po? *)
-      assert (He'': lab e = Spawn (thread e') \/
-                    exists e'', List.In e'' es /\ lab e'' = Spawn (thread e')).
-      { clear - H0.
-        destruct evargs; simpl in H0; inv H0.
-        - symmetry in H1. now auto. 
-        - right.
-          clear H1.
-          generalize dependent es.
-          induction evargs; intros.
-          + simpl in H2.
-            destruct es. simpl in H2; inv H2.
-            inv H2.
-            eexists; split; eauto. simpl. auto.
-          + destruct es; inv H2.
-            destruct (IHevargs es H1) as [e'' [HIn Heq]].
-            exists e''; subst; simpl.
-            split;
-              now auto.
-      }
-      destruct He'' as [? | [e'' [HIn Heq]]]; [now eauto|].
-      specialize (Hspawn _ _ Heq).
-      specialize (Henum _ HIn).
-      apply Hpo1.
-      eapply (trans _ HpoPO);
-        now eauto.
+      eapply no_po_spawn_neq with (e' := e') (e := e);
+        eauto.
+      simpl (List.map lab (e :: es)).
+      rewrite <- H0.
+      apply List.in_or_app;
+        simpl; now eauto.
     Qed.
 
- (*TODO: move to Ensembles_util.v*)
-          Lemma In_Union_inv:
-            forall {A:Type} (U1 U2: Ensemble A) x,
-              In _ (Union _ U1 U2) x ->
-              In _ U1 x \/ In _ U2 x.
-          Proof.
-            intros.
-            inversion H; subst; auto.
-          Qed.
+    Lemma step_gsoThread:
+      forall e e' es tp tp'
+        (Hneq: thread e <> thread e')
+        (Hspawn:  ~ List.In (Spawn (thread e')) (List.map lab (e :: es)))
+        (Hstep: tp [thread e, List.map lab (e :: es) ]==> tp'),
+        getThread (thread e') tp' = getThread (thread e') tp.
+    Proof.
+      intros.
+      inv Hstep;
+        try (erewrite gsoThread; now eauto).
+      (** Spawn thread case*)
+      erewrite! gsoThread; eauto.
+      intros Hcontra; subst.
+      apply Hspawn.
+      simpl (List.map lab (e :: es)).
+      rewrite <- H0.
+      apply List.in_or_app;
+        simpl; now eauto.
+    Qed.
 
-          Lemma enumerate_In:
-            forall {A:Type} R es es' e
-              (Henum: enumerate R es es'),
-              List.In e es' <-> In A es e.
-          Proof.
-            intros.
-            induction Henum.
-            - simpl.
-              split; intros HIn;
-                [now exfalso | inv HIn].
-            - simpl.
-              split; intros HIn.
-              destruct HIn; subst;
-                [now eauto | now exfalso].
-              inversion HIn;
-                now auto.
-            - destruct IHHenum as [IHHIn IHHIn'].
-              split; intros HIn.
-              + apply List.in_inv in HIn.
-                destruct HIn; subst;
-                  now eauto with Ensembles_DB.
-              + apply In_Union_inv in HIn.
-                destruct HIn as [HIn | HIn];
-                  [right; now eauto| inv HIn; left; reflexivity].
-          Qed.
-
+    (** [step] is invariant to [updThread] when the thread updated is
+                not the stepping thread or a thread spawned by the stepping thread *)
+    Lemma step_updThread:
+      forall tp e es tp' e' c'
+        (Hneq: thread e <> thread e')
+        (Hspawn: ~List.In (Spawn (thread e')) (List.map lab (e :: es)))
+        (Hstep: tp [thread e, List.map lab (e :: es)]==> tp'),
+        updThread (thread e') c' tp [thread e, List.map lab (e :: es)]==>
+                  updThread (thread e') c' tp'.
+    Proof.
+      intros.
+      inv Hstep.
+      - simpl. rewrite <- H0.
+        erewrite updComm by eauto.
+        econstructor; eauto.
+        erewrite gsoThread by eauto.
+        assumption.
+      - simpl. rewrite <- H0.
+        erewrite updComm by eauto.
+        econstructor 2; eauto.
+        erewrite gsoThread by eauto;
+          eassumption.
+      - simpl. rewrite <- H0.
+        assert (j <> thread e').
+        { intros Hcontra.
+          subst.
+          clear - H0 Hspawn.
+          apply Hspawn; auto.
+          simpl (List.map lab (e :: es)).
+          rewrite <- H0.
+          eapply List.in_or_app; simpl;
+            now eauto.
+        }
+        assert (j <> thread e)
+          by (intros Hcontra;
+              subst; congruence). 
+        assert (Hupd: updThread j c'' (updThread (thread e) c'0 tp) =
+                      updThread (thread e) c'0 (updThread j c'' tp))
+          by (erewrite updComm; eauto).
+        rewrite Hupd.
+        erewrite updComm by eauto.
+        assert (Hupd': updThread j c'' (updThread (thread e') c' tp) =
+                       updThread (thread e') c' (updThread j c'' tp))
+          by (erewrite updComm; eauto).
+        rewrite <- Hupd'.
+        erewrite updComm by eauto.
+        econstructor 3; eauto.
+        erewrite gsoThread by eauto;
+          eassumption.
+        erewrite gsoThread by eauto;
+          assumption.
+    Qed.
     
     Lemma commute_step_sc:
       forall tp Ex Ex' tp' es e' es' tp''
@@ -156,7 +276,7 @@ Module AxiomaticIntermediate.
         (Hdisjoint: Disjoint _ es Ex)
         (HminSC: forall e, e \in Ex -> sc e' e)
         (Hpo: forall e, e \in Ex -> ~ po e' e)
-        (HpoPO: strict_partial_order po)
+        (HpoWF: po_well_formed po)
         (HscPO: strict_partial_order sc)
         (Hposc: inclusion _ po sc),
       exists tp0,
@@ -164,73 +284,76 @@ Module AxiomaticIntermediate.
         [tp0, Ex] ==>sc [tp'', Ex'].
     Proof.
       intros.
-      assert (getThread (thread e') tp'= getThread (thread e') tp).
-      {
-        inv HstepSC.
-        assert (HIn0: In _ es0 e'0)
-          by (eapply enumerate_In; eauto; simpl; auto).
+      inv HstepSC.
+      assert (HIn0: In _ es0 e'0)
+        by (eapply enumerate_In; eauto; simpl; auto).
+      (** e'0 <> e' *)
+      assert (Hneq_ev: e'0 <> e').
+      { intros Hcontra; subst.
+        apply Disjoint_sym in Hdisjoint.
+        apply Disjoint_Union_r in Hdisjoint.
+        inversion Hdisjoint as [Hdisjoint'].
+        specialize (Hdisjoint' e').
+        apply Hdisjoint'.
+        eapply enumerate_In with (e := e') in Henum0.
+        eapply enumerate_In with (e := e') in Henum.
+        simpl in Henum, Henum0.
+        pose proof (proj1 Henum0 ltac:(auto)).
+        pose proof (proj1 Henum ltac:(auto)).
+        eauto with Ensembles_DB.
+      }
+      (** ~ po e'0 e *)
+      assert (Hnot_po1: ~po e'0 e').
+      { specialize (HminSC e'0 ltac:(eauto with Ensembles_DB)).
+        intros Hcontra.
+        apply Hposc in Hcontra.
+        pose proof (antisym _ HscPO _ _ Hcontra HminSC).
+        subst.
+        eapply (strict _ HscPO);
+          now eauto.
+      }
+      (** Every element in es'0 is po-after e'0 by the spec of [enumerate]*)
+      assert (Henum_spec: forall e'' : id, List.In e'' es'0 -> po e'0 e'')
+        by (intros;
+            eapply @enumerate_spec with (es := es0) (es' := nil);
+            simpl; eauto with Po_db Relations_db).
 
-        (** The thread of e' will be unchanged by the step of the thread of e'0 *)
-        eapply no_po_gsoThread with (e := e'0) (e' := e'); eauto.
-        - (** e'0 <> e' *)
-          intros Hcontra; subst.
-          apply Disjoint_sym in Hdisjoint.
-          apply Disjoint_Union_r in Hdisjoint.
-          inversion Hdisjoint as [Hdisjoint'].
-          specialize (Hdisjoint' e').
-          apply Hdisjoint'.
-          eapply enumerate_In with (e := e') in Henum0.
-          eapply enumerate_In with (e := e') in Henum.
-          simpl in Henum, Henum0.
-          pose proof (proj1 Henum0 ltac:(auto)).
-          pose proof (proj1 Henum ltac:(auto)).
-          eauto with Ensembles_DB.
-        - specialize (HminSC e'0 ltac:(eauto with Ensembles_DB)).
-          intros Hcontra.
-          apply Hposc in Hcontra.
-          pose proof (antisym _ HscPO _ _ Hcontra HminSC).
-          subst.
-          eapply (strict _ HscPO);
-            now eauto.
-        - 
+      (** The state of (thread e') is unchanged by the step of (thread e'0) *)
+      assert (Hget_e': getThread (thread e') tp'= getThread (thread e') tp)
+        by (eapply no_po_gsoThread with (e := e'0) (e' := e'); eauto).
+  
+      (** [tp''] is tp' with the update that's caused by the step of thread e' (OUTDATED) *)
+      (** First prove commutativity for program steps *)
+      assert (exists tp0, tp [thread e', List.map lab (e' :: es')]==> tp0 /\
+                     tp0 [thread e'0, List.map lab (e'0 :: es'0)]==> tp'').
+      { inv Hstep.
+        - exists (updThread (thread e') c' tp).
+          split.
+          + simpl. rewrite <- H0.
+            econstructor; eauto.
+            rewrite <- Hget_e'.
+            assumption.
+          + simpl.
+            apply step_updThread;
+              eauto using no_po_thread_neq, no_po_spawn_neq.
+        - exists (updThread (thread e') c' tp).
+          split.
+          + simpl. rewrite <- H0.
+            econstructor 2; eauto.
+            rewrite <- Hget_e'.
+            assumption.
+          + simpl.
+            apply step_updThread;
+              eauto using no_po_thread_neq, no_po_spawn_neq.
+        - (* RETURN HERE FOR SPAWN CASE *)
+      
+      tp''[e] = tp'[e].
 
-          Lemma enumerate_spec:
-            forall {A:Type} R es es' es'' e e'
-              (Htrans: transitive A R)
-              (Henum: enumerate R es (es' ++ (e::nil) ++ es'')) 
-              (HIn: List.In e' es''),
-              R e e'.
-          Proof.
-            intros A R es es'.
-            generalize dependent es.
-            induction es'; intros; simpl in Henum.
-            - destruct es''.
-              simpl in HIn; now exfalso.
-              simpl in HIn.
-              destruct HIn; subst.
-              inv Henum. now eapply HR.
-              generalize dependent es.
-              generalize dependent a.
-              generalize dependent e.
-              induction es''; intros.
-              + simpl in H; now exfalso.
-              + inv Henum.
-                simpl in H.
-                destruct H; subst.
-                * inv Henum0.
-                  eapply Htrans;
-                    [now apply HR | now apply HR0].
-                * eapply Htrans;
-                    [now apply HR| now eauto].
-            - destruct es'.
-              + simpl in *.
-                inv Henum.
-                now eauto.
-              + inv Henum.
-                eapply (IHes' _ _ _ _ Htrans Henum0 HIn).
-          Qed.
-          (* RETURN HERE*)
-            
+
+      assert (tp [thread e', List.map lab (e' :: es')]==> updThread (thread e') 
+      inv Hstep.
+
+          
       inversion HstepSC; subst.
 
       assert 

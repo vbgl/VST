@@ -1489,3 +1489,13 @@ Hint Extern 5 (Disjoint _ ?A ?B) =>
 eapply Disjoint_Included_r_sym; [| eassumption ] : Ensembles_DB.
 Hint Extern 5 (Disjoint _ ?A ?B) =>
 eapply Disjoint_Included_l_sym; [| eassumption ] : Ensembles_DB.
+
+
+Lemma In_Union_inv:
+  forall {A:Type} (U1 U2: Ensemble A) x,
+    In _ (Union _ U1 U2) x ->
+    In _ U1 x \/ In _ U2 x.
+Proof.
+  intros.
+  inversion H; subst; auto.
+Qed.

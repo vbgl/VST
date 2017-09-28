@@ -79,31 +79,84 @@ End Execution.
 Module ValidSC.
 
   Import Execution.
-  
-  Section ValidSC.
-    Context {lbl : Labels}.
-    Context {exec : Execution}.
 
+  (*TODO: move relations to new file *)
     Record strict_partial_order {A:Type} (R: relation A) :=
       { antisym : antisymmetric _ R;
         trans   : transitive _ R;
         strict  : forall x : A, ~ R x x
       }.
 
+    Lemma strict_partial_order_antisym {A:Type} {R: relation A}:
+      strict_partial_order R -> antisymmetric _ R.
+    Proof.
+      intro SPO;
+        now destruct SPO.
+    Qed.
+
+    Lemma strict_partial_order_trans {A:Type} {R: relation A}:
+      strict_partial_order R -> transitive _ R.
+    Proof.
+      intro SPO;
+        now destruct SPO.
+    Qed.
+
+    Lemma strict_partial_order_strict {A:Type} {R: relation A}:
+      strict_partial_order R -> forall x, ~R x x.
+    Proof.
+      intro SPO;
+        now destruct SPO.
+    Qed.
+
+    Hint Resolve
+         strict_partial_order_antisym strict_partial_order_trans
+         strict_partial_order_strict : Relations_db.
+
     Record strict_total_order {A:Type} (R: relation A) (U: Ensemble A) :=
       { PO : strict_partial_order R;
         total : forall e1 e2 (Hneq: e1 <> e2)
                   (Hdom: e1 \in U /\ e2 \in U),
             R e1 e2 \/ R e2 e1;
-        sc_onto  : forall e1 e2, R e1 e2 -> e1 \in U /\ e2 \in U;
+        R_onto  : forall e1 e2, R e1 e2 -> e1 \in U /\ e2 \in U;
       }.
 
+    Lemma strict_total_order_PO {A:Type} {R: relation A} (U: Ensemble A):
+      strict_total_order R U -> strict_partial_order R.
+    Proof.
+      intro STO;
+        now destruct STO.
+    Qed.
+
+    Lemma strict_total_order_total {A:Type} {R: relation A} (U: Ensemble A):
+      strict_total_order R U ->  forall e1 e2 (Hneq: e1 <> e2)
+                                  (Hdom: e1 \in U /\ e2 \in U),
+        R e1 e2 \/ R e2 e1.
+    Proof.
+      intro STO;
+        now destruct STO.
+    Qed.
+
+    Lemma strict_total_order_onto {A:Type} {R: relation A} (U: Ensemble A):
+      strict_total_order R U ->
+      forall e1 e2, R e1 e2 -> e1 \in U /\ e2 \in U.
+    Proof.
+      intro STO;
+        now destruct STO.
+    Qed.
+
+    Hint Resolve
+         strict_total_order_total strict_total_order_PO
+         strict_total_order_onto : Relations_db.
+
+  Section ValidSC.
+    Context {lbl : Labels}.
+    Context {exec : Execution}.
+
+    (** ** Definition of the SC model *)
+
     (** Definition of well-formed program order*)
-    Record po_well_formed (Ex : events) (po: relation id) :=
-      {
-        (** [po] is defined on elements of the execution only *)
-        po_onto : forall e1 e2, po e1 e2 -> e1 \in Ex /\ e2 \in Ex;
-        (** [po] is a strict partial order *)
+    Record po_well_formed (po: relation id) :=
+      { (** [po] is a strict partial order *)
         po_strict_PO : strict_partial_order po;
         (** events on the same thread are related by [po] *)
         po_same_thread : forall e1 e2, thread e1 = thread e2 ->
@@ -117,7 +170,6 @@ Module ValidSC.
 
     Definition lab := lab.
     Coercion lab : id >-> ConcLabels.
-
 
     (** Validity of read events in the execution:
         - Every read reads from some write that is on
@@ -136,6 +188,7 @@ Module ValidSC.
 
     (** Valid sequential consistent executions:
         - program order [po] is [po_well_formed]
+        - [po] is defined on elements of the execution only
         - [sc] is a total strict order over all events
         - [po] is included in [sc]
         - reads read from the latest write before them according to [sc]
@@ -144,7 +197,8 @@ Module ValidSC.
        accesses so it can be proven as a corollary, but should we require it of
        valid executions? *)
     Record validSC (Ex : events) (po sc : relation id) :=
-      { wf_po    : po_well_formed Ex po;
+      { wf_po    : po_well_formed po;
+        po_onto : forall e1 e2, po e1 e2 -> e1 \in Ex /\ e2 \in Ex;
         total_sc : strict_total_order sc Ex;
         po_sc    : inclusion _ po sc;
         rf_sc    : reads_from sc;
@@ -156,6 +210,45 @@ Module ValidSC.
                                 end
       }.
 
+
+    (** ** Projection Lemmas on records *)
+    Lemma po_well_formed_PO {R: relation id} :
+      po_well_formed R ->
+      strict_partial_order R.
+    Proof.
+      intro STO;
+        now destruct STO.
+    Qed.
+
+    Lemma po_well_formed_thread {R: relation id} :
+      po_well_formed R ->
+      forall e1 e2, thread e1 = thread e2 ->
+               e1 <> e2 ->
+               R e1 e2 \/ R e2 e1.
+    Proof.
+      intro STO;
+        now destruct STO.
+    Qed.
+
+    Lemma po_well_formed_spawn {R: relation id} :
+      po_well_formed R ->
+      forall e1 e2,
+        lab e1 = Spawn (thread e2) ->
+        R e1 e2.
+    Proof.
+      intro STO;
+        now destruct STO.
+    Qed.
+
+   
   End ValidSC.
+
+    
+
+  Hint Resolve
+       po_well_formed_PO po_well_formed_thread : Po_db.
+
+  (*NOTE: Why can't I use po_well_formed_spawn as a hint? *)
+
 End ValidSC.
         
