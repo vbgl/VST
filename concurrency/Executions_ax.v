@@ -31,7 +31,7 @@ Module Execution.
   Open Scope Ensembles_scope.
   (** Minimum elements in U according to R *)
   Definition min {A:Type} (R: relation A) (U: Ensemble A) : Ensemble A :=
-    [ set x | x \in U /\ ~exists y, R y x ].
+    [ set x | x \in U /\ ~exists y, y \in U /\ R y x ].
 
   Definition immediate {A:Type} (R: relation A) : relation A :=
     fun x y => R x y /\ ~ exists z, R x z /\ R z y.

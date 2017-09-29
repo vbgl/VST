@@ -59,6 +59,20 @@ Section Labels.
     | Ev e => mvalE e
     end.
 
+  (** By definition there are no [Spawn] events in
+      a [concLabelsofE] list *)
+  Lemma concLabelsofE_no_spawn:
+    forall evl j,
+      ~ List.In (Spawn j) (concLabelsofE evl).
+  Proof.
+    intros. intro Hcontra.
+    induction evl; simpl in *; eauto.
+    destruct Hcontra;
+      [discriminate | now auto].
+  Qed.
+
+
+
 End Labels.
 
 (** Class of threadwise semantics *)

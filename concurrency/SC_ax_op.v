@@ -118,8 +118,26 @@ Module AxiomaticIntermediate.
           eapply (IHes' _ _ _ _ Htrans Henum0 HIn).
     Qed.
 
+    Lemma enumerate_hd:
+      forall {A:Type} es R e es' e'
+        (Htrans: transitive A R)
+        (Henum: enumerate R es (e :: es'))
+        (Hin: List.In e' es'),
+        R e e'.
+    Proof.
+      intros.
+      apply List.in_split in Hin.
+      destruct Hin as [l1 [l2 Heq]].
+      subst.
+      eapply @enumerate_spec with (es' := nil) (es'' := (l1 ++ e' :: l2)%list) in Henum;
+        eauto.
+      apply List.in_or_app; simpl;
+        now auto.
+    Qed.
+
     Import PeanoNat.Nat.
 
+    (** ** Basic Properties of valid executions *)
     (** Not in [po] implies different threads *)
     Lemma no_po_thread_neq:
       forall e e'
@@ -195,6 +213,7 @@ Module AxiomaticIntermediate.
         simpl; now eauto.
     Qed.
 
+    (** ** Basic Properties of program semantics *)
     Lemma step_gsoThread:
       forall e e' es tp tp'
         (Hneq: thread e <> thread e')
@@ -218,48 +237,46 @@ Module AxiomaticIntermediate.
     (** [step] is invariant to [updThread] when the thread updated is
                 not the stepping thread or a thread spawned by the stepping thread *)
     Lemma step_updThread:
-      forall tp e es tp' e' c'
-        (Hneq: thread e <> thread e')
-        (Hspawn: ~List.In (Spawn (thread e')) (List.map lab (e :: es)))
-        (Hstep: tp [thread e, List.map lab (e :: es)]==> tp'),
-        updThread (thread e') c' tp [thread e, List.map lab (e :: es)]==>
-                  updThread (thread e') c' tp'.
+      forall tp i es tp' j c'
+        (Hneq: i <> j)
+        (Hspawn: ~List.In (Spawn j) es)
+        (Hstep: tp [i, es]==> tp'),
+        updThread j c' tp [i, es]==>
+                  updThread j c' tp'.
     Proof.
       intros.
       inv Hstep.
-      - simpl. rewrite <- H0.
+      - simpl.
         erewrite updComm by eauto.
         econstructor; eauto.
         erewrite gsoThread by eauto.
         assumption.
-      - simpl. rewrite <- H0.
+      - simpl.
         erewrite updComm by eauto.
         econstructor 2; eauto.
         erewrite gsoThread by eauto;
           eassumption.
-      - simpl. rewrite <- H0.
-        assert (j <> thread e').
+      - simpl.
+        assert (j <> j0).
         { intros Hcontra.
           subst.
-          clear - H0 Hspawn.
+          clear - Hspawn.
           apply Hspawn; auto.
-          simpl (List.map lab (e :: es)).
-          rewrite <- H0.
           eapply List.in_or_app; simpl;
             now eauto.
         }
-        assert (j <> thread e)
+        assert (j0 <> i)
           by (intros Hcontra;
-              subst; congruence). 
-        assert (Hupd: updThread j c'' (updThread (thread e) c'0 tp) =
-                      updThread (thread e) c'0 (updThread j c'' tp))
+              subst; congruence).
+        assert (Hupd: updThread j0 c'' (updThread i c'0 tp) =
+                      updThread i c'0 (updThread j0 c'' tp))
           by (erewrite updComm; eauto).
         rewrite Hupd.
         erewrite updComm by eauto.
-        assert (Hupd': updThread j c'' (updThread (thread e') c' tp) =
-                       updThread (thread e') c' (updThread j c'' tp))
+        assert (Hupd': updThread j c' (updThread j0 c'' tp) =
+                       updThread j0 c'' (updThread j c' tp))
           by (erewrite updComm; eauto).
-        rewrite <- Hupd'.
+        rewrite Hupd'.
         erewrite updComm by eauto.
         econstructor 3; eauto.
         erewrite gsoThread by eauto;
@@ -267,7 +284,59 @@ Module AxiomaticIntermediate.
         erewrite gsoThread by eauto;
           assumption.
     Qed.
-    
+
+    (** Spawned thread not in threadpool before spawning, but in threadpool after spawning *)
+    Lemma step_spawn:
+      forall tp tp' es i j
+        (Hstep: tp [i, es]==> tp')
+        (Hspawn: List.In (Spawn j) es),
+        getThread j tp = None /\
+        getThread j tp' <> None.
+    Proof.
+      intros.
+      inv Hstep;
+        try (exfalso; eapply concLabelsofE_no_spawn; now eauto).
+      assert (j = j0).
+      { clear - Hspawn.
+        eapply List.in_app_or in Hspawn.
+        destruct Hspawn as [?| HIn];
+          [exfalso; eapply concLabelsofE_no_spawn;
+           now eauto|].
+        simpl in HIn.
+        destruct HIn as [HIn | HIn];
+          now inv HIn.
+      }
+      subst.
+      split;
+        [now auto| rewrite gssThread; now congruence].
+    Qed.
+
+    Lemma getThread_monotone:
+      forall tp j c i es tp'
+        (Hget: getThread j tp = Some c)
+        (Hstep: tp [i, es]==> tp'),
+      exists c',
+        getThread j tp' = Some c'.
+    Proof.
+      intros.
+      destruct (eq_dec i j).
+      - subst.
+        inv Hstep;
+          try (eexists; erewrite gssThread;
+               now eauto).
+        destruct (eq_dec j j0); subst; [congruence|].
+        eexists; erewrite gsoThread by eauto.
+        erewrite gssThread; eauto.
+      - inv Hstep;
+          try (erewrite gsoThread by eauto; eauto).
+        destruct (eq_dec j j0); subst; [congruence|].
+        erewrite! gsoThread;
+          now eauto.
+    Qed.
+
+    (** * Properties of combined program/execution steps *)
+
+    (** Commuting steps *)
     Lemma commute_step_sc:
       forall tp Ex Ex' tp' es e' es' tp''
         (HstepSC: [tp, Ex] ==>sc [tp', Ex'])
@@ -285,8 +354,11 @@ Module AxiomaticIntermediate.
     Proof.
       intros.
       inv HstepSC.
+
+      (** *** Useful facts in the proof *)
       assert (HIn0: In _ es0 e'0)
         by (eapply enumerate_In; eauto; simpl; auto).
+
       (** e'0 <> e' *)
       assert (Hneq_ev: e'0 <> e').
       { intros Hcontra; subst.
@@ -302,6 +374,7 @@ Module AxiomaticIntermediate.
         pose proof (proj1 Henum ltac:(auto)).
         eauto with Ensembles_DB.
       }
+
       (** ~ po e'0 e *)
       assert (Hnot_po1: ~po e'0 e').
       { specialize (HminSC e'0 ltac:(eauto with Ensembles_DB)).
@@ -312,6 +385,7 @@ Module AxiomaticIntermediate.
         eapply (strict _ HscPO);
           now eauto.
       }
+
       (** Every element in es'0 is po-after e'0 by the spec of [enumerate]*)
       assert (Henum_spec: forall e'' : id, List.In e'' es'0 -> po e'0 e'')
         by (intros;
@@ -322,10 +396,9 @@ Module AxiomaticIntermediate.
       assert (Hget_e': getThread (thread e') tp'= getThread (thread e') tp)
         by (eapply no_po_gsoThread with (e := e'0) (e' := e'); eauto).
   
-      (** [tp''] is tp' with the update that's caused by the step of thread e' (OUTDATED) *)
-      (** First prove commutativity for program steps *)
-      assert (exists tp0, tp [thread e', List.map lab (e' :: es')]==> tp0 /\
-                     tp0 [thread e'0, List.map lab (e'0 :: es'0)]==> tp'').
+      (** *** First prove commutativity for program steps *)
+      assert (Hprog_step: exists tp0, tp [thread e', List.map lab (e' :: es')]==> tp0 /\
+                                 tp0 [thread e'0, List.map lab (e'0 :: es'0)]==> tp'').
       { inv Hstep.
         - exists (updThread (thread e') c' tp).
           split.
@@ -345,7 +418,74 @@ Module AxiomaticIntermediate.
           + simpl.
             apply step_updThread;
               eauto using no_po_thread_neq, no_po_spawn_neq.
-        - (* RETURN HERE FOR SPAWN CASE *)
+        - exists (updThread j c'' (updThread (thread e') c' tp)).
+          (** proof that j was not a valid thread at tp *)
+          assert (Hget_j': getThread j tp = None).
+          { destruct (getThread j tp) eqn:Hgetj; auto.
+            destruct (getThread_monotone tp j _ _ _ tp' Hgetj Hstep0) as [? ?];
+              now congruence.
+          }
+          split.
+          + simpl. rewrite <- H0.
+            econstructor 3; eauto.
+            rewrite <- Hget_e'.
+            assumption.
+          + simpl.
+            (** [thread e'0] <> j because getThread (thread e'0) tp = Some _ by the fact
+                that it steps and getThread j tp = None as proved *)            
+            assert (thread e'0 <> j)
+              by (intros ?; subst; inv Hstep0; now congruence).
+            (** Moreover, it cannot be that the step from [thread e'0] has an event [Spawn j]
+                because that would imply that it spawned thread j but we know that
+                getThread j tp' = None which leads to a contradiction *)
+            assert (~ List.In (Spawn j) (lab e'0 :: List.map lab es'0)).
+            { intros Hcontra.
+              eapply step_spawn in Hcontra; eauto.
+              destruct Hcontra;
+                congruence.
+            }
+            (** Now we can use the fact that the update of the threadpool on
+                thread j does not affect the step of thread e'0 *)
+            eapply step_updThread;
+              eauto using no_po_thread_neq, no_po_spawn_neq.
+            (** Likewise for the step of thread e' *)
+            eapply step_updThread;
+              eauto using no_po_thread_neq, no_po_spawn_neq.
+      }
+      destruct Hprog_step as [tp0 [Hprog_stepe' Hprog_step0']].
+      exists tp0.
+      (** To prove that there is an sc step we also need to prove that
+          the events used by the program steps are sc-minimal in the execution *)
+      assert (Hmin_e': In _ (Execution.min sc (Union _ (Union _ Ex' es0) es)) e').
+      {
+        (** We know by the fact that e' is in the head of the enumeration of es
+        it is the po-minimal element in es, and hence it must also be sc-minimal
+        in es as po is included in sc *) 
+        assert (Hmin_1: In _ (Execution.min sc es) e').
+        { constructor.
+          inversion Henum;
+            now eauto.
+          intros (y & Hy & Hcontra).
+          eapply enumerate_In in Hy; eauto.
+          simpl in Hy.
+          destruct Hy as [Hy | Hy];
+            [subst; eapply strict;
+             now eauto with Relations_db|].
+          eapply enumerate_hd in Henum; eauto with Relations_db Po_db.
+          apply Hincl in Henum.
+          pose proof (antisym _ ltac:(eauto) _ _ Hcontra Henum);
+            subst.
+          eapply strict;
+            now eauto.
+        }
+        
+      assert (Disjoint _ (Union _ Ex' es0) es)
+        by admit.
+      split.
+      econstructor; eauto.
+      econstructor; eauto.
+
+
       
       tp''[e] = tp'[e].
 
