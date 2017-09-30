@@ -3,6 +3,7 @@
 Require Import concurrency.Machine_ax.
 Require Import Coq.Sets.Ensembles.
 Require Import concurrency.Ensembles_util.
+Require Import concurrency.Relations_util.
 Require Import Coq.Relations.Relation_Definitions.
 Require Import Coq.Lists.List.
 Require Import compcert.common.Values.
@@ -21,29 +22,13 @@ Module Execution.
 
   Notation id := nat.
   Import AxSem.
+  Import Order Enumerate.
   Class Execution `{lbl:Labels} :=
     { lab    : id -> ConcLabels;
       thread : id -> tid
     }.
 
   Notation events := (Ensemble id).
-
-  Open Scope Ensembles_scope.
-  (** Minimum elements in U according to R *)
-  Definition min {A:Type} (R: relation A) (U: Ensemble A) : Ensemble A :=
-    [ set x | x \in U /\ ~exists y, y \in U /\ R y x ].
-
-  Definition immediate {A:Type} (R: relation A) : relation A :=
-    fun x y => R x y /\ ~ exists z, R x z /\ R z y.
-
-  (** Enumerate a (finite) set to a list according to the order defined by R *)
-  Inductive enumerate {A:Type} (R: relation A) : Ensemble A -> list A -> Prop :=
-  | EmptySet: enumerate R (Empty_set _) nil
-  | SingletonSet: forall x, enumerate R (Singleton _ x) (x :: nil)
-  | ConsSet: forall x y es es'
-               (HR: immediate R x y)
-               (Henum: enumerate R (Union _ es (Singleton _ y)) (y :: es')),
-      enumerate R (Union _ (Union _ es (Singleton _ y)) (Singleton _ x)) (x :: y :: es').
 
   Section Semantics.
     
@@ -79,74 +64,7 @@ End Execution.
 Module ValidSC.
 
   Import Execution.
-
-  (*TODO: move relations to new file *)
-    Record strict_partial_order {A:Type} (R: relation A) :=
-      { antisym : antisymmetric _ R;
-        trans   : transitive _ R;
-        strict  : forall x : A, ~ R x x
-      }.
-
-    Lemma strict_partial_order_antisym {A:Type} {R: relation A}:
-      strict_partial_order R -> antisymmetric _ R.
-    Proof.
-      intro SPO;
-        now destruct SPO.
-    Qed.
-
-    Lemma strict_partial_order_trans {A:Type} {R: relation A}:
-      strict_partial_order R -> transitive _ R.
-    Proof.
-      intro SPO;
-        now destruct SPO.
-    Qed.
-
-    Lemma strict_partial_order_strict {A:Type} {R: relation A}:
-      strict_partial_order R -> forall x, ~R x x.
-    Proof.
-      intro SPO;
-        now destruct SPO.
-    Qed.
-
-    Hint Resolve
-         strict_partial_order_antisym strict_partial_order_trans
-         strict_partial_order_strict : Relations_db.
-
-    Record strict_total_order {A:Type} (R: relation A) (U: Ensemble A) :=
-      { PO : strict_partial_order R;
-        total : forall e1 e2 (Hneq: e1 <> e2)
-                  (Hdom: e1 \in U /\ e2 \in U),
-            R e1 e2 \/ R e2 e1;
-        R_onto  : forall e1 e2, R e1 e2 -> e1 \in U /\ e2 \in U;
-      }.
-
-    Lemma strict_total_order_PO {A:Type} {R: relation A} (U: Ensemble A):
-      strict_total_order R U -> strict_partial_order R.
-    Proof.
-      intro STO;
-        now destruct STO.
-    Qed.
-
-    Lemma strict_total_order_total {A:Type} {R: relation A} (U: Ensemble A):
-      strict_total_order R U ->  forall e1 e2 (Hneq: e1 <> e2)
-                                  (Hdom: e1 \in U /\ e2 \in U),
-        R e1 e2 \/ R e2 e1.
-    Proof.
-      intro STO;
-        now destruct STO.
-    Qed.
-
-    Lemma strict_total_order_onto {A:Type} {R: relation A} (U: Ensemble A):
-      strict_total_order R U ->
-      forall e1 e2, R e1 e2 -> e1 \in U /\ e2 \in U.
-    Proof.
-      intro STO;
-        now destruct STO.
-    Qed.
-
-    Hint Resolve
-         strict_total_order_total strict_total_order_PO
-         strict_total_order_onto : Relations_db.
+  Import Order Enumerate.
 
   Section ValidSC.
     Context {lbl : Labels}.
@@ -242,13 +160,8 @@ Module ValidSC.
 
    
   End ValidSC.
-
-    
-
+  (*NOTE: Why can't I use po_well_formed_spawn as a hint? *)
   Hint Resolve
        po_well_formed_PO po_well_formed_thread : Po_db.
-
-  (*NOTE: Why can't I use po_well_formed_spawn as a hint? *)
-
 End ValidSC.
         

@@ -104,7 +104,7 @@ SEPCOMP_FILES = \
 # what is:  erasure.v context.v context_equiv.v jstep.v
 
 CONCUR_FILES= \
-  X86_ax.v Asm_core.v Asm_event.v load_frame.v I64Helpers.v BuiltinEffects.v Ensembles_util.v \
+  X86_ax.v Asm_core.v Asm_event.v load_frame.v I64Helpers.v BuiltinEffects.v Ensembles_util.v Relations_util.v \
   Clight_new2core.v Machine_ax.v Executions_ax.v \
   addressFiniteMap.v cast.v compcert_imports.v \
   compcert_threads_lemmas.v threadPool.v  \
