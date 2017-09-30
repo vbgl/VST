@@ -1499,3 +1499,29 @@ Proof.
   intros.
   inversion H; subst; auto.
 Qed.
+
+
+Lemma Disjoint_Union_eq:
+  forall {A:Type} (U1 U2 U3 : Ensemble A)
+    (Heq: Union _ U1 U2 = Union _ U1 U3)
+    (Hdis1: Disjoint _ U1 U2)
+    (Hdis2: Disjoint _ U1 U3),
+    U2 <--> U3.
+Proof.
+  intros.
+  split; intros x HIn.
+  - pose proof (Union_intror _ U1 _ _ HIn) as HInU.
+    rewrite Heq in HInU.
+    inv HInU; try assumption.
+    inversion Hdis1.
+    exfalso.
+    apply (H0 x);
+      now eauto.
+  - pose proof (Union_intror _ U1 _ _ HIn) as HInU.
+    rewrite <- Heq in HInU.
+    inv HInU; try assumption.
+    inversion Hdis2.
+    exfalso.
+    apply (H0 x);
+      now eauto.
+Qed.

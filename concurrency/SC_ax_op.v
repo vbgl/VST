@@ -478,46 +478,246 @@ Module AxiomaticIntermediate.
           eapply strict;
             now eauto.
         }
-        
-      assert (Disjoint _ (Union _ Ex' es0) es)
-        by admit.
-      split.
-      econstructor; eauto.
-      econstructor; eauto.
+        econstructor.
+        constructor 2.
+        eapply enumerate_In;
+          eauto; simpl; now eauto.
+        intros (emin & HIn & Hcontra).
+        eapply In_Union_inv in HIn.
+        destruct HIn as [HIn | HIn].
+        - (** Case emin is in Union Ex' es0 *)
+          (** We know that every element of Union Ex' es0 is sc-smaller than e
+            by HminSC *)
+          specialize (HminSC _ HIn).
+          pose proof (antisym _ ltac:(eauto) _ _ Hcontra HminSC);
+            subst.
+          eapply strict;
+            eauto with Relations_db Po_db.
+        - (** Case emin is in es *)
+          (** By the fact we just proved (Hmin_1) that e' is sc-minimal in es *)
+          inversion Hmin_1 as [_ Hmin_contra].
+          apply Hmin_contra.
+          eexists; split;
+            now eauto.
+      }
+      split;
+        econstructor;
+        eauto with Ensembles_DB.
+    Qed.
+
+    Lemma same_set_eq:
+      forall {A:Type} (U1 U2: Ensemble A)
+        (Hsame: U1 <--> U2),
+        U1 = U2.
+    Proof.
+      intros.
+      eapply FunctionalExtensionality.functional_extensionality.
+      intros.
+      inv Hsame.
+      eapply Axioms.prop_ext.
+      specialize (H x).
+      specialize (H0 x).
+      split;
+        now eauto with Ensembles_DB.
+    Qed.
+
+    Lemma commute_steps_sc:
+      forall n tp Ex Ex' tp' es e' es' tp''
+        (HstepSC: [tp, Ex] ==>{n} [tp', Ex'])
+        (Hstep: tp' [thread e', List.map lab (e' :: es')]==> tp'')
+        (Henum: enumerate po es (e' :: es')%list)
+        (Hdisjoint: Disjoint _ es Ex)
+        (HminSC: forall e, e \in Ex -> sc e' e)
+        (Hpo: forall e, e \in Ex -> ~ po e' e)
+        (HpoWF: po_well_formed po)
+        (HscPO: strict_partial_order sc)
+        (Hposc: inclusion _ po sc),
+      exists tp0,
+        [tp, Union _ Ex es] ==>sc [tp0, Ex] /\
+        [tp0, Ex] ==>{n} [tp'', Ex'].
+    Proof.
+      intros.
+      generalize dependent tp.
+      generalize dependent Ex.
+      induction n; intros.
+      - (** Base case *)
+        inv HstepSC.
+        exists tp''.
+        split; eauto using Step0.
+        econstructor;
+          eauto with Ensembles_DB.
+        constructor.
+        constructor 2.
+        eapply enumerate_In; eauto;
+          simpl; now auto.
+        intros (y & HIn & Hsc).
+        eapply In_Union_inv in HIn.
+        destruct HIn as [HIn | HIn].
+        + specialize (HminSC _ HIn).
+          pose proof (antisym _ ltac:(eauto) _ _ Hsc HminSC);
+            subst.
+          eapply strict;
+            eauto with Relations_db Po_db.
+        + eapply enumerate_In in HIn; eauto.
+          simpl in HIn.
+          destruct HIn as [HIn | HIn];
+            [subst; eapply strict;
+             now eauto with Relations_db|].
+          eapply enumerate_hd in Henum; eauto with Relations_db Po_db.
+          apply Hposc in Henum.
+          pose proof (antisym _ ltac:(eauto) _ _ Hsc Henum);
+            subst.
+          eapply strict;
+            now eauto.
+      - (** Inductive Case *)
+        inversion HstepSC as [|? ? ? tp0 Ex0 ? ? ?]; subst.
+        clear HstepSC.
+        assert (Hdisjoint0: Disjoint id es Ex0) by admit.
+        assert (HminSC0: forall e, In id Ex0 e -> sc e' e) by admit.
+        assert (Hpo0: forall e, In _ Ex0 e -> ~ po e' e) by admit.
+        (** By inductive hypothesis*)
+        destruct (IHn _ Hdisjoint0 HminSC0 Hpo0 _ HRstepN') as [tp1 [Hstep1 HRstepN'']].
+        clear HRstepN'.
+        (** and by applying the commutativity lemma *)
+        inversion Hstep1; subst.
+        (** prove that the sets es0 and es are the same *)
+        eapply Disjoint_Union_eq in H0; eauto with Ensembles_DB.
+        eapply same_set_eq in H0; subst; eauto.
+        assert (exists tp2, [tp, Union _ Ex es] ==>sc [tp2, Ex] /\
+                       [tp2, Ex] ==>sc [tp1, Ex0]).
+        { eapply commute_step_sc; eauto.
+          (** e'0 is sc-minimal in Ex *)
+          intros e HIn.
+
+          Lemma enumerate_ext:
+            forall {A:Type} {R: relation A}
+              es esl esl'
+              (Henum: enumerate R es esl)
+              (Henum': enumerate R es esl'),
+              esl = esl'.
+          Proof.
+            Admitted.
+           (* intros.
+            generalize dependent esl'.
+            induction Henum; intros.
+            inversion Henum'; auto.
+            assert (In A (Empty_set _) x)
+              by (rewrite <- H0; auto).
+            unfold In in H.
+            exfalso. tauto.
+            subst.
+            assert (In A (Empty_set _) x)
+              by (rewrite <- H0;
+                  eauto with Ensembles_DB).
+            unfold In in H.
+            exfalso. tauto.
+            intros.
+            inversion Henum'; subst.
+            inv Henum'.
+            assert (In A (Empty_set _) x)
+              by (rewrite H0;
+                  eauto with Ensembles_DB).
+            unfold In in H.
+            exfalso; tauto.
+            assert (In _ [set x] x0).
+            { rewrite <- H0.
+              auto.
+            }
+            inv H; auto.
+            assert (In _ [set x] x0).
+            rewrite <- H0.
+            eauto with Ensembles_DB.
+            inv H.
+            assert (In _ [set x0] y).
+            rewrite <- H0.
+            eauto with Ensembles_DB.
+            inv H.
+            destruct HR.
+            exfalso.
+            apply H1.
+            eexists; split;
+              now eauto.
+            inv Henum'.
+            specialize (IHHenum _ Henum').
 
 
-      
-      tp''[e] = tp'[e].
+            intros ? ? es esl.
+            induction esl.
+            intros. inversion Henum; subst.
+            inversion Henum'; auto.
+            assert (In A (Empty_set _) x)
+              by (rewrite <- H0; auto).
+            unfold In in H.
+            exfalso. tauto.
+            subst.
+            assert (In A (Empty_set _) x)
+              by (rewrite <- H0;
+                  eauto with Ensembles_DB).
+            unfold In in H.
+            exfalso. tauto.
+            intros.
+            inversion Henum; subst.
+            inv Henum'.
+            assert (In A (Empty_set _) a)
+              by (rewrite H0;
+                  eauto with Ensembles_DB).
+            unfold In in H.
+            exfalso; tauto.
+            assert (In _ [set x] a).
+            { rewrite H0.
+              auto.
+            }
+            inv H; auto.
+            assert (In _ [set a] x).
+            rewrite <- H0.
+            eauto with Ensembles_DB.
+            inv H.
+            assert (In _ [set x] y).
+            rewrite <- H0.
+            eauto with Ensembles_DB.
+            inv H.
+            destruct HR.
+            exfalso.
+            apply H1.
+            eexists; split;
+              now eauto.
 
+            eapply IHesl; eauto.
+            auto.
+            inv H; auto.
 
-      assert (tp [thread e', List.map lab (e' :: es')]==> updThread (thread e') 
-      inv Hstep.
-
+              by (rewrite <- H0; auto).
+            induction Henum;assert (In A (Empty_set _) x)
+              by (rewrite <- H0; auto).
+              inversion Henum'; subst; auto;
+                try discriminate.
+            *)
           
-      inversion HstepSC; subst.
+          
 
-      assert 
-
-
-      Lemma step_gsoThread:
-        forall tp i ev tp' j
-          (Hstep: tp [i, es]==> tp')
+              
 
 
-      Notation " c '[' ls ']'-->' c' " :=
-        (tstep genv po sc tp1 Ex1 tp2 Ex2) (at level 40).
+
+
+        
+
+
+      (* Notation " c '[' ls ']'-->' c' " := *)      (*   (tstep genv po sc tp1 Ex1 tp2 Ex2) (at level 40). *)
           
     Lemma commute_sc:
       forall n tp Ex es e' es' tp' Ex' tp''
         (Hsc_steps: [tp, Ex] ==>{n} [tp', Ex'])
         (Hp_step: tp' [thread e', List.map lab (e' :: es')]==> tp'')
         (Henum: enumerate po es (e' :: es'))
-        (Hmin: e' \in min sc (Union _ Ex es))
+        (Hmin: e' \in Execution.min sc (Union _ Ex es))
         (Hincl: inclusion id po sc)
         (Hdis: Disjoint _ Ex es),
         [tp, Union _ Ex es] ==>{S n} [tp'', Ex'].
     Proof.
       intro n.
+      intros.
+
       induction n; intros.
       - (** Base case *)
         inv Hsc_steps.
@@ -528,11 +728,12 @@ Module AxiomaticIntermediate.
         now constructor.
       - (** Inductive case *)
         inversion Hsc_steps as [|? ? ? tp0 Ex0 ? ?]; subst.
-        assert (e' \in (min sc (Union _ Ex0 es)))
+        assert (e' \in (Execution.min sc (Union _ Ex0 es)))
           by admit.
         assert (Disjoint _ Ex0 es)
           by admit.
         specialize (IHn _ _ _ _ _ _ _ _ HRstepN' Hp_step Henum H Hincl H0).
+
 
 
 
