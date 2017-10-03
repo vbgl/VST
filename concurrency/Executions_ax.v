@@ -25,7 +25,8 @@ Module Execution.
   Import Order Enumerate.
   Class Execution `{lbl:Labels} :=
     { lab    : id -> ConcLabels;
-      thread : id -> tid
+      thread : id -> tid;
+      start  : id -> Prop;
     }.
 
   Notation events := (Ensemble id).
@@ -48,6 +49,8 @@ Module Execution.
     | RStep: forall (Ex es : events) e' es' tp'
                (Henum: enumerate po es (e' :: es'))
                (Hmin: e' \in (min R (Union _ Ex es)))
+               (Hhd: start e')
+               (Htl: forall e', List.In e' es' -> ~ start e')
                (Hincl: inclusion _ po R)
                (Hdis: Disjoint _ Ex es)
                (Hstep: @step _ _ _ cstep genv tp (thread e') (List.map lab (e' :: es')) tp'),

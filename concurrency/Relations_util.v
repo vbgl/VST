@@ -185,9 +185,9 @@ Module Enumerate.
     simpl in HIne_es', HIne'_es;
       destruct HIne_es', HIne'_es; auto.
     eapply antisym; eauto.
-    eapply @enumerate_spec' with (es' := nil) (e' := e') in Henum;
+    eapply @enumerate_spec with (es' := nil) (e' := e') in Henum;
       eauto with Relations_db.
-    eapply @enumerate_spec' with (es' := nil) (e' := e) in Henum';
+    eapply @enumerate_spec with (es' := nil) (e' := e) in Henum';
       eauto with Relations_db.
   Qed.
 
@@ -199,7 +199,7 @@ Module Enumerate.
   Proof.
     intros.
     intros HIn.
-    eapply @enumerate_spec' with (es' := nil) (e:= e) in HIn;
+    eapply @enumerate_spec with (es' := nil) (e:= e) in HIn;
       eauto with Relations_db.
     eapply strict;
       eauto with Relations_db.

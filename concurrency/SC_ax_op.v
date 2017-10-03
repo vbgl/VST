@@ -68,7 +68,7 @@ Module AxiomaticIntermediate.
       apply List.in_split in Hin.
       destruct Hin as [l1 [l2 Heq]].
       subst.
-      eapply @enumerate_spec' with (es' := nil) (es'' := (l1 ++ e' :: l2)%list) in Henum;
+      eapply @enumerate_spec with (es' := nil) (es'' := (l1 ++ e' :: l2)%list) in Henum;
         eauto.
       apply List.in_or_app; simpl;
         now auto.
@@ -282,6 +282,8 @@ Module AxiomaticIntermediate.
         (Hstep: tp' [thread e', List.map lab (e' :: es')]==> tp'')
         (Henum: enumerate po es (e' :: es')%list)
         (Hdisjoint: Disjoint _ es Ex)
+        (Hhd: start e')
+        (Htl: forall e'1 : id, List.In e'1 es' -> ~ start e'1)
         (HminSC: forall e, e \in Ex -> sc e' e)
         (Hpo: forall e, e \in Ex -> ~ po e' e)
         (HpoWF: po_well_formed po)
@@ -325,7 +327,7 @@ Module AxiomaticIntermediate.
       (** Every element in es'0 is po-after e'0 by the spec of [enumerate]*)
       assert (Henum_spec: forall e'' : id, List.In e'' es'0 -> po e'0 e'')
         by (intros;
-            eapply @enumerate_spec' with (es := es0) (es' := nil);
+            eapply @enumerate_spec with (es := es0) (es' := nil);
             simpl; eauto with Po_db Relations_db).
 
       (** The state of (thread e') is unchanged by the step of (thread e'0) *)
@@ -462,6 +464,8 @@ Module AxiomaticIntermediate.
         (HstepSC: [tp, Ex] ==>{n} [tp', Ex'])
         (Hstep: tp' [thread e', List.map lab (e' :: es')]==> tp'')
         (Henum: enumerate po es (e' :: es')%list)
+        (Hhd: start e')
+        (Htl: forall e'1 : id, List.In e'1 es' -> ~ start e'1)
         (Hdisjoint: Disjoint _ es Ex)
         (HminSC: forall e, e \in Ex -> sc e' e)
         (Hpo: forall e, e \in Ex -> ~ po e' e)
@@ -534,12 +538,14 @@ Module AxiomaticIntermediate.
         split;
           [now auto | econstructor; now eauto].
     Qed.
-           
+    
     Lemma stepN_commute_stepSN:
       forall n tp Ex es e' es' tp' Ex' tp''
         (Hsc_steps: [tp, Ex] ==>{n} [tp', Ex'])
         (Hp_step: tp' [thread e', List.map lab (e' :: es')]==> tp'')
         (Henum: enumerate po es (e' :: es'))
+        (Hhd: start e')
+        (Htl: forall e'1 : id, List.In e'1 es' -> ~ start e'1)
         (HminSC: forall e, e \in Ex -> sc e' e)
         (Hpo: forall e, e \in Ex -> ~ po e' e)
         (HpoWF: po_well_formed po)
@@ -553,6 +559,104 @@ Module AxiomaticIntermediate.
       destruct Hsc_steps as [tp0 [Hstep_sc0 Hsteps_sc0]].
       econstructor;
         now eauto.
+    Qed.
+
+    Lemma stepN_union_inv:
+      forall n tp tp' Ex es Ex'
+        (HstepN: [tp, Ex] ==>{n} [tp', Union _ Ex' es]),
+      exists Ex0, Ex = Union _ (Union _ Ex0 Ex') es.
+    Proof.
+      intro n.
+      induction n; intros.
+      - inversion HstepN; subst.
+        exists (Empty_set _).
+        apply same_set_eq.
+        rewrite Union_commut with (s1 := (Empty_set id)).
+        rewrite Union_empty_set_id;
+          now eauto with Ensembles_DB.
+      - inv HstepN.
+        destruct (IHn _ _ _ _ _ HRstepN') as [Ex0 ?];
+          subst.
+        inv HRstep.
+        exists (Union _ Ex0 es0).
+        apply same_set_eq.
+        rewrite <- Union_assoc.
+        rewrite <- Union_assoc.
+        rewrite Union_commut with (s1 := es).
+        rewrite Union_assoc with (s1 := Ex') (s2 := es0).
+        rewrite Union_commut with (s1 := Ex').
+        rewrite Union_assoc.
+        eauto with Ensembles_DB.
+    Qed.
+
+    (*TODO: redo this proof, by inversion? *)
+    Lemma stepN_inv_not_minimal:
+      forall n tp Ex Ex' es tp' e esl
+        (HstepN: [tp, Union _ Ex es] ==>{S n} [tp', Union _ Ex' es])
+        (Henum: enumerate po es (e :: esl))
+        (HscTO: forall e1 e2, e1 <> e2 -> e1 \in (Union _ Ex es) /\
+                                          e2 \in (Union _ Ex es) ->
+                                                 sc e1 e2 \/ sc e2 e1),
+        ~ e \in Order.min sc (Union _ Ex es).
+    Proof.
+      intro n.
+      destruct n; intros.
+      - inversion HstepN as [|? ? tp2 Ex2 ? ?]; subst.
+        inv HRstepN'.
+        intros HIn.
+        destruct HIn as [HIn  Hmin].
+        inversion HRstep; subst.
+        inv Hmin0.
+        apply H1.
+        exists e.
+        split;
+          [rewrite H0; now eauto|].
+        assert (Hneq: e <> e').
+        { intros ?; subst.
+          pose proof (proj2 (proj1 Henum e' ) ltac:(simpl; auto)).
+          pose proof (proj2 (proj1 Henum0 e') ltac:(simpl; auto)).
+          eapply Hdis with (x := e').
+          now eauto with Ensembles_DB.
+        }
+        destruct (HscTO e e' Hneq); auto.
+        split;
+          [|rewrite <- H0]; eauto with Ensembles_DB.
+        exfalso.
+        apply Hmin.
+        exists e'.
+        rewrite <- H0.
+        split;
+          now eauto with Ensembles_DB.
+      - inv HstepN.
+        inv HRstep.
+        destruct (stepN_union_inv _ _ _ _ _ _ HRstepN') as [Ex0 Heq];
+          subst.
+        assert (Hneq: e <> e').
+        { intros ?; subst.
+          pose proof (proj2 (proj1 Henum e' ) ltac:(simpl; auto)).
+          pose proof (proj2 (proj1 Henum0 e') ltac:(simpl; auto)).
+          eapply Hdis with (x := e').
+          now eauto with Ensembles_DB.
+        }
+
+        destruct (HscTO e e' Hneq) as [Hsc | Hsc]; auto.
+        + split;
+            [right; eapply Henum; simpl; now auto|].
+          rewrite H0 in Hmin;
+            now eapply Hmin.
+        + intros _.
+          eapply Hmin.
+          exists e.
+          split; [left; right | assumption].
+          eapply Henum;
+            simpl; now auto.
+        + intros Hcontra.
+          destruct Hcontra as [? Hcontra].
+          apply Hcontra.
+          exists e'.
+          split; [right| assumption].
+          eapply Henum0;
+            simpl; now auto.
     Qed.
 
        
@@ -570,52 +674,254 @@ Module AxiomaticIntermediate.
           of k and l steps s.t all events of the k execution are sc-before than e
           and all events of the l execution are sc-after e *)
       Lemma steps_sc_split_at:
-        forall n tp1 Ex1 tp1' Ex1' e
-          (HstepsN: [tp1, Ex1] ==>{n} [tp1', Ex1'])
+        forall n tp1 Ex1 tp1' tp1'' e es esl
+          (HstepsN: [tp1, Ex1] ==>{n} [tp1', Empty_set _])
           (Hincl: inclusion _ po sc)
-          (Hfresh: ~ e \in Ex1)
-          (Hpo: forall e',  e' \in Ex1 -> ~ po e e')
-          (HscTO: strict_total_order sc (Union _ Ex1 [set e])),
-        exists Ex0' Ex0 tp0 k l,
-          Ex1 = Union _ Ex0 Ex0' /\
-          [tp1, Union _ Ex0 Ex0'] ==>{k} [tp0, Ex0] /\
-          [tp0, Ex0] ==>{l} [tp1', Ex1'] /\
-          (forall e', e' \in Ex0' -> sc e' e) /\
-          (forall e', e' \in Ex0 -> sc e e') /\
+          (Hstep: tp1' [thread e, List.map lab (e :: esl)]==> tp1'')
+          (Henum: enumerate po es (e :: esl)%list)
+          (Hfresh: Disjoint _ Ex1 es)
+          (Hpo: forall e', e' \in Ex1 -> ~ po e e')
+          (HpoPO: strict_partial_order po)
+          (HscPO: strict_partial_order sc)
+          (HscTO: forall e1 e2, e1 <> e2 -> e1 \in (Union _ Ex1 es) /\ e2 \in (Union _ Ex1 es) ->
+                                                                           sc e1 e2 \/ sc e2 e1),
+        exists Ex0' Ex0 tp0 tp0' k l,
+          Ex1 = Union _ Ex0 Ex0' /\ Disjoint _ Ex0 Ex0' /\
+          [tp1, Union _ (Union _ Ex0 Ex0') es] ==>{k} [tp0, Union _ Ex0 es] /\
+          [tp0, Union _ Ex0 es] ==>sc [tp0', Ex0] /\
+          [tp0', Ex0] ==>{l} [tp1'', Empty_set _] /\
           (n = k + l).
       Proof.
         intro n.
         induction n; intros.
         - inv HstepsN.
-          assert (He: (forall e', e' \in Ex1' -> sc e e') \/ ~ (forall e', e' \in Ex1' -> sc e e'))
-            by admit.
-          destruct He as [Hemin | He].
-          + assert (Ex1' = Union _ Ex1' (Empty_set _))
-              by (eapply same_set_eq; eauto with Ensembles_DB).
-            exists (Empty_set _), Ex1', tp1', 0, 0.
-            erewrite <- H.
-            repeat (split; eauto using Step0). 
-            intros ? Hcontra.
-            inversion Hcontra;
-              now auto.
-          + assert (Ex1' = Union _ (Empty_set _) Ex1')
-              by (eapply same_set_eq; eauto with Ensembles_DB).
-            exists Ex1', (Empty_set _), tp1', 0, 0.
-            erewrite <- H.
-            repeat (split; auto using Step0).
-            intros e' HIn.
-          destruct (eq_dec e e') as [Heq | Hneq].
-          + subst.
+          exists (Empty_set _), (Empty_set _), tp1', tp1'', 0, 0.
+          assert (Heq: Empty_set _ = Union id (Empty_set _) (Empty_set _))
+            by (eapply same_set_eq; eauto with Ensembles_DB).
+          rewrite <- Heq.
+          repeat (split; eauto using Step0 with Ensembles_DB).
+          econstructor; eauto.
+          (** e is sc-min in es *)
+          constructor.
+          right.
+          eapply Henum; simpl; now auto.
+          intros (y & Hiny & Hcontra).
+          apply In_Union_inv in Hiny.
+          destruct Hiny as [HcontraIn | Hiny]; [inv HcontraIn|].
+          eapply Henum in Hiny.
+          simpl in Hiny; destruct Hiny as [? | HIny];
+            subst.
+          eapply strict; eauto.
+          eapply @enumerate_spec with (R := po) (e:= e) (es' := nil) in HIny;
+            eauto with Po_db Relations_db.
+          apply Hincl in HIny.
+          pose proof (antisym _ HscPO _ _ Hcontra HIny); subst.
+          eapply strict;
             now eauto.
-          + destruct (total _ _  HscTO e e' Hneq ltac:(split; eauto with Ensembles_DB));
-              auto.
-            specialize (Hpo _ HIn).
-            eapply Hincl in H.
-            
+          admit. (*start*)
+          admit. (*start*)
+        - inversion HstepsN as [|? ? ? tp2 Ex2 ? ? ? ?];
+            subst.
+          (** Establish the premises of the IH *)
+          assert (Hfresh2: Disjoint _ Ex2 es)
+            by (inv HRstep; eauto with Ensembles_DB).
+          assert (Hpo2: forall e', In _ Ex2 e' -> ~po e e')
+            by (inv HRstep;
+                eauto with Ensembles_DB).
+          assert (HscTO2: forall e1 e2, e1 <> e2 -> e1 \in (Union _ Ex2 es) /\ e2 \in (Union _ Ex2 es) ->
+                                                                                   sc e1 e2 \/ sc e2 e1).
+          { intros e1 e2 Hneq (HIn1 & HIn2).
+            inv HRstep.
+            eapply HscTO; auto;
+              try (split; [inv HIn1 | inv HIn2];
+                   now eauto with Ensembles_DB).
+          }
+          destruct (IHn _ _ _ _ _ _ _ HRstepN' Hincl Hstep Henum Hfresh2 Hpo2 HpoPO HscPO HscTO2) as
+              (Ex0' & Ex0 & tp0 & tp0' & k & l & HEx1 & HDisjointEx1 & HRstepK & HRstep0 & HRstepL & Hkl);
+            clear IHn.
+          (** We have split the n-step execution [tp2, Ex2] ==>{n} [tp1', Empty_set].
+              We now need to add the [tp1, Ex1] ==>sc [tp2, Ex2] to this execution and we have the following cases:
+              - If k = 0 then [tp1, Ex1] ==> [tp2, Ex2] is adjacent in the trace to [tp0, Union Ex0 es] ==> [tp0', Ex0].
+                Depending on which one is sc-before we may need to commute these two steps.
+              - If k > 0 then by the fact that [tp2, Union Ex2 es] =>{k} [tp0, Union Ex2' es] it must be
+                that es is not minimal in Union Ex2 es and hence es0 is sc-before es.*)
+          destruct k.
+          + (** Case k = 0 *)
+            inv HRstepK.
+            assert (HEx0': Ex0' = Empty_set _)
+              by admit; subst.
+            (* pose proof (same_set_eq _ _ (Union_commut Ex0 es)) as Heq1. *)
+            (* rewrite Heq1 in H. *)
+            (* pose proof (same_set_eq _ _ (Union_commut (Union _ Ex0 (e) es)) as Heq2. *)
+            (* rewrite Heq2 in H. *)
+            (* eapply Disjoint_Union_eq in H; eauto with Ensembles_DB. *)
+            (* apply same_set_eq in H. *)
+            inv HRstep.
+            (** Case analysis on whether sc e e' or sc e' e *)
+            assert (Hneq: e <> e').
+            { intros Hcontra; subst.
+              eapply Hfresh with (x := e').
+              inv Hmin.
+              constructor; eauto with Ensembles_DB.
+              eapply Henum; simpl;
+                now auto.
+            }
+            assert (HIn: In id (Union id (Union id (Union id Ex0 (Empty_set _)) es0) es) e /\
+                         In id (Union id (Union id (Union id Ex0 (Empty_set _)) es0) es) e').
+            { split.
+              right. eapply Henum; simpl; now auto.
+              left. right. eapply Henum0; simpl; now auto.
+            }
+            destruct (HscTO _ _ Hneq HIn) as [Hsc | Hsc]; clear HIn HscTO2 HscTO.
+            * (** Case sc e e' *)
 
+              assert (Hcommut: exists tp00,
+                         [tp1, Union _ (Union _ Ex0 es0) es] ==>sc [tp00, Union _ Ex0 es] /\
+                         [tp00, Union _ Ex0 es] ==>sc [tp0', Ex0])
+                by admit.
+              destruct Hcommut as (tp00 & Hstep00 & Hstep00').
+              exists es0, Ex0, tp00, tp0', 1, l.
+              repeat (split; eauto with Ensembles_DB).
 
+              Lemma Union_empty_set_id:
+                forall {A:Type} U,
+                  Union A U (Empty_set _) = U.
+              Proof.
+                intros.
+                apply same_set_eq.
+                split; eauto with Ensembles_DB.
+              Qed.
+              
+              now rewrite Union_empty_set_id.
+              econstructor; eauto using Step0.
+            * (** Case sc e' e *)
+              assert (HeqUnion: Union _ (Union _ Ex0 es0) es = Union _ (Union _ Ex0 es) es0).
+              {
+                apply same_set_eq.
+                setoid_rewrite <- Union_assoc.
+                eauto with Ensembles_DB.
+              }
+              exists es0, Ex0, tp0, tp0', 1, l.
+              repeat (split; eauto with Ensembles_DB).
+              rewrite Union_empty_set_id.
+              now reflexivity.
+              rewrite HeqUnion.
+              eapply StepN with (x2 := tp0) (y2 := Union _ Ex0 es); eauto using Step0.
+              econstructor; eauto.
+              (** e' is sc-minimal *)
+              split.
+              right.
+              eapply Henum0; simpl; now auto.
+              intros (y & HIny & Hscy).
+              apply In_Union_inv in HIny.
+              destruct HIny as [HIny | HIny].
+              eapply In_Union_inv in HIny.
+              destruct HIny as [HIny | HIny].
+              destruct Hmin as [_ Hcontra].
+              eapply Hcontra.
+              exists y. split; eauto with Ensembles_DB.
+              eapply Henum in HIny.
+              simpl in HIny. destruct HIny as [? | HIny]; subst.
+              eapply antisym in Hscy; eauto.
+              eapply enumerate_spec with (R := po) (es'0 := nil) in HIny;
+                eauto with Po_db Relations_db.
+              apply Hincl in HIny.
+              assert (sc e e') by (eapply trans; eauto).
+              eapply Hneq.
+              eapply antisym; eauto.
+              (** by enumeration e' is po and sc minimal in es0 *)
+              eapply Henum0 in HIny.
+              simpl in HIny.
+              destruct HIny as [? | HIny];
+                [ subst; eapply strict; eauto|].
+              eapply @enumerate_spec with (R := po) (es' := nil) in HIny;
+                eauto with Relations_db.
+              apply Hincl in HIny.
+              eapply (strict sc ltac:(auto) y); 
+              pose proof (antisym _ HscPO _ _ Hscy HIny);
+                subst; eauto.
+              rewrite Union_empty_set_id in Hfresh.
+              pose proof (Disjoint_Union_l _ _ _ Hfresh).
+              pose proof (Disjoint_Union_r _ _ _ Hfresh).
+              now eauto with Ensembles_DB.
+          + (** Case k > 0 *)
+            inv HRstep.                               
+            exists (Union _ Ex0' es0), Ex0, tp0, tp0', (S (S k)), l.
+            repeat (apply conj; eauto).
+            admit.
+            pose proof (Disjoint_Union_l _ _ _ Hdis).
+            pose proof (Disjoint_Union_r _ _ _ Hdis).
+            now eauto with Ensembles_DB.
+            econstructor; eauto.
+            assert (HeqUnion: Union _ (Union _ Ex0 (Union _ Ex0' es0)) es = Union _ (Union _ (Union _ Ex0 Ex0') es) es0)
+              by (apply same_set_eq;
+                  setoid_rewrite <- Union_assoc;
+                  eauto with Ensembles_DB).
+            rewrite HeqUnion.
+            econstructor; eauto.
+            (** e' is sc-minimal*)
+            (** Obviously e is not sc-minimal in Ex0 U Ex0' U es by [stepN_inv_not_minimal] *)
+            eapply stepN_inv_not_minimal in HRstepK; eauto.
+            constructor.
+            right.
+            eapply Henum0;
+              simpl; now auto.
+            rewrite <- HeqUnion.
+            intros (? & HIn & Hscy).
+            apply In_Union_inv in HIn.
+            destruct HIn as [HIn | HIn].
+            (** Case x is in Ex0 U Ex0' U es0, by Hmin we know e' is sc-minimal in this set *)
+            eapply Hmin.
+            exists x.
+            setoid_rewrite <- Union_assoc.
+            split;
+              now eauto with Ensembles_DB.
+            (** Case x is es, then by enumerate_spec it must be that sc e x and we know that x is not minimal
+                in the set Ex0 U Ex0' U es, hence there must be some sc-before element in Ex0 U Ex0'. But
+             e' is minimal in Ex0 U Ex0' U es0, hence by transitivity it's minimal in Ex0 U Ex0' U es as well*)
+            assert (Hnotmin: exists e'', e'' \in (Union _ Ex0 Ex0') /\ sc e'' e).
+            { assert (Hclassic: (exists e'' : id, In id (Union id Ex0 Ex0') e'' /\ sc e'' e) \/
+                                ~ ( exists e'' : id, In id (Union id Ex0 Ex0') e'' /\ sc e'' e)) by admit.
+              destruct Hclassic as [? | Hcontra]; auto.
+              exfalso.
+              eapply HRstepK.
+              constructor.
+              right. eapply Henum; simpl; now auto.
+              intros (z & HInz & Hscz).
+              apply In_Union_inv in HInz.
+              destruct HInz as [? | HInz]; [now eauto|].
+              apply Henum in HInz; simpl in HInz;
+                destruct HInz as [? | HInz]; subst.
+              eapply strict; now eauto.
+              eapply enumerate_hd with (R := po) in HInz; eauto with Relations_db.
+              apply Hincl in HInz.
+              pose proof (antisym _ ltac:(eauto) _ _ Hscz HInz); subst.
+              eapply strict;
+                now eauto.
+            }
+            destruct Hnotmin as (e'' & HIne'' & Hsc'').
+            assert (Hsc_trans: sc e'' e').
+            { eapply Henum in HIn. simpl in HIn.
+             destruct HIn as [? | HIn]; subst.
+              eapply trans;
+                now eauto with Relations_db.
+              eapply enumerate_hd with (R := po) in HIn;
+                eauto with Relations_db.
+              apply Hincl in HIn.
+              eapply trans; eauto.
+              eapply trans;
+                now eauto.
+            }
+            eapply Hmin.
+            exists e''.
+            split;
+              now auto.
+            pose proof (Disjoint_Union_r _ _ _ Hfresh).
+            now eauto with Ensembles_DB.
 
+         
 
+          
         
           
 
