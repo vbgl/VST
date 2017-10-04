@@ -1781,6 +1781,7 @@ Axiom inline_assembly_properties:
 
 This predicate is used in the semantics of all CompCert languages. *)
 
+
 Definition external_call (ef: external_function): extcall_sem :=
   match ef with
   | EF_external name sg  => external_functions_sem name sg

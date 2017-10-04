@@ -561,6 +561,15 @@ Module AxiomaticIntermediate.
         now eauto.
     Qed.
 
+    Lemma Union_empty_set_id:
+      forall {A:Type} U,
+        Union A U (Empty_set _) = U.
+    Proof.
+      intros.
+      apply same_set_eq.
+      split; eauto with Ensembles_DB.
+    Qed.
+    
     Lemma stepN_union_inv:
       forall n tp tp' Ex es Ex'
         (HstepN: [tp, Ex] ==>{n} [tp', Union _ Ex' es]),
@@ -658,7 +667,6 @@ Module AxiomaticIntermediate.
           eapply Henum0;
             simpl; now auto.
     Qed.
-
        
     Lemma step_po_sim:
       forall n Ex tp1 Ex1 tp2 Ex2 tp1' Ex1'
@@ -681,7 +689,7 @@ Module AxiomaticIntermediate.
           (Henum: enumerate po es (e :: esl)%list)
           (Hfresh: Disjoint _ Ex1 es)
           (Hpo: forall e', e' \in Ex1 -> ~ po e e')
-          (HpoPO: strict_partial_order po)
+          (HpoWF: po_well_formed po)
           (HscPO: strict_partial_order sc)
           (HscTO: forall e1 e2, e1 <> e2 -> e1 \in (Union _ Ex1 es) /\ e2 \in (Union _ Ex1 es) ->
                                                                            sc e1 e2 \/ sc e2 e1),
@@ -736,7 +744,7 @@ Module AxiomaticIntermediate.
               try (split; [inv HIn1 | inv HIn2];
                    now eauto with Ensembles_DB).
           }
-          destruct (IHn _ _ _ _ _ _ _ HRstepN' Hincl Hstep Henum Hfresh2 Hpo2 HpoPO HscPO HscTO2) as
+          destruct (IHn _ _ _ _ _ _ _ HRstepN' Hincl Hstep Henum Hfresh2 Hpo2 HpoWF HscPO HscTO2) as
               (Ex0' & Ex0 & tp0 & tp0' & k & l & HEx1 & HDisjointEx1 & HRstepK & HRstep0 & HRstepL & Hkl);
             clear IHn.
           (** We have split the n-step execution [tp2, Ex2] ==>{n} [tp1', Empty_set].
@@ -750,12 +758,7 @@ Module AxiomaticIntermediate.
             inv HRstepK.
             assert (HEx0': Ex0' = Empty_set _)
               by admit; subst.
-            (* pose proof (same_set_eq _ _ (Union_commut Ex0 es)) as Heq1. *)
-            (* rewrite Heq1 in H. *)
-            (* pose proof (same_set_eq _ _ (Union_commut (Union _ Ex0 (e) es)) as Heq2. *)
-            (* rewrite Heq2 in H. *)
-            (* eapply Disjoint_Union_eq in H; eauto with Ensembles_DB. *)
-            (* apply same_set_eq in H. *)
+            pose proof HRstep as HRstep_copy.
             inv HRstep.
             (** Case analysis on whether sc e e' or sc e' e *)
             assert (Hneq: e <> e').
@@ -772,28 +775,77 @@ Module AxiomaticIntermediate.
               right. eapply Henum; simpl; now auto.
               left. right. eapply Henum0; simpl; now auto.
             }
-            destruct (HscTO _ _ Hneq HIn) as [Hsc | Hsc]; clear HIn HscTO2 HscTO.
+            destruct (HscTO _ _ Hneq HIn) as [Hsc | Hsc]; clear HIn.
             * (** Case sc e e' *)
-
+              (** In this case, the first step to happen is the one of es, hence k will be zero *)
               assert (Hcommut: exists tp00,
-                         [tp1, Union _ (Union _ Ex0 es0) es] ==>sc [tp00, Union _ Ex0 es] /\
-                         [tp00, Union _ Ex0 es] ==>sc [tp0', Ex0])
-                by admit.
+                         [tp1, Union _ (Union _ Ex0 es0) es] ==>sc [tp00, Union _ Ex0 es0] /\
+                         [tp00, Union _ Ex0 es0] ==>sc [tp0', Ex0]).
+              { rewrite Union_empty_set_id in HRstep_copy.
+                inv HRstep0.
+                assert (es = es1) by admit; subst.
+                (* replace (Union _ (Union _ Ex0 es0) es1) with (Union _ (Union _ Ex0 es1) es0) *)
+                (*   by (apply same_set_eq; *)
+                (*       setoid_rewrite <- Union_assoc; *)
+                (*       now eauto with Ensembles_DB). *)
+                pose proof (enumerate_ext _ _ _ eq_dec (po_strict_PO _ HpoWF) Henum Henum1) as Heq;
+                  inv Heq.
+                eapply commute_step_sc with (tp := tp1) (tp'' := tp0')
+                                                        (es := es1);
+                  eauto.
+                - eapply Disjoint_Union_r in Hfresh;
+                    now eauto with Ensembles_DB.
+                - intros x HIn.
+                  eapply In_Union_inv in HIn.
+                  assert (Hneqx: x <> e'0).
+                  { intros Hcontra; subst.
+                    pose proof (proj2 (proj1 Henum1 e'0) ltac:(simpl; now auto)).
+                    destruct HIn.
+                    eapply Hdis0;
+                      now eauto with Ensembles_DB.
+                    eapply Disjoint_Union_r in Hfresh.
+                    eapply Hfresh;
+                      now eauto with Ensembles_DB.
+                  }
+                  destruct (HscTO x e'0 Hneqx) as [Hscx | Hscx].
+                  (** leftover goal from destructing HscTO *)
+                  split; [destruct HIn as [HIn | HIn];
+                          eauto with Ensembles_DB |
+                          destruct Henum1 as [HIne'0 _]; right;
+                          eapply HIne'0; simpl; now auto].
+                  + (** Case sc x e'0 *)
+                    (** We know that e' is sc-minimal in Ex0 U es0, and that sc e'0 e'
+                        hence since x \in Ex0 U es0 there is a cycle in sc *)
+                    exfalso.
+                    destruct Hmin as [_ Hmin].
+                    eapply Hmin.
+                    exists x.
+                    split.
+                    * destruct HIn;
+                        now eauto with Ensembles_DB.
+                    * eapply trans;
+                        now eauto.
+                  + (** Case sc e'0 x, that's our goal, hence trivial *)
+                    now trivial.
+                - intros x HIn Hcontra.
+                  eapply In_Union_inv in HIn.
+                  destruct HIn as [HIn | HIn].
+                  + (** If x \in Ex0 then by hypothesis Hpo2 *)
+                    eapply Hpo2;
+                      now eauto.
+                  + (** Otherwise if x \in es0, then by Hpo *)
+                    eapply Hpo;
+                      now eauto.
+              }
               destruct Hcommut as (tp00 & Hstep00 & Hstep00').
-              exists es0, Ex0, tp00, tp0', 1, l.
-              repeat (split; eauto with Ensembles_DB).
-
-              Lemma Union_empty_set_id:
-                forall {A:Type} U,
-                  Union A U (Empty_set _) = U.
-              Proof.
-                intros.
-                apply same_set_eq.
-                split; eauto with Ensembles_DB.
-              Qed.
-              
-              now rewrite Union_empty_set_id.
-              econstructor; eauto using Step0.
+              exists (Empty_set _), (Union _ Ex0 es0), tp1, tp00, 0, (S l).
+              repeat (split; eauto with Ensembles_DB);
+                try (rewrite Union_empty_set_id).
+              apply same_set_eq;
+                now eauto with Ensembles_DB.
+              constructor.
+              econstructor;
+                now eauto.
             * (** Case sc e' e *)
               assert (HeqUnion: Union _ (Union _ Ex0 es0) es = Union _ (Union _ Ex0 es) es0).
               {
@@ -835,7 +887,7 @@ Module AxiomaticIntermediate.
               destruct HIny as [? | HIny];
                 [ subst; eapply strict; eauto|].
               eapply @enumerate_spec with (R := po) (es' := nil) in HIny;
-                eauto with Relations_db.
+                eauto with Relations_db  Po_db.
               apply Hincl in HIny.
               eapply (strict sc ltac:(auto) y); 
               pose proof (antisym _ HscPO _ _ Hscy HIny);
@@ -893,7 +945,7 @@ Module AxiomaticIntermediate.
               apply Henum in HInz; simpl in HInz;
                 destruct HInz as [? | HInz]; subst.
               eapply strict; now eauto.
-              eapply enumerate_hd with (R := po) in HInz; eauto with Relations_db.
+              eapply enumerate_hd with (R := po) in HInz; eauto with Relations_db Po_db.
               apply Hincl in HInz.
               pose proof (antisym _ ltac:(eauto) _ _ Hscz HInz); subst.
               eapply strict;
@@ -906,7 +958,7 @@ Module AxiomaticIntermediate.
               eapply trans;
                 now eauto with Relations_db.
               eapply enumerate_hd with (R := po) in HIn;
-                eauto with Relations_db.
+                eauto with Relations_db Po_db.
               apply Hincl in HIn.
               eapply trans; eauto.
               eapply trans;
@@ -918,6 +970,7 @@ Module AxiomaticIntermediate.
               now auto.
             pose proof (Disjoint_Union_r _ _ _ Hfresh).
             now eauto with Ensembles_DB.
+      Admitted.
 
          
 
