@@ -83,12 +83,6 @@ Class Semantics `{lbl:Labels} :=
    Sem: @AxiomaticCoreSemantics G C E (** Threadwise semantics *)
  }.
 
-Inductive C' : Type :=
-| Empty   : C'
-| State   : C -> C'
-| Initial : b
-    j genv (Vptr b ofs) [arg] c'' evinit)
-
 Class ThreadPool (C: Type) :=
   {
     t : Type; (** type of thread pool *)

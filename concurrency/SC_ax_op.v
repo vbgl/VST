@@ -1029,17 +1029,90 @@ Module AxiomaticIntermediate.
           eapply ex_po0;
             now eauto.
         + (** If e2 is in es *)
-          assert (Hpo2: po e' e2) by admit.
+
+          Lemma po_trans_codom:
+            forall e e1 e2
+              (HpoWF: po_well_formed po)
+              (Hpo1: po e1 e)
+              (Hpo2: po e2 e),
+              po e1 e2 \/ po e2 e1.
+          Proof.
+          Admitted.
+          (* RETURN HERE*)
+
+          
+          Lemma enumerate_po_imm:
+            forall esl e e1 e2 es esl'
+              (HR12: po e1 e2)
+              (HR1: po e e1)
+              (HR2: po e e2)
+              (HpoWF: po_well_formed po)
+              (Henum: enumerate po es ((e :: esl) ++ (e2 :: nil) ++ esl')),
+              List.In e1 esl.
+          Proof.
+            intros esl.
+            induction esl; intros.
+            - simpl in Henum.
+              exfalso.
+              destruct Henum as [HIn Himm].
+              specialize (Himm e e2 ltac:(simpl; auto)).
+              eapply Himm.
+              exists e1;
+                now eauto.
+            - simpl.
+              simpl in Henum, IHesl.
+              destruct (eq_dec a e1);
+                [subst; now auto |].
+              right.
+              assert (HRa2: po a e2).
+              { eapply @enumerate_spec with (es'' := (esl ++ e2 :: esl')%list)
+                                              (es' := (e :: nil)%list) (e:= a) (e' := e2);
+                  eauto with Relations_db Po_db.
+                eapply List.in_or_app.
+                simpl;
+                  now auto.
+              }
+              assert (HRa1: po a e1).
+              { pose proof (proj2 Henum e a ltac:(simpl; now auto)) as Hipo.
+                destruct Hipo as [Hpo Himm].
+                destruct (po_trans_codom _ _ _ HpoWF HRa2 HR12); auto.
+                exfalso.
+                eapply Himm;
+                  now eauto.
+              }
+              apply enumerate_minus in Henum;
+                now eauto with Relations_db Po_db.
+          Qed.
+
           intros Hcontra.
-          eapply Hmin.
-          exists 
-
-
-
-         
-
-      
-
+          apply Henum in HIn2.
+          simpl in HIn2.
+          destruct HIn2 as [? | HIn2]; subst.
+          * (** If e2 is e' then we have that po e1 e2 but e2 is minimal in Ex1' U es. Contradiction*)
+            eapply Hmin;
+              eexists;
+              now eauto.
+          * (** If e2 <> e' then po e' e2 by the enumeration of es *)
+            (** We show that since po e1 e2 and po e e2 it must be that
+                po e e1 \/ po e1 e. The latter contradicts the fact that e is minimal.
+             Hence we have that po e1 e2, po e e2 and po e e1. By enumerate_po_imm
+             we have that e1 is in es, which results in a contradiction as e1 is in Ex1' which is
+             disjoint from es. *)
+            pose proof (enumerate_hd _ po _ _ _ ltac:(eauto with Relations_db Po_db) Henum HIn2) as Hpo2.
+            destruct (po_trans_codom _ _ _ po_wf0 Hcontra Hpo2) as [Hpo1' | Hpo1'].
+            ** eapply Hmin.
+               eexists;
+                 now eauto.
+            ** apply List.in_split in HIn2.
+               destruct HIn2 as (l1 & l2 & Heq).
+               subst.
+               pose proof (enumerate_po_imm _ _ e1 _ _ _ Hcontra Hpo1' Hpo2 ltac:(eauto with Relations_db Po_db)
+                                                                                   Henum) as HIncontra.
+               pose proof (proj2 (proj1 Henum e1) ltac:(simpl; right; eauto using List.in_or_app)).
+               eapply Hdis;
+                 now eauto with Ensembles_DB.
+    Qed.
+        
 
     (* Goal *)
     Theorem axiomaticToIntermediate:
