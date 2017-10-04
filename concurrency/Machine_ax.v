@@ -83,6 +83,12 @@ Class Semantics `{lbl:Labels} :=
    Sem: @AxiomaticCoreSemantics G C E (** Threadwise semantics *)
  }.
 
+Inductive C' : Type :=
+| Empty   : C'
+| State   : C -> C'
+| Initial : b
+    j genv (Vptr b ofs) [arg] c'' evinit)
+
 Class ThreadPool (C: Type) :=
   {
     t : Type; (** type of thread pool *)
@@ -166,7 +172,7 @@ Section AxSem.
         (Hafter_external: after_external Sem genv None c = Some c')
         (Hinitial: initial_core Sem j genv (Vptr b ofs) [arg] c'' evinit)
         (Hfresh: tp # j = None),
-        step genv tp i ((concLabelsofE evargs) ++ [Spawn j]) ((tp <- i,c') <- j,c'').
+        step genv tp i ((concLabelsofE evargs) ++ [Spawn j] ++ evinit) ((tp <- i,c') <- j,c'').
 
 End AxSem.
 End AxSem.

@@ -166,6 +166,23 @@ Module Enumerate.
         now eauto.
   Qed.
 
+  Corollary enumerate_hd:
+    forall {A:Type} es R e es' e'
+      (Htrans: transitive A R)
+      (Henum: enumerate R es (e :: es'))
+      (Hin: List.In e' es'),
+      R e e'.
+  Proof.
+    intros.
+    apply List.in_split in Hin.
+    destruct Hin as [l1 [l2 Heq]].
+    subst.
+    eapply @enumerate_spec with (es' := nil) (es'' := (l1 ++ e' :: l2)%list) in Henum;
+      eauto.
+    apply List.in_or_app; simpl;
+      now auto.
+  Qed.
+
   Lemma enumerate_hd_ext:
     forall {A:Type} (R: relation A) es esl esl' e e'
       (Hdec: forall n m : A , {n = m} + {n <> m})
@@ -275,4 +292,7 @@ Module Enumerate.
         apply f_equal.
         now eauto.
   Qed.
+
+ 
+
 End Enumerate.

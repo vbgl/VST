@@ -1525,3 +1525,36 @@ Proof.
     apply (H0 x);
       now eauto.
 Qed.
+
+(** * Set equality under the axiom of propositional extensionality*)
+Require Import Coq.Logic.FunctionalExtensionality
+        Coq.Logic.ClassicalFacts.
+Module PropExtSets.
+
+  Axiom prop_ext : ClassicalFacts.prop_extensionality.
+  Lemma same_set_eq:
+    forall {A:Type} (U1 U2: Ensemble A)
+      (Hsame: U1 <--> U2),
+      U1 = U2.
+  Proof.
+    intros.
+    eapply FunctionalExtensionality.functional_extensionality.
+    intros.
+    inv Hsame.
+    eapply prop_ext.
+    specialize (H x).
+    specialize (H0 x).
+    split;
+      now eauto with Ensembles_DB.
+  Qed.
+
+  Lemma Union_empty_set_id:
+    forall {A:Type} U,
+      Union A U (Empty_set _) = U.
+  Proof.
+    intros.
+    apply same_set_eq.
+    split; eauto with Ensembles_DB.
+  Qed.
+
+End PropExtSets.
