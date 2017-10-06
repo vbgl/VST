@@ -2,8 +2,9 @@
  * Author: Zoe Paraskevopoulou, 2016
  *)
 
-From Coq Require Import Classes.Morphisms Arith NArith.BinNat Lists.List Sets.Ensembles
-Sorting.Permutation.
+From Coq Require Import
+     Sets.Finite_sets Sets.Finite_sets_facts
+     Classes.Morphisms Arith NArith.BinNat Lists.List Sets.Ensembles Sorting.Permutation.
 Require Import compcert.lib.Coqlib.
 Import ListNotations.
 
@@ -1558,3 +1559,27 @@ Module PropExtSets.
   Qed.
 
 End PropExtSets.
+
+Module FiniteSets.
+
+  Theorem set_ind:
+    forall (A : Type) (P : Ensemble A -> Prop),
+      P (Empty_set _) -> (forall (a : A) (U : Ensemble A), ~a \in U -> Finite _ U -> P U -> P (Add _ U a)) ->
+      forall U : Ensemble A, Finite _ U -> P U.
+  Proof.
+    intros A P Hempty IH U Hfin.
+    eapply finite_cardinal in Hfin.
+    destruct Hfin as [n Hcardinal].
+    generalize dependent U.
+    induction n; intros.
+    - eapply cardinalO_empty in Hcardinal;
+        subst;
+        assumption.
+    - intros.
+      inversion Hcardinal as [|? ? Hcardinal' x HnotIn]; subst.
+      eapply IH; eauto.
+      eapply cardinal_finite in Hcardinal';
+        now eauto.
+  Qed.
+
+End FiniteSets.

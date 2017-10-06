@@ -71,8 +71,6 @@ Section Labels.
       [discriminate | now auto].
   Qed.
 
-
-
 End Labels.
 
 (** Class of threadwise semantics *)
@@ -166,7 +164,8 @@ Section AxSem.
         (Hafter_external: after_external Sem genv None c = Some c')
         (Hinitial: initial_core Sem j genv (Vptr b ofs) [arg] c'' evinit)
         (Hfresh: tp # j = None),
-        step genv tp i ((concLabelsofE evargs) ++ [Spawn j] ++ evinit) ((tp <- i,c') <- j,c'').
+        step genv tp i ((concLabelsofE evargs) ++ [Spawn j] ++ (concLabelsofE evinit))
+             ((tp <- i,c') <- j,c'').
 
 End AxSem.
 End AxSem.

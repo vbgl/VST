@@ -18,6 +18,23 @@ Inductive stepN {A B: Type} (R : A -> B -> A -> B -> Prop) : nat -> A -> B -> A 
       (HRstepN': stepN R n x2 y2 x3 y3),
       stepN R (S n) x1 y1 x3 y3.
 
+Lemma stepN_trans:
+  forall {A B : Type} {R: A -> B -> A -> B -> Prop} k l m x y x' y' x'' y''
+    (Hm: m = k + l)
+    (HstepK: stepN R k x y x' y')
+    (HstepL: stepN R l x' y' x'' y''),
+    stepN R m x y x'' y''.
+Proof.
+  intros A B R k.
+  induction k; intros.
+  - inv HstepK.
+    simpl.
+    now auto.
+  - inv HstepK.
+    econstructor;
+      now eauto.
+Qed.
+
 Module Execution.
 
   Notation id := nat.

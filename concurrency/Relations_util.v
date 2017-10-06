@@ -3,6 +3,13 @@
 Require Import Coq.Sets.Ensembles.
 Require Import concurrency.Ensembles_util.
 Require Import Coq.Relations.Relation_Definitions.
+Require Import Coq.Sets.Finite_sets.
+Require Import Coq.Sets.Finite_sets_facts.
+
+Definition restr {A:Type} (R:relation A) (U: Ensemble A) : relation A :=
+  fun x y => R x y /\ x \in U /\ y \in U.
+          
+Notation "R ?" := (fun x y => R x y \/ x = y) (at level 40).
 
 Module Order.
 
@@ -293,6 +300,165 @@ Module Enumerate.
         now eauto.
   Qed.
 
- 
+Inductive rn {A:Type} (R:relation A): nat -> A -> A -> Prop :=
+  | R0: forall x, rn R 0 x x
+  | Rn: forall n x y z
+          (Hr: immediate R x y)
+          (HrN: rn R n y z),
+      rn R (S n) x z.
+
+  Lemma R_equiv_Rn:
+    forall {A:Type} (R:relation A) (U : Ensemble A) (Hfin: Finite _ U)
+      x y
+      (HPO: strict_partial_order R)
+      (Honto: forall a b, R a b -> a \in U /\ b \in U),
+      R x y <-> exists n, rn R (S n) x y.
+  Proof.
+    Admitted.
+    (* intros. *)
+    (* split. *)
+    (* - intro Hr. *)
+    (*   remember (fun a => a \in U /\ R x a /\ (R? a y)) as Bx. *)
+    (*   assert (HfinX: Finite _ Bx). *)
+    (*   { eapply Finite_downward_closed with (A := U); eauto. *)
+    (*     intros a0 HIn0. *)
+    (*     subst. *)
+    (*     inversion HIn0; *)
+    (*       now eauto with Ensembles_DB. *)
+    (*   } *)
+    (*   generalize dependent x. *)
+    (*   apply finite_cardinal in HfinX. *)
+    (*   destruct HfinX as (n & HfinX). *)
+    (*   generalize dependent Bx. *)
+    (*   induction n; intros. *)
+    (*   + admit. *)
+    (*   + Lemma bla: *)
+    (*       forall {A:Type} (R:Relation A) (U: Ensemble A) n *)
+    (*         (Hfin: cardinal _ U n) *)
+    (*         (Honto: forall a b, R a b -> a \in U /\ b \in U) *)
+    (*         x y *)
+    (*         (Hr: R x y) *)
+    (*         (HPO: strict_partial_order R), *)
+    (*       exists x0, x0 \in Order.min R (fun a => In _ U a /\ R x a /\ (R? a y)). *)
+    (*     Proof. *)
+    (*       intros A R U n. *)
+    (*       generalize dependent R. *)
+    (*       generalize dependent U. *)
+    (*       induction n; intros. *)
+    (*       - inversion Hfin. *)
+    (*         apply Honto in Hr. *)
+    (*         rewrite <- H in Hr. *)
+    (*         destruct Hr as [Hcontra _]. *)
+    (*         now inversion Hcontra. *)
+    (*       - inversion Hfin as[|U0 m Hfin0 x0 Hfresh0]; subst. *)
+    (*         destruct (Honto _ _ Hr) as [Hx Hy]. *)
+            
+    (*         destruct (IHn U0 (restr R U0) Hfin0 ltac:(assert(False) by admit; now exfalso) _ _ Hr HPO). *)
+    (*         rewrite H. *)
+            
+    (*         ar *)
+
+
+    (*           generalize dependent x. *)
+    (*         generalize dependent Bx. *)
+    (*         generalize dependent U. *)
+    (*         eapply set_ind with (U := U'); eauto. *)
+    (*       - intros. *)
+    (*         inv HyInU'. *)
+    (*       - intros a U Hfresh Hfini IH U0 Hfin0 x y Hsub Hiny Honto Hclosed Hr. *)
+
+
+    (*         Lemma R_equiv_Rn: *)
+    (*           forall {A:Type} (R:relation A) (U U': Ensemble A) (Hfin: Finite _ U) *)
+    (*             x y *)
+    (*             (Hsub: U' \subset U) *)
+    (*             (HyInU': y \in U') *)
+    (*             (Honto: forall a b, R a b -> a \in U /\ b \in U) *)
+    (*             (Hclosed: forall a b, R a b -> b \in U' -> a \in U'), *)
+    (*             R x y -> exists n, rn R n x y. *)
+    (*         Proof. *)
+    (*           intros A R U U'. *)
+    (*           generalize dependent U. *)
+    (*           eapply set_ind with (U := U'); eauto. *)
+    (*           - intros. *)
+    (*             inv HyInU'. *)
+    (*           - intros a U Hfresh Hfini IH U0 Hfin0 x y Hsub Hiny Honto Hclosed Hr. *)
+
+
+    (*             + intros ? ? R Honto Hclosed x y HyInU' Hr. *)
+    (*               exfalso. *)
+    (*               destruct (Honto _ _ Hr) as [Hcontra _]; *)
+    (*                 now inv Hcontra. *)
+    (*             + intros a U0 Hfresh Hfin0 IH U' Hsub R Honto Hclosed x y HyInU' Hr. *)
+                  
+
+
+
+    (*               (* intros A R U U' Hfin. *) *)
+    (*               (* intros. *) *)
+    (*               (* split. *) *)
+    (*               (* - generalize dependent y. *) *)
+    (*               (*   generalize dependent x. *) *)
+    (*               (*   generalize dependent R. *) *)
+    (*               (*   generalize dependent U'. *) *)
+    (*               (*   eapply set_ind with (U := U); eauto. *) *)
+    (*               (*   + intros ? ? R Honto Hclosed x y HyInU' Hr. *) *)
+    (*               (*     exfalso. *) *)
+    (*               (*     destruct (Honto _ _ Hr) as [Hcontra _]; *) *)
+    (*               (*       now inv Hcontra. *) *)
+    (*               (*   + intros a U0 Hfresh Hfin0 IH U' Hsub R Honto Hclosed x y HyInU' Hr. *) *)
+                  
+    (*               (*     destruct (Honto _ _ Hr) as [Hx Hy]. *) *)
+    (*               (*     eapply Add_inv in Hx. *) *)
+    (*               (*     eapply Add_inv in Hy. *) *)
+    (*               (*     destruct Hx as [Hx | ?], Hy as [Hy |?]; subst. *) *)
+    (*               (*     * (** Case x \in U0, y \in U0 *) *) *)
+
+    (*               (*       Definition restr {A:Type} (R:relation A) (U: Ensemble A) : relation A := *) *)
+    (*               (*         fun x y => R x y /\ x \in U /\ y \in U. *) *)
+
+    (*               (*       assert (Honto': forall a b, (restr R U0) a b -> In _ U0 a /\ In _ U0 b) *) *)
+    (*               (*         by (intros ? ? HresR; *) *)
+    (*               (*             destruct HresR; *) *)
+    (*               (*             now auto). *) *)
+    (*               (*       assert (Hclosed': forall a b : A, (restr R U0) a b -> In A U' b -> In A U' a). *) *)
+    (*               (*       { intros a0 b0 HRrestr HInb0. *) *)
+    (*               (*         destruct HRrestr. *) *)
+    (*               (*         eapply Hclosed; *) *)
+    (*               (*           now eauto. *) *)
+    (*               (*       } *) *)
+    (*               (*       destruct (IH (restr R U0) Honto' Hclosed' x y) as (n & Hrn); auto. *) *)
+    (*               (*       split; now auto. *) *)
+    (*               (*       exists n. *) *)
+
+    (*               Lemma rn_restr: *)
+    (*                 forall {A:Type} {R:Relation A} *)
+    (*                   n x y U U' *)
+    (*                   (Hincl: U' \subset U) *)
+    (*                   (Hclosed: forall a b, R a b -> b \in U' -> a \in U') *)
+    (*                   (* (Honto: forall a b, R a b -> a \in U /\ b \in U) *) *)
+    (*                   (Hy: y \in U') *)
+    (*                   (Hrn: rn (restr R U) n x y), *)
+    (*                   rn R n x y. *)
+    (*               Proof. *)
+    (*                 induction n; intros. *)
+    (*                 - inv Hrn. *)
+    (*                   now constructor. *)
+    (*                 - inv Hrn. *)
+    (*                   destruct Hr as [Hr Himm]. *)
+    (*                   econstructor; eauto. *)
+    (*                   destruct Hr as (Hr & Hin & Hin'). *)
+    (*                   split; eauto. *)
+    (*                   intros Hcontra. *)
+    (*                   apply Himm. *)
+    (*                   destruct Hcontra as (z & Hrxz & Hrzy). *)
+    (*                   assert (HRy0y: R y0 y) by admit. *)
+    (*                   eapply Hclosed in HRy0y; eauto. *)
+    (*                   exists z; *)
+    (*                     repeat (split; eauto). *)
+    (*               Admitted. *)
+                  
+                  
+  (* eapply @rn_restr with (U := U0); eauto. *)
 
 End Enumerate.
