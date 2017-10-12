@@ -100,7 +100,8 @@ Module ValidSC.
         (** Thread spawning induces [po] order between parent-children threads*)
         po_spawn : forall e1 e2,
             lab e1 = Spawn (thread e2) ->
-            po e1 e2
+            po e1 e2;
+        po_spec : forall e1 e2, immediate po e1 e2 -> lab e1 = Spawn (thread e2) \/ thread e1 = thread e2
       }.
 
     Definition lab := lab.
@@ -133,7 +134,7 @@ Module ValidSC.
        valid executions? *)
     Record validSC (Ex : events) (po sc : relation id) :=
       { wf_po    : po_well_formed po;
-        po_onto : forall e1 e2, po e1 e2 -> e1 \in Ex /\ e2 \in Ex;
+        po_onto  : forall e1 e2, po e1 e2 -> e1 \in Ex /\ e2 \in Ex;
         total_sc : strict_total_order sc Ex;
         po_sc    : inclusion _ po sc;
         rf_sc    : reads_from sc;

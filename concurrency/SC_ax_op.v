@@ -957,15 +957,79 @@ Module AxiomaticIntermediate.
 
 
     Notation "R ?" := (fun x y => R x y \/ x = y) (at level 40).
-    Lemma po_spec:
+    Lemma po_trans_spec:
       forall e1 e2
         (Hpo: po e1 e2)
-        (HPO: po_well_formed po),
+        (HPO: po_well_formed po)
+        (Honto: forall e1 e2, po e1 e2 -> e1 \in FullE /\ e2 \in FullE),
         thread e1 = thread e2 \/
-        exists e0, po? e1 e0 /\ (thread e0 = thread e2 \/ lab e0 = Spawn (thread e2)).
+        exists e0, e0 <> e2 /\ po? e1 e0 /\ (thread e0 = thread e2 \/ lab e0 = Spawn (thread e2)).
     Proof.
-      Admitted.
-      
+      intros.
+      eapply R_equiv_Rn in Hpo; eauto with Relations_db Po_db.
+      destruct Hpo as (n & Hpo).
+      generalize dependent e2.
+      generalize dependent e1.
+      induction n; intros.
+      - inversion Hpo; subst.
+        inv HrN.
+        destruct (po_spec po HPO _ _ Hr) as [Hspawn | Hthread_eq].
+        + right.
+          exists e1; split; eauto.
+          intros Hcontra; subst.
+          eapply strict with (R:=po); eauto with Relations_db Po_db.
+          now eapply (proj1 Hr).
+        + left; now auto.
+      - inversion Hpo; subst.
+        destruct (IHn _ _ HrN) as [Hthread_eq | Hspawn].
+        + pose proof (po_spec _ HPO _ _ Hr) as Hr_spec.
+          destruct Hr_spec as [Hspawne1 | Heq].
+          *
+            right.
+            exists y.
+            rewrite Hthread_eq.
+            destruct Hr.
+            repeat (split; eauto).
+            intro Hcontra.
+            subst.
+            inv HrN.
+            destruct Hr.
+            destruct n.
+            ** inv HrN0.
+               eapply strict with (x:= e2) (R := po); eauto with Relations_db Po_db.
+            ** eapply strict with (x:= e2) (R := po); eauto with Relations_db Po_db.
+               eapply trans with (R:=po); eauto with Relations_db Po_db.
+               eapply R_equiv_Rn; eauto with Relations_db Po_db.
+          * rewrite Heq, Hthread_eq.
+            now auto.
+        + destruct Hspawn as (e' & Hneq & Hpo' & Hspec').
+          destruct Hpo' as [Hpo' | Heq].
+          * pose proof (po_spec _ HPO _ _ Hr) as Hspec.
+            destruct Hspec as [Hspawn | Heq].
+            ** right. exists e'.
+                   repeat (split; eauto).
+                   left.
+                   eapply po_spawn in Hspawn; eauto.
+                   eapply trans; eauto with Relations_db Po_db.
+            ** rewrite Heq.
+               right.
+               exists e'.
+               repeat (split; eauto).
+               destruct Hr.
+               left; eapply trans; eauto with Relations_db Po_db.
+          * subst.
+            pose proof (po_spec _ HPO _ _ Hr) as Hspec.
+            destruct Hspec as [Hspawn | Heq].
+            right.
+            exists e'. repeat (split; eauto).
+            left; now apply Hr.
+            rewrite Heq.
+            destruct Hspec'; subst; [left; now auto|].
+            right.
+            exists e'.
+            repeat (split; eauto).
+            left; now apply Hr.
+    Qed.
 
     Lemma po_trans_codom:
       forall e e1 e2
@@ -1117,15 +1181,53 @@ Module AxiomaticIntermediate.
                eapply Hdis;
                  now eauto with Ensembles_DB.
     Qed.
-        
-    
+
+    Lemma axiomaticToIntermediateInduction:
+      forall n m tp1 tp1' tp2 Ex1 Ex2
+        (Hexec: stepN (Rstep cstep genv po po) n tp1 Ex1 tp1' (Empty_set _))
+        (Hsim: sim m tp1 Ex1 tp2 Ex2),
+      exists Ex2',
+        sim (n + m) tp1' (Empty_set _) tp2 Ex2'.
+    Proof.
+      intros n.
+      induction n; intros.
+      - inv Hexec.
+        simpl.
+        eexists; eauto.
+      - inversion Hexec as [| ? ? ? tp0 Ex0]; subst.
+        clear Hexec.
+        eapply step_po_sim in HRstep; eauto.
+        destruct HRstep as (Ex0' & Hsim').
+        destruct (IHn _ _ _ _ _ _ HRstepN' Hsim') as (Ex2' & Hsim'').
+        rewrite <- plus_n_Sm in Hsim''.
+        eexists;
+          now eauto.
+    Qed.
+     
     (* Goal *)
     Theorem axiomaticToIntermediate:
       forall n tp tp'
-        (Hexec: Rsteps cstep genv po po n (tp, FullE) (tp', Empty_set _))
-        (Hvalid: validSC Ex po sc),
-        Rsteps cstep genv po sc n (tp, FullE) (tp', Empty_set _).
+        (Hexec: stepN (Rstep cstep genv po po) n tp FullE tp' (Empty_set _))
+        (Hvalid: validSC FullE po sc),
+        [tp, FullE] ==>{n} [tp', Empty_set _].
     Proof.
-      Admitted.
+      intros.
+      (** Initial state in simulation *)
+      assert (Hsim: sim 0 tp FullE tp (Empty_set _)).
+      { destruct Hvalid.
+        constructor; eauto with Ensembles_DB.
+        - now constructor.
+        - intros ? Hcontra;
+            now inv Hcontra.
+      }
+      eapply axiomaticToIntermediateInduction in Hsim; eauto.
+      destruct Hsim as (Ex2' & Hsim).
+      rewrite add_0_r in Hsim.
+      destruct Hsim.
+      rewrite Union_Empty_set_neut_l in set_inv0.
+      apply same_set_eq in set_inv0; subst.
+      assumption.
+    Qed.
 
-  
+  End AxiomaticIntermediate.
+End AxiomaticIntermediate.
