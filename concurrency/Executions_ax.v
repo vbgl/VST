@@ -107,43 +107,117 @@ Module ValidSC.
     Definition lab := lab.
     Coercion lab : id >-> ConcLabels.
 
+    Section ReadsFrom.
     (** Validity of read events in the execution:
         - Every read reads from some write that is on
           the same location and has the same value
         - and is ordered before it according to the sc order
-        - and there is no other write on the same location between them*) 
-    Definition reads_from (sc : relation id) :=
-      forall e1 : id, isRead e1 = true ->
-            exists e2 : id,
-              isWrite e2 = true /\
-              loc e1 = loc e2 /\
-              mval e1 = mval e2 /\
-              sc e2 e1 /\
-              ~exists e3, (sc e3 e1 /\ sc e2 e3 /\ loc e1 = loc e3).
-    (* Notice that loc e1 = loc e3 is only sound with no mixed-size accesses *)
+        - and there is no other write on the same location between them*)
+
+    Definition included (slice footprint: Z*Z) : Prop :=
+      forall ofs, Intv.In ofs slice -> Intv.In ofs footprint.
+
+    Definition in_slice (ofs : Z) (slice : Z*Z) : Prop :=
+      Intv.In ofs slice.
+
+    Variable rf : id -> id -> Z*Z -> Prop.
+
+    Definition rf_valid : Prop :=
+      (** forall e1 e2 that are in the reads-from relation under slice *)
+      forall (e1 e2 : id) (slice: Z*Z),
+        rf e1 e2 slice ->
+
+      (** e1 will be a write and e2 a read*)
+        exists (pf1 : isWrite e1 = true)
+          (pf2 : isRead e2 = true),
+
+      (** the slice relating them is included in the footprints of both *)
+        let '(b1, ofs1, sz1) := loc (or_introl pf1) in
+        let '(b2, ofs2, sz2) := loc (or_intror pf2) in
+        b1 = b2 /\
+        included slice (ofs1, ofs1 + sz1)%Z /\
+        included slice (ofs2, ofs2 + sz2)%Z /\
+
+      (** and their values are per-byte equal on each byte of the slice*)
+        forall ofs', in_slice ofs' slice ->
+                List.nth (Z.to_nat (ofs' - ofs1)%Z) (mval (or_introl pf1)) Undef =
+                List.nth (Z.to_nat (ofs' - ofs2)%Z) (mval (or_intror pf2)) Undef.
+        
+    Definition reads_from_wf : Prop :=
+      (** for every read event *)
+      forall (er : id) (Hisread:isRead er = true),
+        
+      (** there exists writes and slices of that writes *)
+      exists ws : list (id * (Z*Z)),
+
+        (** such that the slices of every two writes are disjoint *)
+        (forall w1 w2,
+            List.In w1 ws /\ List.In w2 ws ->
+            Intv.disjoint (snd w1) (snd w2)) /\
+
+        (** and every write+slice in the list is rf-related with the read*)
+        (forall w, List.In w ws ->
+              rf (fst w) er (snd w)) /\
+
+        (** and all bytes in the footprint of the read belong to some slice in the list,
+            i.e. the read is fully determined *)
+        (forall ofs',
+            let '(b, ofs, sz) := loc (or_intror Hisread) in
+            Intv.In ofs' (ofs, ofs + sz)%Z <->
+            exists w, List.In w ws /\ Intv.In ofs' (snd w)).
+
+    Lemma rf_isWrite:
+      forall (Hvalid: rf_valid) {ew er slice}
+        (Hrf: rf ew er slice),
+        isWrite ew = true.
+    Proof.
+      intros.
+      destruct (Hvalid _ _ _ Hrf) as [? ?];
+        now assumption.
+    Qed.
+
+
+    Definition reads_from_sc (sc : relation id) (Hvalid: rf_valid) : Prop :=
+      (** if [er] reads [slice] from [ew] and ofs' is one of the bytes read*)
+      forall ew er slice
+        (Hrf: rf ew er slice)
+        ofs'
+        (Hofs': Intv.In ofs' slice),
+
+        (** then (ew, er) \in scr: ew is immediately before er in the sc order, between all writes that write this byte *)
+        immediate (restr sc (fun x => exists (isWrite_x: isWrite x = true),
+                                 let '(bx, ofsx, szx) := loc (or_introl isWrite_x) in
+                                 let '(b, ofs, sz) := loc (or_introl (rf_isWrite Hvalid Hrf)) in
+                                 b = bx /\ Intv.In ofs' (ofsx, ofsx + szx)%Z)) ew er.
+
+    End ReadsFrom.
 
     (** Valid sequential consistent executions:
         - program order [po] is [po_well_formed]
         - [po] is defined on elements of the execution only
         - [sc] is a total strict order over all events
         - [po] is included in [sc]
+        - specification of [rf]
+        - [rf] is well formed, i.e. all the reads read from some writes.
         - reads read from the latest write before them according to [sc]
         - all accesses have the same size. *)
     (* are accesses aligned? our threadwise semantics only support aligned
        accesses so it can be proven as a corollary, but should we require it of
        valid executions? *)
-    Record validSC (Ex : events) (po sc : relation id) :=
+    Record validSC (Ex : events) (po sc : relation id) (rf: id -> id -> Z * Z -> Prop) :=
       { wf_po    : po_well_formed po;
         po_onto  : forall e1 e2, po e1 e2 -> e1 \in Ex /\ e2 \in Ex;
         total_sc : strict_total_order sc Ex;
         po_sc    : inclusion _ po sc;
-        rf_sc    : reads_from sc;
-        no_mix   : exists sz, forall e1, e1 \in Ex ->
-                                match loc e1 with
-                                | Some (_, ofs, sz') =>
-                                  sz = sz'
-                                | None => True
-                                end
+        rf_val   : rf_valid rf;
+        rf_wf    : reads_from_wf rf;
+        rf_sc    : reads_from_sc rf sc rf_val;
+        (* no_mix   : exists sz, forall e1, e1 \in Ex -> *)
+        (*                         match loc e1 with *)
+        (*                         | Some (_, ofs, sz') => *)
+        (*                           sz = sz' *)
+        (*                         | None => True *)
+        (*                         end *)
       }.
 
 

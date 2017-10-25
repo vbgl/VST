@@ -21,8 +21,8 @@ Section Labels.
     { E        :> Type;
       isReadE  : E -> bool;
       isWriteE : E -> bool;
-      locE     : E -> option (block * Z * Z);
-      mvalE    : E -> option (list memval)
+      locE     : forall {e}, isWriteE e = true \/ isReadE e = true -> (block * Z * Z);
+      mvalE    : forall {e}, isWriteE e = true \/ isReadE e = true -> list memval
     }.
 
   Context {lbl : Labels}.
@@ -47,17 +47,26 @@ Section Labels.
     | Ev e => isWriteE e
     end.
 
-  Definition loc (e : ConcLabels) :=
-    match e with
-    | Spawn _ => None
-    | Ev e => locE e
-    end.
+  Definition loc {e : ConcLabels} (pf: isWrite e = true \/ isRead e = true) : block * Z * Z.
+    refine (match e return (isWrite e = true \/ isRead e = true -> block * Z * Z) with
+            | Spawn _ => fun pf => _ 
+            | Ev e => fun pf => locE pf
+            end pf).
+    simpl in pf.
+    exfalso. destruct pf; now discriminate.
+  Defined.
 
-  Definition mval (e : ConcLabels) :=
-    match e with
-    | Spawn _ => None
-    | Ev e => mvalE e
-    end.
+      
+  Definition mval {e : ConcLabels} (pf: isWrite e = true \/ isRead e = true) : list memval.
+    refine (match e return (isWrite e = true \/ isRead e = true -> list memval) with
+            | Spawn _ => fun pf => _ 
+            | Ev e => fun pf => mvalE pf
+            end pf).
+    exfalso.
+    simpl in pf;
+      destruct pf;
+      now discriminate.
+  Defined.
 
   (** By definition there are no [Spawn] events in
       a [concLabelsofE] list *)
