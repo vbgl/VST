@@ -220,7 +220,6 @@ Module ValidSC.
         (*                         end *)
       }.
 
-
     (** ** Projection Lemmas on records *)
     Lemma po_well_formed_PO {R: relation id} :
       po_well_formed R ->
