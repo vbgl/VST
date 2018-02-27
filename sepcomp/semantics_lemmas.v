@@ -1032,3 +1032,56 @@ destruct CS. eapply corestepN_rdonly; eassumption.
 Qed.
 
 End memstepN.
+
+Inductive MidStepResult {C M:Type} :=
+  MS_Ext: C -> M -> external_function -> list val -> MidStepResult
+| MS_Ret: C -> M -> val -> MidStepResult
+| MS_Div: MidStepResult.
+
+Inductive midstep {G C M} (SEM : CoreSemantics G C M) g (c:C) (m:M):
+          @MidStepResult C M -> Prop:=
+  ms_ext: forall c' m' f args,
+          corestep_star SEM g c m c' m' ->
+          at_external SEM c' = Some (f,args) ->
+          midstep SEM g c m (MS_Ext c' m' f args)
+| ms_ret: forall c' m' v,
+          corestep_star SEM g c m c' m' ->
+          halted SEM c' = Some v ->
+          midstep SEM g c m (MS_Ret c' m' v)
+| ms_div: forall (H: forall n, exists c' m', corestepN SEM g n c m c' m'),
+          midstep SEM g c m MS_Div.
+
+Lemma midtep_preserves_corestep_rev {G C M} (SEM : CoreSemantics G C M) g:
+   forall c m  c' m', corestep SEM g c m c' m' ->
+   forall R, midstep SEM g c' m' R -> midstep SEM g c m R.
+Proof. intros. inv H0.
++ constructor; trivial. destruct H1. exists (S x), c', m'; split; trivial.
++ constructor; trivial. destruct H1. exists (S x), c', m'; split; trivial.
++ constructor; intros. destruct n. 
+  - eexists; eexists; reflexivity. 
+  - simpl. destruct (H1 n) as [cc [mm CM]].
+    exists cc, mm, c', m'. split; trivial.
+Qed. 
+
+Lemma midtep_preserves_corestep {G C M} (SEM : CoreSemantics G C M) g
+   (DET: forall c m c1 m1 c2 m2, corestep SEM g c m c1 m1 -> corestep SEM g c m c2 m2 -> (c1,m1)=(c2,m2)):
+   forall c m  c' m', corestep SEM g c m c' m' ->
+   forall R, midstep SEM g c m R -> midstep SEM g c' m' R.
+Proof. intros. inv H0.
++ constructor; trivial.
+  destruct H1 as [n N].
+  induction n; simpl in *.
+  - inv N. apply corestep_not_at_external in H. congruence.
+  - destruct N as [cc [mm [STEP STEPS]]]. specialize (DET _ _ _ _ _ _ H STEP); inv DET.
+    exists n; trivial.
++ constructor; trivial.
+  destruct H1 as [n N].
+  induction n; simpl in *.
+  - inv N. apply corestep_not_halted in H. congruence.
+  - destruct N as [cc [mm [STEP STEPS]]]. specialize (DET _ _ _ _ _ _ H STEP); inv DET.
+    exists n; trivial.
++ constructor; intros. destruct (H1 (S n)) as [cc [mm MM]]; clear H1; simpl in MM.
+  destruct MM as [c1 [m1 [STEP STEPS]]].
+  specialize (DET _ _ _ _ _ _ H STEP); inv DET.
+  exists cc, mm; trivial.
+Qed.

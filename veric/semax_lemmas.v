@@ -1830,3 +1830,137 @@ apply imp_derives; [ apply derives_refl | ].
 apply guard_safe_adj; [ trivial | intros].
 apply safe_seq_Slabel; trivial.
 Qed.
+(*
+Lemma prop_imp_right: forall A (agA: ageable A) (P: Prop) (Q R: pred A),
+   (P -> (Q |-- R)) ->
+   Q |-- !! P --> R.
+Proof.
+intros.
+intros w ? ? ? ?.
+apply H; auto. eapply pred_nec_hereditary; eauto.
+Qed.
+
+Lemma imp_right:
+ forall A (agA: ageable A) (P Q R : pred A),
+  P && Q |-- R ->
+  P |-- Q --> R.
+Proof.
+intros.
+intros ? ? ? ? ?.
+apply H.
+split; auto.
+eapply pred_nec_hereditary; eauto.
+Qed.
+
+Lemma prop_andp_subp':
+  forall (A : Type) (agA : ageable A) (P : Prop) (S: pred nat) (Q R : pred A),
+  (P -> S |-- Q >=> R)%pred
+  ->  (S  |--  !! P && Q >=> R)%pred.
+Proof.
+intros.
+intros ? ? ? ? ? ? [? ?].
+eapply H; eauto.
+Qed.
+Locate semax. (*
+Search semax fashR.
+Parameter P:environ -> mpred.
+Check (fun rho => |> P rho).
+Search mpred @box.
+Check (@derives rmap ag_rmap (fun rho =>  |> P rho)).
+Search ageable rmap.*)
+Lemma semax_goto c:
+forall (P' : forall _ : environ, mpred) (l : positive)
+  (Espec : OracleKind) (cs : compspecs) (Delta : tycontext)
+  (P : environ -> mpred) (R : ret_assert)
+  (_ : @eq (option Annotation)
+         (@PTree.get Annotation l (annotations Delta))
+         (@Some Annotation (StrongAnnotation P'))),
+  (*@derives rmap ag_rmap (fun rho =>  |> P rho) P' ->*)
+  (*(_ : derives 
+         (@andp (forall _ : environ, mpred) NatDed(*(@LiftNatDed' mpred Nveric)*)
+            (@lift1 Prop mpred _(*(@prop mpred Nveric)*)
+               (fun rho : environ => typecheck_environ Delta rho)) P) P')*)
+(|> @semax cs Espec Delta P' c R) ->
+@semax cs Espec Delta P (Sgoto l) R.
+Proof. intros. rewrite semax_eq.
+apply allp_right; intros psi.
+apply allp_right; intros Delta'.
+apply prop_imp_right; intros TC.
+apply imp_right.
+apply andp_left2.
+apply allp_right; intros k.
+apply allp_right; intros F.
+apply imp_right.
+rewrite andp_comm. rewrite andp_assoc.
+apply prop_andp_left; intros CL.
+eapply derives_trans.
+2: apply guard_safe_adj with (k1:=k); trivial.
+admit.
+intros. unfold jsafeN, juicy_safety.safeN in H0. simpl in H0.
+Check necR. Print RA_break.
+Check later.
+red. inv H0; [ apply safeN_0 | | discriminate | discriminate].
+simpl in *. Print safeN_. unfold safeN_ in H2. eapply safeN_step.
++ split. 
+  - eapply step_goto. simpl in *. Print cl_step. simpl. constructor. simpl. Print safeN_. simpl in *. safeN_external. econstructor. 2: simpl.
+red; intros n [RG B]. Check guard_safe_adj. simpl. Hn. Search andp. destruct Hn.
+Check rguard. Check believe. Check guard.
+apply guard_safe_adj. [ trivial | intros].
+unfold guard. unfold rguard. unfold believe. unfold derives. intros n. intros.
+destruct H0. intros tx vx. simpl; intros.
+simpl in *.
+red. simpl. unfold juicy_safety.safeN; simpl. Print safeN_.
+subst a'. simpl.
+destruct  (@level rmap ag_rmap (m_phi jm)). 
++ (*case 0*) admit. 
++ (* case S n0*)
+  eapply safeN_step.
+  - constructor. econstructor. Print safeN_. ).
+apply necR_level in H3.
+Search necR.
+econstructor.
++ simpl.
+rewrite eqp_nat.
+Search fash imp. split. Search andp.
+Search derives andp.
+apply andp_left. ; intros CL.
+specialize (@prop_imp_derives).
+
+ destruct cs. simpl in *. unfold genv in psi.
+specialize (prop_imp_derives (tycontext_sub Delta Delta' /\ psi = @cenv_cs cs)).
+Search derives prop.
+unfold imp.
+
+Search derives exist. 
+apply prop_imp_derives; intros TC.
+Search derives allp. 
+ rewrite semax_eq in H; (eapply derives_trans; try eassumption; try clear H).
++ apply allp_derives; intros psi.
+apply allp_derives; intros Delta'.
+apply prop_imp_derives; intros TC.
+apply imp_derives; [ apply derives_refl | ].
+apply allp_derives; intros k.
+apply allp_derives; intros F.
+split.
+
+Lemma semax_goto:
+forall (P' : forall _ : environ, mpred) (l : positive)
+  (Espec : OracleKind) (cs : compspecs) (Delta : tycontext)
+  (P : forall _ : environ, mpred) (R : ret_assert)
+  (_ : @eq (option Annotation)
+         (@PTree.get Annotation l (annotations Delta))
+         (@Some Annotation (StrongAnnotation P')))
+  (_ : @derives (forall _ : environ, mpred) (@LiftNatDed' mpred Nveric)
+         (@andp (forall _ : environ, mpred) (@LiftNatDed' mpred Nveric)
+            (@lift1 Prop mpred (@prop mpred Nveric)
+               (fun rho : environ => typecheck_environ Delta rho)) P) P'),
+@semax cs Espec Delta P (Sgoto l) R.
+
+     : forall (P' : environ -> mpred) l (Espec : OracleKind)
+         (cs : compspecs) (Delta : tycontext) (P : environ -> mpred)
+         (R : ret_assert),
+       PTree.get l (annotations Delta) = Some (StrongAnnotation P') ->
+derives (andp (lift1 prop (fun rho : environ => typecheck_environ Delta rho)) P) P'
+(*       derives (andp (local (tc_environ Delta)) P) P' -> *)
+       semax Delta P (Sgoto l) R.
+Admitted.*)
