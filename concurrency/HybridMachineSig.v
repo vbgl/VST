@@ -550,7 +550,7 @@ Module HybridMachineSig.
               {machineSig: MachineSig}.
 
       Instance DilMem : DiluteMem :=
-        {| diluteMem := id |}.
+        {| diluteMem := fun x => x |}.
       intros.
       split; auto.
       Defined.
@@ -587,10 +587,10 @@ Module HybridMachineSig.
 
       (* TODO: Make a new file with safety lemmas. *)
       Lemma csafe_reduce:
-        forall ge sched tp mem n m,
-          csafe ge (sched, [::], tp) mem n ->
+        forall ge sched tp tr mem n m,
+          csafe ge (sched, tr, tp) mem n ->
           m <= n ->
-          csafe ge (sched, [::], tp) mem m.
+          csafe ge (sched, tr, tp) mem m.
       Proof.
         Admitted.
       

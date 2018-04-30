@@ -3522,7 +3522,8 @@ Module CoreInjections.
             (Hinit: initial_core semSem h m c_new vf arg),
           (* (Hf: forall b b', f b = Some b' -> Mem.valid_block m b), *)
           exists c_new' : semC,
-            initial_core semSem h m' c_new' vf' arg';
+            initial_core semSem h m' c_new' vf' arg' /\
+            core_inj f c_new c_new';
         (* exists f',  *)
         (*   core_inj f' c_new c_new' /\ *)
         (* match om with *)
