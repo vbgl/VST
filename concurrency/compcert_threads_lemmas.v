@@ -1739,9 +1739,9 @@ Module SimProofs.
       apply (safeCoarse Hsim).
     - (** Proof of weak simulation between threads *)
       intros j pfcj pffj'.
-      (*TODO: return here*)
       assert (pffj: containsThread tpf j)
-        by (eauto with fstep).
+        by (eapply fstep_containsThread';
+            now eauto).
       eapply weak_tsim_fstep with (pffi := pff); eauto.
     - (** Proof of seperation of injection pool*)
       (*TODO: comment this proof*)
@@ -1752,7 +1752,7 @@ Module SimProofs.
         try subst k;
         destruct (i == j) eqn:Hij; move/eqP:Hij=>Hij; subst.
       + by exfalso.
-      + pf_cleanup.
+      + Tactics.pf_cleanup.
         rewrite gssFP. rewrite gsoFP; auto.
         intros b b' b2 b2' Hf Hf' Hfi' Hfj.
         destruct (fp i pfc b) as [b2''|] eqn:Hfi.
@@ -1777,7 +1777,7 @@ Module SimProofs.
         erewrite restrPermMap_valid in Hcodomain.
         intros Hcontra. subst.
           by auto.
-      + pf_cleanup.
+      + Tactics.pf_cleanup.
         rewrite gssFP.
         rewrite gsoFP; auto.
         intros b b' b2 b2' Hf Hf' Hfk' Hfj'.
@@ -1810,7 +1810,7 @@ Module SimProofs.
       intros j pfcj pffj'.
       destruct (i == j) eqn:Heq; move/eqP:Heq=>Heq.
       { subst j. exists tpc'', mc''.
-        pf_cleanup. rewrite gssFP.
+        Tactics.pf_cleanup. rewrite gssFP.
         split;
           first by (eapply ren_incr_trans; eauto).
         split.
@@ -1836,8 +1836,12 @@ Module SimProofs.
         (** Proof of block ownership for threads*)
         intros k pffk' Hik b1 b2 ofs Hfi' Hf.
         assert (pffk: containsThread tpf k)
-          by (eauto with fstep).
-        erewrite <- gsoThreadR_fstep with (pfj := pffk); eauto.
+          by (eapply fstep_containsThread';
+              now eauto).
+        erewrite <- @StepLemmas.gsoThreadR_step with (Sch:= HybridFineMachine.scheduler)
+                                                    (DilMem := FineDilMem) (pfj := pffk)
+          by (eauto; unfold fmachine_step in HstepF_empty; simpl in HstepF_empty;
+              eapply HstepF_empty).
         destruct (valid_block_dec mc' b1) as [Hvalidmc'b1 | Hinvalidmc'b1].
         (** Case [b1] is a valid block in [mc']*)
         assert (Hfb1 := (domain_valid (weak_obs_eq (obs_eq_data Htsim))) b1).
@@ -1881,6 +1885,7 @@ Module SimProofs.
         eapply Hfi'; by eexists; eauto.
       }
       { (** Proof of strong simulation for threads different than i*)
+        (*TODO return here*)
         simpl.
         rewrite gsoFP; auto.
         erewrite if_false by (apply/eqP; intros Hcontra; auto).
