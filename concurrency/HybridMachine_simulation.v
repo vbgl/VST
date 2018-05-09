@@ -27,13 +27,9 @@ Require Import VST.concurrency.safety.
 Require Import VST.concurrency.coinductive_safety.
 
 
-Require Import VST.concurrency.HybridMachineSig_rec.
+Require Import VST.concurrency.HybridMachineSig.
 
 Require Import VST.veric.res_predicates.
-Require Import VST.veric.Clight_new.
-Require Import VST.veric.Clightnew_coop.
-Require Import VST.ccc26x86.Asm_coop.
-Require Import VST.ccc26x86.Asm_event.
 
 Require Import VST.concurrency.HybridMachineSig.
 Require Import VST.concurrency.HybridMachine.
@@ -47,7 +43,7 @@ Require Import VST.concurrency.machine_semantics_lemmas.
 
 Section HybridSimulation.
 
-  Variable (Sems Semt : Semantics_rec).
+  Variable (Sems Semt : Semantics).
   Variable (hb1 hb2: option nat).
   Variable (Resources : Resources_rec).
   Variable (MatchCAsm: meminj -> corestate -> mem -> Asm_coop.state -> mem -> Prop).

@@ -25,10 +25,12 @@ Module Type ErasureSig.
   Import HybridMachineSig.
 
   Declare Instance Sem : Semantics.
-
+  
   Declare Instance JR : Resources.
   Declare Instance JTP : ThreadPool.ThreadPool.
   Declare Instance JMS : MachineSig.
+  Declare Instance DelMem : DiluteMem.
+  Declare Instance scheduler : Scheduler.
   Declare Instance JuicyMachine : HybridMachine.
   Notation JMachineSem := (MachineSemantics(HybridMachine := JuicyMachine)).
   Notation jres := (@res JR).
@@ -85,27 +87,27 @@ Axiom init_diagram:
       (vals : list Values.val) (m : mem)
       (rmap: jres)
       (pmap: dres)
-      main genv h,
+      main h,
       init_inj_ok j m ->
       match_rmap_perm rmap pmap ->
       no_locks_perm rmap ->
-   initial_core (JMachineSem U (Some rmap)) h genv m main vals = Some ((U, nil, js),None) ->
+   initial_core (JMachineSem U (Some rmap)) h m (U, nil, js) main vals ->
    exists (ds : dstate),
-     initial_core (DMachineSem U (Some pmap)) h genv m main vals = Some ((U, nil, ds),None) /\
+     initial_core (DMachineSem U (Some pmap)) h m (U, nil, ds) main vals /\
      invariant ds /\
      match_st js ds.
 
   Axiom core_diagram:
     forall (m : mem)  (U0 U U': _) rmap pmap
      (ds : dstate) dtr (js js': jstate) jtr jtr'
-     (m' : mem) genv,
-   corestep (JMachineSem U0 rmap) genv (U, jtr, js) m (U', jtr', js') m' ->
+     (m' : mem),
+   corestep (JMachineSem U0 rmap) (U, jtr, js) m (U', jtr', js') m' ->
    match_st js ds ->
    invariant ds ->
    exists (ds' : dstate),
      invariant ds' /\
      match_st js' ds' /\
-     exists dtr', corestep (DMachineSem U0 pmap) genv (U, dtr, ds) m (U', dtr', ds') m'.
+     exists dtr', corestep (DMachineSem U0 pmap) (U, dtr, ds) m (U', dtr', ds') m'.
 
   Axiom halted_diagram:
     forall U (ds : dmachine_state) (js : jmachine_state)  rmap pmap,

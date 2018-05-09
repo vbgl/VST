@@ -34,7 +34,7 @@ Variable ge_inv : G1 -> G2 -> Prop.
 
 Variable init_inv : meminj -> G1 -> list val -> M1 -> G2 -> list val -> M2 -> Prop.
 
-Variable halt_inv : (*SM_Injection*)meminj -> G1 -> val -> M1 -> G2 -> val -> M2 -> Prop.
+Variable halt_inv : meminj -> G1 -> val -> M1 -> G2 -> val -> M2 -> Prop.
 
 Record Machine_sim  :=
 { core_data : Type
@@ -44,11 +44,11 @@ Record Machine_sim  :=
 ; genv_inv : ge_inv ge1 ge2
 ; core_initial :
     forall j c1 vals1 m1 vals2 m2,
-    initial_machine Sem1 ge1 main vals1 = Some c1 ->
+    initial_machine Sem1 ge1 m1 c1 main vals1 ->
     init_inv j ge1 vals1 m1 ge2 vals2 m2 ->
     exists (*mu*) cd c2,
       (*as_inj mu = j*
-      /\*) initial_machine Sem2 ge2 main vals2 = Some c2
+      /\*) initial_machine Sem2 ge2 m2 c2 main vals2
       /\ match_state cd j c1 m1 c2 m2
 ; thread_diagram :
     forall U st1 m1 st1' m1',
@@ -75,11 +75,15 @@ Record Machine_sim  :=
     exists j v2,
        halt_inv j ge1 v1 m1 ge2 v2 m2
        /\ conc_halted Sem2 U c2 = Some v2
+
+(*TODO:
+  We will need something like this, but can't be used other than in machines!*)
+(*
 ; thread_running:
     forall cd mu c1 m1 c2 m2 ,
       match_state cd mu c1 m1 c2 m2 ->
       forall i, runing_thread Sem1 c1 i <-> runing_thread Sem2 c2 i
-      (* runing_thread Sem1 c1 = runing_thread Sem2 c2 *)
+*)
  }.
 
 End Machine_sim.
