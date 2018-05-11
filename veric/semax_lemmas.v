@@ -350,7 +350,8 @@ apply semax'_post; auto.
 Qed.
 
 Lemma cl_corestep_fun': forall ge, corestep_fun (cl_core_sem ge).
-Proof. repeat intro. eapply cl_corestep_fun; eauto. Qed.
+Proof. repeat intro. eapply cl_corestep_fun; simpl in *; eauto.
+Qed.
 Hint Resolve cl_corestep_fun'.
 
 Lemma derives_skip:
@@ -403,7 +404,7 @@ Qed.
 
 Lemma jsafe_corestep_forward:
   forall ge c m c' m' n z,
-    jstep (cl_core_sem ge) ge c m c' m' -> jsafeN (@OK_spec Espec) ge (S n) z c m ->
+    jstep (cl_core_sem ge) c m c' m' -> jsafeN (@OK_spec Espec) ge (S n) z c m ->
     jm_bupd z (jsafeN (@OK_spec Espec) ge n z c') m'.
 Proof.
   intros.
@@ -445,10 +446,10 @@ split; auto.
 split; auto.
 Qed.
 
-Lemma semax_extract_later_prop:
-  forall {CS: compspecs} Delta (PP: Prop) P c Q,
-           (PP -> semax Espec Delta (fun rho => (P rho)) c Q) ->
-           semax Espec Delta (fun rho => (|> !!PP) && P rho) c Q.
+Lemma semax_remove_later_prop:
+  forall {CS: compspecs} Delta PP P c Q,
+           semax Espec Delta (fun rho => (!!(PP rho) && P rho)) c Q ->
+           semax Espec Delta (fun rho => (|> !!(PP rho)) && P rho) c Q.
 Proof.
 intros.
 intro w.
@@ -456,39 +457,46 @@ rewrite semax_fold_unfold.
 intros gx Delta'.
 apply prop_imp_i; intros [TS HGG].
 intros w' ? ? k F w'' ? ?.
-intros te ve w''' ? w4 ? [[[? ?] ?] ?].
+intros te ve w''' ? w4 ? [[? ?] ?].
 
 replace ((F (construct_rho (filter_genv gx) ve te) *
-        (|>(!!PP) && (P (construct_rho (filter_genv gx) ve te))))%pred) with
-        (|>!!PP && (F (construct_rho (filter_genv gx) ve te) *
-         (P (construct_rho (filter_genv gx) ve te)))%pred) in H8.
+        (|>(!!PP (construct_rho (filter_genv gx) ve te)) && (P (construct_rho (filter_genv gx) ve te))))%pred) with
+        (|>!!(PP (construct_rho (filter_genv gx) ve te)) && (F (construct_rho (filter_genv gx) ve te) *
+         (P (construct_rho (filter_genv gx) ve te)))%pred) in H7.
 Focus 2. {
   rewrite (sepcon_comm (F (construct_rho (filter_genv gx) ve te))
-    (|>!!PP && P (construct_rho (filter_genv gx) ve te))).
+    (|>!!(PP (construct_rho (filter_genv gx) ve te)) && P (construct_rho (filter_genv gx) ve te))).
 
  rewrite corable_andp_sepcon1 by (apply corable_later; apply corable_prop).
 
  rewrite sepcon_comm.
  reflexivity.
 } Unfocus.
-destruct H8.
-simpl in H8.
+destruct H7.
+simpl in H7.
 destruct (age1 w4) eqn:?H.
 + assert (age w4 r) by auto.
-  apply age_laterR in H12.
-  specialize (H8 r H12).
-  specialize (H H8); clear PP H8.
+  apply age_laterR in H11.
+  specialize (H7 r H11).
   hnf in H. rewrite semax_fold_unfold in H.
   eapply H. apply necR_refl. split; eassumption.
   apply necR_refl. eassumption. eassumption. eassumption.
   eassumption. eassumption.
   split; auto.
   split; auto.
-  split; auto.
+  rewrite sepcon_andp_prop2; split; auto.
 + apply bupd_intro; repeat intro.
-  eapply af_level1 in H11; [| apply compcert_rmaps.R.ag_rmap].
-  rewrite H11.
+  eapply af_level1 in H10; [| apply compcert_rmaps.R.ag_rmap].
+  rewrite H10.
   constructor.
+Qed.
+
+Lemma semax_extract_later_prop:
+  forall {CS: compspecs} Delta (PP: Prop) P c Q,
+           (PP -> semax Espec Delta (fun rho => (P rho)) c Q) ->
+           semax Espec Delta (fun rho => (|> !!PP) && P rho) c Q.
+Proof.
+  intros; apply semax_remove_later_prop, semax_extract_prop; auto.
 Qed.
 
 Lemma semax_unfold {CS: compspecs}:
@@ -1168,7 +1176,7 @@ Lemma safe_step_forward:
    cl_at_external st = None ->
    jsafeN (@OK_spec Espec) psi (S n) ora st m ->
  exists st', exists m',
-   jstep (cl_core_sem psi) psi st m st' m' /\ jm_bupd ora (jsafeN (@OK_spec Espec) psi n ora  st') m'.
+   jstep (cl_core_sem psi) st m st' m' /\ jm_bupd ora (jsafeN (@OK_spec Espec) psi n ora  st') m'.
 Proof.
  intros.
  inv H0.
@@ -1361,11 +1369,11 @@ Lemma corestep_preservation_lemma:
        filter_seq ctl1 = filter_seq ctl2 ->
       (forall k : list cont', control_as_safe ge n (k ++ ctl1) (k ++ ctl2)) ->
       control_as_safe ge (S n) ctl1 ctl2 ->
-      jstep (cl_core_sem ge) ge (State ve te (c :: l ++ ctl1)) m c' m' ->
+      jstep (cl_core_sem ge) (State ve te (c :: l ++ ctl1)) m c' m' ->
       jm_bupd ora (jsafeN (@OK_spec Espec) ge n ora c') m' ->
    exists c2 : corestate,
      exists m2 : juicy_mem,
-       jstep (cl_core_sem ge) ge (State ve te (c :: l ++ ctl2)) m c2 m2 /\
+       jstep (cl_core_sem ge) (State ve te (c :: l ++ ctl2)) m c2 m2 /\
        jm_bupd ora (jsafeN (@OK_spec Espec) ge n ora c2) m2.
 Proof. intros until m'. intros H0 H4 CS0 H H1.
   remember (State ve te (c :: l ++ ctl1)) as q. rename c' into q'.
@@ -1420,14 +1428,14 @@ Proof. intros until m'. intros H0 H4 CS0 H H1.
    simpl.
      destruct H2 as [H2 [H2b H2c]].
     split3; auto.
-    rewrite <- strip_step. simpl. rewrite strip_step; auto.
+    simpl; rewrite <- strip_step. simpl. rewrite strip_step; auto.
     destruct (IHcl_step c l _ (eq_refl _) _ (eq_refl _) Hb Hc Hg H1 (eq_refl _))
       as [c2 [m2 [? ?]]]; clear IHcl_step.
     exists c2; exists m2; split; auto.
     destruct H2 as [H2 [H2b H2c]].
    simpl.
    split3; auto.
-   rewrite <- strip_step.
+   simpl; rewrite <- strip_step.
    change (strip_skip (Kseq Sskip :: c :: l ++ ctl2)) with (strip_skip (c::l++ctl2)).
    rewrite strip_step; auto. }
   (* continue *)
@@ -1489,7 +1497,7 @@ Focus 1.
   destruct l0; simpl in *.
   hnf in CS0.
   specialize (CS0 ora ve te m0 (S n)).
-  assert (core_semantics.corestep (juicy_core_sem (cl_core_sem ge)) ge (State ve te ctl1) m0 st' m'0).
+  assert (core_semantics.corestep (juicy_core_sem (cl_core_sem ge)) (State ve te ctl1) m0 st' m'0).
   split3; auto.
   pose proof (jsafeN_step (cl_core_sem ge) OK_spec ge _ _ _ _ _ _ H5 H1).
   apply CS0 in H6; auto.
@@ -1507,7 +1515,7 @@ Focus 1.
   destruct l0; simpl in *.
   hnf in CS0.
   specialize (CS0 ora ve te m0 (S n)).
-  assert (core_semantics.corestep (juicy_core_sem (cl_core_sem ge)) ge (State ve te ctl1) m0 st' m'0).
+  assert (core_semantics.corestep (juicy_core_sem (cl_core_sem ge)) (State ve te ctl1) m0 st' m'0).
   split3; auto.
   pose proof (jsafeN_step (cl_core_sem ge) OK_spec ge _ _ _ _ _ _ H5 H1).
   apply CS0 in H6; auto.

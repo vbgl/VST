@@ -34,6 +34,7 @@ Require Import VST.concurrency.Asm_self_simulation.
 
 Require Import VST.concurrency.permissions.
 
+(*This should be removed, change for some _core.v *)
 Require Import VST.concurrency.ClightCoreSemantincsForMachines.
 
 Set Bullet Behavior "Strict Subproofs".

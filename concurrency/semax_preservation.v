@@ -260,7 +260,7 @@ Abort.
 Lemma mem_cohere_step c c' jm jm' Phi (X : rmap) ge :
   mem_cohere' (m_dry jm) Phi ->
   sepalg.join (m_phi jm) X Phi ->
-  corestep (juicy_core_sem (cl_core_sem ge)) ge c jm c' jm' ->
+  corestep (juicy_core_sem (cl_core_sem ge)) c jm c' jm' ->
   exists Phi',
     sepalg.join (m_phi jm') (age_to (level (m_phi jm')) X) Phi' /\
     mem_cohere' (m_dry jm') Phi'.
@@ -507,11 +507,11 @@ Qed.
 
 Ltac jmstep_inv :=
   match goal with
-  | H : JuicyMachine.start_thread _ _ _ _ _  |- _ => inversion H
-  | H : JuicyMachine.resume_thread _ _ _ _   |- _ => inversion H
-  | H : JuicyMachine.threadStep _ _ _ _ _ _           |- _ => inversion H
-  | H : JuicyMachine.suspend_thread _ _ _ _ |- _ => inversion H
-  | H : JuicyMachine.syncStep _ _ _ _ _ _ _           |- _ => inversion H
+  | H : JuicyMachine.start_thread _ _ _ _  |- _ => inversion H
+  | H : JuicyMachine.resume_thread _ _ _   |- _ => inversion H
+  | H : JuicyMachine.threadStep _ _ _ _ _           |- _ => inversion H
+  | H : JuicyMachine.suspend_thread _ _ _ |- _ => inversion H
+  | H : JuicyMachine.syncStep _ _ _ _ _ _           |- _ => inversion H
   | H : JuicyMachine.threadHalted _                   |- _ => inversion H
   | H : JuicyMachine.schedfail _         |- _ => inversion H
   end; try subst.
@@ -939,7 +939,7 @@ Section Preservation.
   (sch : list nat)
   sch'
   (tp tp' : jstate ge)
-  (jmstep : @JuicyMachine.machine_step _ (ClightSemantincsForMachines.ClightSem ge) _ HybridCoarseMachine.DilMem JuicyMachineShell HybridMachineSig.HybridCoarseMachine.scheduler ge (i :: sch) tr tp m sch'
+  (jmstep : @JuicyMachine.machine_step _ (ClightSemantincsForMachines.ClightSem ge) _ HybridCoarseMachine.DilMem JuicyMachineShell HybridMachineSig.HybridCoarseMachine.scheduler (i :: sch) tr tp m sch'
              tr' tp' m')
   (INV : @state_invariant (@OK_ty (Concurrent_Espec unit CS ext_link)) Jspec' _ Gamma (S n) (m, (tr, i :: sch, tp)))
   (Phi : rmap)
@@ -1126,7 +1126,7 @@ Qed. (* Lemma preservation_Kinit *)
       {
         (* get the next step of this particular thread (with safety for all oracles) *)
         assert (next: exists ci' jmi',
-                   corestep (juicy_core_sem (cl_core_sem ge)) ge ci jmi ci' jmi'
+                   corestep (juicy_core_sem (cl_core_sem ge)) ci jmi ci' jmi'
                    /\ forall ora, jm_bupd ora (jsafeN Jspec' ge n ora ci') jmi').
         {
           specialize (safety i cnti).
@@ -1231,7 +1231,7 @@ Qed. (* Lemma preservation_Kinit *)
 
         - (* not a corestep *)
           jmstep_inv. getThread_inv. injection H as <-.
-          pose proof corestep_not_at_external _ _ _ _ _ _ Hcorestep.
+          pose proof corestep_not_at_external _ _ _ _ _ Hcorestep.
           rewrite Ejuicy_sem in H.
           discriminate.
 

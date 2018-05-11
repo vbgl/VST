@@ -50,9 +50,9 @@ Definition thread_func_spec :=
   WITH y : val, x : val * share * val * val
   PRE [ _args OF (tptr tvoid) ]
          let '(ctr, sh, lock, lockt) := x in
-         PROP  ()
+         PROP  (readable_share sh)
          LOCAL (temp _args y; gvar _ctr ctr; gvar _ctr_lock lock; gvar _thread_lock lockt)
-         SEP   ((!!readable_share sh && emp); lock_inv sh lock (cptr_lock_inv ctr);
+         SEP   (lock_inv sh lock (cptr_lock_inv ctr);
                 lock_inv sh lockt (thread_lock_inv sh ctr lock lockt))
   POST [ tptr tvoid ]
          PROP ()
@@ -97,7 +97,7 @@ Proof.
   forward_call (lock, sh, cptr_lock_inv ctr).
   { lock_props.
     unfold cptr_lock_inv; Exists (z + 1).
-    rewrite add_repr; cancel. }
+    entailer!. }
   forward.
 Qed.
 
@@ -124,8 +124,7 @@ Proof.
   forward_call (lockt, sh, thread_lock_R sh ctr lock, thread_lock_inv sh ctr lock lockt).
   { lock_props.
     unfold thread_lock_inv, thread_lock_R.
-    rewrite selflock_eq at 2; cancel.
-    eapply derives_trans; [apply now_later | cancel]. }
+    rewrite selflock_eq at 2; cancel. }
   forward.
 Qed.
 
@@ -145,37 +144,20 @@ Proof.
   destruct split_Ews as (sh1 & sh2 & ? & ? & Hsh).
   forward_call (lockt, Ews, thread_lock_inv sh1 ctr lock lockt).
   { rewrite sepcon_comm; apply sepcon_derives; [apply derives_refl | cancel]. }
-  make_func_ptr _thread_func.
-  set (f_ := gv _thread_func).
-  forward_spawn (val * share * val * val)%type (f_, Vint (Int.repr 0),
-    fun x : val * share * val * val => let '(ctr, sh, lock, lockt) := x in
-      [(_ctr, ctr); (_ctr_lock, lock); (_thread_lock, lockt)], (ctr, sh1, lock, lockt),
-    fun (x : (val * share * val * val)) (_ : val) => let '(ctr, sh, lock, lockt) := x in
-         !!readable_share sh && emp * lock_inv sh lock (cptr_lock_inv ctr) *
-         lock_inv sh lockt (thread_lock_inv sh ctr lock lockt)).
-  { simpl spawn_pre; entailer!.
-    { erewrite gvar_eval_var, !(force_val_sem_cast_neutral_gvar' _ f_) by eauto.
-      split; auto; repeat split; apply gvar_denote_global; auto. }
-    Exists _args; entailer!.
-    rewrite !sepcon_assoc; apply sepcon_derives.
-    { apply derives_refl'. f_equal.
-      f_equal; extensionality.
-      destruct x as (?, x); repeat destruct x as (x, ?); simpl.
-      extensionality; apply pred_ext; entailer!. }
-    erewrite <- lock_inv_share_join; try apply Hsh; auto.
+  forward_spawn _thread_func nullval (ctr, sh1, lock, lockt).
+  { erewrite <- lock_inv_share_join; try apply Hsh; auto.
     erewrite <- (lock_inv_share_join _ _ Ews); try apply Hsh; auto.
     entailer!. }
   forward_call (ctr, sh2, lock).
   forward_call (lockt, sh2, thread_lock_inv sh1 ctr lock lockt).
   unfold thread_lock_inv at 2; unfold thread_lock_R.
-  rewrite selflock_eq.
+  rewrite selflock_eq; Intros.
   forward_call (ctr, sh2, lock).
   Intros z.
-  (* Does call not remove a later? How can we remove it? *)
   forward_call (lock, sh2, cptr_lock_inv ctr).
-  replace_SEP 4 (lock_inv sh1 lockt (thread_lock_inv sh1 ctr lock lockt)) by admit.
   forward_call (lockt, Ews, sh1, thread_lock_R sh1 ctr lock, thread_lock_inv sh1 ctr lock lockt).
   { lock_props.
+    unfold thread_lock_inv, thread_lock_R.
     erewrite <- (lock_inv_share_join _ _ Ews); try apply Hsh; auto; cancel. }
   forward_call (lock, Ews, cptr_lock_inv ctr).
   { lock_props.
