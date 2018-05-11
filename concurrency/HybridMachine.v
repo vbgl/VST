@@ -139,7 +139,7 @@ Module DryHybridMachine.
               (cnt0:containsThread tp tid0)(Hcompat:mem_compatible tp m):
       thread_pool -> mem -> sync_event -> Prop :=
     | step_acquire :
-        forall (tp' tp'':thread_pool) m0 m1 c m' b ofs
+        forall (tp' tp'':thread_pool) marg m0 m1 c m' b ofs
           (pmap : lock_info)
           (pmap_tid' : access_map)
           (virtueThread : delta_map * delta_map)
@@ -153,7 +153,9 @@ Module DryHybridMachine.
           forall
             (Hinv : invariant tp)
             (Hcode: getThreadC cnt0 = Kblocked c)
-            (Hat_external: core_semantics.at_external semSem c m = Some (LOCK, LOCK_SIG, Vptr b ofs::nil))
+            (* To check if the machine is at an external step and load its arguments install the thread data permissions*)
+            (Hrestrict_pmap_arg: restrPermMap (Hcompat tid0 cnt0).1 = marg)
+            (Hat_external: core_semantics.at_external semSem c marg = Some (LOCK, LOCK_SIG, Vptr b ofs::nil))
             (** install the thread's permissions on lock locations*)
             (Hrestrict_pmap0: restrPermMap (Hcompat tid0 cnt0).2 = m0)
             (** To acquire the lock the thread must have [Readable] permission on it*)
@@ -178,7 +180,7 @@ Module DryHybridMachine.
                               (Some virtueThread))
 
     | step_release :
-        forall (tp' tp'':thread_pool) m0 m1 c m' b ofs virtueThread virtueLP pmap_tid' rmap
+        forall (tp' tp'':thread_pool) marg m0 m1 c m' b ofs virtueThread virtueLP pmap_tid' rmap
           (Hbounded: if isCoarse then
                        ( sub_map virtueThread.1 (getMaxPerm m).2 /\
                          sub_map virtueThread.2 (getMaxPerm m).2)
@@ -196,7 +198,9 @@ Module DryHybridMachine.
           forall
             (Hinv : invariant tp)
             (Hcode: getThreadC cnt0 = Kblocked c)
-            (Hat_external: core_semantics.at_external semSem c m =
+            (* To check if the machine is at an external step and load its arguments install the thread data permissions*)
+            (Hrestrict_pmap_arg: restrPermMap (Hcompat tid0 cnt0).1 = marg)
+            (Hat_external: core_semantics.at_external semSem c marg =
                            Some (UNLOCK, UNLOCK_SIG, Vptr b ofs::nil))
             (** install the thread's permissions on lock locations *)
             (Hrestrict_pmap0: restrPermMap (Hcompat tid0 cnt0).2 = m0)
@@ -222,7 +226,7 @@ Module DryHybridMachine.
                      (release (b, Ptrofs.intval ofs)
                               (Some virtueLP))
     | step_create :
-        forall (tp_upd tp':thread_pool) c b ofs arg virtue1 virtue2
+        forall (tp_upd tp':thread_pool) c marg b ofs arg virtue1 virtue2
           (Hbounded: if isCoarse then
                        ( sub_map virtue1.1 (getMaxPerm m).2 /\
                          sub_map virtue1.2 (getMaxPerm m).2)
@@ -240,7 +244,9 @@ Module DryHybridMachine.
           forall
             (Hinv : invariant tp)
             (Hcode: getThreadC cnt0 = Kblocked c)
-            (Hat_external: core_semantics.at_external semSem c m = Some (CREATE, CREATE_SIG, Vptr b ofs::arg::nil))
+            (* To check if the machine is at an external step and load its arguments install the thread data permissions*)
+            (Hrestrict_pmap_arg: restrPermMap (Hcompat tid0 cnt0).1 = marg)
+            (Hat_external: core_semantics.at_external semSem c marg = Some (CREATE, CREATE_SIG, Vptr b ofs::arg::nil))
             (** we do not need to enforce the almost empty predicate on thread
            spawn as long as it's considered a synchronizing operation *)
             (Hangel1: permMapJoin newThreadPerm.1 threadPerm'.1 (getThreadR cnt0).1)
@@ -253,12 +259,14 @@ Module DryHybridMachine.
 
 
     | step_mklock :
-        forall  (tp' tp'': thread_pool) m1 c m' b ofs pmap_tid',
+        forall  (tp' tp'': thread_pool) marg m1 c m' b ofs pmap_tid',
           let: pmap_tid := getThreadR cnt0 in
           forall
             (Hinv : invariant tp)
             (Hcode: getThreadC cnt0 = Kblocked c)
-            (Hat_external: core_semantics.at_external semSem c m = Some (MKLOCK, UNLOCK_SIG, Vptr b ofs::nil))
+            (* To check if the machine is at an external step and load its arguments install the thread data permissions*)
+            (Hrestrict_pmap_arg: restrPermMap (Hcompat tid0 cnt0).1 = marg)
+            (Hat_external: core_semantics.at_external semSem c marg = Some (MKLOCK, UNLOCK_SIG, Vptr b ofs::nil))
             (** install the thread's data permissions*)
             (Hrestrict_pmap: restrPermMap (Hcompat tid0 cnt0).1 = m1)
             (** To create the lock the thread must have [Writable] permission on it*)
@@ -287,7 +295,7 @@ Module DryHybridMachine.
             ext_step genv cnt0 Hcompat tp'' m' (mklock (b, Ptrofs.intval ofs))
 
     | step_freelock :
-        forall  (tp' tp'': thread_pool) c b ofs pmap_tid' m1 pdata rmap
+        forall  (tp' tp'': thread_pool) c marg b ofs pmap_tid' m1 pdata rmap
            (Hbounded: if isCoarse then
                         ( bounded_maps.bounded_nat_func' pdata LKSIZE_nat)
                       else
@@ -296,7 +304,9 @@ Module DryHybridMachine.
           forall
             (Hinv: invariant tp)
             (Hcode: getThreadC cnt0 = Kblocked c)
-            (Hat_external: core_semantics.at_external semSem c m = Some (FREE_LOCK, UNLOCK_SIG, Vptr b ofs::nil))
+            (* To check if the machine is at an external step and load its arguments install the thread data permissions*)
+            (Hrestrict_pmap_arg: restrPermMap (Hcompat tid0 cnt0).1 = marg)
+            (Hat_external: core_semantics.at_external semSem c marg = Some (FREE_LOCK, UNLOCK_SIG, Vptr b ofs::nil))
             (** If this address is a lock*)
             (His_lock: lockRes tp (b, (Ptrofs.intval ofs)) = Some rmap)
             (** And the lock is taken *)
@@ -328,10 +338,12 @@ Module DryHybridMachine.
             (Htp'': tp'' = remLockSet tp' (b, Ptrofs.intval ofs)),
             ext_step genv cnt0 Hcompat  tp'' m (freelock (b, Ptrofs.intval ofs))
     | step_acqfail :
-        forall  c b ofs m1
+        forall  c b ofs marg m1
            (Hinv : invariant tp)
            (Hcode: getThreadC cnt0 = Kblocked c)
-           (Hat_external: core_semantics.at_external semSem c m = Some (LOCK, LOCK_SIG, Vptr b ofs::nil))
+           (* To check if the machine is at an external step and load its arguments install the thread data permissions*)
+           (Hrestrict_pmap_arg: restrPermMap (Hcompat tid0 cnt0).1 = marg)
+           (Hat_external: core_semantics.at_external semSem c marg = Some (LOCK, LOCK_SIG, Vptr b ofs::nil))
            (** Install the thread's lock permissions*)
            (Hrestrict_pmap: restrPermMap (Hcompat tid0 cnt0).2 = m1)
            (** To acquire the lock the thread must have [Readable] permission on it*)

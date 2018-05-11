@@ -290,7 +290,8 @@ Module HybridMachineSig.
     (** Provides control over scheduling. For example,
         for FineMach this is schedSkip, for CoarseMach this is just id *)
   Class Scheduler :=
-    {yield: schedule -> schedule}.
+    { isCoarse : bool;
+      yield: schedule -> schedule}.
   
   Context {scheduler : Scheduler}.
 
@@ -330,7 +331,7 @@ Module HybridMachineSig.
           (HschedS: schedSkip U = U')        (*Schedule Forward*)
           (Htid: containsThread ms tid)
           (Hcmpt: mem_compatible ms m)
-          (Htstep: syncStep true genv Htid Hcmpt ms' m' ev),
+          (Htstep: syncStep isCoarse genv Htid Hcmpt ms' m' ev),
           machine_step U tr ms m U' (tr ++ [:: external tid ev]) ms' m'
     | halted_step:
         forall tid U U' ms m tr
@@ -449,7 +450,7 @@ Module HybridMachineSig.
             (HschedS: schedSkip U = U')        (*Schedule Forward*)
             (Htid: containsThread ms tid)
             (Hcmpt: mem_compatible ms m)
-            (Htstep: syncStep true genv Htid Hcmpt ms' m' ev),
+            (Htstep: syncStep isCoarse genv Htid Hcmpt ms' m' ev),
             external_step U tr ms m  U' (tr ++ [:: external tid ev]) ms' m'
       | halted_step':
           forall tid U U' ms m tr
@@ -556,7 +557,8 @@ Module HybridMachineSig.
       Defined.
       
       Instance scheduler : Scheduler :=
-        {| yield := fun x => x |}.
+        {| isCoarse := true;
+           yield := fun x => x |}.
 
       Notation thread_pool := t.
       Notation C:= (semC).
@@ -617,7 +619,8 @@ Module HybridMachineSig.
       Context {dilMem : DiluteMem}.
       
       Instance scheduler : Scheduler :=
-        {| yield := fun x => schedSkip x |}.
+        {| isCoarse := false;
+           yield := fun x => schedSkip x |}.
 
       Definition HybridFineMachine : HybridMachine:=
         @Build_HybridMachine resources Sem ThreadPool _ _ _
