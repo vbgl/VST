@@ -331,7 +331,7 @@ Module HybridMachineSig.
           (HschedS: schedSkip U = U')        (*Schedule Forward*)
           (Htid: containsThread ms tid)
           (Hcmpt: mem_compatible ms m)
-          (Htstep: syncStep isCoarse genv Htid Hcmpt ms' m' ev),
+          (Htstep: syncStep isCoarse Htid Hcmpt ms' m' ev),
           machine_step U tr ms m U' (tr ++ [:: external tid ev]) ms' m'
     | halted_step:
         forall tid U U' ms m tr
@@ -450,7 +450,7 @@ Module HybridMachineSig.
             (HschedS: schedSkip U = U')        (*Schedule Forward*)
             (Htid: containsThread ms tid)
             (Hcmpt: mem_compatible ms m)
-            (Htstep: syncStep isCoarse genv Htid Hcmpt ms' m' ev),
+            (Htstep: syncStep isCoarse Htid Hcmpt ms' m' ev),
             external_step U tr ms m  U' (tr ++ [:: external tid ev]) ms' m'
       | halted_step':
           forall tid U U' ms m tr
@@ -589,10 +589,10 @@ Module HybridMachineSig.
 
       (* TODO: Make a new file with safety lemmas. *)
       Lemma csafe_reduce:
-        forall ge sched tp tr mem n m,
-          csafe ge (sched, tr, tp) mem n ->
+        forall sched tp tr mem n m,
+          csafe (sched, tr, tp) mem n ->
           m <= n ->
-          csafe ge (sched, tr, tp) mem m.
+          csafe (sched, tr, tp) mem m.
       Proof.
         Admitted.
       

@@ -303,10 +303,10 @@ Module StepLemmas.
   Qed.
 
   Lemma safeC_invariant:
-    forall tpc trc mc n the_ge
+    forall tpc trc mc n
       (Hn: n > 0)
       (Hsafe: forall U,
-          HybridCoarseMachine.csafe the_ge (U,trc,tpc) mc n),
+          HybridCoarseMachine.csafe (U,trc,tpc) mc n),
       invariant tpc.
   Proof.
     intros.
@@ -319,10 +319,10 @@ Module StepLemmas.
   Qed.
 
   Lemma safeC_compatible:
-    forall tpc trc mc n the_ge
+    forall tpc trc mc n
       (Hn: n > 0)
       (Hsafe: forall U,
-          HybridCoarseMachine.csafe the_ge (U,trc,tpc) mc n),
+          HybridCoarseMachine.csafe (U,trc,tpc) mc n),
       mem_compatible tpc mc.
   Proof.
     intros.
