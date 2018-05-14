@@ -253,27 +253,26 @@ Module SimDefs.
   (** *** Simulations Diagrams *)
 
   Definition sim_internal_def :=
-    forall tpc trc tpf trf (mc mf : Mem.mem) tr fuelF
+    forall tpc trc tpf trf (mc mf : Mem.mem) fuelF
       (xs : Sch) (f fg : memren) (fp : fpool tpc) (i : NatTID.tid)
       (pff: containsThread tpf i)
       (Hsim: sim tpc trc mc tpf trf mf xs f fg fp (S (S fuelF))),
       let mrestr := restrPermMap (((compat_th _ _ (mem_compf Hsim)) pff).1) in
       forall (Hinternal: pff$mrestr @ I),
       exists tpf' mf' fp' tr',
-        (forall U, fmachine_step (i :: U, tr, tpf) mf (U, tr', tpf') mf') /\
+        (forall U, fmachine_step (i :: U, trf, tpf) mf (U, tr', tpf') mf') /\
         sim tpc trc mc tpf' trf mf' (i :: xs) f fg fp' (S fuelF).
 
   Definition sim_external_def :=
-    forall tpc trc tpf trf (mc mf : Mem.mem) tr fuelF
+    forall tpc trc tpf trf (mc mf : Mem.mem) fuelF
       (xs : Sch) (f fg : memren) (fp : fpool tpc) (i : NatTID.tid)
       (pff: containsThread tpf i)
-      (Hexternal: pff $ mf @ E)
       (Hsynced: ~ List.In i xs)
       (Hsim: sim tpc trc mc tpf trf mf xs f fg fp (S (S fuelF))),
       let mrestr := restrPermMap (((compat_th _ _ (mem_compf Hsim)) pff).1) in
-      forall (Hinternal: pff$mrestr @ E),
+      forall (Hexternal: pff$mrestr @ E),
     exists tpc' trc' mc' tpf' mf' f' fp' tr',
-      (forall U, fmachine_step (i :: U, tr, tpf) mf (U, tr', tpf') mf') /\
+      (forall U, fmachine_step (i :: U, trf, tpf) mf (U, tr', tpf') mf') /\
       sim tpc' trc' mc' tpf' tr' mf' xs f' fg fp' (S fuelF).
 
   (** When we reach a suspend step, we can ``synchronize'' the two
@@ -282,35 +281,35 @@ Module SimDefs.
   thread will now serve as the new injection. *)
 
   Definition sim_suspend_def :=
-    forall tpc trc tpf trf (mc mf : Mem.mem) tr fuelF
+    forall tpc trc tpf trf (mc mf : Mem.mem) fuelF
       (xs : Sch) (f fg : memren) (fp : fpool tpc) (i : NatTID.tid)
       (pff: containsThread tpf i)
       (Hsim: sim tpc trc mc tpf trf mf xs f fg fp (S (S fuelF))),
       let mrestr := restrPermMap (((compat_th _ _ (mem_compf Hsim)) pff).1) in
-      forall (Hinternal: pff$mrestr @ S),
+      forall (Hsuspend: pff$mrestr @ S),
     exists tpc' trc' mc' tpf' mf' f' fp' tr',
-      (forall U, fmachine_step (i :: U, tr, tpf) mf (U, tr', tpf') mf') /\
+      (forall U, fmachine_step (i :: U, trf, tpf) mf (U, tr', tpf') mf') /\
       sim tpc' (trc ++ trc') mc' tpf' trf mf' [seq x <- xs | x != i] f' fg fp'
           (S fuelF).
 
   Definition sim_halted_def :=
-    forall tpc trc tpf trf (mc mf : Mem.mem) tr fuelF
+    forall tpc trc tpf trf (mc mf : Mem.mem) fuelF
       (xs : Sch) (f fg : memren) (fp : fpool tpc) (i : NatTID.tid)
       (pff: containsThread tpf i)
       (Hsim: sim tpc trc mc tpf trf mf xs f fg fp (S (S fuelF))),
       let mrestr := restrPermMap (((compat_th _ _ (mem_compf Hsim)) pff).1) in
-      forall (Hinternal: pff$mrestr @ H),
+      forall (Hhalt: pff$mrestr @ H),
       exists tr',
-        (forall U, fmachine_step (i :: U, tr, tpf) mf (U, tr', tpf) mf) /\
+        (forall U, fmachine_step (i :: U, trf, tpf) mf (U, tr', tpf) mf) /\
         sim tpc trc mc tpf trf mf xs f fg fp (S fuelF).
 
   Definition sim_fail_def :=
-    forall tpc trc tpf trf (mc mf : Mem.mem) tr fuelF
+    forall tpc trc tpf trf (mc mf : Mem.mem) fuelF
       (xs : Sch) (f fg : memren) (fp : fpool tpc) (i : NatTID.tid)
       (pff: ~ containsThread tpf i)
       (Hsim: sim tpc trc mc tpf trf mf xs f fg fp (S (S fuelF))),
     exists tr',
-      (forall U, fmachine_step (i :: U, tr, tpf) mf (U, tr', tpf) mf) /\
+      (forall U, fmachine_step (i :: U, trf, tpf) mf (U, tr', tpf) mf) /\
       sim tpc trc mc tpf trf mf xs f fg fp (S fuelF).
 
   End SimDefs.
@@ -427,13 +426,13 @@ Module SimProofs.
     intros.
     pose proof (mem_compf Hsim) as Hcompf.
     pose proof (invF Hsim) as HinvF.
-    unfold getStepType in Hinternal.
+    unfold getStepType in Hhalt.
     destruct (getThreadC pff) eqn:Hget; simpl in *;
     try discriminate.
     destruct (at_external semSem s (restrPermMap (proj1 ((mem_compf Hsim) i pff)))) eqn:Hext;
-      rewrite Hext in Hinternal; try discriminate.
-    destruct Hinternal as [[[? ?] _]|[Hcontra _]]; try discriminate.
-    exists tr.
+      rewrite Hext in Hhalt; try discriminate.
+    destruct Hhalt as [[[? ?] _]|[Hcontra _]]; try discriminate.
+    exists trf.
     split.
     intros.
     econstructor 6; simpl; eauto.
@@ -446,7 +445,7 @@ Module SimProofs.
   Proof.
     unfold sim_fail_def.
     intros.
-    exists tr.
+    exists trf.
     split.
     intros. econstructor 7; simpl; eauto.
     eapply (invF Hsim); eauto.
@@ -1743,7 +1742,7 @@ Module SimProofs.
     assert (Hge_incr': ren_incr fg (fp i pfc))
       by (destruct Hge_spec; eapply ren_incr_trans; eauto).
     (** And from this we derive safety for 1 step for FineConc*)
-    destruct (tsim_fstep_safe tr HmaxF HinvF Hge_wd (snd Hge_spec)
+    destruct (tsim_fstep_safe trf HmaxF HinvF Hge_wd (snd Hge_spec)
                               Hge_incr' Htsim Hwd_mem' Hstep')
       as (tpf' & mf' & fi' & tr' & HstepF & HmaxF' & Hincr' & Hsepi & Htsim'
           & Howned' & Hownedlp').
@@ -3362,7 +3361,7 @@ Module SimProofs.
                  let bz :=
                      (Z.pos b1 - (Z.pos (Mem.nextblock mc'') -
                                   Z.pos (Mem.nextblock mc)))%Z in
-                 (fp j cntj) (Z.to_pos bz)), tr.
+                 (fp j cntj) (Z.to_pos bz)), trf.
     split.
     { (** the fine-grained machine takes a suspend step *)
       intros U; eapply suspend_step; simpl; eauto.
@@ -4947,15 +4946,16 @@ into mcj' with an extension of the id injection (fij). *)
                         intros Hcontra;
                         clear - Hcontra Hlt n;
                         unfold Mem.valid_block, Coqlib.Plt in *; zify; omega).
-                  erewrite if_false by admit.
-                    (* by (apply negbT; *)
-                    (*     eapply proj_sumbool_is_false; *)
-                    (*     intros Hcontra; *)
-                    (*     clear - Hcontra Hlt n; *)
-                    (*     unfold Mem.valid_block, Coqlib.Plt in *; *)
-                    (*     zify; *)
-                    (*     erewrite Pos2Z.inj_sub in Hcontra by assumption; *)
-                    (*     omega). *)
+                  erewrite if_false
+                    by (apply negbT;
+                        eapply proj_sumbool_is_false;
+                        intros Hcontra;
+                        clear - Hcontra Hlt n;
+                        unfold Mem.valid_block, Coqlib.Plt in *;
+                        zify;
+                        destruct H2 as [[? ?] | [? ?]];
+                        subst;
+                        omega).
                   erewrite Z.pos_sub_gt by (zify; omega).
                   rewrite Pos.add_sub.
                   simpl.
@@ -7909,7 +7909,7 @@ relation*)
           as tpf'' eqn:Htpf'';
           symmetry in Htpf''.
         exists tpf'', mf' , (fp i pfc), fp,
-        (tr ++ [:: (external i (acquire (b2, Ptrofs.intval ofs)
+        (trf ++ [:: (external i (acquire (b2, Ptrofs.intval ofs)
                                        (Some virtueF)))]).
         split.
         (** proof that the fine grained machine can step*)
@@ -8842,7 +8842,7 @@ relation*)
         as tpf'' eqn:Htpf'';
         symmetry in Htpf''.
       exists tpf'', mf', (fp i pfc), fp,
-      (tr ++ [:: (external i (release (b2, Ptrofs.intval ofs)
+      (trf ++ [:: (external i (release (b2, Ptrofs.intval ofs)
                                      (Some (virtueLPF))))]).
       split.
       (** proof that the fine grained machine can step*)
@@ -9750,7 +9750,7 @@ relation*)
       made any allocations yet *)
       exists tpf', mf, (fp i pfc),
       (@addFP _ fp (fp i pfc) (Vptr b ofs) arg newThreadPerm),
-      (tr ++ [:: (external i (spawn (b2,Ptrofs.intval ofs) (Some (getThreadR pff, virtue1F)) (Some virtue2F)))]).
+      (trf ++ [:: (external i (spawn (b2,Ptrofs.intval ofs) (Some (getThreadR pff, virtue1F)) (Some virtue2F)))]).
       split.
       (** proof that the fine grained machine can step*)
       intros U.
@@ -10331,7 +10331,7 @@ relation*)
       (** And then update the [lockRes] with empty resources on that address. *)
       remember (updLockSet tpf' (b2, Ptrofs.intval ofs) (empty_map, empty_map)) as tpf'' eqn:Htpf'';
         symmetry in Htpf''.
-      exists tpf'', mf', (fp i pfc), fp, (tr ++ [:: (external i (mklock (b2, Ptrofs.intval ofs)))]).
+      exists tpf'', mf', (fp i pfc), fp, (trf ++ [:: (external i (mklock (b2, Ptrofs.intval ofs)))]).
       split.
       (** proof that the FineConc machine can step*)
       intros U.
@@ -11369,7 +11369,7 @@ relation*)
         as tpf' eqn:Htpf'.
       (** Finally we remove the lock from the FineConc machine*)
       remember (remLockSet tpf' (b2, Ptrofs.intval ofs)) as tpf'' eqn:Htpf''.
-      exists tpf'', mf, (fp i pfc), fp, (tr ++ [:: (external i (freelock (b2, Ptrofs.intval ofs)))]).
+      exists tpf'', mf, (fp i pfc), fp, (trf ++ [:: (external i (freelock (b2, Ptrofs.intval ofs)))]).
       split.
       (** proof that the FineConc machine can step*)
       intros U.
@@ -11852,7 +11852,7 @@ relation*)
           by auto.
       }
       (** The state is not changed by a failed load*)
-      exists tpf, mf, (fp i pfc), fp, (tr ++ [:: (external i (failacq (b2, Ptrofs.intval ofs)))]).
+      exists tpf, mf, (fp i pfc), fp, (trf ++ [:: (external i (failacq (b2, Ptrofs.intval ofs)))]).
       split.
       intros U.
       subst.

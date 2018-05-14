@@ -629,15 +629,15 @@ Module HybridMachineSig.
                              (hybrid_initial_schedule).
 
       (** Schedule safety of the fine-grained machine*)
-      Inductive fsafe (ge : G) (tp : thread_pool) (m : mem) (U : schedule)
+      Inductive fsafe (tp : thread_pool) (m : mem) (U : schedule)
         : nat -> Prop :=
-      | Safe_0: fsafe ge tp m U 0
-      | HaltedSafe : forall n tr, halted_machine (U, tr, tp) -> fsafe ge tp m U n
+      | Safe_0: fsafe tp m U 0
+      | HaltedSafe : forall n tr, halted_machine (U, tr, tp) -> fsafe tp m U n
       | StepSafe : forall (tp' : thread_pool) (m' : mem)
                      (tr tr': event_trace) n,
           MachStep (U, tr, tp) m (schedSkip U, tr', tp') m' ->
-          fsafe ge tp' m' (schedSkip U) n ->
-          fsafe ge tp m U (S n).
+          fsafe tp' m' (schedSkip U) n ->
+          fsafe tp m U (S n).
     End HybridFineMachine.
 End HybridFineMachine.
 
