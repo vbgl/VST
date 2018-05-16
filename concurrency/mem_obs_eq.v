@@ -3088,6 +3088,28 @@ as big as [m] *)
     rewrite perm_obs_strong0; auto.
   Qed.
 
+  Lemma valid_access_obs_eq_2:
+    forall f m1 m2 b1 b2 chunk ofs p,
+      weak_mem_obs_eq f m1 m2 ->
+      f b1 = Some b2 ->
+      ~ Mem.valid_access m1 chunk b1 ofs p ->
+      ~ Mem.valid_access m2 chunk b2 ofs p.
+  Proof.
+    intros.
+    intros Hcontra.
+    destruct Hcontra as [A B].
+    eapply H1.
+    constructor; [|now auto].
+    intros ofs' Hofs.
+    specialize (A ofs' Hofs).
+    destruct H.
+    specialize (perm_obs_weak0 _ _ ofs' H0).
+    unfold permissions.permission_at in *.
+    unfold Mem.perm in *.
+    erewrite po_oo in *.
+    eapply po_trans; eauto.
+  Qed.
+
   Lemma getN_obs:
     forall f m1 m2 b1 b2,
       strong_mem_obs_eq f m1 m2 ->
@@ -3131,6 +3153,22 @@ as big as [m] *)
     rewrite <- size_chunk_conv.
     exploit Mem.load_valid_access; eauto. intros [A B]. auto.
   Qed.
+
+  Lemma load_fail:
+    forall chunk m m' b1 b2 ofs f
+      (Hf: f b1 = Some b2)
+      (Hmem_obs_eq: weak_mem_obs_eq f m m')
+      (Hload: Mem.load chunk m b1 ofs = None),
+      Mem.load chunk m' b2 ofs = None.
+  Proof.
+    intros.
+    unfold Mem.load in *.
+    destruct (Mem.valid_access_dec m chunk b1 ofs Readable); [discriminate|].
+    eapply valid_access_obs_eq_2 in n; eauto.
+    erewrite Coqlib2.if_false by eauto.
+    reflexivity.
+  Qed.
+
   Opaque Mem.load.
 
   Lemma loadv_val_obs:
@@ -3149,6 +3187,21 @@ as big as [m] *)
     destruct vptr1; try discriminate.
     inversion Hf; subst.
     eapply load_val_obs in Hload; eauto.
+  Qed.
+
+  Lemma loadv_fail:
+    forall chunk m m' v1 v2 f
+      (Hval_obs_eq: val_obs f v1 v2)
+      (Hmem_obs_eq: weak_mem_obs_eq f m m')
+      (Hload: Mem.loadv chunk m v1 = None),
+      Mem.loadv chunk m' v2 = None.
+  Proof.
+    intros.
+    unfold Mem.loadv in *.
+    inversion Hval_obs_eq; auto.
+    subst.
+    eapply load_fail;
+      now eauto.
   Qed.
 
   (** ** Lemmas about [Mem.store] and [mem_obs_eq]*)
@@ -4088,7 +4141,6 @@ Module CoreInjections.
         at_external_wd:
           forall m (f : memren) c
             (ef : external_function)
-            (ef_sig : signature)
             (args : seq val),
             valid_mem m ->
             domain_memren f m ->
@@ -4098,7 +4150,7 @@ Module CoreInjections.
 
         after_external_wd:
           forall m (c c' : semC) (f : memren) (ef : external_function)
-            (ef_sig: signature) (args : seq val) (ov : option val)
+            (args : seq val) (ov : option val)
             (Hat_external: at_external semSem c m = Some (ef, args))
             (Hcore_wd: core_wd f c)
             (Hvalid_list: valid_val_list f args)

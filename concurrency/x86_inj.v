@@ -735,7 +735,6 @@ Module X86Inj.
   Lemma at_external_wd :
     forall the_ge m (f : memren) c
       (ef : external_function)
-      (ef_sig : signature)
       (args : seq val),
       valid_mem m ->
       domain_memren f m ->
@@ -775,7 +774,7 @@ Module X86Inj.
   Hint Resolve valid_val_loword valid_val_loword : wd.
 
   Lemma after_external_wd :
-    forall the_ge m (c c' : state) (f : memren) (ef : external_function) (sig : signature)
+    forall the_ge m (c c' : state) (f : memren) (ef : external_function)
       (args : seq val) (ov : option val)
       (Hat_external: at_external (Asm_core_sem the_ge) c m = Some (ef, args))
       (Hcore_wd: core_wd f c)
@@ -881,6 +880,47 @@ Module X86Inj.
       apply val_obs_longofwords; auto.
   Qed.
 
+  (*NOTE: regset_wd seems useless if you have regset_ren*)
+  Lemma get_extcall_arg_none:
+    forall f rs rs' m m' l,
+      regset_ren f rs rs' ->
+      mem_obs_eq f m m' ->
+      get_extcall_arg rs m l = None ->
+      get_extcall_arg rs' m' l = None.
+  Proof.
+    intros f rs rs' m m' l Hrs_ren Hmem_obs_eq Hget_arg.
+    unfold get_extcall_arg in *.
+    destruct l; auto.
+    discriminate.
+    destruct sl; auto.
+    destruct Hmem_obs_eq.
+    eapply loadv_fail; eauto.
+    eapply val_obs_offset_ptr.
+    eapply Hrs_ren.
+  Qed.
+
+  Lemma get_extcall_arguments_none : forall f rs rs' m m' l,
+      regset_ren f rs rs' -> mem_obs_eq f m m' ->
+      get_extcall_arguments rs m l = None ->
+      get_extcall_arguments rs' m' l = None.
+  Proof.
+    induction l; simpl; intros.
+    - discriminate.
+    - repeat match goal with
+             | [H: match ?Expr with _ => _ end = _ |- _] =>
+               destruct Expr eqn:?
+             | [|- match get_extcall_arg ?A ?B ?C with _ => _ end = _] =>
+               destruct (get_extcall_arg A B C) eqn:?
+             end; try (discriminate); try auto;
+        try (erewrite IHl; now eauto);
+      try match goal with
+      | [H: get_extcall_arg _ _ _ = None |- _] =>
+        eapply get_extcall_arg_none in H; eauto
+      end;
+      now congruence.
+  Qed.
+
+
   Lemma find_funct_ptr_inj : forall g (f fg : memren) b b' h
       (Hfg: forall b1 b2, fg b1 = Some b2 -> b1 = b2)
       (Hge_wd: ge_wd fg g)
@@ -953,11 +993,12 @@ Module X86Inj.
       destruct (get_extcall_arguments _ _ _) eqn: Hargs.
       eapply get_extcall_arguments_inj in Hargs as (? & -> & ?); eauto.
       destruct (get_extcall_arguments r0 m' _) eqn: Hargs'; auto.
-      admit. (* other direction *)
+      eapply get_extcall_arguments_none in Hargs; eauto.
+      congruence.
     - destruct (find_funct_ptr the_ge b0) eqn: Hfind'; auto.
       exploit find_funct_ptr_inj'; eauto; intro; subst.
       congruence.
-  Admitted.
+  Qed.
 
   Lemma core_inj_after_ext :
     forall the_ge c cc c' (ov1 : option val) m m'
@@ -2262,7 +2303,7 @@ Qed.
         end;
     try match goal with
         | [H: Mem.storev _ _ (eval_addrmode ?G ?A rs) (rs ?R) = _ |- _] =>
-          eapply storev_wd_domain in H; destruct H as [? ?]
+          eapply storev_wd_domain in H; destruct H
         end;
       repeat match goal with
              | [H: Mem.loadv _ _ (eval_addrmode ?G ?A rs) = _ |- _] =>
@@ -2402,7 +2443,7 @@ Qed.
 
   Import X86Context.
 
-  Context (the_program : program).
+  Context (the_program : program). 
   Notation the_ge := (the_ge the_program).
   Hypothesis (Hsafe : safe_genv the_ge).
 

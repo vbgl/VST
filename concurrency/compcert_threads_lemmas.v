@@ -23,6 +23,8 @@ Require Import VST.concurrency.addressFiniteMap.
 Require Import compcert.lib.Integers.
 
 Require Import Coq.ZArith.ZArith.
+Require Import Coq.Logic.ClassicalFacts.
+ 
 
 Require Import VST.concurrency.threadPool.
 Require Import VST.concurrency.threads_lemmas.
@@ -375,10 +377,10 @@ Module SimProofs.
     destruct c; destruct c'; try (by exfalso);
       unfold ctlType in *; try tauto.
     assert (Hat_ext := core_inj_ext _ _  Hfg Hge_wd Hincr Hvalid Hinj Hmem).
-    destruct (at_external semSem s m) as [[[? ?] ?]|] eqn:Hext; simpl in *.
-    - destruct (at_external semSem s0 m') as [[[? ?] ?]|];
+    destruct (at_external semSem s m) as [[? ?]|] eqn:Hext; simpl in *.
+    - destruct (at_external semSem s0 m') as [[? ?]|];
         now tauto.
-    - destruct (at_external semSem s0 m') as [[[? ?] ?]|]; [tauto|].
+    - destruct (at_external semSem s0 m') as [[? ?]|]; [tauto|].
         assert (Hhalted := core_inj_halted _ _ _ Hinj); auto.
         split; intros [[[? ?] ?] |[? ?]]; subst;
           try (left; split;
@@ -772,7 +774,7 @@ Module SimProofs.
         Tactics.pf_cleanup.
         specialize (Htp_wd _ ctn).
         rewrite Hcode in Htp_wd.
-      destruct X as [[? ?] ?].
+      destruct X as [? ?].
       simpl in *.
       destruct Htp_wd as [Hcore_wd _].
       inversion Hperm; subst.
@@ -1294,12 +1296,12 @@ Module SimProofs.
       assert (Hat_externalF_spec := core_inj_ext _ _  Hfg Hge_wd Hren_incr Hmem_wd Hcode_eq memObsEq).
       rewrite Hat_external in Hat_externalF_spec.
       simpl in Hat_externalF_spec.
-      destruct X as [[ef sig] val].
+      destruct X as [ef val].
       destruct (at_external semSem cf (restrPermMap (proj1 (compat_th _ _ Hcompf pff))))
-        as [[[ef' sig'] val']|] eqn:Hat_externalF;
+        as [[ef' val']|] eqn:Hat_externalF;
         rewrite Hat_externalF in Hat_externalF_spec;
         try by exfalso.
-      destruct Hat_externalF_spec as [?  [? Harg_obs]]; subst.
+      destruct Hat_externalF_spec as [? Harg_obs]; subst.
       remember (updThreadC pff (Krun cf')) as tpf' eqn:Hupd.
       exists tpf', mf, fi, tr.
       split.
@@ -2384,11 +2386,11 @@ Module SimProofs.
       assert (Hat_external_spec := core_inj_ext _ _ Hfg Hge_wd Hge_incr Hvalid_mem'
                                                 Hcode_eq Hmem_obs_eq).
       rewrite Hat_external in Hat_external_spec.
-      destruct X as [[ef sig] vs].
+      destruct X as [ef vs].
       destruct (at_external semSem c1' (restrPermMap (compat_th _ _ Hcomp1' pf1j')#1))
-        as [[[? ?] ?] | ] eqn:Hat_external';
+        as [[? ?] | ] eqn:Hat_external';
         try by exfalso.
-      destruct Hat_external_spec as [? [? ?]]; subst.
+      destruct Hat_external_spec as [? ?]; subst.
       assert (Hvalid_val: match (Some (Vint Int.zero)) with
                           | Some v1 => valid_val f v1
                           | None => True
@@ -2808,11 +2810,11 @@ Module SimProofs.
       assert (Hat_external_spec := core_inj_ext _ _  Hfg Hge_wd Hge_incr Hvalid_mem' Hcode_eq Hmem_obs_eq).
       inversion Hperm; subst.
       rewrite Hat_external in Hat_external_spec.
-      destruct X as [[? ?] vs].
+      destruct X as [? vs].
       destruct (at_external semSem c1' (restrPermMap (compat_th _ _ Hcomp1' pf1j')#1))
-        as [[[? ?] ?] | ] eqn:Hat_external';
+        as [[? ?] | ] eqn:Hat_external';
         try by exfalso.
-      destruct Hat_external_spec as [? [? ?]]; subst.
+      destruct Hat_external_spec as [?  ?]; subst.
       assert (Hvalid_val: match (Some (Vint Int.zero)) with
                           | Some v1 => valid_val f v1
                           | None => True
@@ -3126,11 +3128,11 @@ Module SimProofs.
                                                          Hcode_eq memObsEq).
     inversion Hperm; subst.
     rewrite Hat_external in Hat_external_spec.
-    destruct X as [[? ?] ?].
+    destruct X as [? ?].
     destruct (at_external semSem c' (restrPermMap (compat_th _ _ Hcompf pff)#1))
-      as [[[? ?] ?]|] eqn:Hat_external';
+      as [[? ?]|] eqn:Hat_external';
       try by exfalso.
-    destruct Hat_external_spec as [? [? ?]]; subst.
+    destruct Hat_external_spec as [? ?]; subst.
     exists (updThreadC pff (Kblocked c')).
     split.
     eapply SuspendThread with (Hcmpt := Hcompf); now eauto.
@@ -3279,7 +3281,6 @@ Module SimProofs.
 
   (** NOTE: this is only needed to find out if a block is in the
     codomain of f, which is decidable *)
-  Require Import Coq.Logic.ClassicalFacts.
   Hypothesis em : excluded_middle.
 
   Lemma sim_suspend : sim_suspend_def.
@@ -5181,7 +5182,7 @@ into mcj' with an extension of the id injection (fij). *)
       eauto.
     eapply ren_incr_domain_incr;
       now eauto.
-  Admitted.
+  Qed.
 
   (** ** Proofs about external steps*)
 
@@ -7827,11 +7828,11 @@ relation*)
         assert (Hat_external_spec := core_inj_ext _ _  Hfg Hge_wd Hge_incr Hvalid_mem' Hcore_inj (obs_eq_data Htsim)).
         rewrite Hat_external in Hat_external_spec.
         destruct (at_external semSem cf (restrPermMap (compat_th _ _ (mem_compf Hsim) pff)#1))
-          as [[[? ?] vsf] | ] eqn:Hat_externalF;
+          as [[? vsf] | ] eqn:Hat_externalF;
           try by exfalso.
         (** and moreover that it's the same external and their
             arguments are related by the injection*)
-        destruct Hat_external_spec as [? [? Harg_obs]]; subst.
+        destruct Hat_external_spec as [? Harg_obs]; subst.
         inversion Harg_obs as [|? ? ? ? Hptr_obs Hl]; subst.
         inversion Hl; subst.
         inversion Hptr_obs as [| | | |b1 bf ofs0 Hf|];
@@ -8729,11 +8730,11 @@ relation*)
       assert (Hat_external_spec := core_inj_ext _ _  Hfg Hge_wd Hge_incr Hvalid_mem' Hcore_inj (obs_eq_data Htsim)).
       rewrite Hat_external in Hat_external_spec.
       destruct (at_external semSem cf (restrPermMap (compat_th _ _ (mem_compf Hsim) pff)#1))
-        as [[[? ?] vsf] | ] eqn:Hat_externalF;
+        as [[?  vsf] | ] eqn:Hat_externalF;
         try by exfalso.
       (** and moreover that it's the same external and their
             arguments are related by the injection*)
-      destruct Hat_external_spec as [? [? Harg_obs]]; subst.
+      destruct Hat_external_spec as [? Harg_obs]; subst.
       inversion Harg_obs as [|? ? ? ? Hptr_obs Hl]; subst.
       inversion Hl; subst.
       inversion Hptr_obs as [| | | |b1 bf ofs0 Hf|];
@@ -9683,11 +9684,11 @@ relation*)
       assert (Hat_external_spec := core_inj_ext _ _ Hfg Hge_wd Hge_incr Hvalid_mem' Hcore_inj (obs_eq_data Htsim)).
       rewrite Hat_external in Hat_external_spec.
       destruct (at_external semSem cf (restrPermMap (compat_th _ _ (mem_compf Hsim) pff)#1))
-        as [[[? ?] vsf] | ] eqn:Hat_externalF;
+        as [[? vsf] | ] eqn:Hat_externalF;
         try by exfalso.
       (** and moreover that it's the same external and their
         arguments are related by the injection*)
-      destruct Hat_external_spec as [? [? Harg_obs]]; subst.
+      destruct Hat_external_spec as [? Harg_obs]; subst.
       inversion Harg_obs as [|? vff argf vsf' Hptr_obs Hl]; subst.
       inversion Hl; subst.
       inversion H3; subst. clear H3.
@@ -10289,11 +10290,11 @@ relation*)
       assert (Hat_external_spec := core_inj_ext _ _ Hfg Hge_wd Hge_incr Hvalid_mem' Hcore_inj Hmem_obs_eq_data).
       rewrite Hat_external in Hat_external_spec.
         destruct (at_external semSem cf (restrPermMap (compat_th _ _ (mem_compf Hsim) pff)#1))
-        as [[[? ?] vsf] | ] eqn:Hat_externalF;
+        as [[? vsf] | ] eqn:Hat_externalF;
         try by exfalso.
       (** and moreover that it's the same external and their
         arguments are related by the renaming [fp i pfc]*)
-      destruct Hat_external_spec as [? [? Harg_obs]]; subst.
+      destruct Hat_external_spec as [? Harg_obs]; subst.
       inversion Harg_obs as [|? ? ? ? Hptr_obs Hl]; subst.
       inversion Hl; subst.
       inversion Hptr_obs as [| | | |b1 bf ofs0 Hf|];
@@ -11313,11 +11314,11 @@ relation*)
       assert (Hat_external_spec := core_inj_ext _ _ Hfg Hge_wd Hge_incr Hvalid_mem' Hcore_inj Hmem_obs_eq_data).
       rewrite Hat_external in Hat_external_spec.
       destruct (at_external semSem cf (restrPermMap (compat_th _ _ (mem_compf Hsim) pff)#1))
-        as [[[? ?] vsf] | ] eqn:Hat_externalF;
+        as [[? vsf] | ] eqn:Hat_externalF;
           try by exfalso.
       (** and moreover that it's the same external and their
         arguments are related by the injection*)
-      destruct Hat_external_spec as [? [? Harg_obs]]; subst.
+      destruct Hat_external_spec as [? Harg_obs]; subst.
       inversion Harg_obs as [|? ? ? ? Hptr_obs Hl]; subst.
       inversion Hl; subst.
       inversion Hptr_obs as [| | | |b1 b2 ofs0 Hf|];
@@ -11832,11 +11833,11 @@ relation*)
       assert (Hat_external_spec := core_inj_ext _ _ Hfg Hge_wd Hge_incr Hvalid_mem' Hcore_inj (obs_eq_data Htsim)).
       rewrite Hat_external in Hat_external_spec.
       destruct (at_external semSem cf (restrPermMap (compat_th _ _ (mem_compf Hsim) pff)#1))
-        as [[[? ?] vsf] | ] eqn:Hat_externalF;
+        as [[? vsf] | ] eqn:Hat_externalF;
         try by exfalso.
       (** and moreover that it's the same external and their
         arguments are related by the injection*)
-      destruct Hat_external_spec as [? [? Harg_obs]]; subst.
+      destruct Hat_external_spec as [? Harg_obs]; subst.
       inversion Harg_obs as [|? ? ? ? Hptr_obs Hl]; subst.
       inversion Hl; subst.
       inversion Hptr_obs as [| | | |b1 b2 ofs0 Hf|];
