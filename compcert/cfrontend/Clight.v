@@ -510,14 +510,14 @@ Definition set_mem (s:state)(m:mem):=
   end.
 
 (**NEW *)
-Definition at_external (c: state) : option (external_function * signature * list val) :=
+Definition at_external (c: state) : option (external_function * list val) :=
   match c with
   | State _ _ _ _ _ _ => None
   | Callstate fd args k _ =>
       match fd with
         Internal f => None
       | External ef targs tres cc => 
-          Some (ef, ef_sig ef, args)
+          Some (ef, args)
       end
   | Returnstate _ _ _ => None
  end.
@@ -745,23 +745,11 @@ Parameter tys_nonvoid: typelist -> bool .
 Parameter vals_defined: list val -> bool.
  *)
 
-(*Following definition mimics *_not_fresh lemmas from common/Globalenvs.v*)
-Record globals_not_fresh {F V} (ge:Genv.t F V) m:=
-  {
-    find_symbol_not_fresh:
-       forall id b, Genv.find_symbol ge id = Some b -> Mem.valid_block m b;
-    find_funct_ptr_not_fresh:
-      forall b fp, Genv.find_funct_ptr ge b = Some fp -> Mem.valid_block m b;
-    find_var_info_not_fresh:
-      forall b def, Genv.find_var_info ge b = Some def -> Mem.valid_block m b;
-}. 
-  
-    
-(* No dangling pointers. 
-   In particular, nothing pointing after nextblock *)      
+(* No unvalid pointers, i.e. othing pointing after nextblock *)      
 Definition mem_well_formed m:=
   Mem.inject (Mem.flat_inj (Mem.nextblock m)) m m.
 
+(* All arguments are in memory and without unvalid pointers*)
 Definition arg_well_formed args m0:=
       Val.inject_list (Mem.flat_inj (Mem.nextblock m0)) args args.
 
@@ -773,15 +761,16 @@ Inductive val_casted_list: list val -> typelist -> Prop :=
       val_casted_list (v1 :: vl) (Tcons  ty1 tyl).
 
 (*NOTE: DOUBLE CHECK TARGS (it's not used right now)*)
-Inductive entry_point  (ge:genv): mem -> state -> val -> list val -> Prop :=
+Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop :=
 | initi_core:
     forall f fb m args targs tres,
       Genv.find_funct_ptr ge fb = Some f ->
       type_of_fundef f = Tfunction targs tres cc_default ->
       globals_not_fresh ge m ->
-      mem_well_formed m ->
-      arg_well_formed args m ->
+      Mem.mem_wd m ->
+      Mem.arg_well_formed args m ->
       val_casted_list args targs ->
+      Val.has_type_list args (typlist_of_typelist targs) ->
       (*val_casted_list_func args targs 
                            && tys_nonvoid targs 
                            && vals_defined args

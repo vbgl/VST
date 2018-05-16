@@ -484,7 +484,7 @@ Record part_semantics : Type :=
   set_mem: state -> Memory.mem -> state;
   step : state -> trace -> state -> Prop;
   entry_point: Memory.mem -> state -> val -> list val -> Prop;
-  at_external : state ->  option (external_function * signature * list val);
+  at_external : state ->  option (external_function * list val);
   after_external : option val -> state -> Memory.mem -> option state;
   final_state: state -> int -> Prop;
   globalenv: genvtype;
@@ -523,7 +523,7 @@ Definition Semantics {state funtype vartype: Type}
                      (set_mem: state -> Memory.mem -> state)
                      (step: state -> trace -> state -> Prop)
                      (entry_point: Memory.mem -> state -> val -> list val  -> Prop)
-                     (at_external : state -> option (external_function * signature * list val))
+                     (at_external : state -> option (external_function * list val))
                      (after_external : option val -> state -> Memory.mem -> option state)
                      (final_state: state -> int -> Prop)
                      (globalenv: Genv.t funtype vartype)
@@ -548,7 +548,7 @@ Definition Semantics_gen (state genvtype: Type)
                      (set_mem: state -> Memory.mem -> state)
                      (step: state -> trace -> state -> Prop)
                      (entry_point: Memory.mem -> state -> val -> list val  -> Prop)
-                     (at_external : state ->  option (external_function * signature * list val))
+                     (at_external : state ->  option (external_function * list val))
                      (after_external : option val -> state -> Memory.mem -> option state)
                      (final_state: state -> int -> Prop)
                      (globalenv: genvtype)
@@ -582,7 +582,43 @@ Open Scope smallstep_scope.
 
 (** * Forward simulations between two transition semantics. *)
 
+(*Following definition mimics *_not_fresh lemmas from common/Globalenvs.v*)
+(* genv_next bounds all global blocks *)
+(* This should be part of GENV file?   *)
+Definition globals_not_fresh {F V} (ge:Genv.t F V) m:=
+  Ple (Genv.genv_next ge) (Mem.nextblock m).
 
+ Lemma len_defs_genv_next:
+      forall {F1 V1 F2 V2} (p1:AST.program F1 V1) (p2:AST.program F2 V2),
+        length (AST.prog_defs p1) =length (AST.prog_defs p2) ->
+        Genv.genv_next (Genv.globalenv p1) = Genv.genv_next (Genv.globalenv p2).
+    Proof.
+      intros. unfold Genv.globalenv.
+      do 2 rewrite Genv.genv_next_add_globals.
+      remember (Genv.empty_genv F1 V1 (AST.prog_public p1)) as base1.
+      remember (Genv.empty_genv F2 V2 (AST.prog_public p2)) as base2.
+      replace (Genv.genv_next base1) with (Genv.genv_next base2) by (subst; reflexivity).
+      remember (Genv.genv_next base2) as X.
+      remember (AST.prog_defs p1) as ls1.
+      remember (AST.prog_defs p2) as ls2.
+      generalize X ls2 H.
+      clear.
+      induction ls1.
+      - intros; destruct ls2; inversion H; auto.
+      - intros. destruct ls2; inversion H; auto.
+        simpl. eapply IHls1; auto.
+    Qed.
+    
+    Lemma globals_not_fresh_preserve:
+      forall {F1 V1 F2 V2} (p1:AST.program F1 V1) (p2:AST.program F2 V2),
+        length (AST.prog_defs p1) = length (AST.prog_defs p2) ->
+        forall m0, globals_not_fresh (Genv.globalenv p1) m0 ->
+              globals_not_fresh (Genv.globalenv p2) m0.
+    Proof.
+      unfold globals_not_fresh; intros until m0.
+      erewrite len_defs_genv_next; eauto.
+    Qed.
+    
  Section ForwardSimulations.
    Context (L1 L2: semantics).
    
@@ -613,8 +649,10 @@ Record fsim_properties (index: Type)
                                                                 }.
 
 (*In the case where initial_memories are equal, initial_states follows from entry_points. *)
-Lemma init_states_from_cores:
-  forall (INIT_MEM: init_mem L1 = init_mem L2)
+Lemma init_states_from_entry_index:
+  forall (INIT_MEM:
+       forall m, init_mem L1 = Some m ->
+            init_mem L2 = Some m)
    (INIT_BLOCK: main_block L1 = main_block L2),
     forall index match_states
   (fsim_match_entry_points:
@@ -623,11 +661,29 @@ Lemma init_states_from_cores:
     forall s1, initial_state L1 s1  -> 
           exists (i:index), exists s2, initial_state L2 s2 /\ match_states i s1 s2.
 Proof.
-  intros. inv H. rewrite INIT_MEM, INIT_BLOCK in *.
+  intros. inv H. rewrite INIT_BLOCK in *.
   eapply fsim_match_entry_points0 in H1. destruct H1 as (i&s2&init_core&MATCH).
   exists i, s2; split; eauto.
   econstructor; eauto.
-Qed.  
+Qed.
+
+Lemma init_states_from_entry:
+  forall (INIT_MEM:
+       forall m, init_mem L1 = Some m ->
+            init_mem L2 = Some m)
+   (INIT_BLOCK: main_block L1 = main_block L2),
+    forall match_states
+  (fsim_match_entry_points:
+      forall (s1:state L1) f arg m0, entry_point L1 m0 s1 f arg  -> 
+                     exists s2, entry_point L2 m0 s2 f arg /\ match_states s1 s2),
+    forall s1, initial_state L1 s1  -> 
+          exists s2, initial_state L2 s2 /\ match_states s1 s2.
+Proof.
+  intros. inv H. rewrite INIT_BLOCK in *.
+  eapply fsim_match_entry_points0 in H1. destruct H1 as (s2&init_core&MATCH).
+  exists s2; split; eauto.
+  econstructor; eauto.
+Qed. 
 
    Section EqualityAndExtension.
      (** *Equality Phases*)
@@ -1397,7 +1453,7 @@ Hypothesis initial_states_exist:
 
 Hypothesis match_entry_points:
   forall s1 s2 f arg m0, entry_point L1 m0 s1 f arg  ->
-                 entry_point L2 m0 s2 f arg  ->
+                    entry_point L2 m0 s2 f arg  ->
                  exists s1', entry_point L1 m0 s1' f arg /\ match_states s1' s2.
 
 Hypothesis match_initial_state:
@@ -1428,7 +1484,7 @@ Proof.
     (fun (x y: unit) => False)
     (fun (i: unit) s1 s2 => match_states s1 s2);
   constructor; auto.
-- red; intros; constructor; intros. contradiction. 
+- red; intros; constructor; intros. contradiction.
 - intros. exists tt; eauto.
 - intros. exists tt; eauto.
 - intros. exists s1; split. apply star_refl. eauto.
@@ -1625,14 +1681,14 @@ Proof.
 - (* initial states exist *)
   intros. exploit (bsim_initial_states_exist props); eauto. intros [s2 ].
   exploit (bsim_initial_states_exist props'); eauto; intros (s3&?&?).
-- (* match initial cores *)
+- (* match entry points *)
   intros s1 s3 f arg m0 INIT1 INIT3.
   exploit (bsim_entry_points_exist props); eauto. intros [s2 INIT2].
-  exploit (bsim_match_entry_points props'); eauto. supertransitivity.
+  exploit (bsim_match_entry_points props'); eauto.
   intros [i2 [s2' [INIT2' M2]]].
   exploit (bsim_match_entry_points props); eauto; supertransitivity.
     intros [i1 [s1' [INIT1' M1]]].
-  exists (i1, i2); exists s1'; intuition auto. supertransitivity.
+  exists (i1, i2); exists s1'; intuition auto. 
   eapply bb_match_at; eauto.
 - (* match initial states *)
   intros s1 s3 INIT1 INIT3.

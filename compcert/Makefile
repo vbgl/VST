@@ -15,16 +15,21 @@
 
 include Makefile.config
 
--include CONFIGURE
-DIRS=lib common $(ARCH) backend cfrontend ia32 driver debug\
+ifeq ($(wildcard $(ARCH)_$(BITSIZE)),)
+ARCHDIRS=$(ARCH)
+else
+ARCHDIRS=$(ARCH)_$(BITSIZE) $(ARCH)
+endif
+
+DIRS=lib common $(ARCHDIRS) backend cfrontend driver debug\
   flocq/Core flocq/Prop flocq/Calc flocq/Appli exportclight \
   cparser cparser/validator
 
-RECDIRS=lib common $(ARCH) backend cfrontend ia32 driver flocq exportclight cparser
+RECDIRS=lib common $(ARCHDIRS) backend cfrontend driver flocq exportclight cparser
 
 COQINCLUDES=$(foreach d, $(RECDIRS), -R $(d) compcert.$(d))
 
-COQC="$(COQBIN)coqc" -q $(COQINCLUDES)
+COQC="$(COQBIN)coqc" -q $(COQINCLUDES) $(COQCOPTS)
 COQDEP="$(COQBIN)coqdep" $(COQINCLUDES)
 COQDOC="$(COQBIN)coqdoc"
 COQEXEC="$(COQBIN)coqtop" $(COQINCLUDES) -batch -load-vernac-source
@@ -53,12 +58,13 @@ FLOCQ=\
 VLIB=Axioms.v Coqlib.v Intv.v Maps.v Heaps.v Lattice.v Ordered.v \
   Iteration.v Integers.v Archi.v Fappli_IEEE_extra.v Floats.v \
   Parmov.v UnionFind.v Wfsimpl.v \
-  Postorder.v FSetAVLplus.v IntvSets.v Decidableplus.v
+  Postorder.v FSetAVLplus.v IntvSets.v Decidableplus.v BoolEqual.v \
+  SCTactics.v
 
 # Parts common to the front-ends and the back-end (in common/)
 
 COMMON=Errors.v AST.v Linking.v \
-  Events.v ExposedSmallstep.v Globalenvs.v Memdata.v Memtype.v Memory.v \
+  Events.v Globalenvs.v Memdata.v Memtype.v Memory.v \
   Values.v Smallstep.v Behaviors.v Switch.v Determinism.v Unityping.v \
   Separation.v
 
@@ -66,8 +72,9 @@ COMMON=Errors.v AST.v Linking.v \
 
 BACKEND=\
   Cminor.v Op.v CminorSel.v \
-  SelectOp.v SelectDiv.v SelectLong.v Selection.v \
-  SelectOpproof.v SelectDivproof.v SelectLongproof.v Selectionproof.v \
+  SelectOp.v SelectDiv.v SplitLong.v SelectLong.v Selection.v \
+  SelectOpproof.v SelectDivproof.v SplitLongproof.v \
+  SelectLongproof.v Selectionproof.v \
   Registers.v RTL.v \
   RTLgen.v RTLgenspec.v RTLgenproof.v \
   Tailcall.v Tailcallproof.v \
@@ -100,9 +107,6 @@ CFRONTEND=Ctypes.v Cop.v Csyntax.v Csem.v Ctyping.v Cstrategy.v Cexec.v \
   Cshmgen.v Cshmgenproof.v \
   Csharpminor.v Cminorgen.v Cminorgenproof.v
 
-# Asm backend (in ia32/)
-IA32=Asm.v
-
 # LR(1) parser validator
 
 PARSERVALIDATOR=Alphabet.v Interpreter_complete.v Interpreter.v \
@@ -119,10 +123,18 @@ DRIVER=Compopts.v Compiler.v Complements.v
 
 # All source files
 
-FILES=$(VLIB) $(COMMON) $(BACKEND) $(CFRONTEND) $(IA32) $(DRIVER) $(FLOCQ) \
+FILES=$(VLIB) $(COMMON) $(BACKEND) $(CFRONTEND) $(DRIVER) $(FLOCQ) \
   $(PARSERVALIDATOR) $(PARSER)
 
+# Generated source files
+
+GENERATED=\
+  $(ARCH)/ConstpropOp.v $(ARCH)/SelectOp.v $(ARCH)/SelectLong.v \
+  backend/SelectDiv.v backend/SplitLong.v \
+  cparser/Parser.v
+
 all:
+	@test -f .depend || $(MAKE) depend
 	$(MAKE) proof
 	$(MAKE) extraction
 	$(MAKE) ccomp
@@ -135,6 +147,9 @@ endif
 
 
 proof: $(FILES:.v=.vo)
+
+# Turn off some warnings for compiling Flocq
+flocq/%.vo: COQCOPTS+=-w -deprecated-implicit-arguments
 
 extraction: extraction/STAMP
 
@@ -193,7 +208,7 @@ latexdoc:
 	@rm -f $*.v
 	@echo "Preprocessing $*.vp"
 	@tools/ndfun $*.vp > $*.v || { rm -f $*.v; exit 2; }
-	@chmod -w $*.v
+	@chmod a-w $*.v
 
 compcert.ini: Makefile.config
 	(echo "stdlib_path=$(LIBDIR)"; \
@@ -206,12 +221,14 @@ compcert.ini: Makefile.config
          echo "arch=$(ARCH)"; \
          echo "model=$(MODEL)"; \
          echo "abi=$(ABI)"; \
+         echo "endianness=$(ENDIANNESS)"; \
          echo "system=$(SYSTEM)"; \
          echo "has_runtime_lib=$(HAS_RUNTIME_LIB)"; \
          echo "has_standard_headers=$(HAS_STANDARD_HEADERS)"; \
          echo "asm_supports_cfi=$(ASM_SUPPORTS_CFI)"; \
          echo "struct_passing_style=$(STRUCT_PASSING)"; \
-         echo "struct_return_style=$(STRUCT_RETURN)";) \
+         echo "struct_return_style=$(STRUCT_RETURN)"; \
+	 echo "response_file_style=$(RESPONSEFILE)";) \
         > compcert.ini
 
 driver/Version.ml: VERSION
@@ -222,16 +239,19 @@ driver/Version.ml: VERSION
 cparser/Parser.v: cparser/Parser.vy
 	$(MENHIR) --coq cparser/Parser.vy
 
-depend: $(FILES) exportclight/Clightdefs.v
-	$(COQDEP) $^ \
-        | sed -e 's|$(ARCH)/|$$(ARCH)/|g' \
-        > .depend
+depend: $(GENERATED) depend1
+
+depend1: $(FILES) exportclight/Clightdefs.v
+	@echo "Analyzing Coq dependencies"
+	@$(COQDEP) $^ > .depend
 
 install:
 	install -d $(BINDIR)
 	install -m 0755 ./ccomp $(BINDIR)
 	install -d $(SHAREDIR)
 	install -m 0644 ./compcert.ini $(SHAREDIR)
+	install -d $(MANDIR)/man1
+	install -m 0644 ./doc/ccomp.1 $(MANDIR)/man1
 	$(MAKE) -C runtime install
 ifeq ($(CLIGHTGEN),true)
 	install -m 0755 ./clightgen $(BINDIR)
@@ -239,13 +259,14 @@ endif
 
 clean:
 	rm -f $(patsubst %, %/*.vo, $(DIRS))
+	rm -f $(patsubst %, %/.*.aux, $(DIRS))
 	rm -rf doc/html doc/*.glob
 	rm -f doc/coq2html.ml doc/coq2html doc/*.cm? doc/*.o
 	rm -f driver/Version.ml
 	rm -f compcert.ini
 	rm -f extraction/STAMP extraction/*.ml extraction/*.mli .depend.extr
 	rm -f tools/ndfun tools/modorder tools/*.cm? tools/*.o
-	rm -f $(ARCH)/ConstpropOp.v $(ARCH)/SelectOp.v backend/SelectDiv.v backend/SelectLong.v
+	rm -f $(GENERATED) .depend
 	$(MAKE) -f Makefile.extr clean
 	$(MAKE) -C runtime clean
 	$(MAKE) -C test clean
@@ -257,17 +278,16 @@ distclean:
 check-admitted: $(FILES)
 	@grep -w 'admit\|Admitted\|ADMITTED' $^ || echo "Nothing admitted."
 
-# Problems with coqchk (coq 8.5pl1):
+# Problems with coqchk (coq 8.6):
 # Integers.Int.Z_mod_modulus_range takes forever to check
-# compcert.lib.Floats.Float.of_longu_from_words takes forever to check
 # compcert.backend.SelectDivproof.divs_mul_shift_2 takes forever to check
 
 check-proof: $(FILES)
-	$(COQCHK) -admit Integers -admit Floats -admit SelectDivproof Complements
+	$(COQCHK) -admit compcert.lib.Integers -admit compcert.backend.SelectDivproof compcert.driver.Complements
 
 print-includes:
 	@echo $(COQINCLUDES)
 
-include .depend
+-include .depend
 
 FORCE:
