@@ -484,3 +484,55 @@ Proof.
   intros; unfold own.
   apply exp_left; intro; apply Own_dealloc.
 Qed.
+
+Definition physical (P : pred rmap) :=
+  forall w1 w2, resource_at w1 = resource_at w2 -> level w1 = level w2 -> P w1 -> P w2.
+
+Lemma physical_bupd : forall P, physical P -> bupd P |-- P.
+Proof.
+  repeat intro.
+  specialize (H0 (core (ghost_of a))) as (? & ? & ? & ? & ? & ? & HP).
+  { eexists.
+    rewrite <- ghost_of_approx at 1; apply ghost_fmap_join, join_comm, core_unit. }
+  eapply H; eauto.
+Qed.
+
+Lemma bupd_frame_r_phys : forall P Q, physical Q -> bupd P && Q |-- bupd (P && Q).
+Proof.
+  repeat intro.
+  destruct H0 as [HP ?].
+  specialize (HP _ H1) as (? & ? & m' & ? & ? & ? & ?); subst.
+  do 2 eexists; eauto.
+  exists m'; repeat split; auto.
+  eapply H; eauto.
+Qed.
+
+Lemma prop_physical : forall P, physical (!! P).
+Proof.
+  repeat intro; auto.
+Qed.
+
+Lemma andp_physical : forall P Q, physical P -> physical Q -> physical (P && Q).
+Proof.
+  repeat intro.
+  destruct H3; split; [eapply H | eapply H0]; eauto.
+Qed.
+
+Lemma sepcon_physical : forall P Q, physical P -> physical Q -> physical (P * Q).
+Proof.
+  repeat intro.
+  destruct H3 as (r1 & r2 & J & ? & ?).
+  destruct (join_level _ _ _ J) as [Hl1 Hl2].
+  destruct (make_rmap _ (core (ghost_of w2)) (rmap_valid r1) (level w2)) as (r1' & ? & Hr1 & Hg1).
+  { apply resources_same_level.
+    intro; rewrite <- H1; apply resource_at_join_sub; eexists; eauto. }
+  { rewrite ghost_core; auto. }
+  destruct (make_rmap _ (ghost_of w2) (rmap_valid r2) (level w2)) as (r2' & ? & Hr2 & Hg2).
+  { apply resources_same_level.
+    intro; rewrite <- H1; apply resource_at_join_sub; eexists; eauto. }
+  { apply ghost_of_approx. }
+  exists r1', r2'; repeat split; [| eapply (H r1) | eapply (H0 r2)]; eauto; try omega.
+  apply resource_at_join2; try omega.
+  - intro; rewrite Hr1, Hr2, <- H1; apply resource_at_join; auto.
+  - rewrite Hg1, Hg2; apply core_unit.
+Qed.

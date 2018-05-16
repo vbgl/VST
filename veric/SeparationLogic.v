@@ -45,7 +45,8 @@ Instance CSLveric: CorableSepLog mpred := algCorableSepLog compcert_rmaps.RML.R.
 Instance CIveric: CorableIndir mpred := algCorableIndir compcert_rmaps.RML.R.rmap.
 Instance SRveric: SepRec mpred := algSepRec compcert_rmaps.RML.R.rmap.
 Instance Bveric: BupdSepLog mpred gname compcert_rmaps.RML.R.preds :=
-  mkBSL _ _ _ _ _ bupd (@own) bupd_intro bupd_mono bupd_trans bupd_frame_r
+  mkBSL _ _ _ _ _ bupd (@own) physical bupd_intro bupd_mono bupd_trans bupd_frame_r
+    bupd_physical bupd_frame_r_phys prop_physical andp_physical sepcon_physical
     (@ghost_alloc) (@ghost_op) (@ghost_valid_2) (@ghost_update_ND) (@ghost_dealloc).
 
 Instance LiftNatDed' T {ND: NatDed T}: NatDed (LiftEnviron T) := LiftNatDed _ _.

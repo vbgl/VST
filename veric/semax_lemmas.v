@@ -167,11 +167,9 @@ split; [ | split; [ | split]].
  rewrite (H0 id); auto.
 Qed.
 
-Lemma funassert_resource: forall Delta rho a a' (Hl: level a = level a')
-  (Hr: resource_at a = resource_at a'),
-  funassert Delta rho a -> funassert Delta rho a'.
+Lemma funassert_physical: forall Delta, physical (funassert Delta).
 Proof.
-  intros.
+  repeat intro.
   destruct H as [H1 H2]; split; repeat intro.
   - destruct (H1 _ _ _ (rt_refl _ _ _) H0) as (b1 & ? & ?).
     exists b1; split; auto.
@@ -2013,8 +2011,7 @@ apply guard_safe_adj; [ trivial | intros].
 apply safe_seq_Slabel; trivial.
 Qed.
 
-Lemma denote_tc_resource: forall {cs: compspecs} rho a a' t, resource_at a = resource_at a' ->
-  denote_tc_assert t rho a -> denote_tc_assert t rho a'.
+Lemma denote_tc_physical: forall {cs: compspecs} t, physical (denote_tc_assert t).
 Proof.
   induction t; auto; intros; simpl in *.
   - destruct H0; auto.
@@ -2068,10 +2065,7 @@ Qed.
 Lemma bupd_denote_tc: forall {cs: compspecs} P t rho a,
   denote_tc_assert t rho a -> bupd P a -> bupd (denote_tc_assert t rho && P) a.
 Proof.
-  repeat intro.
-  destruct (H0 _ H1) as (b & ? & m & ? & ? & ? & ?); subst.
-  eexists; split; eauto; exists m; repeat split; eauto.
-  eapply denote_tc_resource; [|eauto]; auto.
+  intros; eapply bupd_frame_l_phys; auto.
 Qed.
 
 Lemma assert_safe_jsafe: forall Espec ge ve te ctl ora jm,
