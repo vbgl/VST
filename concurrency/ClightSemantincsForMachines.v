@@ -62,7 +62,7 @@ Section ClightSEM.
      forall ge c m, at_external (Sem ge) c m =
       match c with
       | State _ _ _ => None
-      | ExtCall ef args _ _ _ _ => Some (ef, ef_sig ef, args)
+      | ExtCall ef args _ _ _ _ => Some (ef, args)
       end.
   Proof. auto. Qed.
 

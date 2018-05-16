@@ -15,7 +15,7 @@ Require Import compcert.common.Smallstep.
 
 Record CoreSemantics {C M : Type} : Type :=
   { initial_core : nat -> M -> C -> val -> list val -> Prop
-  ; at_external : C -> M -> option (external_function * signature * list val)
+  ; at_external : C -> M -> option (external_function * list val)
   ; after_external : option val -> C -> M -> option C
   ; halted : C -> int -> Prop
   ; corestep : C -> M -> C -> M -> Prop

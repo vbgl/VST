@@ -148,13 +148,13 @@ Section Jspec'_properties.
     destruct n as [ | n]. intros; constructor.
     intros safe.
     inversion safe as [ | ? ? ? ? c' jm' step safe' H H2 H3 H4
-                        | ? ? ? ? ef sig args x atex' Pre Post | ]; subst.
+                        | ? ? ? ? ef args x atex' Pre Post | ]; subst.
     - (* corestep: not at external *)
       destruct step as [step rd].
       erewrite cl_corestep_not_at_external in atex. discriminate. apply step.
     - (* at_ex: interesting case *)
       intros jm_ Ejm_.
-      constructor 3 with (e := ef) (sig := sig) (args := args) (x := x).
+      constructor 3 with (e := ef) (args := args) (x := x).
       + auto.
 
       + (* precondition only cares about phi *)

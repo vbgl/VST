@@ -357,7 +357,7 @@ Module HybridMachineSig.
                     (fst (fst c')) (snd (fst c')) (snd c')  m'.
 
     Definition at_external_mach (st : MachState) (m: mem)
-      : option (external_function * signature * list val) := None.
+      : option (external_function * list val) := None.
     
     Definition after_external_mach (ov : option val) (st : MachState) (m : mem) :
       option (MachState) := None.

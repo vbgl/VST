@@ -512,7 +512,7 @@ Definition blocked_at_external (state : cm_state) (ef : external_function) :=
     exists j cntj sch' c args,
       sch = j :: sch' /\
       @getThreadC _ _ _ j tp cntj = Kblocked c /\
-      cl_at_external c = Some (ef, ef_sig ef, args)
+      cl_at_external c = Some (ef, args)
   end.
 
 Definition state_bupd P (state : cm_state) := let '(m, (tr, sch, tp)) := state in
@@ -569,9 +569,9 @@ Lemma state_inv_upd : forall Gamma (n : nat)
       (mcompat : mem_compatible_with tp m PHI)
       (lock_sparse : lock_sparsity (lset tp))
       (lock_coh : lock_coherence' tp PHI m mcompat)
-      (safety : forall C, joins (ghost_of PHI) (ghost_fmap (approx (level PHI)) (approx (level PHI)) (Some (ext_ghost tt, NoneP) :: C)) ->
+      (safety : forall C, joins (ghost_of PHI) (ghost_fmap (approx (level PHI)) (approx (level PHI)) (Some (ext_ref tt, NoneP) :: C)) ->
         exists tp' PHI' (Hupd : tp_update tp PHI tp' PHI'),
-        joins (ghost_of PHI') (ghost_fmap (approx (level PHI)) (approx (level PHI)) (Some (ext_ghost tt, NoneP) :: C)) /\
+        joins (ghost_of PHI') (ghost_fmap (approx (level PHI)) (approx (level PHI)) (Some (ext_ref tt, NoneP) :: C)) /\
         threads_safety m tp' PHI' (mem_compatible_upd _ _ _ _ _ mcompat Hupd) n)
       (wellformed : threads_wellformed tp)
       (uniqkrun :  unique_Krun tp sch),

@@ -740,7 +740,7 @@ Module X86Inj.
       valid_mem m ->
       domain_memren f m ->
       core_wd f c ->
-      at_external (Asm_core_sem the_ge) c m = Some (ef, ef_sig, args) -> valid_val_list f args.
+      at_external (Asm_core_sem the_ge) c m = Some (ef, args) -> valid_val_list f args.
   Proof.
     intros.
     destruct c; simpl in *.
@@ -777,7 +777,7 @@ Module X86Inj.
   Lemma after_external_wd :
     forall the_ge m (c c' : state) (f : memren) (ef : external_function) (sig : signature)
       (args : seq val) (ov : option val)
-      (Hat_external: at_external (Asm_core_sem the_ge) c m = Some (ef, sig, args))
+      (Hat_external: at_external (Asm_core_sem the_ge) c m = Some (ef, args))
       (Hcore_wd: core_wd f c)
       (Hvalid_list: valid_val_list f args)
       (Hafter_external: after_external (Asm_core_sem the_ge) ov c m = Some c')
@@ -928,10 +928,10 @@ Module X86Inj.
       (Hinj : core_inj f c c')
       (Hmem : mem_obs_eq f m m'),
       match at_external (Asm_core_sem the_ge) c m with
-      | Some (ef, sig, vs) =>
+      | Some (ef, vs) =>
         match at_external (Asm_core_sem the_ge) c' m' with
-        | Some (ef', sig', vs') =>
-          ef = ef' /\ sig = sig' /\ val_obs_list f vs vs'
+        | Some (ef', vs') =>
+          ef = ef' /\ val_obs_list f vs vs'
         | None => False
         end
       | None =>
@@ -952,6 +952,7 @@ Module X86Inj.
       destruct f0; auto.
       destruct (get_extcall_arguments _ _ _) eqn: Hargs.
       eapply get_extcall_arguments_inj in Hargs as (? & -> & ?); eauto.
+      destruct (get_extcall_arguments r0 m' _) eqn: Hargs'; auto.
       admit. (* other direction *)
     - destruct (find_funct_ptr the_ge b0) eqn: Hfind'; auto.
       exploit find_funct_ptr_inj'; eauto; intro; subst.

@@ -73,7 +73,7 @@ Module BareMachine.
         forall (tp' : thread_pool) c m' b ofs
           (Hcode: getThreadC cnt0 = Kblocked c)
           (Hat_external: at_external semSem c m =
-                         Some (LOCK, LOCK_SIG, Vptr b ofs::nil))
+                         Some (LOCK, Vptr b ofs::nil))
           (Hload: Mem.load Mint32 m b (Ptrofs.intval ofs) = Some (Vint Int.one))
           (Hstore: Mem.store Mint32 m b (Ptrofs.intval ofs) (Vint Int.zero) = Some m')
           (Htp': tp' = updThreadC cnt0 (Kresume c Vundef)),
@@ -83,7 +83,7 @@ Module BareMachine.
         forall (tp':thread_pool) c m' b ofs
           (Hcode: getThreadC cnt0 = Kblocked c)
           (Hat_external: at_external semSem c m =
-                         Some (UNLOCK, UNLOCK_SIG, Vptr b ofs::nil))
+                         Some (UNLOCK, Vptr b ofs::nil))
           (Hstore: Mem.store Mint32 m b (Ptrofs.intval ofs) (Vint Int.one) = Some m')
           (Htp': tp' = updThreadC cnt0 (Kresume c Vundef)),
           ext_step cnt0 Hcompat tp' m' (release (b, Ptrofs.intval ofs) None)
@@ -92,7 +92,7 @@ Module BareMachine.
         forall (tp_upd tp':thread_pool) c b ofs arg
           (Hcode: getThreadC cnt0 = Kblocked c)
           (Hat_external: at_external semSem c m =
-                         Some (CREATE, CREATE_SIG, Vptr b ofs::arg::nil))
+                         Some (CREATE, Vptr b ofs::arg::nil))
           (Htp_upd: tp_upd = updThreadC cnt0 (Kresume c Vundef))
           (Htp': tp' = addThread tp_upd (Vptr b ofs) arg tt),
           ext_step cnt0 Hcompat tp' m (spawn (b, Ptrofs.intval ofs) None None)
@@ -101,7 +101,7 @@ Module BareMachine.
         forall  (tp': thread_pool) c m' b ofs
            (Hcode: getThreadC cnt0 = Kblocked c)
            (Hat_external: at_external semSem c m =
-                          Some (MKLOCK, UNLOCK_SIG, Vptr b ofs::nil))
+                          Some (MKLOCK, Vptr b ofs::nil))
            (Hstore: Mem.store Mint32 m b (Ptrofs.intval ofs) (Vint Int.zero) = Some m')
            (Htp': tp' = updThreadC cnt0 (Kresume c Vundef)),
           ext_step cnt0 Hcompat tp' m' (mklock (b, Ptrofs.intval ofs))
@@ -110,7 +110,7 @@ Module BareMachine.
         forall (tp' tp'': thread_pool) c b ofs
           (Hcode: getThreadC cnt0 = Kblocked c)
           (Hat_external: at_external semSem c m =
-                         Some (FREE_LOCK, UNLOCK_SIG, Vptr b ofs::nil))
+                         Some (FREE_LOCK, Vptr b ofs::nil))
           (Htp': tp' = updThreadC cnt0 (Kresume c Vundef)),
           ext_step cnt0 Hcompat  tp' m (freelock (b,Ptrofs.intval ofs))
 
@@ -118,7 +118,7 @@ Module BareMachine.
         forall  c b ofs
            (Hcode: getThreadC cnt0 = Kblocked c)
            (Hat_external: at_external semSem c m =
-                          Some (LOCK, LOCK_SIG, Vptr b ofs::nil))
+                          Some (LOCK, Vptr b ofs::nil))
            (Hload: Mem.load Mint32 m b (Ptrofs.intval ofs) = Some (Vint Int.zero)),
           ext_step cnt0 Hcompat tp m (failacq (b, Ptrofs.intval ofs)).
 

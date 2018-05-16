@@ -4093,13 +4093,13 @@ Module CoreInjections.
             valid_mem m ->
             domain_memren f m ->
             core_wd f c ->
-            at_external semSem c m = Some (ef, ef_sig, args) -> 
+            at_external semSem c m = Some (ef, args) -> 
             valid_val_list f args;
 
         after_external_wd:
           forall m (c c' : semC) (f : memren) (ef : external_function)
             (ef_sig: signature) (args : seq val) (ov : option val)
-            (Hat_external: at_external semSem c m = Some (ef, ef_sig, args))
+            (Hat_external: at_external semSem c m = Some (ef, args))
             (Hcore_wd: core_wd f c)
             (Hvalid_list: valid_val_list f args)
             (Hafter_external: after_external semSem ov c m = Some c')
@@ -4142,10 +4142,10 @@ Module CoreInjections.
             core_inj f c c' ->
             mem_obs_eq f m m' ->
             match at_external semSem c m with
-            | Some (ef, sig, vs) =>
+            | Some (ef, vs) =>
               match at_external semSem c' m' with
-              | Some (ef', sig', vs') =>
-                ef = ef' /\ sig = sig' /\ val_obs_list f vs vs'
+              | Some (ef', vs') =>
+                ef = ef' /\ val_obs_list f vs vs'
               | None => False
               end
             | None =>

@@ -32,8 +32,8 @@ Section safety.
       safeN_ n z c' m' ->
       safeN_ (S n) z c m
   | safeN_external:
-      forall n z c m e sig args x,
-      at_external Hcore c m = Some (e,sig,args) ->
+      forall n z c m e args x,
+      at_external Hcore c m = Some (e,args) ->
       ext_spec_pre Hspec e x (genv_symb ge) (sig_args (ef_sig e)) args z m ->
       (forall ret m' z' n'
          (Hargsty : Val.has_type_list args (sig_args (ef_sig e)))

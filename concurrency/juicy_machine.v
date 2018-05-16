@@ -1141,7 +1141,7 @@ Qed.
             (Hinv : invariant tp)
             (Hthread: getThreadC cnt0 = Kblocked c)
             (Hat_external: at_external the_sem c m =
-                           Some (LOCK, LOCK_SIG, Vptr b ofs::nil))
+                           Some (LOCK, Vptr b ofs::nil))
             (Hcompatible: mem_compatible tp m)
             (*Hpersonal_perm:
                personal_mem cnt0 Hcompatible = jm*)
@@ -1174,7 +1174,7 @@ Qed.
             (Hinv : invariant tp)
             (Hthread: getThreadC cnt0 = Kblocked c)
             (Hat_external: at_external the_sem c m =
-                           Some (UNLOCK, UNLOCK_SIG, Vptr b ofs::nil))
+                           Some (UNLOCK, Vptr b ofs::nil))
             (Hcompatible: mem_compatible tp m)
             (* Hpersonal_perm:
                personal_mem cnt0 Hcompatible = jm *)
@@ -1209,7 +1209,7 @@ Qed.
             (Hinv : invariant tp)
             (Hthread: getThreadC cnt0 = Kblocked c)
             (Hat_external: at_external the_sem c m =
-                           Some (CREATE, CREATE_SIG, vf::arg::nil))
+                           Some (CREATE, vf::arg::nil))
             (Hinitial: initial_core the_sem 0 m c_new vf (arg::nil)) (* FIXME:
                     This line should not be necessary, says Andrew to Santiago, June 29, 2017 *)
             (Hfun_sepc: vf = Vptr b ofs)
@@ -1228,7 +1228,7 @@ Qed.
             (Hinv : invariant tp)
             (Hthread: getThreadC cnt0 = Kblocked c)
             (Hat_external: at_external the_sem c m =
-                           Some (MKLOCK, UNLOCK_SIG, Vptr b ofs::nil))
+                           Some (MKLOCK, Vptr b ofs::nil))
             (Hcompatible: mem_compatible tp m)
             (*Hright_juice:  m = m_dry jm*)
             (Hpersonal_perm:
@@ -1253,7 +1253,7 @@ Qed.
             (Hinv : invariant tp)
             (Hthread: getThreadC cnt0 = Kblocked c)
             (Hat_external: at_external the_sem c m =
-                           Some (FREE_LOCK, UNLOCK_SIG, Vptr b ofs::nil))
+                           Some (FREE_LOCK, Vptr b ofs::nil))
             (Hcompatible: mem_compatible tp m)
             (Hpersonal_juice: getThreadR cnt0 = phi)
             (*First check the lock is acquired:*)
@@ -1272,7 +1272,7 @@ Qed.
             (Hinv : invariant tp)
             (Hthread: getThreadC cnt0 = Kblocked c)
             (Hat_external: at_external the_sem c m =
-                           Some (LOCK, UNLOCK_SIG, Vptr b ofs::nil))
+                           Some (LOCK, Vptr b ofs::nil))
             (Hcompatible: mem_compatible tp m)
             (Hpersonal_perm:
                personal_mem (thread_mem_compatible Hcompatible cnt0) = jm)

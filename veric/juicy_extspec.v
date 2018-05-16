@@ -29,7 +29,7 @@ Definition j_initial_core {C} (csem: @CoreSemantics C mem)
   core_semantics.initial_core csem n (m_dry m) q v args.
 
 Definition j_at_external {C} (csem: @CoreSemantics C mem)
-   (q: C) (jm: juicy_mem) : option (external_function * signature * list val) :=
+   (q: C) (jm: juicy_mem) : option (external_function * list val) :=
  core_semantics.at_external csem q (m_dry jm).
 
 Definition j_after_external {C} (csem: @CoreSemantics C mem)
@@ -454,8 +454,8 @@ Section juicy_safety.
       jm_bupd z (jsafeN_ n z c') m' ->
       jsafeN_ (S n) z c m
   | jsafeN_external:
-      forall n z c m e sig args x,
-      j_at_external Hcore c m = Some (e,sig,args) ->
+      forall n z c m e args x,
+      j_at_external Hcore c m = Some (e,args) ->
       ext_spec_pre Hspec e x (genv_symb ge) (sig_args (ef_sig e)) args z m ->
       (forall ret m' z' n'
          (Hargsty : Val.has_type_list args (sig_args (ef_sig e)))

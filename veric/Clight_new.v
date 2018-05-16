@@ -77,10 +77,10 @@ Inductive corestate :=
 Fixpoint strip_skip (k: cont) : cont :=
  match k with Kseq Sskip :: k' => strip_skip k' | _ => k end.
 
-Definition cl_at_external (c: corestate) : option (external_function * signature * list val) :=
+Definition cl_at_external (c: corestate) : option (external_function * list val) :=
   match c with
   | State _ _ k => None
-  | ExtCall ef args lid ve te k => Some (ef, ef_sig ef, args)
+  | ExtCall ef args lid ve te k => Some (ef, args)
  end.
 
 Definition cl_after_external (vret: option val) (c: corestate) : option corestate :=
