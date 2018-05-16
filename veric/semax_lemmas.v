@@ -167,10 +167,10 @@ split; [ | split; [ | split]].
  rewrite (H0 id); auto.
 Qed.
 
-Lemma funassert_physical: forall Delta, physical (funassert Delta).
+Lemma funassert_physical: forall Delta rho, physical (funassert Delta rho).
 Proof.
-  repeat intro.
-  destruct H as [H1 H2]; split; repeat intro.
+  intros ???? Hr Hl [H1 H2].
+  split; repeat intro.
   - destruct (H1 _ _ _ (rt_refl _ _ _) H0) as (b1 & ? & ?).
     exists b1; split; auto.
     destruct b0; simpl in *.
@@ -259,7 +259,7 @@ assert ((bupd (assert_safe Espec psi ve te (exit_cont ek vl k)
   lapply (H0 m'); [|omega].
   intro X; apply X; auto.
   split; [split|]; auto.
-  apply funassert_resource with (a := a'); auto. }
+  apply (funassert_physical _ _ a'); auto. }
 eapply bupd_trans; eauto.
 Qed.
 
@@ -304,7 +304,7 @@ pose proof (necR_level _ _ H2).
 lapply (H0 m'); [|omega].
 intro X; apply X; auto.
 split; [split|]; auto.
-apply funassert_resource with (a := a'); auto.
+apply (funassert_physical _ _ a'); auto.
 { destruct H3; eapply typecheck_environ_sub; eauto. }
 Qed.
 
@@ -2011,11 +2011,11 @@ apply guard_safe_adj; [ trivial | intros].
 apply safe_seq_Slabel; trivial.
 Qed.
 
-Lemma denote_tc_physical: forall {cs: compspecs} t, physical (denote_tc_assert t).
+Lemma denote_tc_physical: forall {cs: compspecs} t rho, physical (denote_tc_assert t rho).
 Proof.
-  induction t; auto; intros; simpl in *.
-  - destruct H0; auto.
-  - destruct H0; auto.
+  induction t; repeat intro; auto; simpl in *.
+  - destruct H1; split; [eapply IHt1 | eapply IHt2]; eauto.
+  - destruct H1; [left; eapply IHt1 | right; eapply IHt2]; eauto.
   - unfold liftx in *; simpl in *.
     unfold lift in *; simpl in *.
     destruct (eval_expr e rho); auto; simpl in *; if_tac; auto.
@@ -2026,18 +2026,18 @@ Proof.
     unfold lift in *; simpl in *.
     destruct (eval_expr e rho), (eval_expr e0 rho); auto; simpl in *.
     + simple_if_tac; auto.
-      destruct H0; split; auto.
-      destruct H1; [left | right]; simpl in *; rewrite <- H; auto.
+      destruct H1; split; auto.
+      destruct H2; [left | right]; simpl in *; rewrite <- H; auto.
     + simple_if_tac; auto.
-      destruct H0; split; auto.
-      destruct H1; [left | right]; simpl in *; rewrite <- H; auto.
+      destruct H1; split; auto.
+      destruct H2; [left | right]; simpl in *; rewrite <- H; auto.
     + unfold test_eq_ptrs in *.
-      destruct (sameblock _ _), H0; split; simpl in *; rewrite <- H; auto.
+      destruct (sameblock _ _), H1; split; simpl in *; rewrite <- H; auto.
   - unfold liftx in *; simpl in *.
     unfold lift in *; simpl in *.
     destruct (eval_expr e rho), (eval_expr e0 rho); auto; simpl in *.
     unfold test_order_ptrs in *.
-    destruct (sameblock _ _), H0; split; simpl in *; rewrite <- H; auto.
+    destruct (sameblock _ _), H1; split; simpl in *; rewrite <- H; auto.
   - unfold liftx in *; simpl in *.
     unfold lift in *; simpl in *.
     destruct (eval_expr e rho); auto; simpl in *; if_tac; auto.
@@ -2065,7 +2065,9 @@ Qed.
 Lemma bupd_denote_tc: forall {cs: compspecs} P t rho a,
   denote_tc_assert t rho a -> bupd P a -> bupd (denote_tc_assert t rho && P) a.
 Proof.
-  intros; eapply bupd_frame_l_phys; auto.
+  intros; rewrite andp_comm.
+  eapply bupd_frame_r_phys; [apply denote_tc_physical|].
+  split; auto.
 Qed.
 
 Lemma assert_safe_jsafe: forall Espec ge ve te ctl ora jm,
