@@ -222,13 +222,11 @@ Section Safety.
     destruct (containsThread_dec i tp) as [cnti | ncnti]. 2: now t.
     destruct (@getThreadC _ _ _ i tp cnti) as [c | c | c v | v v0] eqn:Ei;
     try solve [right; intros [i' [cnti' [sch' [c0 [? [H [? ?]]]]]]]; inv H; proof_irr; congruence].
-    destruct (cl_at_external c) as [((ef', sig), args) | ] eqn:Eo;
+    destruct (cl_at_external c) as [(ef', args) | ] eqn:Eo;
     try solve [right; intros [i' [cnti' [sch' [c0 [? [H [? ?]]]]]]]; inv H; proof_irr; congruence].
     destruct (eq_dec ef ef'); try subst ef';
     try solve [right; intros [i' [cnti' [sch' [c0 [? [H [? ?]]]]]]]; inv H; proof_irr; congruence].
     (* destruct (EqDec_external_function ef ef'). subst ef'. 2: now t' i cnti. *)
-    destruct (signature_eq sig (ef_sig ef)); try subst sig;
-    try solve [right; intros [i' [cnti' [sch' [c0 [? [H [? ?]]]]]]]; inv H; proof_irr; congruence].
     now left; repeat eexists; eauto.
   Qed.
 
@@ -306,8 +304,8 @@ Section Safety.
   Proof.
     intros ???? HP.
     destruct HP as [? HP]; split; auto.
-    intros ? Hj ? J.
-    specialize (HP _ Hj _ J) as (? & ? & ? & ? & ? & ? & ?); eauto 8.
+    intros ? Hj ? HC J.
+    specialize (HP _ Hj _ HC J) as (? & ? & ? & ? & ? & ? & ?); eauto 8.
   Qed.
 
   Lemma inv_step Gamma n state :

@@ -62,10 +62,10 @@ Module THE_JUICY_MACHINE.
 
   Definition tp_bupd P (tp : jstate) := (exists phi, join_all tp phi) /\
   forall phi, join_all tp phi ->
-    forall c : ghost,
-     joins (ghost_of phi) (ghost_fmap (approx (level phi)) (approx (level phi)) (Some (initial_world.ext_ref tt, NoneP) :: c)) ->
+    forall c : ghost, join_sub (Some (initial_world.ext_ref tt, NoneP) :: nil) c ->
+     joins (ghost_of phi) (ghost_fmap (approx (level phi)) (approx (level phi)) c) ->
      exists b : ghost,
-       joins b (ghost_fmap (approx (level phi)) (approx (level phi)) (Some (initial_world.ext_ref tt, NoneP) :: c)) /\
+       joins b (ghost_fmap (approx (level phi)) (approx (level phi)) c) /\
        exists phi' tp', tp_update tp phi tp' phi' /\ ghost_of phi' = b /\ P tp'.
 
   Existing Instance JuicyMachineShell.

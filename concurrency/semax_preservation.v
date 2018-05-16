@@ -1460,14 +1460,14 @@ Qed. (* Lemma preservation_Kinit *)
           eexists; split; eauto.
           specialize (safety i ctn tt).
           unfold JSem in *. rewrite Eci in safety.
-          intros ? J.
+          intros ? HC J.
           unshelve erewrite gThreadCR in J; auto.
           getThread_inv. injection H as -> -> .
           setoid_rewrite ClightSemantincsForMachines.CLN_msem in Hafter_external.
           specialize (safety _ Hafter_external (jm_ ctn compat)).
           erewrite getThread_level in J by apply compat.
           substwith Htid ctn.
-          rewrite m_phi_jm_ in safety; specialize (safety eq_refl) as (jm' & ? & Hupd & safety).
+          rewrite m_phi_jm_ in safety; specialize (safety eq_refl) as (jm' & ? & Hupd & safety); eauto.
           { rewrite m_phi_jm_, level_jm_; eauto. }
           rewrite level_jm_ in H.
           eexists; split; [unshelve erewrite gThreadCR, getThread_level by apply compat; eauto|].

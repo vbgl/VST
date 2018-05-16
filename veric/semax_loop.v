@@ -1127,7 +1127,7 @@ reflexivity.
   rewrite <- H11.
   eapply step_ifthenelse. eassumption. eassumption.
   simpl.
-  intros ? J; destruct (H1 _ J) as (m'' & ? & ? & Hsafe).
+  intros ? HC J; destruct (H1 _ HC J) as (m'' & ? & ? & Hsafe).
   exists m''; split; auto; split; auto.
   clear - Hsafe.
   inv Hsafe.
@@ -1143,7 +1143,7 @@ reflexivity.
   rewrite <- H11.
   eapply step_ifthenelse. eassumption. eassumption.
   simpl.
-  intros ? J; destruct (H1 _ J) as (m'' & ? & ? & Hsafe).
+  intros ? HC J; destruct (H1 _ HC J) as (m'' & ? & ? & Hsafe).
   exists m''; split; auto; split; auto.
   clear - Hsafe.
   inv Hsafe.

@@ -127,14 +127,14 @@ Proof.
     inv Safe.
     + destruct (jstep_age_sim A H0 ltac:(omega)) as [jmaged' [A' step']].
       econstructor 2; eauto.
-      intros C J.
+      intros C HC J.
       rewrite (age1_ghost_of _ _ (age_jm_phi A')) in J.
       destruct (own.ghost_joins_approx _ _ _ J) as (J' & Hd').
       rewrite <- level_juice_level_phi in *.
       rewrite <- (age_level _ _ A') in *.
       rewrite level_juice_level_phi, ghost_of_approx in J'.
-      rewrite (make_join_ext _ _ _ _ J) in *.
-      destruct (H1 _ J') as (b & ? & Hupd & Hsafe).
+      destruct (H1 (own.make_join (ghost_of (m_phi m')) C)) as (b & ? & Hupd & Hsafe); auto.
+      { eapply make_join_ext; eauto. }
       destruct (jm_update_age _ _ _ Hupd A') as (b' & Hupd' & Hage').
       eapply IHn in Hsafe; eauto.
       eexists; split; [|eauto].

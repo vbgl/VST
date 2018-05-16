@@ -775,9 +775,9 @@ Proof.
     exists _, cnti''; split.
     + subst tp''; eexists; split.
       { rewrite gssThreadCode; auto. }
-      intros ? Jg.
+      intros ? HC Jg.
       rewrite gssThreadRes in Jg.
-      specialize (safei' tt _ Jg) as (jm' & ? & Hupd & safei').
+      specialize (safei' tt _ HC Jg) as (jm' & ? & Hupd & safei').
       eexists; split.
       { rewrite gssThreadRes; eauto. }
       exists (m_phi jm').

@@ -109,7 +109,7 @@ Proof.
 
   fixsafe safei.
   inversion safei
-    as [ | ?????? bad | n0 z c m0 e sig args0 x at_ex Pre SafePost | ????? bad ];
+    as [ | ?????? bad | n0 z c m0 e args0 x at_ex Pre SafePost | ????? bad ];
     [ now erewrite cl_corestep_not_at_external in atex; [ discriminate | eapply bad ]
     | subst | now inversion bad ].
   subst.

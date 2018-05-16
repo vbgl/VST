@@ -59,8 +59,10 @@ Module THE_DRY_MACHINE_SOURCE.
 
   Section DMS.
 
-  Existing Instance ClightSem.
+  Context {ge : genv}.
   Existing Instance OrdinalPool.OrdinalThreadPool.
+  Instance DSem : Semantics := ClightSem ge.
+
   Definition DMachineSem := MachineSemantics(HybridMachine := HybridCoarseMachine.HybridCoarseMachine(machineSig := DryHybridMachine.DryHybridMachineSig)).
 
 (*  Existing Instance DryHybridMachine.DryHybridMachineSig.

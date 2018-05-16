@@ -569,9 +569,10 @@ Lemma state_inv_upd : forall Gamma (n : nat)
       (mcompat : mem_compatible_with tp m PHI)
       (lock_sparse : lock_sparsity (lset tp))
       (lock_coh : lock_coherence' tp PHI m mcompat)
-      (safety : forall C, joins (ghost_of PHI) (ghost_fmap (approx (level PHI)) (approx (level PHI)) (Some (ext_ref tt, NoneP) :: C)) ->
+      (safety : forall C, join_sub (Some (ext_ref tt, NoneP) :: nil) C ->
+        joins (ghost_of PHI) (ghost_fmap (approx (level PHI)) (approx (level PHI)) C) ->
         exists tp' PHI' (Hupd : tp_update tp PHI tp' PHI'),
-        joins (ghost_of PHI') (ghost_fmap (approx (level PHI)) (approx (level PHI)) (Some (ext_ref tt, NoneP) :: C)) /\
+        joins (ghost_of PHI') (ghost_fmap (approx (level PHI)) (approx (level PHI)) C) /\
         threads_safety m tp' PHI' (mem_compatible_upd _ _ _ _ _ mcompat Hupd) n)
       (wellformed : threads_wellformed tp)
       (uniqkrun :  unique_Krun tp sch),
@@ -579,7 +580,7 @@ Lemma state_inv_upd : forall Gamma (n : nat)
 Proof.
   intros.
   split; [eexists; apply mcompat|].
-  intros ??? J.
+  intros ??? Hc J.
   assert (join_all tp PHI) as HPHI by (clear - mcompat; inv mcompat; auto).
   destruct (join_all_eq _ _ _ H HPHI) as [(Ht & ? & ? & ?)|].
   { exists nil; split.
@@ -590,7 +591,7 @@ Proof.
     repeat intro.
     generalize (getThreadR_nth _ _ cnti); setoid_rewrite Ht; rewrite nth_error_nil; discriminate. }
   subst.
-  specialize (safety _ J) as (tp' & PHI' & Hupd & J' & safety).
+  specialize (safety _ Hc J) as (tp' & PHI' & Hupd & J' & safety).
   eexists; split; eauto; do 2 eexists; split; eauto; split; auto.
   pose proof (mem_compatible_upd _ _ _ _ _ mcompat Hupd) as mcompat'.
   destruct Hupd as (Hl & Hr & Hj & Hiff & Hthreads & Hguts & Hlset & Hres & Hlatest).

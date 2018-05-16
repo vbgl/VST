@@ -85,12 +85,17 @@ Module Parching <: ErasureSig.
 
   Section Parching.
 
-  Instance Sem : Semantics := ClightSemantincsForMachines.ClightSem.
+  Context (ge : genv).
+
+  Instance Sem : Semantics := ClightSemantincsForMachines.ClightSem ge.
 
   Instance JR : Resources := LocksAndResources.
   Instance JTP : ThreadPool.ThreadPool := OrdinalPool.OrdinalThreadPool.
   Instance JMS : MachineSig := Concur.JuicyMachineShell.
+  Existing Instance HybridMachineSig.HybridCoarseMachine.DilMem.
+  Existing Instance HybridCoarseMachine.scheduler.
   Instance JuicyMachine : HybridMachine := HybridCoarseMachine.HybridCoarseMachine.
+  Definition jstate := jstate ge.
 
   (*UNCOMMENT THE LINE BELOW AFTER CHANGES ARE MADE (WHENEVER THE FILE COMPILES)*)
   (*Module DSEM := SEM*)
@@ -960,13 +965,13 @@ Module Parching <: ErasureSig.
 
     Lemma init_diagram:
       forall (j : Values.Val.meminj) (U:schedule) (js : jstate)
-        (vals : list Values.val) (m : Mem.mem) rmap pmap main genv h,
+        (vals : list Values.val) (m : Mem.mem) rmap pmap main h,
         init_inj_ok j m ->
         match_rmap_perm rmap pmap ->
         no_locks_perm rmap ->
-        initial_core (JMachineSem U (Some rmap)) h genv m main vals = Some ((U, nil, js),None) ->
+        initial_core (JMachineSem U (Some rmap)) h m (U, nil, js) main vals ->
         exists (ds : dstate),
-          initial_core (DMachineSem U (Some pmap)) h genv m main vals = Some ((U, nil,ds),None) /\
+          initial_core (DMachineSem U (Some pmap)) h m (U, nil,ds) main vals /\
           invariant ds /\
           match_st js ds.
     Proof.
@@ -977,20 +982,17 @@ Module Parching <: ErasureSig.
 
       (* Build the dry state *)
       simpl in H2.
-      unfold init_machine in H2. simpl in H2.
-      unfold Concur.init_mach in H2.
-      destruct ( initial_core semSem 0 genv m main vals) as [[? ?]|] eqn:C; try solve[inversion H2].
-      destruct o; inv H2.
-      exists (DryHybridMachine.initial_machine pmap.1 s).
+      unfold Concur.init_mach in H2; simpl in *.
+      destruct H2 as (_ & s & ? & ?); subst.
+      exists (DryHybridMachine.initial_machine(Sem := Sem) pmap.1 s).
 
       split; [|split].
 
       (*Proofs*)
-      - simpl.
-        unfold HybridMachineSig.init_machine; simpl.
+      - split; auto.
+        simpl.
         unfold DryHybridMachine.init_mach.
-        rewrite C.
-        f_equal.
+        eexists; split; simpl; eauto.
       - (* THIS COULD BE A LEMMA*)
         eapply initial_invariant0.
 

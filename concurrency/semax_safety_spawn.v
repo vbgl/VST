@@ -205,7 +205,7 @@ Proof.
 
   fixsafe safei.
   inversion safei
-    as [ | ?????? bad | n0 z c m0 e sig args0 x at_ex Pre SafePost | ????? bad ].
+    as [ | ?????? bad | n0 z c m0 e args0 x at_ex Pre SafePost | ????? bad ].
   apply (corestep_not_at_external (juicy_core_sem _)) in bad. elimtype False; subst; clear - bad atex.
    simpl in bad. unfold cl_at_external in *; simpl in *. rewrite atex in bad; inv bad.
   2: inversion bad.

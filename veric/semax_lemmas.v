@@ -1131,7 +1131,7 @@ Proof.
   apply age_level in H; omega.
   clear HeqN m H. rename m' into m.
   intros; eexists; repeat split; eauto.
-  clear H; revert m H0; induction N; intros; simpl; [constructor|].
+  clear H H1; revert m H0; induction N; intros; simpl; [constructor|].
   case_eq (age1 m); [intros m' ? |  intro; apply age1_level0 in H; omegaContradiction].
   apply jsafeN_step
     with (c' := State ve te (Kseq Sskip :: Kseq Scontinue :: Kloop1 Sskip Sskip :: k))
@@ -1392,8 +1392,7 @@ Proof. intros until m'. intros H0 H4 CS0 H H1.
   (* call_external *)
 { do 2 eexists; split; [split3; [ | eassumption | auto ] | ].
   rewrite <- Heqdm';  eapply step_call_external; eauto.
-  intros ? J; specialize (H5 _ J).
-  destruct H5 as (m'' & J' & Hupd & H5).
+  intros ? HC J; specialize (H5 _ HC J) as (m'' & J' & Hupd & H5).
   exists m''; split; auto; split; auto.
   destruct n; [constructor|].
   inv H5.
@@ -2093,7 +2092,7 @@ Lemma assert_safe_jsafe: forall Espec ge ve te ctl ora jm,
   jm_bupd ora (jsafeN OK_spec ge (level jm) ora (State ve te ctl)) jm.
 Proof.
   repeat intro.
-  destruct (H _ H0) as (? & ? & ? & Hl & Hr & ? & Hsafe); subst.
+  destruct (H _ H1) as (? & ? & ? & Hl & Hr & ? & Hsafe); subst.
   destruct (juicy_mem_resource _ _ Hr) as (jm' & ? & ?); subst.
   exists jm'; repeat split; auto.
   rewrite level_juice_level_phi, <- Hl; auto.

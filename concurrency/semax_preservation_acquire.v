@@ -145,7 +145,7 @@ Lemma preservation_acquire
   (psh : shares.readable_share sh)
   (R : pred rmap)
   (Hthread : getThreadC i tp cnti = Kblocked c)
-  (Hat_external : at_external (ClightSemantincsForMachines.CLN_evsem ge) c m = Some (LOCK, ef_sig LOCK, Vptr b ofs :: nil))
+  (Hat_external : at_external (ClightSemantincsForMachines.CLN_evsem ge) c m = Some (LOCK, Vptr b ofs :: nil))
   (His_unlocked : lockRes tp (b, Ptrofs.intval ofs) = Some (Some d_phi))
   (Hload : Mem.load Mint32 (juicyRestrict_locks (mem_compat_thread_max_cohere Hcmpt cnti))
                     b (Ptrofs.intval ofs) =
@@ -210,7 +210,7 @@ Proof.
       + specialize (safety _ cnti tt).
         rewrite Hthread in safety.
         unshelve eapply jsafe_phi_jsafeN in safety; try apply compat.
-        inversion safety as [ | ?????? step | ???????? ae Pre Post Safe | ????? Ha].
+        inversion safety as [ | ?????? step | ??????? ae Pre Post Safe | ????? Ha].
         * (* not corestep *)
           exfalso.
           clear -Hat_external step.
@@ -502,7 +502,7 @@ Proof.
         intros c' Ec'.
 
         eapply jsafe_phi_jsafeN with (compat0 := compat) in safety.
-        inversion safety as [ | ?????? step | ???????? ae Pre Post Safe | ????? Ha]; swap 2 3.
+        inversion safety as [ | ?????? step | ??????? ae Pre Post Safe | ????? Ha]; swap 2 3.
         - (* not corestep *)
           exfalso.
           clear -Hat_external step.

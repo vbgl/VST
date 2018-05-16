@@ -429,10 +429,10 @@ Section Progress.
         rewrite Eci in safei.
         fixsafe safei.
         inversion safei
-          as [ | ?????? bad | n0 z c m0 e sig args0 x at_ex Pre SafePost | ????? bad ];
+          as [ | ?????? bad | n0 z c m0 e args0 x at_ex Pre SafePost | ????? bad ];
           [ now inversion bad; inversion H4 | subst | now inversion bad ].
         subst.
-        simpl in at_ex. injection at_ex as <- <- <-.
+        simpl in at_ex. injection at_ex as <- <-.
         hnf in x.
         revert x Pre SafePost.
 
@@ -563,7 +563,7 @@ Section Progress.
             assert (Ecall: EF_external name sg = LOCK) by congruence.
 
             assert (Eae : at_external (@semSem (ClightSemantincsForMachines.ClightSem ge)) (ExtCall (EF_external name sg) args lid ve te k) m =
-                    Some (LOCK, LOCK_SIG, Vptr b ofs :: nil)). {
+                    Some (LOCK, Vptr b ofs :: nil)). {
               simpl.
               repeat f_equal; congruence.
             }
@@ -629,7 +629,7 @@ Section Progress.
           assert (Ecall: EF_external name sg = LOCK) by congruence.
 
           assert (Eae : at_external (@semSem (ClightSemantincsForMachines.ClightSem ge)) (ExtCall (EF_external name sg) args lid ve te k) m =
-                        Some (LOCK, LOCK_SIG, Vptr b ofs :: nil)). {
+                        Some (LOCK, Vptr b ofs :: nil)). {
             simpl.
             repeat f_equal; congruence.
           }
@@ -719,10 +719,10 @@ Section Progress.
         rewrite Eci in safei.
         fixsafe safei.
         inversion safei
-          as [ | ?????? bad | n0 z c m0 e sig args0 x at_ex Pre SafePost | ????? bad ];
+          as [ | ?????? bad | n0 z c m0 e args0 x at_ex Pre SafePost | ????? bad ];
           [ now inversion bad; inversion H4 | subst | now inversion bad ].
         subst.
-        simpl in at_ex. injection at_ex as <- <- <-.
+        simpl in at_ex. injection at_ex as <- <-.
         hnf in x.
         revert x Pre SafePost.
 
@@ -812,7 +812,7 @@ Section Progress.
           assert (Ecall: EF_external name sg = UNLOCK) by congruence.
 
           assert (Eae : at_external (@semSem (ClightSemantincsForMachines.ClightSem ge)) (ExtCall (EF_external name sg) args lid ve te k) m =
-                        Some (UNLOCK, UNLOCK_SIG, Vptr b ofs :: nil)). {
+                        Some (UNLOCK, Vptr b ofs :: nil)). {
             simpl.
             auto.
           }
@@ -988,10 +988,10 @@ Section Progress.
         rewrite Eci in safei.
         fixsafe safei.
         inversion safei
-          as [ | ?????? bad | n0 z c m0 e sig args0 x at_ex Pre SafePost | ????? bad ];
+          as [ | ?????? bad | n0 z c m0 e args0 x at_ex Pre SafePost | ????? bad ];
           [ now inversion bad; inversion H4 | subst | now inversion bad ].
         subst.
-        simpl in at_ex. injection at_ex as <- <- <-.
+        simpl in at_ex. injection at_ex as <- <-.
         hnf in x.
         revert x Pre SafePost.
 
@@ -1040,7 +1040,7 @@ Section Progress.
         assert (Ecall: EF_external name sg = MKLOCK) by congruence.
 
         assert (Eae : at_external (@semSem (ClightSemantincsForMachines.ClightSem ge)) (ExtCall (EF_external name sg) args lid ve te k) m =
-                      Some (MKLOCK, UNLOCK_SIG, Vptr b ofs :: nil)). {
+                      Some (MKLOCK, Vptr b ofs :: nil)). {
           simpl.
           repeat f_equal; congruence.
         }
@@ -1121,10 +1121,10 @@ Section Progress.
         rewrite Eci in safei.
         fixsafe safei.
         inversion safei
-          as [ | ?????? bad | n0 z c m0 e sig args0 x at_ex Pre SafePost | ????? bad ];
+          as [ | ?????? bad | n0 z c m0 e args0 x at_ex Pre SafePost | ????? bad ];
           [ now inversion bad; inversion H4 | subst | now inversion bad ].
         subst.
-        simpl in at_ex. injection at_ex as <- <- <-.
+        simpl in at_ex. injection at_ex as <- <-.
         hnf in x.
         revert x Pre SafePost.
 
@@ -1186,7 +1186,7 @@ Section Progress.
         assert (Ecall: EF_external name sg = FREE_LOCK) by congruence.
 
         assert (Eae : at_external (@semSem (ClightSemantincsForMachines.ClightSem ge)) (ExtCall (EF_external name sg) args lid ve te k) m =
-                      Some (FREE_LOCK, UNLOCK_SIG, Vptr b ofs :: nil)). {
+                      Some (FREE_LOCK, Vptr b ofs :: nil)). {
           simpl.
           repeat f_equal; congruence.
         }
@@ -1367,10 +1367,10 @@ Section Progress.
         rewrite Eci in safei.
         fixsafe safei.
         inversion safei
-          as [ | ?????? bad | n0 z c m0 e sig args0 x at_ex Pre SafePost | ????? bad ];
+          as [ | ?????? bad | n0 z c m0 e args0 x at_ex Pre SafePost | ????? bad ];
           [ now inversion bad; inversion H4 | subst | now inversion bad ].
         subst.
-        simpl in at_ex. injection at_ex as <- <- <-.
+        simpl in at_ex. injection at_ex as <- <-.
         hnf in x.
         revert x Pre SafePost.
 
