@@ -3088,26 +3088,21 @@ as big as [m] *)
     rewrite perm_obs_strong0; auto.
   Qed.
 
-  Lemma valid_access_obs_eq_2:
+  Lemma valid_access_obs_eq':
     forall f m1 m2 b1 b2 chunk ofs p,
-      weak_mem_obs_eq f m1 m2 ->
+      strong_mem_obs_eq f m1 m2 ->
       f b1 = Some b2 ->
-      ~ Mem.valid_access m1 chunk b1 ofs p ->
-      ~ Mem.valid_access m2 chunk b2 ofs p.
+      Mem.valid_access m2 chunk b2 ofs p ->
+      Mem.valid_access m1 chunk b1 ofs p.
   Proof.
-    intros.
-    intros Hcontra.
-    destruct Hcontra as [A B].
-    eapply H1.
-    constructor; [|now auto].
+    intros. destruct H1 as [A B]. constructor; auto.
     intros ofs' Hofs.
     specialize (A ofs' Hofs).
     destruct H.
-    specialize (perm_obs_weak0 _ _ ofs' H0).
-    unfold permissions.permission_at in *.
+    specialize (perm_obs_strong0 _ _ ofs' H0).
+    unfold permission_at in *.
     unfold Mem.perm in *.
-    erewrite po_oo in *.
-    eapply po_trans; eauto.
+    rewrite <- perm_obs_strong0; auto.
   Qed.
 
   Lemma getN_obs:
@@ -3154,21 +3149,21 @@ as big as [m] *)
     exploit Mem.load_valid_access; eauto. intros [A B]. auto.
   Qed.
 
-  Lemma load_fail:
-    forall chunk m m' b1 b2 ofs f
+  Lemma load_None_obs:
+    forall (mc mf : mem) (f:memren)
+      (b1 b2 : block) chunk (ofs : Z)
+      (Hload: Mem.load chunk mc b1 ofs = None)
       (Hf: f b1 = Some b2)
-      (Hmem_obs_eq: weak_mem_obs_eq f m m')
-      (Hload: Mem.load chunk m b1 ofs = None),
-      Mem.load chunk m' b2 ofs = None.
+      (Hinjective: forall b0 b1' b3 : block, f b0 = Some b3 -> f b1' = Some b3 -> b0 = b1')
+      (Hobs_eq: strong_mem_obs_eq f mc mf),
+    Mem.load chunk mf b2 ofs = None.
   Proof.
     intros.
     unfold Mem.load in *.
-    destruct (Mem.valid_access_dec m chunk b1 ofs Readable); [discriminate|].
-    eapply valid_access_obs_eq_2 in n; eauto.
-    erewrite Coqlib2.if_false by eauto.
-    reflexivity.
+    destruct (Mem.valid_access_dec _ _ _ _ _); try discriminate.
+    destruct (Mem.valid_access_dec _ _ _ _ _); auto.
+    eapply valid_access_obs_eq' in v; eauto; contradiction.
   Qed.
-
   Opaque Mem.load.
 
   Lemma loadv_val_obs:
@@ -3189,19 +3184,20 @@ as big as [m] *)
     eapply load_val_obs in Hload; eauto.
   Qed.
 
-  Lemma loadv_fail:
-    forall chunk m m' v1 v2 f
-      (Hval_obs_eq: val_obs f v1 v2)
-      (Hmem_obs_eq: weak_mem_obs_eq f m m')
-      (Hload: Mem.loadv chunk m v1 = None),
-      Mem.loadv chunk m' v2 = None.
+  Lemma loadv_None_obs:
+    forall (mc mf : mem) (f:memren)
+      (vptr1 vptr2 : val) chunk
+      (Hload: Mem.loadv chunk mc vptr1 = None)
+      (Hf: val_obs f vptr1 vptr2)
+      (Hinjective: forall b0 b1' b3 : block, f b0 = Some b3 -> f b1' = Some b3 -> b0 = b1')
+      (Hobs_eq: strong_mem_obs_eq f mc mf),
+      Mem.loadv chunk mf vptr2 = None.
   Proof.
     intros.
     unfold Mem.loadv in *.
-    inversion Hval_obs_eq; auto.
-    subst.
-    eapply load_fail;
-      now eauto.
+    destruct vptr2; auto.
+    inv Hf.
+    eapply load_None_obs in Hload; eauto.
   Qed.
 
   (** ** Lemmas about [Mem.store] and [mem_obs_eq]*)

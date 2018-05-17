@@ -880,46 +880,42 @@ Module X86Inj.
       apply val_obs_longofwords; auto.
   Qed.
 
-  (*NOTE: regset_wd seems useless if you have regset_ren*)
-  Lemma get_extcall_arg_none:
-    forall f rs rs' m m' l,
-      regset_ren f rs rs' ->
-      mem_obs_eq f m m' ->
-      get_extcall_arg rs m l = None ->
-      get_extcall_arg rs' m' l = None.
+  Lemma get_extcall_arg_inj' : forall f rs rs' m m' l,
+    regset_ren f rs rs' -> mem_obs_eq f m m' ->
+    get_extcall_arg rs m l = None ->
+    get_extcall_arg rs' m' l = None.
   Proof.
-    intros f rs rs' m m' l Hrs_ren Hmem_obs_eq Hget_arg.
-    unfold get_extcall_arg in *.
-    destruct l; auto.
-    discriminate.
-    destruct sl; auto.
-    destruct Hmem_obs_eq.
-    eapply loadv_fail; eauto.
-    eapply val_obs_offset_ptr.
-    eapply Hrs_ren.
+    destruct l; simpl; intros.
+    - discriminate.
+    - destruct sl; auto.
+      eapply loadv_None_obs; eauto; try apply H0.
+      specialize (H RSP); hnf in H.
+      unfold Pregmap.get in H.
+      destruct rs; inv H; constructor; auto.
   Qed.
 
-  Lemma get_extcall_arguments_none : forall f rs rs' m m' l,
-      regset_ren f rs rs' -> mem_obs_eq f m m' ->
-      get_extcall_arguments rs m l = None ->
-      get_extcall_arguments rs' m' l = None.
+  Lemma get_extcall_arguments_inj' : forall f rs rs' m m' l,
+    regset_ren f rs rs' -> mem_obs_eq f m m' ->
+    get_extcall_arguments rs m l = None ->
+    get_extcall_arguments rs' m' l = None.
   Proof.
     induction l; simpl; intros.
-    - discriminate.
-    - repeat match goal with
-             | [H: match ?Expr with _ => _ end = _ |- _] =>
-               destruct Expr eqn:?
-             | [|- match get_extcall_arg ?A ?B ?C with _ => _ end = _] =>
-               destruct (get_extcall_arg A B C) eqn:?
-             end; try (discriminate); try auto;
-        try (erewrite IHl; now eauto);
-      try match goal with
-      | [H: get_extcall_arg _ _ _ = None |- _] =>
-        eapply get_extcall_arg_none in H; eauto
-      end;
-      now congruence.
+    { inv H1; exists nil; split; auto; constructor. }
+    destruct a.
+    - destruct (get_extcall_arg rs m r) eqn: Hget;
+        [|eapply get_extcall_arg_inj' in Hget as ->; eauto].
+      destruct (get_extcall_arguments rs m l) eqn: Hargs; inv H1.
+      rewrite IHl; auto.
+      destruct (get_extcall_arg rs' m' r); auto.
+    - destruct (get_extcall_arg rs m rhi) eqn: Hget;
+        [|eapply get_extcall_arg_inj' in Hget as ->; eauto].
+      destruct (get_extcall_arg rs' m' rhi); auto.
+      clear Hget; destruct (get_extcall_arg rs m rlo) eqn: Hget;
+        [|eapply get_extcall_arg_inj' in Hget as ->; eauto].
+      destruct (get_extcall_arg rs' m' rlo); auto.
+      destruct (get_extcall_arguments rs m l) eqn: Hargs; inv H1.
+      rewrite IHl; auto.
   Qed.
-
 
   Lemma find_funct_ptr_inj : forall g (f fg : memren) b b' h
       (Hfg: forall b1 b2, fg b1 = Some b2 -> b1 = b2)
@@ -957,14 +953,12 @@ Module X86Inj.
     intro; eapply Hmem; eauto.
   Qed.
 
-  (* Does this need to be so strong? Right now, it's possible for at_external to be true in the
-     injection but not in the original, because the evaluation of arguments succeeds in the larger
-     memory but fails in the smaller. *)
   Lemma core_inj_ext :
     forall the_ge m m' c c' (f fg : memren)
       (Hfg: forall b1 b2, fg b1 = Some b2 -> b1 = b2)
       (Hge_wd: ge_wd fg the_ge)
       (Hincr: ren_incr fg f)
+      (Hc : core_wd f c)
       (Hinj : core_inj f c c')
       (Hmem : mem_obs_eq f m m'),
       match at_external (Asm_core_sem the_ge) c m with
@@ -991,10 +985,8 @@ Module X86Inj.
       rewrite Hfind.
       destruct f0; auto.
       destruct (get_extcall_arguments _ _ _) eqn: Hargs.
-      eapply get_extcall_arguments_inj in Hargs as (? & -> & ?); eauto.
-      destruct (get_extcall_arguments r0 m' _) eqn: Hargs'; auto.
-      eapply get_extcall_arguments_none in Hargs; eauto.
-      congruence.
+      + eapply get_extcall_arguments_inj in Hargs as (? & -> & ?); eauto.
+      + erewrite get_extcall_arguments_inj'; eauto.
     - destruct (find_funct_ptr the_ge b0) eqn: Hfind'; auto.
       exploit find_funct_ptr_inj'; eauto; intro; subst.
       congruence.
