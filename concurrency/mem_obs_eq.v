@@ -3088,6 +3088,23 @@ as big as [m] *)
     rewrite perm_obs_strong0; auto.
   Qed.
 
+  Lemma valid_access_obs_eq':
+    forall f m1 m2 b1 b2 chunk ofs p,
+      strong_mem_obs_eq f m1 m2 ->
+      f b1 = Some b2 ->
+      Mem.valid_access m2 chunk b2 ofs p ->
+      Mem.valid_access m1 chunk b1 ofs p.
+  Proof.
+    intros. destruct H1 as [A B]. constructor; auto.
+    intros ofs' Hofs.
+    specialize (A ofs' Hofs).
+    destruct H.
+    specialize (perm_obs_strong0 _ _ ofs' H0).
+    unfold permission_at in *.
+    unfold Mem.perm in *.
+    rewrite <- perm_obs_strong0; auto.
+  Qed.
+
   Lemma getN_obs:
     forall f m1 m2 b1 b2,
       strong_mem_obs_eq f m1 m2 ->
@@ -3131,6 +3148,22 @@ as big as [m] *)
     rewrite <- size_chunk_conv.
     exploit Mem.load_valid_access; eauto. intros [A B]. auto.
   Qed.
+
+  Lemma load_None_obs:
+    forall (mc mf : mem) (f:memren)
+      (b1 b2 : block) chunk (ofs : Z)
+      (Hload: Mem.load chunk mc b1 ofs = None)
+      (Hf: f b1 = Some b2)
+      (Hinjective: forall b0 b1' b3 : block, f b0 = Some b3 -> f b1' = Some b3 -> b0 = b1')
+      (Hobs_eq: strong_mem_obs_eq f mc mf),
+    Mem.load chunk mf b2 ofs = None.
+  Proof.
+    intros.
+    unfold Mem.load in *.
+    destruct (Mem.valid_access_dec _ _ _ _ _); try discriminate.
+    destruct (Mem.valid_access_dec _ _ _ _ _); auto.
+    eapply valid_access_obs_eq' in v; eauto; contradiction.
+  Qed.
   Opaque Mem.load.
 
   Lemma loadv_val_obs:
@@ -3149,6 +3182,22 @@ as big as [m] *)
     destruct vptr1; try discriminate.
     inversion Hf; subst.
     eapply load_val_obs in Hload; eauto.
+  Qed.
+
+  Lemma loadv_None_obs:
+    forall (mc mf : mem) (f:memren)
+      (vptr1 vptr2 : val) chunk
+      (Hload: Mem.loadv chunk mc vptr1 = None)
+      (Hf: val_obs f vptr1 vptr2)
+      (Hinjective: forall b0 b1' b3 : block, f b0 = Some b3 -> f b1' = Some b3 -> b0 = b1')
+      (Hobs_eq: strong_mem_obs_eq f mc mf),
+      Mem.loadv chunk mf vptr2 = None.
+  Proof.
+    intros.
+    unfold Mem.loadv in *.
+    destruct vptr2; auto.
+    inv Hf.
+    eapply load_None_obs in Hload; eauto.
   Qed.
 
   (** ** Lemmas about [Mem.store] and [mem_obs_eq]*)
