@@ -30,7 +30,7 @@ ANNOTATE=silent   # suppress chatty output from coqc
 
 CC_TARGET=compcert/cfrontend/Clight.vo
 CC_DIRS= lib common cfrontend exportclight
-VSTDIRS= msl sepcomp veric floyd progs concurrency ccc26x86 
+VSTDIRS= msl sepcomp veric floyd progs concurrency ccc26x86 coarse_sepcomp
 OTHERDIRS= wand_demo sha fcf hmacfcf tweetnacl20140427 hmacdrbg aes mailbox
 DIRS = $(VSTDIRS) $(OTHERDIRS)
 CONCUR = concurrency
@@ -87,6 +87,12 @@ MSL_FILES = \
   simple_CCC.v seplog.v alg_seplog.v alg_seplog_direct.v log_normalize.v \
   ghost.v ghost_seplog.v \
   iter_sepcon.v ramification_lemmas.v wand_frame.v wandQ_frame.v #age_to.v
+
+COARSE_SEPCOMP_FILES = \
+  coarse_defs.v coarse_semantics.v coarse_sim.v \
+  coarse_base.v coarse_semantics_lemmas.v FiniteMaps.v \
+  interpolation_II_defs.v interpolation_II_construction.v \
+  interpolation_II.v interpolation_EI.v coarse_sim_trans.v
 
 SEPCOMP_FILES = \
   Address.v \
@@ -369,6 +375,7 @@ C_FILES = $(SINGLE_C_FILES) $(LINKED_C_FILES)
 FILES = \
  $(MSL_FILES:%=msl/%) \
  $(SEPCOMP_FILES:%=sepcomp/%) \
+ $(COARSE_SEPCOMP_FILES:%=coarse_sepcomp/%) \
  $(VERIC_FILES:%=veric/%) \
  $(FLOYD_FILES:%=floyd/%) \
  $(PROGS_FILES:%=progs/%) \
@@ -457,6 +464,7 @@ all: default_target files travis hmacdrbg tweetnacl aes
 # endif
  
 msl:     _CoqProject version.vo $(MSL_FILES:%.v=msl/%.vo)
+coarse_sepcomp: .loadpath $(CC_TARGET) $(COARSE_SEPCOMP_FILES:%.v=coarse_sepcomp/%.vo)
 sepcomp: _CoqProject $(CC_TARGET) $(SEPCOMP_FILES:%.v=sepcomp/%.vo)
 ccc26x86:   _CoqProject $(CCC26x86_FILES:%.v=ccc26x86/%.vo)
 concurrency: _CoqProject $(CC_TARGET) $(SEPCOMP_FILES:%.v=sepcomp/%.vo) $(CONCUR_FILES:%.v=concurrency/%.vo)
