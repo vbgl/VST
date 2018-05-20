@@ -2,7 +2,7 @@
 
 Require Import compcert.lib.Axioms.
 
-Require Import VST.sepcomp. Import SepComp.
+Require Import VST.concurrency.sepcomp. Import SepComp.
 Require Import VST.sepcomp.semantics_lemmas.
 
 Require Import VST.concurrency.pos.
@@ -25,7 +25,7 @@ Require Import VST.concurrency.threads_lemmas.
 Require Import VST.concurrency.permissions.
 Require Import VST.concurrency.HybridMachineSig.
 Require Import VST.concurrency.memory_lemmas.
-Require Import VST.concurrency.HybridMachine_lemmas.
+Require Import VST.concurrency.dry_machine_lemmas.
 Require Import VST.concurrency.dry_context.
 Require Import VST.concurrency.fineConc_safe.
 Require Import VST.concurrency.executions.
@@ -102,7 +102,8 @@ Module ValErasure.
     induction vs; simpl...
   Qed.
 
-  Lemma val_erasure_list_decode:
+  (* TODO: is that still used? *)
+  (*Lemma val_erasure_list_decode:
     forall vals vals' typs,
       val_erasure_list vals vals' ->
       val_erasure_list (val_casted.decode_longs typs vals)
@@ -125,7 +126,7 @@ Module ValErasure.
     unfold val_erasure in H3.
     destruct v0; subst; auto;
     constructor.
-  Qed.
+  Qed. *)
 
   Lemma memval_erasure_list_refl:
     forall vs, memval_erasure_list vs vs.
@@ -177,7 +178,8 @@ Module ValErasure.
   Proof.
     destruct v1,v2; intros;
     simpl; auto;
-    inv H; inv H0; simpl; auto.
+      inv H; inv H0; try (destruct Archi.ptr64); simpl;
+        now auto.
   Qed.
 
   Lemma val_erasure_mul:
@@ -356,8 +358,10 @@ Module ValErasure.
   Proof.
     destruct v1,v2; intros;
     simpl; auto;
-    inv H; inv H0; simpl; auto.
-    destruct (eq_block b b0); simpl; auto.
+      inv H; inv H0; simpl; auto;
+        try (destruct Archi.ptr64); simpl; auto;
+          destruct (eq_block b b0); simpl;
+            now auto.
   Qed.
 
   Lemma val_erasure_mulhu:
@@ -679,6 +683,10 @@ Module ValErasure.
     repeat_Undef_inject_encode_val.
     unfold encode_val. destruct v'; apply inj_value_erasure; auto.
     unfold encode_val. destruct v'; apply inj_value_erasure; auto.
+    try (destruct Archi.ptr64); simpl;
+      repeat (econstructor; eauto).
+    try (destruct Archi.ptr64); simpl;
+      repeat (econstructor; eauto).
   Qed.
 
   Lemma val_defined_add_1:
@@ -958,23 +966,47 @@ Module MemErasure.
       val_erasure (decode_val chunk vl1) (decode_val chunk vl2).
   Proof.
     intros. unfold decode_val.
+    pose proof H as H'.
     destruct (proj_bytes vl1) as [bl1|] eqn:PB1.
-    exploit proj_bytes_erasure; eauto. intros PB2. rewrite PB2.
-    destruct chunk; simpl; auto.
-    assert (A: forall q fn,
-               val_erasure (Val.load_result chunk (proj_value q vl1))
-                          (match proj_bytes vl2 with
-                           | Some bl => fn bl
-                           | None => Val.load_result chunk (proj_value q vl2)
-                           end)).
-    { intros. destruct (proj_bytes vl2) as [bl2|] eqn:PB2.
-      rewrite proj_value_undef. destruct chunk; simpl; auto.
-      eapply proj_bytes_not_erasure; eauto. congruence.
-      apply load_result_erasure. apply proj_value_erasure; auto.
-    }
-    destruct chunk; simpl; eauto.
+    - exploit proj_bytes_erasure; eauto. intros PB2. rewrite PB2.
+      destruct chunk; simpl; auto.
+    - assert (A: forall q fn,
+                 val_erasure (Val.load_result chunk (proj_value q vl1))
+                             (match proj_bytes vl2 with
+                              | Some bl => fn bl
+                              | None => Val.load_result chunk (proj_value q vl2)
+                              end)).
+      { intros. destruct (proj_bytes vl2) as [bl2|] eqn:PB2.
+        rewrite proj_value_undef. destruct chunk; simpl; auto.
+        eapply proj_bytes_not_erasure; eauto. congruence.
+        apply load_result_erasure. apply proj_value_erasure; auto.
+      }
+      destruct chunk; simpl; eauto;
+        destruct (Archi.ptr64); simpl; eauto.
+      eapply proj_value_erasure with (q := Q64) in H;
+      destruct (proj_value Q64 vl1) eqn:Hproj_val1;
+        simpl; eauto;
+          destruct (proj_value Q64 vl2); simpl in *;
+            try (discriminate);
+            inv H.
+      + specialize (A Q64 (fun bl => Vlong (Int64.repr (decode_int bl))));
+          erewrite Hproj_val1 in A;
+          simpl in A;
+          destruct (proj_bytes vl2);
+          now eauto.
+      + specialize (A Q64 (fun bl => Vlong (Int64.repr (decode_int bl)))).
+          erewrite Hproj_val1 in A.
+          destruct (Archi.ptr64); simpl in A.
+          * destruct (proj_bytes vl2) eqn:Hproj_bytes2;
+            try discriminate.
+            reflexivity.
+          * destruct (proj_bytes vl2) eqn:Hcontra; auto.
+            eapply proj_bytes_not_erasure in PB1; eauto.
+            eapply proj_value_undef with (q := Q64) in PB1.
+            now congruence.
+            intros ?;
+                   now congruence.
   Qed.
-
 
   Lemma mem_load_erased:
     forall chunk m m' b ofs v
@@ -1175,7 +1207,7 @@ Module MemErasure.
     eapply mem_erasure_valid_pointer_guard in Heqb2; eauto.
     congruence.
     subst.
-    apply andb_false_iff in Heqb2.
+    apply andb_false_iff in Heqb3.
     destruct Heqb2 as [Heqb2 | Heqb2];
       eapply mem_erasure_valid_pointer_guard in Heqb2; eauto;
       congruence.

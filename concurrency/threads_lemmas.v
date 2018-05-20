@@ -83,7 +83,16 @@ Lemma nth_error_app_inv:
   destruct i; simpl in *;
     now auto.
 Qed.
-  
+
+Lemma app_eq_refl_nil:
+  forall {A:Type} (xs ys : list A),
+    xs = xs ++ ys ->
+    ys = nil.
+Proof.
+  intros.
+  erewrite <- app_nil_r in H at 1.
+  apply app_inv_head in H; auto.
+Qed.
   
 Lemma app_assoc_l:
   forall (A : Type) (l m n : seq.seq A),
