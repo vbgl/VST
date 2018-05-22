@@ -22,7 +22,7 @@ Require Import Smallstep.
 
 
 (*Require Import VST.concurrency.compiler_correct.*)
-Require Import VST.concurrency.CoreSemantics_sum.
+Require Import VST.concurrency.compiler.CoreSemantics_sum.
 
 
 (*Self simulations say that a program has equivalent executions 

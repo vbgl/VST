@@ -34,7 +34,7 @@ Require Import VST.veric.res_predicates.
 Require Import VST.concurrency.HybridMachineSig.
 Require Import VST.concurrency.HybridMachine.
 
-Require Import VST.concurrency.CoreSemantics_sum.
+Require Import VST.concurrency.compiler.CoreSemantics_sum.
 
 Require Import compcert.common.Smallstep.
 

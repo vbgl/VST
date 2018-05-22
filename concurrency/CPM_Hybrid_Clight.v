@@ -2,7 +2,7 @@
 Require Import VST.concurrency.DryMachineSourceCore.
 Require Import VST.concurrency.x86_context.
 
-Require Import VST.concurrency.CoreSemantics_sum.
+Require Import VST.concurrency.compiler.CoreSemantics_sum.
 Require Import VST.concurrency.HybridMachine.
 
 Require Import VST.concurrency.machine_semantics.
