@@ -199,11 +199,14 @@ Record SM_simulation_extend := {
 ; match_L: forall c1 m1 c2 m2 L,
     match_state L c1 m1 c2 m2 -> forall b, L b = true -> Mem.valid_block m1 b
 
+; eq_globals:  isGlobalBlock ge1 = isGlobalBlock ge2
+
+; eq_readonly: forall b, ReadOnlyBlocks ge1 b = true <-> ReadOnlyBlocks ge2 b = true
+
 ; match_genv: forall c1 m1 c2 m2 L, match_state L c1 m1 c2 m2 ->
-    globals_valid ge1 m1 /\ globals_valid ge2 m2 /\ (*globals_preserved ge1 ge2 j /\*)
+    globals_valid ge1 m1 /\ globals_valid ge2 m2 /\ 
     mem_respects_readonly ge1 m1 /\ mem_respects_readonly ge2 m2 /\
-    (forall b, ReadOnlyBlocks ge1 b = true <-> ReadOnlyBlocks ge2 b = true) /\
-    (forall b, isGlobalBlock ge1 b = true -> isGlobalBlock ge2 b = true /\ L b = false) 
+    (forall b, isGlobalBlock ge1 b = true -> L b = false) 
 
   (** The blocks in the domain/range of [j] are valid in [m1]/[m2]. *)
 ; match_validblocks: forall c1 m1 c2 m2 L,

@@ -59,7 +59,7 @@ Theorem ext_inj_trans: SM_simulationINJ.SM_simulation_inject Sem1 Sem3 ge1 ge3.
 Proof.
   destruct SIM12
     as [match12 ext12 ext_match12 idle12 resume12 match_extends12 Lvalid12
-       globals12 Valid12 initial12 cstep12].
+       globals_eq12 rdo12 globals12 Valid12 initial12 cstep12].
   destruct SIM23
     as [match23 ext23 ext_match23 idle23 resume23 match_inject23 LSvalid23
         LTvalid23 local23 globals23 Valid23 initial23 cstep23].
@@ -82,7 +82,7 @@ Proof.
   split; [exists c2, m2; split; trivial |].
   eapply forall_lessdef_valinject; eassumption. }
 { (*match_idle*) 
-  clear - idle12 idle23 ext_match12 ext_match23 match_extends12 match_inject23  local23 Valid23 globals12 globals23.
+  clear - idle12 idle23 ext_match12 ext_match23 match_extends12 match_inject23  local23 Valid23 globals12 globals23 rdo12.
   intros Res1 Res3 tp j LS LT c1 arg1 m1 c3 args3 m3.
   intros [Res2 [c2 [args2 [m2 [A12 A23]]]]].
   destruct (ext_match12 _ _ _ _ _ _ _ _ _ _ A12) as [M12 Args12]; clear ext_match12.
@@ -99,17 +99,17 @@ Proof.
     apply SepA; clear SepA. eapply Mem.valid_block_extends; eassumption. }
 
   destruct Fwd1. destruct Fwd3.
-    specialize (local23 _ _ _ _ _ _ _ M23). specialize (Valid23 _ _ _ _ _ _ M23).
-    destruct (globals12 _ _ _ _ _ M12) as [G1 [G2 [G3 [G4 [G5 G6]]]]]; clear globals12.
+    specialize (local23 _ _ _ _ _ _ _ M23). specialize (Valid23 _ _ _ _ _ _ M23). 
+    destruct (globals12 _ _ _ _ _ M12) as [GV1 [GV2 [MRR1 [MRR2 GL1]]]]; clear globals12.
     destruct (globals23 _ _ _ _ _ _ _ M23) as [K1 [K2 [K3 [K4 [K5 [K6 K7]]]]]]; clear globals23.
 
   destruct (interp_EI m1 m2 m1' m3 m3' j j' LS LT (ReadOnlyBlocks ge1) (ReadOnlyBlocks ge2) (ReadOnlyBlocks ge3))
      as [m2' [MExt12' [FWD2 [MInj23' [RDO2 [Unch2A Unch2B]]]]]]; try eassumption.
-    + intros. specialize (G4 b). unfold ReadOnlyBlocks in H3. destruct (Genv.find_var_info ge2 b); [ apply (G4 g); trivial | discriminate].
+    + intros. specialize (MRR2 b). unfold ReadOnlyBlocks in H3. destruct (Genv.find_var_info ge2 b); [ apply (MRR2 g); trivial | discriminate].
     + intros. specialize (Gsep  _ _ _ H3 H4). remember (ReadOnlyBlocks ge3 b3) as r; destruct r; [symmetry in Heqr | trivial].
       apply ReadOnlyBlocks_global in Heqr; congruence.
     + intros. destruct (K6 _ _ _ H3); auto. 
-    + intros. apply G5; trivial.
+    + intros. apply rdo12; trivial.
     + intros. apply ReadOnlyBlocks_global in H3; eauto. 
     + red in K1. assert (Fwd2: forward ge2 m2 m2') by (split; trivial).
       exists Res2, c2, args2, m2'; split.
@@ -141,16 +141,15 @@ Proof.
 { (*local*) clear - local23.
   intros j c1 m1 c3 m3 LS LT [c2 [m2 [M12 M23]]] b1 b3 d B.
   eapply local23; eassumption. }
-{ (*Gvalid*) clear - globals12 globals23. 
-  intros j c1 m1 c3 m3 LS LT [c2 [m2 [M12 M23]]]. 
-  specialize (globals12 _ _ _ _ _ M12); destruct globals12 as [G1 [G2 [GP12 [G3 [G4 G5]]]]]. 
+{ (*Gvalid*) clear - globals12 globals23 globals_eq12 rdo12. 
+  intros j c1 m1 c3 m3 LS LT [c2 [m2 [M12 M23]]].  
+  specialize (globals12 _ _ _ _ _ M12); destruct globals12 as [GV1 [GV2 [MRR1 [MRR2 GL12]]]].
   specialize (globals23 _ _ _ _ _ _ _ M23); destruct globals23 as [_ [GV3 [GP23 [D1 [D2 [D3 D4]]]]]].
   split; [ trivial | split; [trivial  | ]].
-  split. { red; intros. specialize (GP23 _ _ _ H).  (*injections: do we need both directions of isGlobalBlock ge1 <-> isGlobalBlock ge2 ?*) admit. }
+  split. { red; intros. rewrite <- (GP23 _ _ _ H), globals_eq12; trivial. }
   split; [trivial | split; [trivial | split; [| trivial]]]. 
   intros b1 b3 d J.
-    destruct (D3 _ _ _ J). destruct (G4 b1). split; intros; auto.
-    intros. apply (G5 _ H). } 
+    destruct (D3 _ _ _ J). destruct (rdo12 b1). split; intros; auto. } 
 { (*Jvalid*) clear - Valid12 Valid23.
   intros j c1 m1 c3 m3 [LS LT] [c2 [m2 [M12 M23]]] b b' d B.
   destruct (Valid23 _ _ _ _ _ _ M23 _ _ _ B). destruct (Valid12 _ _ _ _ _ M12 b). split; [ auto | trivial ]. }
@@ -529,33 +528,35 @@ Proof.
   destruct (Jvalid12 _ _ _ _ _ _ M12 _ _ _ J1).
   destruct (Jvalid23 _ _ _ _ _ _ M23 _ _ _ J2).
   split; trivial. }
-{ (*init*) 
-  clear -initial12 initial23 globals12 globals23.
+{ (*init*)  admit. (*
+  clear -initial12 initial23 (*globals12 globals23 *).
   intros until j. intros vals3 m3 IC1 MInj13 Vinj13 GV1 GV3 GP13 MRR1 MRR3 JValid.
   destruct (inject_split _ _ _ MInj13 JValid) as [m2 [j1 [j2 [J [FE [MInj12 [MInj23 JJ]]]]]]].
   subst j.
   apply forall_val_inject_split in Vinj13. destruct Vinj13 as [vals2 [Vinj12 Vinj23]].
-  assert (GV2: globals_valid ge2 m2).
-  { red; intros. admit. }
-  assert (GP12: globals_preserved ge1 ge2 j1).
-  { red; intros. admit. }
-  assert (MRR2: mem_respects_readonly ge2 m2).
-  { red; intros. admit. }
-  destruct (initial12 _ _ _ _ _ _ _ IC1 MInj12 Vinj12) as [c2 [IC2 MATCH12]]; trivial.
+  assert (VBj2: forall b1 b2 d, j1 b1 = Some (b2, d) -> Mem.valid_block m1 b1 /\ Mem.valid_block m2 b2).
   { intros. destruct (FE b1 _ _ H) as [b3 [d2 J2]]. reflexivity.
     destruct (JJ _ _ _ J2); clear JJ.
     assert (VB1: Mem.valid_block m1 b1).
     - eapply JValid. unfold compose_meminj. rewrite H, J2; trivial. 
     - split; trivial. eapply MInj12; eauto. }
+  assert (GV2: globals_valid ge2 m2).
+  { red; intros. remember (j2 b) as q; symmetry in Heqq.  admit. }
+  assert (GP12: globals_preserved ge1 ge2 j1).
+  { clear initial12 initial23; red; intros. destruct (FE _ _ _ H) as [b3 [d2 J2]]; trivial.  admit. }
+  assert (MRR2: mem_respects_readonly ge2 m2).
+  { red; intros. admit. }
+  destruct (initial12 _ _ _ _ _ _ _ IC1 MInj12 Vinj12) as [c2 [IC2 MATCH12]]; trivial.
   assert (GP23: globals_preserved ge2 ge3 j2).
-  { red; intros. admit. }  
+  { clear initial12 initial23; red; intros. destruct (JJ _ _ _ H).
+    rewrite <- (GP13 _ _ _ H1). admit. }  
   destruct (initial23 _ _ _ _ _ _ _ IC2 MInj23 Vinj23) as [c3 [IC3 MATCH23]]; trivial.
   { intros. destruct (JJ _ _ _ H); clear JJ.
     assert (VB1: Mem.valid_block m2 b1) by (eapply MInj12; eauto).
     split; [ trivial | eapply MInj23; eauto]. }
   exists c3; split; trivial.
   exists c2, m2, j1, j2, (fun _ : block => false).
-  split; trivial. split; trivial. split; trivial. }
+  split; trivial. split; trivial. split; trivial. *) }
 { (*coarsestep*)
   clear initial12 idle12 initial23 idle23.
   intros j c1 m1 c3 m3 LS LT [c2 [m2 [j1 [j2 [LM [J [M12 [M23 FE]]]]]]]] R1 Step1; subst.
