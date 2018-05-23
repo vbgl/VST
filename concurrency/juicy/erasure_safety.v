@@ -10,8 +10,8 @@ Require Import ProofIrrelevance.
 
 (* The concurrent machinery*)
 Require Import VST.concurrency.common.HybridMachineSig.
-Require Import VST.concurrency.common.juicy_machine. Import Concur.
-Require Import VST.concurrency.common.HybridMachine. Import Concur.
+Require Import VST.concurrency.juicy.juicy_machine. Import Concur.
+Require Import VST.concurrency.common.HybridMachine.
 Require Import VST.concurrency.common.lksize.
 Require Import VST.concurrency.common.permissions.
 
@@ -19,10 +19,10 @@ Require Import VST.concurrency.common.permissions.
 From mathcomp.ssreflect Require Import ssreflect ssrbool ssrnat eqtype seq.
 Require Import Coq.ZArith.ZArith.
 Require Import PreOmega.
-Require Import VST.concurrency.ssromega. (*omega in ssrnat *)
+Require Import VST.concurrency.common.ssromega. (*omega in ssrnat *)
 
 (*The simulations*)
-Require Import VST.sepcomp.wholeprog_simulations.
+Require Import VST.concurrency.common.machine_simulation.
 
 (*General erasure*)
 Require Import VST.concurrency.juicy.erasure_signature.
@@ -55,10 +55,10 @@ Module ErasureSafety.
   Existing Instance DMS.
 
   Lemma erasure_safety': forall n ge sch js jtr ds dtr m,
-      ErasureProof.match_st js ds ->
+      ErasureProof.match_st ge js ds ->
       DryHybridMachine.invariant ds ->
-    jm_csafe ge (sch, jtr, js) m n ->
-    HybridMachineSig.HybridCoarseMachine.csafe ge (sch, dtr, ds) m n.
+    jm_csafe (sch, jtr, js) m n ->
+    HybridMachineSig.HybridCoarseMachine.csafe (sch, dtr, ds) m n.
   Proof.
     induction n.
     intros. constructor.
@@ -72,16 +72,16 @@ Module ErasureSafety.
     - { simpl in Hstep.
         unfold JuicyMachine.MachStep in Hstep; simpl in Hstep.
         assert (step_diagram:=step_diagram).
-        specialize (step_diagram m initU sch sch (Some init_rmap) (Some init_pmap)).
+        specialize (step_diagram ge m initU sch sch (Some init_rmap) (Some init_pmap)).
         specialize (step_diagram ds dtr js tp' jtr tr' m').
         unfold corestep in step_diagram; simpl in step_diagram.
         unfold JuicyMachine.MachStep in step_diagram; simpl in step_diagram.
         eapply step_diagram in Hstep; try eassumption.
         destruct Hstep as [ds' [dinv' [MATCH' [dtr' stp']]]].
-        destruct Hsafe as [[? Hphi] Hsafe].
-        specialize (Hsafe _ Hphi nil) as (? & ? & ? & ? & Hr & ? & Hsafe).
-        { eexists; simpl.
-          erewrite <- ghost_core; apply join_comm, core_unit. }
+        destruct Hsafe as [[? [Hphi Hext]] Hsafe].
+        specialize (Hsafe _ Hphi [:: Some (initial_world.ext_ref tt, NoneP)])
+          as (? & ? & ? & ? & Hr & ? & Hsafe); auto.
+        { apply join_sub_refl. }
         eapply MTCH_tp_update in MATCH'; eauto.
         eapply IHn in Hsafe; eauto.
         econstructor 3; eauto.
@@ -89,7 +89,7 @@ Module ErasureSafety.
     - { simpl in Hstep.
         unfold JuicyMachine.MachStep in Hstep; simpl in Hstep.
         assert (step_diagram:=step_diagram).
-        specialize (step_diagram m initU sch (HybridMachineSig.schedSkip sch) (Some init_rmap) (Some init_pmap)).
+        specialize (step_diagram ge m initU sch (HybridMachineSig.schedSkip sch) (Some init_rmap) (Some init_pmap)).
         specialize (step_diagram ds dtr js tp' jtr tr' m').
         unfold corestep in step_diagram; simpl in step_diagram.
         unfold JuicyMachine.MachStep in step_diagram; simpl in step_diagram.
@@ -98,18 +98,18 @@ Module ErasureSafety.
         econstructor 4; eauto.
         { apply stp'. }
         intro U''; specialize (Hsafe U'').
-        destruct Hsafe as [[? Hphi] Hsafe].
-        specialize (Hsafe _ Hphi nil) as (? & ? & ? & ? & Hr & ? & Hsafe).
-        { eexists; simpl.
-          erewrite <- ghost_core; apply join_comm, core_unit. }
+        destruct Hsafe as [[? [Hphi Hext]] Hsafe].
+        specialize (Hsafe _ Hphi [:: Some (initial_world.ext_ref tt, NoneP)])
+          as (? & ? & ? & ? & Hr & ? & Hsafe); auto.
+        { apply join_sub_refl. }
         eapply MTCH_tp_update in MATCH'; eauto. }
 Qed.
 
 
   Theorem erasure_safety: forall ge cd j js ds m n,
-      Erasure.match_state cd j js m ds m ->
-    jm_csafe ge js m n ->
-    HybridMachineSig.HybridCoarseMachine.csafe ge ds m n.
+      Erasure.match_state ge cd j js m ds m ->
+    jm_csafe js m n ->
+    HybridMachineSig.HybridCoarseMachine.csafe ds m n.
   Proof.
     intros ? ? ? ? ? ? ? MATCH jsafe.
     inversion MATCH. subst.
@@ -119,20 +119,21 @@ Qed.
   (*there is something weird about this theorem.*)
   (*The injection is trivial... but it shouldn't*)
   Theorem initial_safety:
-    forall (U : HybridMachineSig.schedule) (js : jstate)
+    forall genv (U : HybridMachineSig.schedule) (js : jstate genv)
       (vals : seq Values.val) m
-      (rmap0 : rmap) (pmap : access_map * access_map) main genv h,
+      (rmap0 : rmap) (pmap : access_map * access_map) main h,
       match_rmap_perm rmap0 pmap ->
       no_locks_perm rmap0 ->
-      initial_core (JMachineSem U (Some rmap0)) h genv
-         m main vals = Some ((U, [::], js), None)  ->
-      exists (ds : dstate),
-        initial_core (DMachineSem U (Some pmap)) h genv
-                     m main vals = Some ((U, [::], ds), None) /\
-        invariant ds /\ match_st js ds.
+      (* Do we need to add that rmap0 contains the external ghost? *)
+      initial_core (JMachineSem U (Some rmap0)) h
+         m (U, [::], js) main vals  ->
+      exists (ds : dstate genv),
+        initial_core (DMachineSem U (Some pmap)) h
+                     m (U, [::], ds) main vals /\
+        invariant ds /\ match_st genv js ds.
   Proof.
     intros ? ? ? ? ? ? ? ? ? mtch_perms no_locks init.
-    destruct (init_diagram (fun _ => None) U js vals m rmap0 pmap main genv h)
+    destruct (init_diagram genv (fun _ => None) U js vals m rmap0 pmap main h)
     as [ds [dinit [dinv MTCH]]]; eauto.
     unfold init_inj_ok; intros b b' ofs H. inversion H.
   Qed.

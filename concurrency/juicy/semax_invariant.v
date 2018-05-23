@@ -28,7 +28,6 @@ Require Import VST.veric.semax_ext.
 Require Import VST.veric.res_predicates.
 Require Import VST.veric.seplog.
 Require Import VST.floyd.coqlib3.
-Require Import VST.sepcomp.semantics.
 Require Import VST.sepcomp.step_lemmas.
 Require Import VST.sepcomp.event_semantics.
 Require Import VST.concurrency.juicy.semax_conc_pred.
@@ -482,6 +481,7 @@ Inductive state_invariant Gamma (n : nat) : cm_state -> Prop :=
       (lev : level PHI = n)
       (envcoh : env_coherence Jspec ge Gamma PHI)
       (mcompat : mem_compatible_with tp m PHI)
+      (extcompat : joins (ghost_of PHI) (Some (ext_ref tt, NoneP) :: nil))
       (lock_sparse : lock_sparsity (lset tp))
       (lock_coh : lock_coherence' tp PHI m mcompat)
       (safety : threads_safety m tp PHI mcompat n)
@@ -495,9 +495,9 @@ Lemma state_invariant_sch_irr Gamma n m i tr sch sch' tp :
   state_invariant Gamma n (m, (tr, i :: sch', tp)).
 Proof.
   intros INV.
-  inversion INV as [m0 tr0 sch0 tp0 PHI lev envcoh compat sparse lock_coh safety wellformed uniqkrun H0];
+  inversion INV as [m0 tr0 sch0 tp0 PHI lev envcoh compat extcompat sparse lock_coh safety wellformed uniqkrun H0];
     subst m0 tr0 sch0 tp0.
-  refine (state_invariant_c Gamma n m tr (i :: sch') tp PHI lev envcoh compat sparse lock_coh safety wellformed _).
+  refine (state_invariant_c Gamma n m tr (i :: sch') tp PHI lev envcoh compat extcompat sparse lock_coh safety wellformed _).
   clear -uniqkrun.
   intros H i0 cnti q H0.
   destruct (uniqkrun H i0 cnti q H0) as [sch'' E].
@@ -518,6 +518,7 @@ Definition state_bupd P (state : cm_state) := let '(m, (tr, sch, tp)) := state i
   tp_bupd (fun tp' => P (m, (tr, sch, tp'))) tp.
 
 Lemma state_bupd_intro : forall (P : _ -> Prop) m tr sch tp phi, join_all tp phi ->
+  joins (ghost_of phi) (Some (ext_ref tt, NoneP) :: nil) ->
   P (m, (tr, sch, tp)) -> state_bupd P (m, (tr, sch, tp)).
 Proof.
   intros; split; eauto; intros.
@@ -530,7 +531,7 @@ Lemma state_bupd_intro' : forall Gamma n s,
   state_bupd (state_invariant Gamma n) s.
 Proof.
   inversion 1; subst.
-  eapply state_bupd_intro; auto.
+  eapply state_bupd_intro; eauto.
   apply mcompat.
 Qed.
 
@@ -566,6 +567,7 @@ Lemma state_inv_upd : forall Gamma (n : nat)
       (lev : level PHI = n)
       (envcoh : env_coherence Jspec ge Gamma PHI)
       (mcompat : mem_compatible_with tp m PHI)
+      (extcompat : joins (ghost_of PHI) (Some (ext_ref tt, NoneP) :: nil))
       (lock_sparse : lock_sparsity (lset tp))
       (lock_coh : lock_coherence' tp PHI m mcompat)
       (safety : forall C, join_sub (Some (ext_ref tt, NoneP) :: nil) C ->
@@ -578,7 +580,7 @@ Lemma state_inv_upd : forall Gamma (n : nat)
   state_bupd (state_invariant Gamma n) (m, (tr, sch, tp)).
 Proof.
   intros.
-  split; [eexists; apply mcompat|].
+  split; [eexists; split; eauto; apply mcompat|].
   intros ??? Hc J.
   assert (join_all tp PHI) as HPHI by (clear - mcompat; inv mcompat; auto).
   destruct (join_all_eq _ _ _ H HPHI) as [(Ht & ? & ? & ?)|].
@@ -603,6 +605,9 @@ Proof.
     + destruct coh as (? & ? & ? & ? & ? & Happ).
       do 4 eexists; eauto; split; auto.
       eapply semax_lemmas.funassert_resource, Happ; auto.
+  - eapply joins_comm, join_sub_joins_trans, joins_comm, J'.
+    destruct Hc as [? Hc].
+    eapply ghost_fmap_join in Hc; eexists; eauto.
   - repeat intro.
     setoid_rewrite Hguts in H0; setoid_rewrite Hguts in H1; auto.
   - repeat intro.

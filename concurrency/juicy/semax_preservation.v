@@ -33,7 +33,6 @@ Require Import VST.veric.res_predicates.
 Require Import VST.veric.mem_lessdef.
 Require Import VST.veric.age_to_resource_at.
 Require Import VST.floyd.coqlib3.
-Require Import VST.sepcomp.semantics.
 Require Import VST.sepcomp.step_lemmas.
 Require Import VST.sepcomp.event_semantics.
 Require Import VST.sepcomp.semantics_lemmas.
@@ -335,7 +334,7 @@ Proof.
         exfalso.
         destruct RD as [NN [RD|[RD|[[P [v' RD]]|RD]]]].
         all: breakhyps.
-        apply YES_inj in H. inv H. inv H0.
+        apply YES_inj in H1. inv H1. inv H2.
          clear - RJ0 rsh5. apply join_top_l in RJ0. subst.
          apply shares.bot_unreadable; auto.
 
@@ -943,6 +942,7 @@ Section Preservation.
   (INV : @state_invariant (@OK_ty (Concurrent_Espec unit CS ext_link)) Jspec' _ Gamma (S n) (m, (tr, i :: sch, tp)))
   (Phi : rmap)
   (compat : mem_compatible_with tp m Phi)
+  (extcompat : joins (ghost_of Phi) (Some (ext_ref tt, NoneP) :: nil))
   (lev : @level rmap ag_rmap Phi = S n)
   (envcoh : env_coherence Jspec' ge Gamma Phi)
   (sparse : @lock_sparsity lock_info (lset tp))
@@ -975,6 +975,7 @@ Section Preservation.
       right.
 
       unshelve eapply state_invariant_c with (PHI := Phi) (mcompat := _).
+      2:assumption.
       2:assumption.
       2:assumption.
       2:assumption.
@@ -1070,7 +1071,7 @@ Qed. (* Lemma preservation_Kinit *)
     (* apply state_invariant_S *)
     subst state state'; clear STEP.
     intros INV.
-    inversion INV as [m0 tr0 sch0 tp0 Phi lev envcoh compat sparse lock_coh safety wellformed unique E].
+    inversion INV as [m0 tr0 sch0 tp0 Phi lev envcoh compat extcompat sparse lock_coh safety wellformed unique E].
     subst m0 sch0 tp0.
 
     destruct sch as [ | i sch ].
@@ -1262,6 +1263,9 @@ Qed. (* Lemma preservation_Kinit *)
           + (* env_coherence *)
             assumption.
 
+          + (* external coherence *)
+            auto.
+
           + (* lock sparsity *)
             auto.
 
@@ -1441,6 +1445,9 @@ Qed. (* Lemma preservation_Kinit *)
         assumption.
 
       + (* env_coherence *)
+        assumption.
+
+      + (* external coherence *)
         assumption.
 
       + (* sparsity *)

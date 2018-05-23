@@ -33,7 +33,6 @@ Require Import VST.veric.mem_lessdef.
 Require Import VST.veric.age_to_resource_at.
 Require Import VST.veric.seplog.
 Require Import VST.floyd.coqlib3.
-Require Import VST.sepcomp.semantics.
 Require Import VST.sepcomp.step_lemmas.
 Require Import VST.sepcomp.event_semantics.
 Require Import VST.concurrency.juicy.semax_conc_pred.
@@ -810,6 +809,7 @@ Lemma state_inv_upd1 : forall {Z} (Jspec : juicy_ext_spec Z) Gamma (n : nat)
       (lev : level PHI = n)
       (envcoh : env_coherence Jspec ge Gamma PHI)
       (mcompat : mem_compatible_with tp m PHI)
+      (extcompat : joins (ghost_of PHI) (Some (ext_ref tt, NoneP) :: nil))
       (lock_sparse : lock_sparsity (lset tp))
       (lock_coh : lock_coherence' tp PHI m mcompat)
       (safety : exists i (cnti : containsThread tp i), let phi := getThreadR cnti in

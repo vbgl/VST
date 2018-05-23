@@ -5,8 +5,8 @@ Require Import VST.concurrency.common.threadPool.
 Require Import VST.concurrency.common.scheduler.
 Require Import VST.concurrency.common.HybridMachineSig.
 Require Import VST.concurrency.common.semantics.
-Require Import VST.concurrency.common.juicy_machine. Import Concur.
-Require Import VST.concurrency.common.HybridMachine. Import Concur.
+Require Import VST.concurrency.juicy.juicy_machine. Import Concur.
+Require Import VST.concurrency.common.HybridMachine.
 
 (*The simulations*)
 Require Import VST.sepcomp.wholeprog_simulations.
@@ -23,56 +23,56 @@ Module Type ErasureSig.
 
   Import HybridMachineSig.
 
-  Declare Instance Sem : Semantics.
-  
+  Declare Instance Sem (ge : Clight.genv) : Semantics.
+
   Declare Instance JR : Resources.
-  Declare Instance JTP : ThreadPool.ThreadPool.
-  Declare Instance JMS : MachineSig.
-  Declare Instance DelMem : DiluteMem.
+  Declare Instance JTP (ge : Clight.genv) : ThreadPool.ThreadPool(Sem := Sem ge).
+  Declare Instance JMS (ge : Clight.genv) : MachineSig(ThreadPool := JTP ge).
+  Declare Instance DilMem : DiluteMem.
   Declare Instance scheduler : Scheduler.
-  Declare Instance JuicyMachine : HybridMachine.
-  Notation JMachineSem := (MachineSemantics(HybridMachine := JuicyMachine)).
+  Declare Instance JuicyMachine (ge : Clight.genv) : HybridMachine(machineSig := JMS ge).
+  Notation JMachineSem ge := (MachineSemantics(HybridMachine := JuicyMachine ge)).
   Notation jres := (@res JR).
-  Notation jstate := (@ThreadPool.t _ _ JTP).
-  Notation jmachine_state := (@MachState _ _ JTP).
+  Notation jstate ge := (@ThreadPool.t _ _ (JTP ge)).
+  Notation jmachine_state ge := (@MachState _ _ (JTP ge)).
   Declare Instance DR : Resources.
-  Declare Instance DTP : ThreadPool.ThreadPool.
-  Declare Instance DMS : MachineSig.
-  Declare Instance DryMachine : HybridMachine.
-  Notation DMachineSem := (MachineSemantics(HybridMachine := DryMachine)).
+  Declare Instance DTP (ge : Clight.genv) : ThreadPool.ThreadPool(Sem := Sem ge).
+  Declare Instance DMS (ge : Clight.genv) : MachineSig(ThreadPool := DTP ge).
+  Declare Instance DryMachine (ge : Clight.genv) : HybridMachine(machineSig := DMS ge).
+  Notation DMachineSem ge := (MachineSemantics(HybridMachine := DryMachine ge)).
   Notation dres := (@res DR).
-  Notation dstate := (@ThreadPool.t _ _ DTP).
-  Notation dmachine_state := (@MachState _ _ DTP).
+  Notation dstate ge := (@ThreadPool.t _ _ (DTP ge)).
+  Notation dmachine_state ge := (@MachState _ _ (DTP ge)).
 
   (*Parameter parch_state : jstate ->  dstate.*)
-  Parameter match_st : jstate ->  dstate -> Prop.
+  Parameter match_st : forall (ge : Clight.genv), jstate ge -> dstate ge -> Prop.
 
   (*match axioms*)
-  Axiom MTCH_cnt: forall {js tid ds},
-           match_st js ds ->
+  Axiom MTCH_cnt: forall {ge js tid ds},
+           match_st ge js ds ->
            ThreadPool.containsThread js tid -> ThreadPool.containsThread ds tid.
-  Axiom MTCH_cnt': forall {js tid ds},
-           match_st js ds ->
+  Axiom MTCH_cnt': forall {ge js tid ds},
+           match_st ge js ds ->
            ThreadPool.containsThread ds tid -> ThreadPool.containsThread js tid.
 
-       Axiom  MTCH_getThreadC: forall js ds tid c,
+       Axiom  MTCH_getThreadC: forall ge js ds tid c,
            forall (cnt: ThreadPool.containsThread js tid)
              (cnt': ThreadPool.containsThread ds tid)
-             (M: match_st js ds),
+             (M: match_st ge js ds),
              ThreadPool.getThreadC cnt =  c ->
              ThreadPool.getThreadC cnt'  =  c.
 
-       Axiom MTCH_compat: forall js ds m,
-           match_st js ds ->
+       Axiom MTCH_compat: forall ge js ds m,
+           match_st ge js ds ->
          mem_compatible js m ->
          mem_compatible ds m.
 
        Axiom MTCH_updt:
-           forall js ds tid c
-             (H0:match_st js ds)
+           forall ge js ds tid c
+             (H0:match_st ge js ds)
              (cnt: ThreadPool.containsThread js tid)
              (cnt': ThreadPool.containsThread ds tid),
-             match_st (ThreadPool.updThreadC cnt c)
+             match_st ge (ThreadPool.updThreadC cnt c)
                        (ThreadPool.updThreadC cnt' c).
 
   (*Variable genv: G.
@@ -82,7 +82,7 @@ Module Type ErasureSig.
 
 
 Axiom init_diagram:
-    forall (j : Values.Val.meminj) (U:_) (js : jstate)
+    forall ge (j : Values.Val.meminj) (U:_) (js : jstate ge)
       (vals : list Values.val) (m : mem)
       (rmap: jres)
       (pmap: dres)
@@ -90,28 +90,28 @@ Axiom init_diagram:
       init_inj_ok j m ->
       match_rmap_perm rmap pmap ->
       no_locks_perm rmap ->
-   initial_core (JMachineSem U (Some rmap)) h m (U, nil, js) main vals ->
-   exists (ds : dstate),
-     initial_core (DMachineSem U (Some pmap)) h m (U, nil, ds) main vals /\
+   initial_core (JMachineSem ge U (Some rmap)) h m (U, nil, js) main vals ->
+   exists (ds : dstate ge),
+     initial_core (DMachineSem ge U (Some pmap)) h m (U, nil, ds) main vals /\
      invariant ds /\
-     match_st js ds.
+     match_st ge js ds.
 
   Axiom core_diagram:
-    forall (m : mem)  (U0 U U': _) rmap pmap
-     (ds : dstate) dtr (js js': jstate) jtr jtr'
+    forall ge (m : mem)  (U0 U U': _) rmap pmap
+     (ds : dstate ge) dtr (js js': jstate ge) jtr jtr'
      (m' : mem),
-   corestep (JMachineSem U0 rmap) (U, jtr, js) m (U', jtr', js') m' ->
-   match_st js ds ->
+   corestep (JMachineSem ge U0 rmap) (U, jtr, js) m (U', jtr', js') m' ->
+   match_st ge js ds ->
    invariant ds ->
-   exists (ds' : dstate),
+   exists (ds' : dstate ge),
      invariant ds' /\
-     match_st js' ds' /\
-     exists dtr', corestep (DMachineSem U0 pmap) (U, dtr, ds) m (U', dtr', ds') m'.
+     match_st ge js' ds' /\
+     exists dtr', corestep (DMachineSem ge U0 pmap) (U, dtr, ds) m (U', app dtr dtr', ds') m'.
 
   Axiom halted_diagram:
-    forall U (ds : dmachine_state) (js : jmachine_state)  rmap pmap,
+    forall ge U (ds : dmachine_state ge) (js : jmachine_state ge)  rmap pmap,
       fst (fst js) = fst (fst ds) ->
-      halted (JMachineSem U rmap) js = halted (DMachineSem U pmap) ds.
+      halted (JMachineSem ge U rmap) js = halted (DMachineSem ge U pmap) ds.
 
 End ErasureSig.
 
@@ -120,14 +120,16 @@ Module ErasureFnctr (PC:ErasureSig).
 
   Section ErasureFnctr.
 
+  Context (ge : Clight.genv).
   Notation jres := (@res JR).
-  Notation jstate := (@ThreadPool.t _ _ JTP).
-  Notation jmachine_state := (@MachState _ _ JTP).
+  Notation jstate := (@ThreadPool.t _ _ (JTP ge)).
+  Notation jmachine_state := (@MachState _ _ (JTP ge)).
   Notation dres := (@res DR).
-  Notation dstate := (@ThreadPool.t _ _ DTP).
-  Notation dmachine_state := (@MachState _ _ DTP).
-  Existing Instance DMS.
-
+  Notation dstate := (@ThreadPool.t _ _ (DTP ge)).
+  Notation dmachine_state := (@MachState _ _ (DTP ge)).
+  Instance DMS : MachineSig(ThreadPool := DTP ge) := DMS ge.
+  Instance Sem : Semantics := Sem ge.
+  Notation match_st := (match_st ge).
 
   (*Parameter halt_inv: SM_Injection ->
                       G -> Values.val -> M ->

@@ -16,7 +16,6 @@ Require Import VST.veric.juicy_safety.
 Require Import VST.veric.Clight_new.
 Require Import VST.veric.res_predicates.
 Require Import VST.veric.SeparationLogic.
-Require Import VST.sepcomp.semantics.
 Require Import VST.sepcomp.extspec.
 Require Import VST.floyd.reptype_lemmas.
 Require Import VST.floyd.field_at.

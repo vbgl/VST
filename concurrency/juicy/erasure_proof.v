@@ -11,7 +11,7 @@ Require Import ProofIrrelevance.
 (* The concurrent machinery*)
 Require Import VST.concurrency.common.threadPool.
 Require Import VST.concurrency.common.HybridMachineSig.
-Require Import VST.concurrency.common.juicy_machine.
+Require Import VST.concurrency.juicy.juicy_machine.
 Require Import VST.concurrency.common.HybridMachine.
 Require Import VST.concurrency.common.dry_machine_lemmas.
 Require Import VST.concurrency.common.lksize.
@@ -28,7 +28,7 @@ Require Import VST.concurrency.common.ssromega. (*omega in ssrnat *)
 Require Import VST.sepcomp.wholeprog_simulations.
 
 (*The semantics*)
-Require Import VST.concurrency.common.JuicyMachineModule.
+Require Import VST.concurrency.juicy.JuicyMachineModule.
 Require Import VST.concurrency.common.DryMachineSource.
 
 (*General erasure*)
@@ -84,8 +84,8 @@ Module Parching <: ErasureSig.
   Instance JR : Resources := LocksAndResources.
   Instance JTP : ThreadPool.ThreadPool := OrdinalPool.OrdinalThreadPool.
   Instance JMS : MachineSig := Concur.JuicyMachineShell.
-  Existing Instance HybridMachineSig.HybridCoarseMachine.DilMem.
-  Existing Instance HybridCoarseMachine.scheduler.
+  Instance DilMem : DiluteMem := HybridMachineSig.HybridCoarseMachine.DilMem.
+  Instance scheduler : Scheduler := HybridCoarseMachine.scheduler.
   Instance JuicyMachine : HybridMachine := HybridCoarseMachine.HybridCoarseMachine.
   Definition jstate := jstate ge.
 
@@ -4576,6 +4576,20 @@ Here be dragons
 
               Qed.
 
+  Lemma mtch_install_perm:
+    forall js ds m m' tid (MATCH : match_st js ds)
+    (Hcmpt : mem_compatible js m) (Htid : containsThread js tid)
+    (Hperm : install_perm Hcmpt Htid m'),
+    DryHybridMachine.install_perm _ _ _ (MTCH_compat _ _ _ MATCH Hcmpt) (MTCH_cnt MATCH Htid) m'.
+  Proof.
+    simpl; intros; hnf.
+    subst.
+    unshelve erewrite MTCH_restrict_personal; eauto; simpl.
+    { apply Concur.compatible_threadRes_cohere; auto. }
+    unfold Concur.install_perm; simpl; f_equal.
+    apply proof_irr.
+  Qed.
+
   Lemma core_diagram':
     forall (m : Mem.mem)  (U0 U U': schedule)
       (ds : dstate) dtr (js js': jstate) jtr jtr' rmap pmap
@@ -4586,7 +4600,7 @@ Here be dragons
       exists (ds' : dstate),
         invariant ds' /\
         match_st js' ds' /\
-        exists dtr', corestep (DMachineSem U0 pmap) (U, dtr, ds) m (U', dtr', ds') m'.
+        exists dtr', corestep (DMachineSem U0 pmap) (U, dtr, ds) m (U', dtr ++ dtr', ds') m'.
 Proof.
           intros m U0 U U' ds dtr js js' jtr jtr' rmap pmap m' MATCH dinv.
           unfold JuicyMachine.MachineSemantics; simpl.
@@ -4600,7 +4614,7 @@ Proof.
             exists ds'. split; [|split].
             - apply updThreadC_invariant. assumption.
             - apply MTCH_updt; assumption.
-            - exists dtr.
+            - exists nil; rewrite <- app_nil_end.
               eapply (HybridMachineSig.start_step tid) with (Htid0 := @MTCH_cnt js tid ds MATCH Htid).
               + assumption.
               + { simpl in Hperm; subst.
@@ -4621,15 +4635,14 @@ Proof.
             (*Invariant*)
             { apply updThreadC_invariant; assumption. }
             (*Match *)
-            { (*This should be a lemma *)
-              apply MTCH_updt; assumption.
+            { apply MTCH_updt; assumption.
             }
             (*Step*)
-            { exists dtr.
-              simpl in Hperm; subst.
+            { exists nil; rewrite <- app_nil_end.
               econstructor 2; try eassumption.
               - simpl. econstructor; try eassumption.
-                + rewrite <- Hcode. symmetry. apply mtch_gtc.
+                + apply mtch_install_perm; eauto.
+                + setoid_rewrite <- Hcode. symmetry. apply mtch_gtc.
                 + reflexivity.
             }
           }
@@ -4691,7 +4704,7 @@ Proof.
         rewrite HH; simpl; auto.
       - destruct B as [[M [v B]]|[v[pp [B1 B2]]]].
         + rewrite B; simpl.
-          { (* address is not valid so it should be no... wiht mem compat.*)
+          { (* address is not valid so it should be no... with mem compat.*)
             destruct Hcmpt as [jall Hcmpt].
             inversion Hcmpt.
             inversion all_cohere.
@@ -4716,7 +4729,7 @@ Proof.
    inversion Hcorestep.
    eapply ev_step_ax2 in H.
    destruct H as [T evSTEP].
-   exists (dtr ++ map (Events.internal tid) T).
+   exists (map (Events.internal tid) T).
    eapply HybridMachineSig.thread_step; simpl.
    - eassumption.
    - econstructor; try eassumption.
@@ -4738,18 +4751,18 @@ inversion MATCH; subst.
   (*Match *)
   { apply MTCH_updt; assumption.        }
   (*Step*)
-  { exists dtr.
+  { exists nil; rewrite <- app_nil_end.
     econstructor 4; try eassumption.
     - simpl. reflexivity.
-    - eapply MTCH_compat; eassumption.
     - simpl. econstructor; try eassumption.
-      + rewrite <- Hcode. symmetry. apply mtch_gtc.
+      + setoid_rewrite <- Hcode. symmetry. apply mtch_gtc.
+      + apply mtch_install_perm; eauto.
       + reflexivity.
   }
 
 *  (*Conc step*)
   {
-    destruct (conc_step_diagram m m' U js js' ds tid genv ev MATCH dinv Htid Hcmpt HschedN Htstep)
+    destruct (conc_step_diagram m m' U js js' ds tid ev MATCH dinv Htid Hcmpt HschedN Htstep)
       as [ds' [ev' [dinv' [MTCH' step']]]]; eauto.
     exists ds'; split; [| split]; try assumption.
     eexists; econstructor 5; simpl; try eassumption.
@@ -4763,7 +4776,7 @@ inversion MATCH; subst.
   { assumption. }
   { inversion MATCH; subst.
     assert (Htid':=Htid); apply mtch_cnt in Htid'.
-    exists dtr.
+    exists nil; rewrite <- app_nil_end.
     econstructor 6; try eassumption.
     simpl; reflexivity.
     simpl. eapply MTCH_compat; eassumption; instantiate(1:=Htid').
@@ -4774,7 +4787,7 @@ inversion MATCH; subst.
 *  (* schedfail *)
   { exists ds.
     split;[|split]; try eassumption.
-    exists dtr.
+    exists nil; rewrite <- app_nil_end.
     econstructor 7; try eassumption; try reflexivity.
     unfold not; simpl; intros.
     apply Htid. inversion MATCH; apply mtch_cnt'; assumption.
@@ -4782,24 +4795,25 @@ inversion MATCH; subst.
 
   Grab Existential Variables.
   - simpl. apply mtch_cnt. assumption.
-  - simpl. apply mtch_cnt. assumption.
   - assumption.
-  - simpl. apply mtch_cnt. assumption.
+  - assumption.
+  - assumption.
+  - eapply MTCH_compat; eauto.
   Qed.
 
   Lemma core_diagram:
     forall (m : Mem.mem)  (U0 U U': schedule) rmap pmap
       (ds : dstate) dtr (js js': jstate) jtr jtr'
-      (m' : Mem.mem) genv,
-      corestep (JMachineSem U0 rmap) genv (U, jtr, js) m (U', jtr', js') m' ->
+      (m' : Mem.mem),
+      corestep (JMachineSem U0 rmap) (U, jtr, js) m (U', jtr', js') m' ->
       match_st js ds ->
       invariant ds ->
       exists (ds' : dstate),
         invariant ds' /\
         match_st js' ds' /\
-        exists dtr', corestep (DMachineSem U0 pmap) genv (U, dtr, ds) m (U', dtr', ds') m'.
+        exists dtr', corestep (DMachineSem U0 pmap) (U, dtr, ds) m (U', dtr ++ dtr', ds') m'.
   Proof.
-    intros. destruct (core_diagram' m U0 U U' ds dtr js js' jtr jtr' rmap0 pmap m' genv H0 H1 H) as [ds' [A[B C]]].
+    intros. destruct (core_diagram' m U0 U U' ds dtr js js' jtr jtr' rmap0 pmap m' H0 H1 H) as [ds' [A[B C]]].
     exists ds'; split;[|split]; try assumption.
   Qed.
 
@@ -4807,7 +4821,7 @@ inversion MATCH; subst.
   Lemma halted_diagram:
     forall U ds js rmap pmap,
       fst (fst js) = fst (fst ds) ->
-      halted (JMachineSem U rmap) js = halted (DMachineSem U pmap) ds.
+      halted (JMachineSem(ge := ge) U rmap) js = halted (DMachineSem(ge := ge) U pmap) ds.
         intros until pmap. destruct ds as [dp ?], js as [jp ?]; destruct dp, jp; simpl; intros HH; rewrite HH.
         reflexivity.
   Qed.

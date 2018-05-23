@@ -246,9 +246,8 @@ Lemma resource_decay_join b phi1 phi1' phi2 phi3 :
   sepalg.join phi1 phi2 phi3 ->
   exists phi3',
     sepalg.join phi1' (age_to (level phi1') phi2) phi3' /\
-    resource_decay b phi3 phi3'.
+    resource_decay b phi3 phi3' /\ ghost_of phi3' = own.ghost_approx phi3' (ghost_of phi3).
 Proof.
-  Unset Printing Implicit.
   intros bound rd; apply resource_decay_aux_spec in rd; revert rd.
   intros [lev rd] Hg J.
   assert (lev12 : level phi1 = level phi2).
@@ -369,7 +368,7 @@ Proof.
   }
 
   exists phi3'.
-  split;[|split].
+  split;[|split; [split|]].
   - apply resource_at_join2; auto.
     + rewrite lev3.
       unfold phi2'.
@@ -396,4 +395,5 @@ Proof.
        rewrite H0; apply YES_ext; auto.
     + right; right; left. auto.
     + auto.
+  - congruence.
 Qed.

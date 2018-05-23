@@ -32,7 +32,6 @@ Require Import VST.veric.shares.
 Require Import VST.veric.age_to_resource_at.
 Require Import VST.floyd.coqlib3.
 Require Import VST.floyd.field_at.
-Require Import VST.sepcomp.semantics.
 Require Import VST.sepcomp.step_lemmas.
 Require Import VST.sepcomp.event_semantics.
 Require Import VST.concurrency.juicy.semax_conc_pred.
@@ -237,7 +236,7 @@ Section Progress.
       state_step(ge := ge) state state'.
   Proof.
     intros not_spawn I.
-    inversion I as [m tr sch tp Phi En envcoh compat sparse lock_coh safety wellformed unique E]. rewrite <-E in *.
+    inversion I as [m tr sch tp Phi En envcoh compat extcompat sparse lock_coh safety wellformed unique E]. rewrite <-E in *.
     destruct sch as [ | i sch ].
 
     (* empty schedule: we loop in the same state *)

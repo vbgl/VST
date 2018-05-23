@@ -23,7 +23,6 @@ Require Import VST.veric.juicy_mem.
 Require Import VST.floyd.field_at.
 Require Import VST.floyd.reptype_lemmas.
 Require Import VST.sepcomp.Address.
-Require Import VST.sepcomp.semantics.
 Require Import VST.sepcomp.step_lemmas.
 Require Import VST.sepcomp.event_semantics.
 Require Import VST.veric.coqlib4.

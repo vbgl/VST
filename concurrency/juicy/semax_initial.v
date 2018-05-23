@@ -31,7 +31,6 @@ Require Import VST.veric.mem_lessdef.
 Require Import VST.veric.seplog.
 Require Import VST.veric.juicy_safety.
 Require Import VST.floyd.coqlib3.
-Require Import VST.sepcomp.semantics.
 Require Import VST.sepcomp.step_lemmas.
 Require Import VST.sepcomp.event_semantics.
 Require Import VST.concurrency.juicy.semax_conc_pred.
@@ -68,11 +67,11 @@ Section Initial_State.
   Definition initial_state (n : nat) (sch : schedule) : cm_state :=
     (proj1_sig init_m,
      (nil, sch,
-      let spr := semax_prog_rule
+      let spr := semax_prog_rule'
                    (Concurrent_Espec unit CS ext_link) V G prog
                    (proj1_sig init_m) 0 all_safe (proj2_sig init_m) in
       let q : corestate := projT1 (projT2 spr) in
-      let jm : juicy_mem := proj1_sig (snd (projT2 (projT2 spr)) n) in
+      let jm : juicy_mem := proj1_sig (snd (projT2 (projT2 spr)) n tt) in
       @OrdinalPool.mk LocksAndResources (ClightSemantincsForMachines.ClightSem (globalenv prog))
         (pos.mkPos (le_n 1))
         (* (fun _ => Kresume q Vundef) *)
@@ -100,9 +99,9 @@ Section Initial_State.
   Proof.
     unfold initial_state.
     destruct init_m as [m Hm]; simpl proj1_sig; simpl proj2_sig.
-    set (spr := semax_prog_rule (Concurrent_Espec unit CS ext_link) V G prog m 0 all_safe Hm).
+    set (spr := semax_prog_rule' (Concurrent_Espec unit CS ext_link) V G prog m 0 all_safe Hm).
     set (q := projT1 (projT2 spr)).
-    set (jm := proj1_sig (snd (projT2 (projT2 spr)) n)).
+    set (jm := proj1_sig (snd (projT2 (projT2 spr)) n tt)).
     match goal with |- _ _ _ (_, (_, ?TP)) => set (tp := TP) end.
 
     (*! compatibility of memories *)
@@ -110,7 +109,7 @@ Section Initial_State.
     {
       constructor.
       + apply AllJuice with (m_phi jm) None.
-        * change (proj1_sig (snd (projT2 (projT2 spr)) n)) with jm.
+        * change (proj1_sig (snd (projT2 (projT2 spr)) n tt)) with jm.
           unfold join_threads.
           unfold getThreadsR.
 
@@ -142,7 +141,7 @@ Section Initial_State.
         unfold tp in Ephi; simpl in Ephi.
         discriminate.
       + intros loc sh psh P z L.
-        destruct (snd (projT2 (projT2 spr))) as (jm' & D  & H  & A & NL & MFS).
+        destruct (snd (projT2 (projT2 spr))) as (jm' & D & H & E & A & NL & MFS).
         unfold jm in *; clear jm; simpl in L |- *.
         pose proof (NL loc) as NL'.
         rewrite L in NL'.
@@ -168,11 +167,24 @@ Section Initial_State.
       auto.
 
     - (*! env_coherence *)
-      destruct (snd (projT2 (projT2 spr))) as (jm' & D  & H  & A & NL & MFS & FA).
+      destruct (snd (projT2 (projT2 spr))) as (jm' & D & H & E & A & NL & MFS & FA).
       simpl in jm. unfold jm.
       split.
       + apply MFS.
       + exists prog, CS, V. auto.
+
+    - (*! external coherence *)
+      destruct (snd (projT2 (projT2 spr))) as (jm' & D & H & E & A & NL & MFS & FA).
+      simpl in jm. unfold jm.
+      subst jm tp; clear - E.
+      assert (@ghost.valid (ext_PCM unit) (Some (Tsh, Some tt), Some (Some tt))).
+      { simpl; split; [apply Share.nontrivial|].
+        eexists; apply join_comm, core_unit. }
+      eexists; apply join_comm, own.singleton_join_gen with (k := O).
+      erewrite nth_error_nth in E by (apply nth_error_Some; rewrite E; discriminate).
+      inversion E as [Heq]; rewrite Heq.
+      instantiate (1 := (_, _)); constructor; constructor; simpl; [|repeat constructor].
+      unshelve constructor; [| apply H | repeat constructor].
 
     - (*! lock sparsity (no locks at first) *)
       intros l1 l2.
@@ -207,10 +219,10 @@ Section Initial_State.
       subst jm. rewrite <-Ejm.
       simpl in Ec. replace c with q in * by congruence.
       destruct spr as (b' & q' & Hb & JS); simpl proj1_sig in *; simpl proj2_sig in *.
-      destruct (JS n) as (jm' & jmm & lev & Safe & notlock); simpl projT1 in *; simpl projT2 in *.
+      destruct (JS n tt) as (jm' & jmm & lev & ? & Safe & notlock); simpl projT1 in *; simpl projT2 in *.
       subst q.
       simpl proj1_sig in *; simpl proj2_sig in *. subst n.
-      apply (Safe ora).
+      destruct ora; apply Safe.
 
     - (* well-formedness *)
       intros i cnti.

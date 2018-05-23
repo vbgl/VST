@@ -32,7 +32,6 @@ Require Import VST.veric.res_predicates.
 Require Import VST.veric.mem_lessdef.
 Require Import VST.veric.age_to_resource_at.
 Require Import VST.floyd.coqlib3.
-Require Import VST.sepcomp.semantics.
 Require Import VST.sepcomp.step_lemmas.
 Require Import VST.sepcomp.event_semantics.
 Require Import VST.sepcomp.semantics_lemmas.
@@ -124,6 +123,7 @@ Lemma preservation_acquire
   (compat : mem_compatible_with tp m Phi)
   (lev : level Phi = S n)
   (envcoh : env_coherence Jspec' ge Gamma Phi)
+  (extcompat : joins (ghost_of Phi) (Some (ext_ref tt, NoneP) :: nil))
   (sparse : lock_sparsity (lset tp))
   (lock_coh : lock_coherence' tp Phi m compat)
   (safety : threads_safety Jspec' m tp Phi compat (S n))
@@ -307,6 +307,9 @@ Proof.
 
   + (* env_coherence *)
     apply env_coherence_age_to. auto.
+
+  + rewrite age_to_ghost_of.
+    destruct extcompat as [? J]; eapply ghost_fmap_join in J; eexists; eauto.
 
   + (* lock sparsity *)
     simpl.

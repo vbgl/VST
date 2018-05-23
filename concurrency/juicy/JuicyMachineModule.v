@@ -57,7 +57,11 @@ Module THE_JUICY_MACHINE.
     replace (proj2 _ _) with cnt by apply proof_irr; auto.
   Qed.
 
-  Definition tp_bupd P (tp : jstate) := (exists phi, join_all tp phi) /\
+  Definition tp_bupd P (tp : jstate) :=
+  (* Without this initial condition, a thread pool could be vacuously safe by being inconsistent
+     with itself or the external environment. Since we want juicy safety to imply dry safety,
+     we need to rule out the vacuous case. *)
+  (exists phi, join_all tp phi /\ joins (ghost_of phi) (Some (initial_world.ext_ref tt, NoneP) :: nil)) /\
   forall phi, join_all tp phi ->
     forall c : ghost, join_sub (Some (initial_world.ext_ref tt, NoneP) :: nil) c ->
      joins (ghost_of phi) (ghost_fmap (approx (level phi)) (approx (level phi)) c) ->

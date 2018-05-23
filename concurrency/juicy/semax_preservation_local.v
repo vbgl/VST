@@ -32,7 +32,6 @@ Require Import VST.veric.res_predicates.
 Require Import VST.veric.mem_lessdef.
 Require Import VST.veric.age_to_resource_at.
 Require Import VST.floyd.coqlib3.
-Require Import VST.sepcomp.semantics.
 Require Import VST.sepcomp.step_lemmas.
 Require Import VST.sepcomp.event_semantics.
 Require Import VST.sepcomp.semantics_lemmas.
@@ -74,7 +73,7 @@ Lemma resource_decay_joinlist b phi1 phi1' l Phi :
   joinlist (phi1 :: l) Phi ->
   exists Phi',
     joinlist (phi1' :: (map (age_to (level phi1')) l)) Phi' /\
-    resource_decay b Phi Phi'.
+    resource_decay b Phi Phi' /\ ghost_of Phi' = own.ghost_approx Phi' (ghost_of Phi).
 Proof.
   intros B rd g (x & h & j).
   assert (Bx : rmap_bound b x). { apply (rmap_bound_join j) in B. intuition. }
@@ -93,13 +92,14 @@ Lemma resource_decay_join_all ge {tp : jstate ge} {m Phi} c' {phi' i} {cnti : co
   exists Phi',
     join_all (updThread i (age_tp_to (level phi') tp) (cnt_age' cnti) c' phi') Phi' /\
     resource_decay (Mem.nextblock m) Phi Phi' /\
+    ghost_of Phi' = own.ghost_approx Phi' (ghost_of Phi) /\
     level Phi = S (level Phi').
 Proof.
   do 2 rewrite join_all_joinlist.
   intros B (rd & lev & g) j.
   rewrite (maps_getthread _ _ cnti) in j.
-  destruct (resource_decay_joinlist _ _ _ _ _ B rd g j) as (Phi' & j' & rd').
-  exists Phi'; split; [ | split]; auto.
+  destruct (resource_decay_joinlist _ _ _ _ _ B rd g j) as (Phi' & j' & rd' & ?).
+  exists Phi'; split; [ | split; [|split]]; auto.
   - rewrite maps_updthread.
     exact_eq j'. f_equal. f_equal. rewrite <-all_but_map, maps_age_to.
     auto.
@@ -292,6 +292,7 @@ Lemma invariant_thread_step
   (Stable : ext_spec_stable age Jspec)
   (Stable' : ext_spec_stable juicy_mem_equiv Jspec)
   (envcoh : env_coherence Jspec ge Gamma Phi)
+  (extcompat : joins (ghost_of Phi) (Some (ext_ref tt, NoneP) :: nil))
   (compat : mem_compatible_with tp m Phi)
   (En : level Phi = S n)
   (lock_bound : lockSet_block_bound (lset tp) (Mem.nextblock m))
@@ -329,7 +330,7 @@ Proof.
   (** * Getting new global rmap (Phi'') with smaller level [n] *)
   assert (B : rmap_bound (Mem.nextblock m) Phi) by apply compat.
   destruct (resource_decay_join_all _ (Krun ci') B (proj2 stepi) J)
-    as [Phi'' [J'' [RD L]]].
+    as [Phi'' [J'' [RD [G L]]]].
   rewrite join_all_joinlist in J''.
   assert (Eni'' : level (m_phi jmi') = n). {
     clear -stepi Eni.
@@ -622,6 +623,9 @@ Proof.
 
   - (* env_coherence *)
     eapply env_coherence_resource_decay with _ Phi; eauto. setoid_rewrite En''; omega.
+
+  - rewrite G.
+    destruct extcompat as [? Je]; eapply ghost_fmap_join in Je; eexists; eauto.
 
   - (* lock coherence: own rmap has changed, but we prove it did not affect locks *)
     unfold tp''; simpl.

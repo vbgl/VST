@@ -28,7 +28,6 @@ Require Import VST.veric.juicy_extspec.
 Require Import VST.veric.tycontext.
 Require Import VST.veric.res_predicates.
 Require Import VST.floyd.coqlib3.
-Require Import VST.concurrency.core_semantics.
 Require Import VST.sepcomp.step_lemmas.
 Require Import VST.sepcomp.event_semantics.
 Require Import VST.concurrency.juicy.semax_conc_pred.
@@ -108,7 +107,6 @@ Proof.
   inversion step; try tauto.
   all: try inversion Htstep; repeat match goal with H : ?x = ?y |- _ => subst x || subst y end.
   all: intros j cnti q.
-  Set Printing Implicit.
   all: assert (tid = i) by (simpl in *; congruence); subst tid.
   all: destruct (eq_dec i j).
   all: try subst j.
@@ -366,13 +364,13 @@ Section Safety.
   Definition init_mem : { m | Genv.init_mem prog = Some m } := init_m prog init_mem_not_none.
 
   Definition spr :=
-    semax_prog_rule
+    semax_prog_rule'
       (Concurrent_Espec unit CS ext_link) V G prog
       (proj1_sig init_mem) 0 all_safe (proj2_sig init_mem).
 
   Definition initial_corestate : corestate := projT1 (projT2 spr).
 
-  Definition initial_jm (n : nat) : juicy_mem := proj1_sig (snd (projT2 (projT2 spr)) n).
+  Definition initial_jm (n : nat) : juicy_mem := proj1_sig (snd (projT2 (projT2 spr)) n tt).
 
   Definition initial_machine_state (n : nat) :=
     @OrdinalPool.mk LocksAndResources (@JSem (globalenv prog))
@@ -459,7 +457,7 @@ Section Safety.
     jmsafe (globalenv prog) n ((proj1_sig init_mem), (nil, sch, initial_machine_state n)).
   Proof.
     eapply invariant_safe.
-    exists n; split; auto; apply initial_invariant.
+    exists n; split; auto. apply initial_invariant.
   Qed.
 
   Lemma jmsafe_csafe n m tr sch s : jmsafe (globalenv prog) n (m, (tr, sch, s)) -> jm_csafe (sch, tr, s) m n.

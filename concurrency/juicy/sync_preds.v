@@ -29,7 +29,6 @@ Require Import VST.veric.semax_ext.
 Require Import VST.veric.res_predicates.
 Require Import VST.veric.age_to_resource_at.
 Require Import VST.veric.coqlib4.
-Require Import VST.sepcomp.semantics.
 Require Import VST.sepcomp.step_lemmas.
 Require Import VST.sepcomp.event_semantics.
 Require Import VST.concurrency.juicy.semax_conc_pred.

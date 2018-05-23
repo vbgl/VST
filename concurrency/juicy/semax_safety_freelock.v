@@ -34,7 +34,6 @@ Require Import VST.veric.shares.
 Require Import VST.veric.age_to_resource_at.
 Require Import VST.floyd.coqlib3.
 Require Import VST.floyd.field_at.
-Require Import VST.sepcomp.semantics.
 Require Import VST.sepcomp.step_lemmas.
 Require Import VST.sepcomp.event_semantics.
 Require Import VST.sepcomp.semantics_lemmas.
@@ -105,7 +104,7 @@ Proof.
   assert (Hpos : (0 < LKSIZE)%Z) by reflexivity.
   intros isfreelock.
   intros I.
-  inversion I as [m tr sch_ tp Phi En envcoh compat sparse lock_coh safety wellformed unique E]. rewrite <-E in *.
+  inversion I as [m tr sch_ tp Phi En envcoh compat extcompat sparse lock_coh safety wellformed unique E]. rewrite <-E in *.
   unfold blocked_at_external in *.
   destruct isfreelock as (i & cnti & sch & ci & args & -> & Eci & atex).
   pose proof (safety i cnti tt) as safei.
@@ -475,6 +474,10 @@ Proof.
     apply env_coherence_pures_eq with Phi; auto. omega.
     apply pures_same_pures_eq. auto.
     eapply rmap_freelock_pures_same; eauto.
+
+  - rewrite age_to_ghost_of.
+    destruct Hrmap' as (? & ? & ? & <-).
+    destruct extcompat as [? J]; eapply ghost_fmap_join in J; eexists; eauto.
 
   - (* lock sparsity *)
     apply lock_sparsity_age_to.

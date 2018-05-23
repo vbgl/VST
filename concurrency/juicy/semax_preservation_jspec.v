@@ -31,7 +31,6 @@ Require Import VST.veric.res_predicates.
 Require Import VST.veric.mem_lessdef.
 Require Import VST.floyd.coqlib3.
 Require Import VST.sepcomp.extspec.
-Require Import VST.sepcomp.semantics.
 Require Import VST.sepcomp.step_lemmas.
 Require Import VST.sepcomp.event_semantics.
 Require Import VST.sepcomp.semantics_lemmas.
