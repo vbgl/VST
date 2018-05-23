@@ -5,7 +5,7 @@ Require Import compcert.common.AST.
 Require Import compcert.common.Values.
 
 Require Import VST.sepcomp.extspec.
-Require Import VST.concurrency.core_semantics.
+Require Import VST.concurrency.common.core_semantics.
 Require Import VST.sepcomp.semantics_lemmas.
 
 Definition has_opttyp (v : option val) (t : option typ) :=

@@ -1,6 +1,6 @@
 Require Import VST.msl.Axioms.
 Require Import compcert.common.Memory.
-Require Import VST.concurrency.core_semantics.
+Require Import VST.concurrency.common.core_semantics.
 
 Module FSem.
 Record t M TM := mk {

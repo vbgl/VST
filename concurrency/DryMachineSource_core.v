@@ -21,7 +21,7 @@ Require Import VST.concurrency.lksize.
 Require Import VST.concurrency.permissions.
 
 Require Import VST.concurrency.dry_context.
-Require Import VST.concurrency.HybridMachine_lemmas.
+Require Import VST.concurrency.dry_machine_lemmas.
 Require Import VST.concurrency.erased_machine.
 
 (*Semantics*)
