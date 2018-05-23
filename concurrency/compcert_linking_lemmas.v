@@ -2,7 +2,7 @@ Require Import VST.msl.Axioms.
 
 Require Import VST.sepcomp.effect_semantics.
 
-Require Import VST.concurrency.pos.
+Require Import VST.concurrency.common.pos.
 Require Import VST.concurrency.compcert_linking.
 
 From mathcomp.ssreflect Require Import ssreflect ssrbool ssrnat ssrfun seq fintype.

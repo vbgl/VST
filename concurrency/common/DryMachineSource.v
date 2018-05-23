@@ -13,8 +13,8 @@ Require Import VST.concurrency.common.scheduler.
 
 Require Import VST.concurrency.common.HybridMachineSig.
 Require Import VST.concurrency.common.semantics.
-Require Import VST.concurrency.common.juicy_machine. Import Concur.
-Require Import VST.concurrency.common.HybridMachine. Import Concur.
+(*Require Import VST.concurrency.common.juicy_machine. Import Concur.*)
+Require Import VST.concurrency.common.HybridMachine.
 Require Import VST.concurrency.common.lksize.
 Require Import VST.concurrency.common.permissions.
 
@@ -37,7 +37,7 @@ Require Import PreOmega.
 Require Import VST.concurrency.common.ssromega. (*omega in ssrnat *)
 Set Bullet Behavior "Strict Subproofs".
 
-Import Concur threadPool.
+Import threadPool.
 
 Module THE_DRY_MACHINE_SOURCE.
 (*  Module SEM:= ClightSEM.*)

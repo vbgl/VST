@@ -1,8 +1,8 @@
 Require Import VST.msl.Axioms.
 
-Require Import VST.concurrency.sepcomp. Import SepComp.
+Require Import VST.concurrency.common.sepcomp. Import SepComp.
 
-Require Import VST.concurrency.pos.
+Require Import VST.concurrency.common.pos.
 Require Import VST.concurrency.stack.
 Require Import VST.concurrency.cast.
 
