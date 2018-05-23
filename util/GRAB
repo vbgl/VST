@@ -23,6 +23,9 @@ if [ -e "$1" -a ./GRAB ]; then
   cp $1/flocq/Calc/*.v flocq/Calc
   cp $1/flocq/Appli/*.v flocq/Appli
   cp $1/exportclight/*.v exportclight
+  # Files for assembly
+  cp $1/x86/{Asm,Conventions1,Machregs,Op,Stacklayout}.v x86
+  cp $1/backend/{Bounds,Conventions,LTL,Linear,Locations}.v backend
   cp $1/.depend .depend
 else
  echo "Usage:  ./GRAB ~/compcert"
