@@ -1,9 +1,9 @@
 (** * Injections on X86 cores*)
 
-Require Import VST.concurrency.core_semantics.
+Require Import VST.concurrency.common.core_semantics.
 Require Import VST.sepcomp.semantics_lemmas.
 
-Require Import VST.concurrency.pos.
+Require Import VST.concurrency.common.pos.
 
 Require Import Coqlib.
 Require Import Coq.Program.Program.
@@ -17,17 +17,17 @@ Require Import compcert.common.Values. (*for val*)
 Require Import compcert.common.Globalenvs.
 Require Import compcert.common.Memory.
 Require Import compcert.common.Events.
-Require Import VST.concurrency.addressFiniteMap.
+Require Import VST.concurrency.common.addressFiniteMap.
 Require Import compcert.lib.Integers.
 
 Require Import Coq.ZArith.ZArith.
-Require Import VST.concurrency.threads_lemmas.
+Require Import VST.concurrency.common.threads_lemmas.
 Require Import VST.concurrency.mem_obs_eq.
 Require Import VST.concurrency.memory_lemmas.
 Require Import compcert.x86.Asm.
-Require Import VST.concurrency.Asm_core VST.concurrency.Asm_event.
+Require Import VST.concurrency.common.Asm_core VST.concurrency.common.Asm_event.
 Require Import VST.concurrency.x86_context.
-Require Import VST.concurrency.core_semantics.
+Require Import VST.concurrency.common.core_semantics.
 
 Import ValObsEq Renamings MemObsEq event_semantics.
 

@@ -2,11 +2,11 @@
 
 Require Import compcert.lib.Axioms.
 
-Require Import VST.concurrency.sepcomp.
+Require Import VST.concurrency.common.sepcomp.
 Import SepComp.
 Require Import VST.sepcomp.semantics_lemmas.
 
-Require Import VST.concurrency.pos.
+Require Import VST.concurrency.common.pos.
 
 Require Import Coq.Program.Program.
 From mathcomp.ssreflect Require Import ssreflect ssrbool ssrnat ssrfun eqtype seq fintype finfun.
@@ -19,22 +19,22 @@ Require Import compcert.common.Values. (*for val*)
 Require Import compcert.common.Globalenvs.
 Require Import compcert.common.Memory.
 Require Import compcert.common.Events.
-Require Import VST.concurrency.addressFiniteMap.
+Require Import VST.concurrency.common.addressFiniteMap.
 Require Import compcert.lib.Integers.
 
 Require Import Coq.ZArith.ZArith.
 Require Import Coq.Logic.ClassicalFacts.
  
 
-Require Import VST.concurrency.threadPool.
-Require Import VST.concurrency.threads_lemmas.
-Require Import VST.concurrency.permissions.
-Require Import VST.concurrency.permjoin_def.
-Require Import VST.concurrency.scheduler.
-Require Import VST.concurrency.HybridMachineSig.
-Require Import VST.concurrency.dry_machine_lemmas.
-Require Import VST.concurrency.dry_machine_step_lemmas.
-Require Import VST.concurrency.dry_context.
+Require Import VST.concurrency.common.threadPool.
+Require Import VST.concurrency.common.threads_lemmas.
+Require Import VST.concurrency.common.permissions.
+Require Import VST.concurrency.common.permjoin_def.
+Require Import VST.concurrency.common.scheduler.
+Require Import VST.concurrency.common.HybridMachineSig.
+Require Import VST.concurrency.common.dry_machine_lemmas.
+Require Import VST.concurrency.common.dry_machine_step_lemmas.
+Require Import VST.concurrency.common.dry_context.
 Require Import VST.concurrency.memory_lemmas.
 Require Import VST.concurrency.mem_obs_eq.
 
@@ -460,7 +460,7 @@ Module SimProofs.
   Existing Instance HybridCoarseMachine.scheduler.
   Import TheSchedule.THESCH.
 
-  Import VST.concurrency.tactics.
+  Import VST.concurrency.common.tactics.
   Lemma internal_step_cmachine_step :
     forall (i : NatTID.tid) (tp tp' : thread_pool) (m m' : mem)
       (U : list nat) tr

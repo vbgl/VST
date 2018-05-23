@@ -2,10 +2,10 @@
 
 Require Import compcert.lib.Axioms.
 
-Require Import VST.concurrency.sepcomp. Import SepComp.
+Require Import VST.concurrency.common.sepcomp. Import SepComp.
 Require Import VST.sepcomp.semantics_lemmas.
 
-Require Import VST.concurrency.pos.
+Require Import VST.concurrency.common.pos.
 Require Import compcert.common.AST.     (*for typ*)
 Require Import compcert.common.Values. (*for val*)
 Require Import compcert.common.Globalenvs.
@@ -14,8 +14,8 @@ Require Import compcert.common.Events.
 Require Import compcert.lib.Integers.
 
 Require Import Coq.ZArith.ZArith.
-Require Import VST.concurrency.permissions.
-Require Import VST.concurrency.HybridMachineSig.
+Require Import VST.concurrency.common.permissions.
+Require Import VST.concurrency.common.HybridMachineSig.
 Require Import VST.concurrency.mem_obs_eq.
 Require Import VST.concurrency.x86_inj.
 Require Import VST.concurrency.x86_context.

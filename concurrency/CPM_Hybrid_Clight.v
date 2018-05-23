@@ -1,11 +1,11 @@
 (*Require Import Coqlib.*)
-Require Import VST.concurrency.DryMachineSourceCore.
+Require Import VST.concurrency.common.DryMachineSourceCore.
 Require Import VST.concurrency.x86_context.
 
 Require Import VST.concurrency.CoreSemantics_sum.
-Require Import VST.concurrency.HybridMachine.
+Require Import VST.concurrency.common.HybridMachine.
 
-Require Import VST.concurrency.machine_semantics.
+Require Import VST.concurrency.common.machine_semantics.
 Set Bullet Behavior "Strict Subproofs".
 
 (*Import the dry CPM for Clight_core*)

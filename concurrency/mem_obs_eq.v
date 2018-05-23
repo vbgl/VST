@@ -1,10 +1,10 @@
 (** ** Memories equal up to alpha-renaming *)
 
 Require Import compcert.lib.Axioms.
-Require Import VST.concurrency.sepcomp. Import SepComp.
+Require Import VST.concurrency.common.sepcomp. Import SepComp.
 (* Require Import VST.sepcomp.val_casted. *)
 
-Require Import VST.concurrency.pos.
+Require Import VST.concurrency.common.pos.
 
 Require Import compcert.lib.Coqlib.
 Require Import Coq.Program.Program.
@@ -23,11 +23,11 @@ Require Import compcert.lib.Integers.
 
 Require Import Coq.ZArith.ZArith.
 
-Require Import VST.concurrency.threadPool.
-Require Import VST.concurrency.threads_lemmas.
-Require Import VST.concurrency.permissions.
-Require Import VST.concurrency.dry_context.
-Require Import VST.concurrency.semantics.
+Require Import VST.concurrency.common.threadPool.
+Require Import VST.concurrency.common.threads_lemmas.
+Require Import VST.concurrency.common.permissions.
+Require Import VST.concurrency.common.dry_context.
+Require Import VST.concurrency.common.semantics.
 
 (** ** Block renamings*)
 Module Renamings.

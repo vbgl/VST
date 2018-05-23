@@ -14,7 +14,7 @@ Require Import VST.sepcomp.mem_lemmas. (*needed for definition of valid_block_de
 Require Import VST.msl.Axioms.
 Require Import VST.sepcomp.structured_injections.
 Require Import VST.sepcomp.reach.
-Require Import VST.concurrency.core_semantics.
+Require Import VST.concurrency.common.core_semantics.
 Require Import VST.sepcomp.semantics_lemmas.
 Require Import VST.sepcomp.effect_semantics.
 Require Import VST.sepcomp.effect_properties.

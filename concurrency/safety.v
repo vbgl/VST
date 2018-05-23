@@ -9,11 +9,11 @@ Require Import compcert.common.Memory.
 
 (*Require Import VST.concurrency.juicy_machine.
 
-Require Import VST.concurrency.HybridMachineSig.
-Require Import VST.concurrency.scheduler.*)
+Require Import VST.concurrency.common.HybridMachineSig.
+Require Import VST.concurrency.common.scheduler.*)
 Require Import VST.msl.eq_dec.
 
-Require Import VST.concurrency.konig.
+Require Import VST.concurrency.common.konig.
 
 Section cardinality.
 (*Here goes cardinality stuff*)
@@ -212,7 +212,7 @@ Qed.
     move => x EM blah inF sfN.
     replace x with (thing (mkTT x inF)) by reflexivity.
     eapply filtered_to_unfiltered_safe.
-    eapply VST.concurrency.konig.konigsafe => //.
+    eapply VST.concurrency.common.konig.konigsafe => //.
 
     move=> [] xx prfx.
     rewrite /finite.
@@ -368,7 +368,7 @@ Section Safety.
       (forall P, finite (SST_step P)) ->
       (forall n, SsafeN n P) ->
       Ssafe P.
-  Proof. by move => EM P A B; apply: (VST.concurrency.konig.konigsafe). Qed.
+  Proof. by move => EM P A B; apply: (VST.concurrency.common.konig.konigsafe). Qed.
 
   (*This is strong enough *)
   Lemma finite_Ssafe_safe':

@@ -4,11 +4,11 @@ Require Import compcert.lib.Integers.
 
 Require Import compcert.common.Values.
 
-Require Import VST.concurrency.machine_simulation.
-Require Import VST.concurrency.permissions.
+Require Import VST.concurrency.common.machine_simulation.
+Require Import VST.concurrency.common.permissions.
 
-Require Import VST.concurrency.DryMachineSource.
-Require Import VST.concurrency.DryMachineSourceCore.
+Require Import VST.concurrency.common.DryMachineSource.
+Require Import VST.concurrency.common.DryMachineSourceCore.
 
 Require Import VST.concurrency.concursim_safety.
 Require Import VST.concurrency.semax_to_juicy_machine.

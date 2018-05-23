@@ -1,14 +1,14 @@
 (** * Tactics for concurrency *)
 
 From mathcomp.ssreflect Require Import ssreflect seq ssrbool ssrnat.
-Require Import VST.concurrency.HybridMachineSig.
-Require Import VST.concurrency.threadPool.
+Require Import VST.concurrency.common.HybridMachineSig.
+Require Import VST.concurrency.common.threadPool.
 Require Import VST.msl.Axioms. (*for proof_irr *)
 
 Import HybridMachineSig.
 
 Module Tactics.
-  
+
 Ltac pf_cleanup :=
     repeat match goal with
            | [H1: invariant ?X, H2: invariant ?X |- _] =>

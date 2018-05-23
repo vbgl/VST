@@ -1,5 +1,5 @@
-Require Import VST.concurrency.core_semantics.
-Require Import VST.concurrency.semantics.
+Require Import VST.concurrency.common.core_semantics.
+Require Import VST.concurrency.common.semantics.
 Require Import VST.sepcomp.event_semantics.
 
 (*

@@ -18,7 +18,7 @@ Require Import VST.sepcomp.mem_lemmas.
 Require Import Smallstep.
 (*To include once Asm has been repaired:
   Require Import VST.concurrency.x86_context.
-  Require Import VST.concurrency.HybridMachine_simulation.*)
+  Require Import VST.concurrency.common.HybridMachine_simulation.*)
 
 
 (*Require Import VST.concurrency.compiler_correct.*)
