@@ -2218,10 +2218,6 @@ Module SimProofs.
       Unshelve. all:eauto.     
   Qed.
 
-  Lemma at_external_halted_excl:
-    forall q m, at_external (@semSem asmSem) q m = None \/ forall i, ~ halted (@semSem asmSem) q i.
-  Proof. Admitted.
-
   Opaque containsThread getThreadC getThreadR.
   (** ** Proof of simulation for stop steps *)
   Lemma suspend_step_inverse:

@@ -100,7 +100,6 @@ Module FineConcSafe.
   Existing Instance dryCoarseMach.
   Existing Instance HybridFineMachine.scheduler.
   Existing Instance HybridCoarseMachine.scheduler.
-  Existing Instance FineDilMem.
   Existing Instance HybridCoarseMachine.DilMem.
 
   Lemma init_tp_wd:

@@ -908,7 +908,16 @@ Module CoreLanguage.
           corestep_nextblock:
             forall c m c' m',
               corestep semSem c m c' m' ->
-              (Mem.nextblock m <= Mem.nextblock m')%positive
+              (Mem.nextblock m <= Mem.nextblock m')%positive;
+          (** A core cannot be both at external and halted *)
+          at_external_halted_excl:
+            forall q m, at_external semSem q m = None \/ forall i, ~ halted semSem q i;
+          (** [initial_core] is deterministic *)
+          initial_core_det:
+            forall i m v args c c',
+              initial_core semSem i m c v args ->
+              initial_core semSem i m c' v args ->
+              c = c'
         }.
           
       Context {SemAx : SemAxioms}.

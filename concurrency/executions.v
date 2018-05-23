@@ -41,7 +41,7 @@ Set Bullet Behavior "Strict Subproofs".
 
 Module Executions.
 
-  Import HybridMachineSig HybridMachine.DryHybridMachine StepLemmas StepType ThreadPool AsmContext.
+  Import  HybridMachine.DryHybridMachine HybridMachineSig StepLemmas StepType ThreadPool AsmContext.
   Import event_semantics threads_lemmas.
   Import Events.
 
@@ -52,12 +52,13 @@ Module Executions.
       {initU : seq.seq nat}
       {init_mem : option Memory.Mem.mem}
       {SemAx : CoreLanguage.SemAxioms}
-      {DilMem : DiluteMem}.
+      {DilMem : DiluteMem}
+      {Res: Resources}.
     
     (* Existing Instance FineDilMem. *)
     Existing Instance HybridFineMachine.scheduler.
-    Existing Instance HybridMachine.DryHybridMachine.DryHybridMachineSig.
     Existing Instance OrdinalPool.OrdinalThreadPool.
+    Context {Hbs : MachineSig}.
 
     (** Reflexive-transitive closure of machine step relation*)
     Inductive multi_step :
@@ -86,14 +87,13 @@ Module Executions.
         fine_execution (U, tr ++ tr', tp') m' (U', tr ++ tr' ++ tr'', tp'') m'' ->
         fine_execution (i :: U,tr,tp) m (U',tr ++ tr' ++ tr'',tp'') m''.
 
+    (** ** Generic Properties of executions and steps *)
 
-
-    (** ** Connection between [multi_step] and [fine_execution]*)
-
+    (** Connection between [multi_step] and [fine_execution]*)
     Lemma fine_execution_multi_step:
-      forall U tr tp m tp' m',
-        fine_execution (U, [::], tp) m ([::], tr, tp') m' ->
-        multi_step (U, [::], tp) m ([::], tr, tp') m'.
+      forall U  tr tr' tp m tp' m',
+        fine_execution (U, tr, tp) m ([::], tr', tp') m' ->
+        multi_step (U, tr, tp) m ([::], tr', tp') m'.
     Proof.
       intros.
       induction H;
@@ -101,7 +101,22 @@ Module Executions.
         now eauto.
     Qed.
 
-    (** ** Generic Properties of executions and steps *)
+    (** [fine_execution] has empty schedules*)
+    Lemma fine_execution_schedule:
+      forall U U' tr tr' tp m tp' m',
+        fine_execution (U, tr, tp) m (U', tr', tp') m' ->
+        U' = [::].
+    Proof.
+      intro U.
+      induction U; intros.
+      - inversion H;
+          reflexivity.
+      - inversion H; subst.
+        + simpl in H6.
+            by exfalso.
+        + eapply IHU.
+          eapply H10.
+    Qed.
 
     (** A property of steps is that any sequence of events added by
     one external step is a singleton *)
@@ -139,55 +154,6 @@ Module Executions.
       simpl in H2. by exfalso.
     Qed.
 
-    Lemma step_event_sched:
-      forall U tr tp m U' ev tr_pre tr_post tp' m'
-        (Hstep: MachStep (U, tr, tp) m
-                         (U', tr ++ tr_pre ++ [:: ev] ++ tr_post, tp') m'),
-        U = (thread_id ev) :: U'.
-    Proof.
-      intros.
-      inv Hstep; simpl in *;
-        try (apply app_eq_refl_nil in H4; exfalso;
-             eapply app_cons_not_nil; by eauto);
-        apply app_inv_head in H5.
-      inv Htstep.
-      pose proof (in_map_iff ([eta internal tid]) ev0 ev) as HIn.
-      rewrite H5 in HIn.
-      erewrite in_app in HIn.
-      destruct (HIn.1 ltac:(right; simpl; eauto)) as [? [? ?]].
-      subst.
-      simpl.
-      destruct U; simpl in HschedN; inv HschedN.
-      reflexivity.
-      destruct tr_pre; [| destruct tr_pre];
-        simpl in H5; inv H5.
-      destruct U; simpl in HschedN; inv HschedN.
-      reflexivity.
-    Qed.
-
-    Lemma step_ev_contains:
-      forall U tr tp m U' ev
-        tr_pre tr_post tp' m'
-        (Hstep: MachStep (U, tr, tp) m
-                         (U', tr ++ tr_pre ++ [:: ev] ++ tr_post, tp') m'),
-        containsThread tp (thread_id ev) /\ containsThread tp' (thread_id ev).
-    Proof.
-      intros.
-      pose proof (step_event_sched _ _ _ Hstep) as Heq.
-      inv Hstep; simpl in *;
-        try (apply app_eq_refl_nil in H4; exfalso;
-             eapply app_cons_not_nil; by eauto);
-        try subst.
-      inv HschedN.
-      inv Htstep;
-        split; eauto.
-      inv HschedN.
-      inv Htstep; split; eauto.
-      apply OrdinalPool.cntAdd.
-      apply OrdinalPool.cntUpdate.
-      assumption.
-    Qed.
-
     Lemma step_event_tid:
       forall U tr tp m U' tr' tp' m'
         (Hstep: MachStep (U, tr, tp) m
@@ -209,44 +175,6 @@ Module Executions.
       reflexivity.
       simpl in H, H0; destruct H, H0; try (by exfalso);
         subst; reflexivity.
-    Qed.
-
-    Lemma multi_step_mem_compatible :
-      forall U tr tp m U' tr' tp' m'
-        (Hexec: multi_step (U, tr, tp) m (U', tr', tp') m'),
-        mem_compatible tp m \/ tp = tp' /\ m = m' /\ U = U' /\ tr = tr'.
-    Proof.
-      intros.
-      inversion Hexec; subst.
-      right; auto.
-      eapply step_mem_compatible in H7.
-      left; auto.
-    Qed.
-
-    Lemma multi_step_invariant :
-      forall U tr tp m U' tr' tp' m'
-        (Hexec: multi_step (U, tr, tp) m (U', tr', tp') m'),
-        invariant tp \/ tp = tp' /\ m = m' /\ U = U' /\ tr = tr'.
-    Proof.
-      intros.
-      inversion Hexec; subst.
-      right; auto.
-      eapply step_invariant in H7.
-      left; auto.
-    Qed.
-
-    Lemma multi_step_containsThread :
-      forall U tp tr m U' tp' tr' m' i
-        (Hexec: multi_step (U, tr, tp) m (U', tr', tp') m'),
-        containsThread tp i -> containsThread tp' i.
-    Proof.
-      intros U.
-      induction U. intros.
-      inversion Hexec; subst; simpl in *; auto; try discriminate.
-      intros.
-      inversion Hexec; subst; eauto.
-      eapply step_containsThread with (j := i) in H9;
-        now eauto.
     Qed.
 
     Lemma step_trace_monotone:
@@ -524,7 +452,94 @@ Module Executions.
     Existing Instance DryHybridMachineSig.
     Existing Instance FineDilMem.
     Existing Instance dryFineMach.
-    
+
+     Lemma step_event_sched:
+      forall U tr tp m U' ev tr_pre tr_post tp' m'
+        (Hstep: MachStep (U, tr, tp) m
+                         (U', tr ++ tr_pre ++ [:: ev] ++ tr_post, tp') m'),
+        U = (thread_id ev) :: U'.
+    Proof.
+      intros.
+      inv Hstep; simpl in *;
+        try (apply app_eq_refl_nil in H4; exfalso;
+             eapply app_cons_not_nil; by eauto);
+        apply app_inv_head in H5.
+      inv Htstep.
+      pose proof (in_map_iff ([eta internal tid]) ev0 ev) as HIn.
+      rewrite H5 in HIn.
+      erewrite in_app in HIn.
+      destruct (HIn.1 ltac:(right; simpl; eauto)) as [? [? ?]].
+      subst.
+      simpl.
+      destruct U; simpl in HschedN; inv HschedN.
+      reflexivity.
+      destruct tr_pre; [| destruct tr_pre];
+        simpl in H5; inv H5.
+      destruct U; simpl in HschedN; inv HschedN.
+      reflexivity.
+    Qed.
+
+    Lemma step_ev_contains:
+      forall U tr tp m U' ev
+        tr_pre tr_post tp' m'
+        (Hstep: MachStep (U, tr, tp) m
+                         (U', tr ++ tr_pre ++ [:: ev] ++ tr_post, tp') m'),
+        containsThread tp (thread_id ev) /\ containsThread tp' (thread_id ev).
+    Proof.
+      intros.
+      pose proof (step_event_sched _ _ _ Hstep) as Heq.
+      inv Hstep; simpl in *;
+        try (apply app_eq_refl_nil in H4; exfalso;
+             eapply app_cons_not_nil; by eauto);
+        try subst.
+      inv HschedN.
+      inv Htstep;
+        split; eauto.
+      inv HschedN.
+      inv Htstep; split; eauto.
+      apply OrdinalPool.cntAdd.
+      apply OrdinalPool.cntUpdate.
+      assumption.
+    Qed.
+
+        Lemma multi_step_mem_compatible :
+      forall U tr tp m U' tr' tp' m'
+        (Hexec: multi_step (U, tr, tp) m (U', tr', tp') m'),
+        mem_compatible tp m \/ tp = tp' /\ m = m' /\ U = U' /\ tr = tr'.
+    Proof.
+      intros.
+      inversion Hexec; subst.
+      right; auto.
+      eapply step_mem_compatible in H7.
+      left; auto.
+    Qed.
+
+    Lemma multi_step_invariant :
+      forall U tr tp m U' tr' tp' m'
+        (Hexec: multi_step (U, tr, tp) m (U', tr', tp') m'),
+        invariant tp \/ tp = tp' /\ m = m' /\ U = U' /\ tr = tr'.
+    Proof.
+      intros.
+      inversion Hexec; subst.
+      right; auto.
+      eapply step_invariant in H7.
+      left; auto.
+    Qed.
+
+    Lemma multi_step_containsThread :
+      forall U tp tr m U' tp' tr' m' i
+        (Hexec: multi_step (U, tr, tp) m (U', tr', tp') m'),
+        containsThread tp i -> containsThread tp' i.
+    Proof.
+      intros U.
+      induction U. intros.
+      inversion Hexec; subst; simpl in *; auto; try discriminate.
+      intros.
+      inversion Hexec; subst; eauto.
+      eapply step_containsThread with (j := i) in H9;
+        now eauto.
+    Qed.
+
     Lemma multi_step_valid_block:
       forall U tr tp m U' tr' tp' m' b
         (Hexec: multi_step (U, tr, tp) m (U', tr', tp') m')
