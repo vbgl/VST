@@ -35,11 +35,11 @@ Require Import VST.sepcomp.event_semantics.
 Require Import VST.concurrency.semax_conc_pred.
 Require Import VST.concurrency.semax_conc.
 Require Import VST.concurrency.juicy_machine.
-Require Import VST.concurrency.HybridMachineSig.
-Require Import VST.concurrency.scheduler.
-Require Import VST.concurrency.addressFiniteMap.
-Require Import VST.concurrency.permissions.
-Require Import VST.concurrency.HybridMachine_lemmas.
+Require Import VST.concurrency.common.HybridMachineSig.
+Require Import VST.concurrency.common.scheduler.
+Require Import VST.concurrency.common.addressFiniteMap.
+Require Import VST.concurrency.common.permissions.
+Require Import VST.concurrency.common.HybridMachine_lemmas.
 
 Require Import VST.concurrency.semax_invariant.
 Require Import VST.concurrency.semax_initial.
@@ -509,7 +509,7 @@ Module MainSafety .
         auto.
     Qed.
 
-    Require Import VST.concurrency.dry_context.
+    Require Import VST.concurrency.common.dry_context.
     (*Definition dry_initial_core_2:=
       initial_core (coarse_semantics)
                    (the_ge) (Vptr x Int.zero) nil.

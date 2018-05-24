@@ -10,7 +10,7 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
-Require Import VST.concurrency.pos.
+Require Import VST.concurrency.common.pos.
 Require Import VST.concurrency.rc_semantics.
 Require Import VST.sepcomp.nucular_semantics.
 Require Import VST.concurrency.compcert_linking. Import Modsem.

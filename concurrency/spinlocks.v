@@ -1,10 +1,10 @@
 (** * Spinlock well synchronized and spinlock clean*)
 Require Import compcert.lib.Axioms.
 
-Require Import VST.concurrency.sepcomp. Import SepComp.
+Require Import VST.concurrency.common.sepcomp. Import SepComp.
 Require Import VST.sepcomp.semantics_lemmas.
 
-Require Import VST.concurrency.pos.
+Require Import VST.concurrency.common.pos.
 
 From mathcomp.ssreflect Require Import ssreflect ssrbool ssrnat ssrfun eqtype seq fintype finfun.
 Set Implicit Arguments.
@@ -20,14 +20,14 @@ Require Import compcert.lib.Integers.
 
 Require Import Coq.ZArith.ZArith.
 
-Require Import VST.concurrency.threads_lemmas.
-Require Import VST.concurrency.permissions.
-Require Import VST.concurrency.permjoin_def.
-Require Import VST.concurrency.HybridMachineSig.
+Require Import VST.concurrency.common.threads_lemmas.
+Require Import VST.concurrency.common.permissions.
+Require Import VST.concurrency.common.permjoin_def.
+Require Import VST.concurrency.common.HybridMachineSig.
 Require Import VST.concurrency.memory_lemmas.
-Require Import VST.concurrency.dry_context.
-Require Import VST.concurrency.dry_machine_lemmas.
-Require Import VST.concurrency.dry_machine_step_lemmas.
+Require Import VST.concurrency.common.dry_context.
+Require Import VST.concurrency.common.dry_machine_lemmas.
+Require Import VST.concurrency.common.dry_machine_step_lemmas.
 Require Import VST.concurrency.executions.
 Require Import Coqlib.
 Require Import VST.msl.Coqlib2.

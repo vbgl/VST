@@ -5,7 +5,7 @@ Require Import compcert.lib.Axioms.
 Require Import VST.concurrency.sepcomp. Import SepComp.
 Require Import VST.sepcomp.semantics_lemmas.
 
-Require Import VST.concurrency.pos.
+Require Import VST.concurrency.common.pos.
 
 From mathcomp.ssreflect Require Import ssreflect ssrbool ssrnat ssrfun eqtype seq fintype finfun.
 Set Implicit Arguments.
@@ -21,9 +21,9 @@ Require Import compcert.lib.Integers.
 
 Require Import Coq.ZArith.ZArith.
 
-Require Import VST.concurrency.threads_lemmas.
-Require Import VST.concurrency.permissions.
-Require Import VST.concurrency.HybridMachineSig.
+Require Import VST.concurrency.common.threads_lemmas.
+Require Import VST.concurrency.common.permissions.
+Require Import VST.concurrency.common.HybridMachineSig.
 Require Import VST.concurrency.SC_erasure.
 Require Import VST.concurrency.x86_context.
 Require Import VST.ccc26x86.Asm ccc26x86.Asm_coop.

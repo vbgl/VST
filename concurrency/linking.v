@@ -2,7 +2,7 @@ Require Import Axioms.
 
 Require Import VST.sepcomp. Import SepComp.
 
-Require Import VST.concurrency.pos.
+Require Import VST.concurrency.common.pos.
 Require Import VST.concurrency.stack.
 
 Require Import ssreflect ssrbool ssrnat ssrfun eqtype seq fintype finfun.

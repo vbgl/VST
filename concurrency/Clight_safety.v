@@ -14,7 +14,7 @@ Require Import VST.veric.semax_prog.
 Require Import VST.concurrency.semax_initial.
 Require Import VST.concurrency.semax_conc.
 Require Import VST.concurrency.semax_to_juicy_machine.
-Require Import VST.concurrency.permissions.
+Require Import VST.concurrency.common.permissions.
 
 (** *Erasure Imports*)
 Require Import VST.concurrency.erasure_signature.
@@ -26,7 +26,7 @@ Require Import VST.concurrency.safety.
 
 (** *SSROMEGA*)
 Require Import Omega.
-Require Import VST.concurrency.ssromega.
+Require Import VST.concurrency.common.ssromega.
 Set Bullet Behavior "Strict Subproofs".
 
 (** *Excluded middle*)

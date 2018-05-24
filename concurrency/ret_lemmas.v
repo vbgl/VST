@@ -11,7 +11,7 @@ Require Import Axioms. (*for proof_irr*)
 Require Import VST.sepcomp. Import SepComp.
 Require Import VST.sepcomp.arguments.
 
-Require Import VST.concurrency.pos.
+Require Import VST.concurrency.common.pos.
 Require Import VST.concurrency.stack.
 Require Import VST.concurrency.cast.
 Require Import VST.concurrency.pred_lemmas.

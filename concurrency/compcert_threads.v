@@ -4,8 +4,8 @@ Require Import VST.sepcomp. Import SepComp.
 Require Import VST.sepcomp.semantics_lemmas.
 
 
-Require Import VST.concurrency.pos.
-Require Import VST.concurrency.HybridMachineSig.
+Require Import VST.concurrency.common.pos.
+Require Import VST.concurrency.common.HybridMachineSig.
 Require Import Coq.Program.Program.
 From mathcomp.ssreflect Require Import ssreflect ssrbool ssrnat ssrfun eqtype seq fintype finfun.
 Set Implicit Arguments.
@@ -18,11 +18,11 @@ Require Import compcert.common.Globalenvs.
 Require Import compcert.common.Memory.
 Require Import compcert.lib.Integers.
 Require Import VST.veric.shares VST.msl.msl_standard.
-Require Import VST.concurrency.threads_lemmas.
+Require Import VST.concurrency.common.threads_lemmas.
 
 Require Import Coq.ZArith.ZArith.
 
-Require Import (*compcert_linking*) VST.concurrency.permissions.
+Require Import (*compcert_linking*) VST.concurrency.common.permissions.
 
 Module ThreadPool.
   Section ThreadPool.
