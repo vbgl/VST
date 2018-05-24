@@ -169,8 +169,7 @@ Proof.
   assert (locked : lockRes tp (b, Ptrofs.intval ofs) = Some None). {
     specialize (lock_coh (b, Ptrofs.intval ofs)). cleanup.
     destruct (AMap.find _ _) as [[phi_sat|]|] eqn:Ephi_sat; [ exfalso | reflexivity | exfalso ].
-    - (* positive and precise *)
-      destruct lock_coh as (_&_&_&R&lk&[sat|?]). 2:omega.
+    - destruct lock_coh as (_&_&_&R&lk&[sat|?]). 2:omega.
 
       assert (J0 : join_sub phi0 Phi). {
         apply join_sub_trans with (getThreadR i tp cnti). eexists; eauto.
@@ -269,7 +268,6 @@ Proof.
   apply (lock_inv_rmap_freelock CS) with (m := m) in Hlockinv; auto; try apply lock_coh.
   destruct Hlockinv as (phi0lockinv' & Hrmap00 & Hlkat).
 
-(*  assert (Hpos'' : (0 < 4)%Z) by omega. *)
   pose proof rmap_freelock_join _ _ _ _ _ _ _ _ Hpos Hrmap00 jphi0 as Hrmap0.
   destruct Hrmap0 as (phi0' & Hrmap0 & jphi0').
   pose proof rmap_freelock_join _ _ _ _ _ _ _ _ Hpos Hrmap0 Join as Hrmap.

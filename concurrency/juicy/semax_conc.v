@@ -444,25 +444,22 @@ Next Obligation.
   intro cs; hnf.
   intros.
   destruct x as [[v sh] R]; simpl in *.
-Admitted. (* super_non_expansive obligation of freelock_spec' *)
-(*
   apply (nonexpansive_super_non_expansive
    (fun R => (PROP (writable_share sh)
     LOCAL (temp _lock v)
-    SEP (weak_positive_mpred R && emp; lock_inv sh v R; R)) rho)).
+    SEP (weak_exclusive_mpred R && emp; lock_inv sh v R; R)) rho)).
   apply (PROP_LOCAL_SEP_nonexpansive
           ((fun _ => writable_share sh) :: nil)
           (temp _lock v :: nil)
-          ((fun R => weak_positive_mpred R && emp)%logic :: (fun R => lock_inv sh v R) :: (fun R => R) :: nil));
+          ((fun R => weak_exclusive_mpred R && emp)%logic :: (fun R => lock_inv sh v R) :: (fun R => R) :: nil));
   repeat apply Forall_cons; try apply Forall_nil.
   + apply const_nonexpansive.
-  + apply (conj_nonexpansive weak_positive_mpred).
-    - apply positive_mpred_nonexpansive.
+  + apply (conj_nonexpansive weak_exclusive_mpred).
+    - apply exclusive_mpred_nonexpansive.
     - apply const_nonexpansive.
   + apply nonexpansive_lock_inv.
   + apply identity_nonexpansive.
 Qed.
-*)
 Next Obligation.
   intro cs; hnf.
   intros.

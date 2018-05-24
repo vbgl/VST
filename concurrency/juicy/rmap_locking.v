@@ -981,15 +981,17 @@ Proof.
 Qed.
 
 Lemma lock_inv_rmap_freelock CS sh b ofs R phi m :
-  (4 | Ptrofs.unsigned ofs) ->
-  Ptrofs.unsigned ofs + LKSIZE <= Ptrofs.modulus ->
+  (align_chunk Mptr | Ptrofs.unsigned ofs) ->
+  Ptrofs.unsigned ofs + LKSIZE < Ptrofs.modulus ->
   writable_share sh ->
   app_pred (@lock_inv sh (Vptr b ofs) R) phi ->
   exists phi',
     rmap_freelock phi phi' m (b, Ptrofs.unsigned ofs) R LKSIZE /\
-    app_pred (@data_at_ CS sh (Tarray (Tpointer Tvoid noattr) (LKSIZE/4) noattr) (Vptr b ofs)) phi'.
+    app_pred (@data_at_ CS sh (Tarray (Tpointer Tvoid noattr) (LKSIZE/size_chunk Mptr) noattr) (Vptr b ofs)) phi'.
 Proof.
-  match goal with |- context [?A / ?B] => set (z := A / B); compute  in z; subst z end.
+  unfold LKSIZE at 3.
+  assert (size_chunk Mptr > 0) as Hpos by (rewrite size_chunk_Mptr; destruct Archi.ptr64; omega).
+  rewrite Z.div_mul by omega.
   intros Halign Hbound Hwritable Hli.
   destruct Hli as (? & ? & E & Hli & Hg). injection E as <- <- .
 
@@ -1055,11 +1057,27 @@ Proof.
     split.
     + repeat split.
       * unfold size_compatible, sizeof.
-        
-    repeat split; try assumption. simpl sizeof.
-     clear - Hli Ephi'.
-     admit.  (* should be straightforward, says Andrew *)
-Admitted.
+        rewrite size_chunk_Mptr in Hbound.
+        rewrite Z.max_r; omega.
+      * constructor; econstructor; simpl; eauto.
+        rewrite align_chunk_Mptr.
+        apply Z.divide_add_r; auto.
+        apply Z.divide_factor_l.
+    + split.
+      { rewrite size_chunk_Mptr, Z.mul_comm in Hbound; auto. }
+      rewrite mapsto_memory_block.memory_block'_eq;
+        unfold mapsto_memory_block.memory_block'_alt; rewrite ?Z2Nat.id; try apply Z.ge_le, sizeof_pos.
+      rewrite if_true by (apply writable_readable_share; auto).
+      split; simpl; [|rewrite Hg'; auto].
+      rewrite Ephi'; unfold freelock_f.
+      rewrite (Z.mul_comm 2) in *.
+      intro b0; specialize (Hli b0); simpl in Hli.
+      rewrite <- size_chunk_Mptr; if_tac; auto.
+      if_tac in Hli; destruct Hli as [? ->]; eauto.
+      { apply Ptrofs.unsigned_range. }
+      { simpl.
+        rewrite <- size_chunk_Mptr; omega. }
+Qed.
 
 Lemma rmap_makelock_unique phi phi1 phi2 loc R len :
   rmap_makelock phi phi1 loc R len ->
