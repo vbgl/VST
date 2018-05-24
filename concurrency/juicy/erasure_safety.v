@@ -201,7 +201,6 @@ Section DrySafety.
     destruct (s n tt) as (jm & ? & ? & ? & ? & ? & ?); auto.
   Qed.
 
-  (* Note that any injection will work here. *)
   Theorem dry_safety_initial_state (sch : HybridMachineSig.schedule) (n : nat) :
     HybridMachineSig.HybridCoarseMachine.csafe (sch, [::],
       DryHybridMachine.initial_machine(Sem := Sem) (getCurPerm init_mem)
@@ -209,6 +208,7 @@ Section DrySafety.
   Proof.
     eapply (ErasureSafety.erasure_safety sch (init_rmap n)
       (juice2Perm (init_rmap n) init_mem, empty_map)) with (cd := tt)(j := fun _ => None),
+      (* Note that any injection will work here. *)
       safety_initial_state.
     constructor.
     { apply dry_machine_lemmas.ThreadPoolWF.initial_invariant0. }
