@@ -5,8 +5,8 @@ Require Import VST.concurrency.erased_machine.
 Require Import VST.concurrency.HybridMachineSig.
 Require Import VST.concurrency.permissions.
 Require Import VST.concurrency.memory_lemmas.
+Require Import VST.concurrency.dry_machine_lemmas.
 Require Import VST.concurrency.dry_context.
-(* Require Import VST.concurrency.HybridMachine_lemmas. *)
 Require Import VST.concurrency.Asm_core.
 Require Import VST.concurrency.Asm_event.
 Require Import compcert.common.Globalenvs.
@@ -35,37 +35,27 @@ Module X86Context.
          the_ge := the_ge
       }.
 
-    Definition coarse_semantics:=
-      coarse_semantics initU (Genv.init_mem the_program).
-    Definition fine_semantics:=
-      fine_semantics initU (Genv.init_mem the_program).
-    Definition bare_semantics :=
-      bare_semantics initU.
-
   End X86Context.
 End X86Context.
 
-  Module X86SEMAxioms.
+Module X86SEMAxioms.
 
-    Import Asm Asm_core event_semantics semantics_lemmas
+  Import Asm Asm_core event_semantics semantics_lemmas
            X86Context Memory.
 
-    Section X86Context.
+  Section X86Context.
 
     Variable initU: seq.seq nat.
     Variable the_program: Asm.program.
-
-    Definition the_ge := Globalenvs.Genv.globalenv the_program.
+    Notation the_ge := (the_ge the_program).
     Hypothesis Hsafe : safe_genv the_ge.
 
     Instance X86Sem: Semantics := X86Sem the_program Hsafe.
 
-(*    Lemma corestep_det: forall m m' m'' c c' c'' m1 m1' m1'',
-      corestep semSem (State c m1) m (State c' m1') m' ->
-      corestep semSem (State c m1) m (State c'' m1'') m'' ->
-      c' = c'' /\ m' = m''.
-    Proof.
-      hnf; intros.
+    Lemma corestep_det: corestep_fun semSem.
+   Proof.
+   Admitted.
+    (*  hnf; intros.
       inv H; inv H0; simpl in *.
       inv H; inv H1;
         repeat
@@ -81,7 +71,7 @@ End X86Context.
       destruct (Events.external_call_determ _ _ _ _ _ _ _ _ _ _ H12 H16).
       specialize (H0 (eq_refl _)). destruct H0; subst m'' vres0.
       auto.
-    Qed.*)
+    Qed. *)
 
     Lemma mem_step_decay:
       forall m m',
@@ -161,19 +151,19 @@ End X86Context.
     Qed.
 
     Lemma exec_load_same_mem:
-      forall ge ch m a rs rd rs' m',
-        exec_load ge ch m a rs rd = Next rs' m' ->
+      forall ch m a rs rd rs' m',
+        exec_load the_ge ch m a rs rd = Next rs' m' ->
         m=m'.
     Proof.
       intros.
       unfold exec_load in H.
-      destruct (Memory.Mem.loadv ch m (eval_addrmode ge a rs)) eqn:?; inv H.
+      destruct (Memory.Mem.loadv ch m (eval_addrmode the_ge a rs)) eqn:?; inv H.
       reflexivity.
     Qed.
 
     Lemma exec_store_obeys_cur_write:
-      forall ge ch m a rs rs0 d rs' m',
-        exec_store ge ch m a rs rs0 d = Next rs' m' ->
+      forall ch m a rs rs0 d rs' m',
+        exec_store the_ge ch m a rs rs0 d = Next rs' m' ->
         forall b ofs,
           Memory.Mem.valid_block m b ->
           ~ Memory.Mem.perm m b ofs Memtype.Cur Memtype.Writable ->
@@ -182,9 +172,9 @@ End X86Context.
     Proof.
       intros.
       unfold exec_store in H.
-      destruct (Memory.Mem.storev ch m (eval_addrmode ge a rs) (rs rs0)) eqn:?; inv H.
+      destruct (Memory.Mem.storev ch m (eval_addrmode the_ge a rs) (rs rs0)) eqn:?; inv H.
       unfold Memory.Mem.storev in Heqo.
-      destruct (eval_addrmode ge a rs); inv Heqo.
+      destruct (eval_addrmode the_ge a rs); inv Heqo.
       symmetry;
         eapply MemoryLemmas.store_contents_other; eauto.
     Qed.
@@ -312,5 +302,53 @@ End X86Context.
       simpl in H.
       apply asm_mem_step in H; auto.
     Qed.
+
+    Lemma at_external_halted_excl:
+      forall q m, core_semantics.at_external (@semSem X86Sem) q m = None \/ forall i, ~ halted semSem q i.
+    Proof.
+      intros.
+      simpl.
+      unfold at_external.
+      repeat match goal with
+             | [|-match ?Expr with _ => _ end = _ \/ _] =>
+               destruct Expr eqn:?; auto
+             end.
+      unfold set_mem in Heqs.
+      destruct q; inversion Heqs; subst.
+      right.
+      intros i0 Hcontra.
+      inversion Hcontra; subst.
+      rewrite H1 in Heqv.
+      discriminate.
+    Qed.
+
+    Lemma initial_core_det:
+      forall i m v args c c',
+        initial_core semSem i m c v args ->
+        initial_core semSem i m c' v args ->
+        c = c'.
+    Proof.
+      intros.
+      simpl in *.
+      inv H. inv H0.
+      rewrite H1 in H3.
+      inv H3.
+      assert (rs0 = rs2)
+        by reflexivity.
+      erewrite H in *.
+      rewrite H2 in H6.
+      inv H6.
+      reflexivity.
+    Qed.
+
+    Instance X86Axioms : CoreLanguage.SemAxioms :=
+      { corestep_det := corestep_det;
+        corestep_unchanged_on := corestep_unchanged_on;
+        corestep_decay := corestep_decay;
+        corestep_nextblock := corestep_nextblock;
+        at_external_halted_excl := at_external_halted_excl;
+        initial_core_det := initial_core_det
+      }.
+                                                    
   End X86Context.
-  End X86SEMAxioms.
+End X86SEMAxioms.
