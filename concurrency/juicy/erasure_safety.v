@@ -41,10 +41,12 @@ Module ErasureSafety.
   Import ErasureProof.
   Import Erasure.
 
-  Parameters initU: HybridMachineSig.schedule.
-  Parameter init_rmap : @res JR.
-  Parameter init_pmap : @res DR.
-  Parameter init_rmap_perm:  match_rmap_perm init_rmap init_pmap.
+  Section ErasureSafety.
+
+  Context (initU: HybridMachineSig.schedule).
+  Context (init_rmap : @res JR).
+  Context (init_pmap : @res DR).
+  Context (init_rmap_perm:  match_rmap_perm init_rmap init_pmap).
 
   (*Definition local_erasure:= erasure initU init_rmap init_pmap init_rmap_perm.*)
   Definition step_diagram:= ErasureProof.core_diagram.
@@ -124,7 +126,6 @@ Qed.
       (rmap0 : rmap) (pmap : access_map * access_map) main h,
       match_rmap_perm rmap0 pmap ->
       no_locks_perm rmap0 ->
-      (* Do we need to add that rmap0 contains the external ghost? *)
       initial_core (JMachineSem U (Some rmap0)) h
          m (U, [::], js) main vals  ->
       exists (ds : dstate genv),
@@ -137,6 +138,118 @@ Qed.
     as [ds [dinit [dinv MTCH]]]; eauto.
     unfold init_inj_ok; intros b b' ofs H. inversion H.
   Qed.
+
+  End ErasureSafety.
+
+End ErasureSafety.
+
+Require Import VST.concurrency.juicy.semax_to_juicy_machine.
+
+Lemma no_locks_no_locks_perm : forall r, Parching.no_locks_perm r <-> initial_world.no_locks r.
+Proof.
+  unfold Parching.no_locks_perm, initial_world.no_locks, perm_of_res_lock; split; intros.
+  - destruct addr as (b, ofs); specialize (H b ofs).
+    destruct (r @ (b, ofs)); try (split; discriminate).
+    destruct (perm_of_sh (Share.glb Share.Rsh sh0)) eqn: Hsh.
+    destruct k; split; discriminate.
+    { contradiction r0.
+      apply perm_of_empty_inv in Hsh as ->; auto. }
+  - specialize (H (b, ofs)).
+    destruct (r @ (b, ofs)); auto.
+    specialize (H sh r0).
+    destruct k; auto; specialize (H z p) as []; contradiction.
+Qed.
+
+(* unused *)
+Lemma juice2Perm_match : forall m r, access_cohere' m r ->
+  Parching.match_rmap_perm r (juice2Perm r m, empty_map).
+Proof.
+  split; auto; simpl.
+  apply juic2Perm_correct; auto.
+Qed.
+
+Section DrySafety.
+(* combining results from semax_to_juicy_machine and erasure_proof *)
+
+  Variable (CPROOF : CSL_proof).
+
+  Instance Sem : Semantics := ClightSemantincsForMachines.ClightSem (globalenv CPROOF.(CSL_prog)).
+  Definition ge := globalenv CPROOF.(CSL_prog).
+  Instance DTP : threadPool.ThreadPool.ThreadPool := Parching.DTP ge.
+  Instance DMS : HybridMachineSig.MachineSig := Parching.DMS ge.
+  Definition init_mem := proj1_sig (init_mem CPROOF).
+  Definition init_rmap n := m_phi (initial_jm CPROOF n).
+
+  Lemma init_match n : Parching.match_rmap_perm (init_rmap n) (getCurPerm init_mem, empty_map).
+  Proof.
+    split; auto; simpl.
+    unfold init_rmap, initial_jm, spr.
+    destruct (semax_prog.semax_prog_rule' _ _ _ _ _ _ _ _) as (? & ? & ? & s); simpl.
+    destruct (s n tt) as (jm & ? & ? & ? & ? & ? & ?); simpl.
+    destruct jm; simpl in *; subst.
+    rewrite <- (JMaccess (b, ofs)).
+    unfold access_at, PMap.get; simpl.
+    rewrite PTree.gmap1.
+    fold init_mem; destruct ((snd (Mem.mem_access init_mem)) ! b); auto.
+  Qed.
+
+  Lemma init_no_locks n : Parching.no_locks_perm (init_rmap n).
+  Proof.
+    apply no_locks_no_locks_perm.
+    unfold init_rmap, initial_jm, spr.
+    destruct (semax_prog.semax_prog_rule' _ _ _ _ _ _ _ _) as (? & ? & ? & s); simpl.
+    destruct (s n tt) as (jm & ? & ? & ? & ? & ? & ?); auto.
+  Qed.
+
+  (* Note that any injection will work here. *)
+  Theorem dry_safety_initial_state (sch : HybridMachineSig.schedule) (n : nat) :
+    HybridMachineSig.HybridCoarseMachine.csafe (sch, [::],
+      DryHybridMachine.initial_machine(Sem := Sem) (getCurPerm init_mem)
+        (initial_corestate CPROOF)) init_mem n.
+  Proof.
+    eapply (ErasureSafety.erasure_safety sch (init_rmap n)
+      (juice2Perm (init_rmap n) init_mem, empty_map)) with (cd := tt)(j := fun _ => None),
+      safety_initial_state.
+    constructor.
+    { apply dry_machine_lemmas.ThreadPoolWF.initial_invariant0. }
+    apply Parching.MTCH_initial with (pmap := (getCurPerm init_mem, empty_map)).
+    - apply init_match.
+    - apply init_no_locks.
+  Qed.
+
+End DrySafety.
+
+(*  Existing Instance HybridMachineSig.HybridCoarseMachine.DilMem.
+  Existing Instance HybridMachineSig.HybridCoarseMachine.scheduler.
+  Import Machine_sim.
+
+  Program Definition juicy_dry_sim ge U rmap0 pmap main
+    (Hinit_perm : match_rmap_perm rmap0 pmap)
+    (Hinit_locks : no_locks_perm rmap0) : Machine_sim
+    (new_MachineSemantics(machineSig := JMS ge) U (Some rmap0))
+    (new_MachineSemantics(machineSig := DMS ge) U (Some pmap)) ge ge main eq
+    (fun j ge1 vals1 m1 ge2 vals2 m2 => ge1 = ge2 /\ vals1 = vals2 /\ m1 = m2)
+    (fun j ge1 v1 m1 ge2 v2 m2 => ge1 = ge2 /\ v1 = v2 /\ m1 = m2) :=
+    {| match_state (d : Erasure.core_data) j c1 m1 c2 m2 := m1 = m2 /\ match_st ge c1 c2;
+       core_ord_wf := Erasure.core_ord_wf |}.
+  Next Obligation.
+  Proof.
+    destruct H as (? & ? & ?); subst.
+    exists tt; eexists; split.
+    - eexists; eauto.
+    - split; auto.
+      apply MTCH_initial; auto.
+  Qed.
+  Next Obligation.
+  Proof.
+    admit. (* We didn't prove separately that an internal step matches an internal step. *)
+  Admitted.
+  Next Obligation.
+    admit.
+  Admitted.
+  Next Obligation.
+    exists (fun _ => None), v1; repeat split; auto.
+  Qed.*)
 
   (** *Lets proof that again with the new kind of safety*)
 (*  (* Is this still needed? Is this the right way to do it? *)
@@ -256,6 +369,3 @@ Qed.
     inversion MATCH. subst.
     eapply erasure_safety'; eauto.
   Qed.*)*)
-
-
-End ErasureSafety.
