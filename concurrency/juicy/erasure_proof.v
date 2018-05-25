@@ -38,22 +38,6 @@ From mathcomp.ssreflect Require Import ssreflect seq.
 
 Import addressFiniteMap.
 
-(*Module Type DecayingSemantics.
-  Include Semantics.
-  Axiom step_decay: forall g c m tr c' m',
-      event_semantics.ev_step (Sem) g c m tr c' m' ->
-
-      decay m m'.
-End DecayingSemantics. *)
-
-(* Where Does this lemma fit better?
- * Uses definitions from
- * VST.concurrency.permissions.v and
- * veric.juicy_mem_lemmas.v          *)
-
-
-
-
 Set Bullet Behavior "Strict Subproofs".
 
 Module Parching <: ErasureSig.
@@ -61,19 +45,6 @@ Module Parching <: ErasureSig.
   Import THE_DRY_MACHINE_SOURCE.
   Import DMS.
   Import ThreadPoolWF.
-
-  (*Module SCH:= ListScheduler NatTID.
-  Module SEM:= DecayingSEM.
-
-
-  Module JSEM := JuicyMachineShell SEM. (* JuicyMachineShell : Semantics -> ConcurrentSemanticsSig *)
-  Module JuicyMachine := CoarseMachine SCH 
- (* CoarseMachine : Schedule -> ConcurrentSemanticsSig -> ConcurrentSemantics *)
-  Notation JMachineSem:= JuicyMachine.MachineSemantics.
-  Notation jstate:= t.
-  Notation jmachine_state:= JuicyMachine.MachState.
-  Module JTP:=
-  Import JuicyMachineLemmas.*)
 
   Section Parching.
 
@@ -89,8 +60,6 @@ Module Parching <: ErasureSig.
   Instance JuicyMachine : HybridMachine := HybridCoarseMachine.HybridCoarseMachine.
   Definition jstate := jstate ge.
 
-  (*UNCOMMENT THE LINE BELOW AFTER CHANGES ARE MADE (WHENEVER THE FILE COMPILES)*)
-  (*Module DSEM := SEM*)
   Instance DR : Resources := DryHybridMachine.dryResources.
   Instance DTP : ThreadPool.ThreadPool := OrdinalPool.OrdinalThreadPool.
   Instance DMS : MachineSig := DryHybridMachine.DryHybridMachineSig.
@@ -985,12 +954,52 @@ Module Parching <: ErasureSig.
         simpl.
         unfold DryHybridMachine.init_mach.
         eexists; split; simpl; eauto.
-      - (* THIS COULD BE A LEMMA*)
-        eapply initial_invariant0.
+      - eapply initial_invariant0.
 
       - apply MTCH_initial; assumption.
     Qed.
 
+  Lemma perm_of_readable' : forall sh, shares.readable_share sh ->
+    Mem.perm_order' (perm_of_sh (Share.glb Share.Rsh sh)) Readable.
+  Proof.
+    intros; unfold perm_of_sh.
+    if_tac.
+    - erewrite if_false by (apply shares.glb_Rsh_not_top); constructor.
+    - erewrite if_true by (apply shares.readable_glb; auto); constructor.
+  Qed.
+
+  Lemma perm_of_writable' : forall sh, shares.writable_share sh ->
+    Mem.perm_order' (perm_of_sh sh) Writable.
+  Proof.
+    intros; unfold perm_of_sh.
+    erewrite if_true by auto.
+    if_tac; constructor.
+  Qed.
+
+  Lemma lock_range_perm : forall m js ds (MATCH : match_st js ds) i (Hi : containsThread js i)
+    (Hcmpt : mem_compatible js m) b ofs 
+    sh psh R (HJcanwrite : getThreadR Hi @ (b, Ptrofs.intval ofs) = YES sh psh (LK LKSIZE) (Concur.pack_res_inv R)),
+    Mem.range_perm (Concur.juicyRestrict_locks (Concur.mem_compat_thread_max_cohere Hcmpt Hi)) b
+      (Ptrofs.intval ofs) (Ptrofs.intval ofs + LKSIZE) Cur Readable.
+  Proof.
+    intros.
+    pose proof (rmap_valid (getThreadR Hi) b (Ptrofs.intval ofs)).
+    unfold compose in H.
+    rewrite HJcanwrite in H; simpl in H.
+    intros ??.
+    unfold Concur.juicyRestrict_locks, Mem.perm.
+    setoid_rewrite restrPermMap_Cur.
+    rewrite <- Concur.juic2Perm_locks_correct by (eapply Concur.mem_compat_thread_max_cohere; auto).
+    destruct (eq_dec ofs0 (Ptrofs.intval ofs)).
+    - subst; rewrite HJcanwrite; simpl.
+      apply perm_of_readable'; auto.
+    - specialize (H (ofs0 - Ptrofs.intval ofs)); spec H; [omega|].
+      rewrite Zplus_minus in H.
+      simpl.
+      destruct (OrdinalPool.getThreadR Hi @ (b, ofs0)) eqn: Hofs; inv H.
+      rewrite Hofs; simpl.
+      apply perm_of_readable'; auto.
+  Qed.
 
   Lemma conc_step_diagram:
     forall m m' U js js' ds i ev
@@ -1218,7 +1227,7 @@ Module Parching <: ErasureSig.
 
           - assumption.
           - intros.
-            assert (joins phi' (getThreadR (MTCH_cnt' MATCH cnt))).
+            assert (forall l, joins (phi' @ l) (getThreadR (MTCH_cnt' MATCH cnt) @ l)).
             {assert (Hcmpt':=Hcmpt).
               assert (Hcmpt'':=Hcmpt).
               eapply
@@ -1231,6 +1240,9 @@ Module Parching <: ErasureSig.
                      (l:=(b, Ptrofs.intval ofs))
                      (phi:=d_phi)
                 in Hcmpt''; auto.
+              intro l; apply resource_at_joins with (loc := l) in Hcmpt';
+                apply resource_at_joins with (loc := l) in Hcmpt'';
+                apply resource_at_join with (loc := l) in Hadd_lock_res.
               eapply (juicy_mem_lemmas.components_join_joins _ _ _ _ Hadd_lock_res); eauto;
               eapply joins_comm; auto.
             }
@@ -1238,63 +1250,64 @@ Module Parching <: ErasureSig.
             split;
             eapply permDisjoint_permMapsDisjoint; intros b0 ofs0; simpl.
             + rewrite virtue_correct1 (MTCH_perm' _ MATCH b0 ofs0).
-              apply joins_permDisjoint.
-              apply resource_at_joins; assumption.
+              apply joins_permDisjoint; auto.
             + rewrite virtue_correct2 (MTCH_perm2' _ MATCH b0 ofs0).
-              apply joins_permDisjoint_lock.
-              apply resource_at_joins; assumption.
+              apply joins_permDisjoint_lock; auto.
           - intros; intros b0 ofs0.
             destruct (eq_dec i j).
             + subst j.
               rewrite virtue_correct2 (MTCH_perm' _ MATCH b0 ofs0).
               contradiction.
             + rewrite virtue_correct2 (MTCH_perm' _ MATCH b0 ofs0).
-              assert (joins phi' (getThreadR (MTCH_cnt' MATCH cnt))).
+              assert (forall l, joins (phi' @ l) (getThreadR (MTCH_cnt' MATCH cnt) @ l)).
               {assert (Hcmpt':=Hcmpt).
                assert (Hcmpt'':=Hcmpt).
                eapply
-                 Concur.compatible_threadRes_join
-               with (cnti:=Hi)(cntj:=(MTCH_cnt' MATCH cnt))
-                 in Hcmpt'; auto.
+                Concur.compatible_threadRes_join
+                with (cnti:=Hi)(cntj:=(MTCH_cnt' MATCH cnt))
+                in Hcmpt'; auto.
                eapply
                  Concur.compatible_threadRes_lockRes_join
-               with (cnti:=(MTCH_cnt' MATCH cnt))
-                      (l:=(b, Ptrofs.intval ofs))
-                      (phi:=d_phi)
+                 with (cnti:=(MTCH_cnt' MATCH cnt))
+                     (l:=(b, Ptrofs.intval ofs))
+                     (phi:=d_phi)
                  in Hcmpt''; auto.
+               intro l; apply resource_at_joins with (loc := l) in Hcmpt';
+                 apply resource_at_joins with (loc := l) in Hcmpt'';
+                 apply resource_at_join with (loc := l) in Hadd_lock_res.
                eapply (juicy_mem_lemmas.components_join_joins _ _ _ _ Hadd_lock_res); eauto;
                eapply joins_comm; auto.
-              }
+             }
 
 
               apply perm_coh_joins.
-              apply joins_comm; apply resource_at_joins;
-              assumption.
+              apply joins_comm; auto.
 
           - intros; intros b0 ofs0.
             destruct (eq_dec i j).
             + subst j.
               contradiction.
             + rewrite virtue_correct1 (MTCH_perm2' _ MATCH b0 ofs0).
-              assert (joins phi' (getThreadR (MTCH_cnt' MATCH cnt))).
+              assert (forall l, joins (phi' @ l) (getThreadR (MTCH_cnt' MATCH cnt) @ l)).
               {assert (Hcmpt':=Hcmpt).
                assert (Hcmpt'':=Hcmpt).
                eapply
-                 Concur.compatible_threadRes_join
-               with (cnti:=Hi)(cntj:=(MTCH_cnt' MATCH cnt))
-                 in Hcmpt'; auto.
+                Concur.compatible_threadRes_join
+                with (cnti:=Hi)(cntj:=(MTCH_cnt' MATCH cnt))
+                in Hcmpt'; auto.
                eapply
                  Concur.compatible_threadRes_lockRes_join
-               with (cnti:=(MTCH_cnt' MATCH cnt))
-                      (l:=(b, Ptrofs.intval ofs))
-                      (phi:=d_phi)
+                 with (cnti:=(MTCH_cnt' MATCH cnt))
+                     (l:=(b, Ptrofs.intval ofs))
+                     (phi:=d_phi)
                  in Hcmpt''; auto.
+               intro l; apply resource_at_joins with (loc := l) in Hcmpt';
+                 apply resource_at_joins with (loc := l) in Hcmpt'';
+                 apply resource_at_join with (loc := l) in Hadd_lock_res.
                eapply (juicy_mem_lemmas.components_join_joins _ _ _ _ Hadd_lock_res); eauto;
                eapply joins_comm; auto.
               }
-              apply perm_coh_joins.
-              apply resource_at_joins;
-              assumption.
+              apply perm_coh_joins; auto.
           - intros l pmap0.
             destruct (AMap.E.eq_dec l (b, Ptrofs.intval ofs)).
             + subst l; rewrite gssLockRes; simpl; intros HH; inversion HH; simpl.
@@ -1310,7 +1323,7 @@ Module Parching <: ErasureSig.
               }
               destruct H as [pmap1 HH'].
               destruct pmap1.
-              * assert (joins r phi').
+              * assert (forall l, joins (r @ l) (phi' @ l)).
                { assert (Hcmpt':=Hcmpt).
                  assert (Hcmpt'':=Hcmpt).
                  eapply
@@ -1326,6 +1339,9 @@ Module Parching <: ErasureSig.
                         (phi2:=d_phi)
                         (phi1:=r)
                    in Hcmpt''; auto.
+                 intro l0; apply resource_at_joins with (loc := l0) in Hcmpt';
+                   apply resource_at_joins with (loc := l0) in Hcmpt'';
+                   apply resource_at_join with (loc := l0) in Hadd_lock_res.
                  eapply joins_comm.
                  eapply (juicy_mem_lemmas.components_join_joins _ _ _ _ Hadd_lock_res); eauto;
                  eapply joins_comm; auto. }
@@ -1334,13 +1350,11 @@ Module Parching <: ErasureSig.
                -- rewrite virtue_correct1.
                 inversion MATCH.
                 erewrite <- mtch_locksRes; eauto.
-                apply joins_permDisjoint;
-                  apply resource_at_joins; assumption.
+                apply joins_permDisjoint; auto.
                -- rewrite virtue_correct2.
                   inversion MATCH.
                   erewrite <- mtch_locksRes0; eauto.
-                  apply joins_permDisjoint_lock;
-                    apply resource_at_joins; assumption.
+                  apply joins_permDisjoint_lock; auto.
               * inversion MATCH.
                 specialize (mtch_locksEmpty l pmap0 HH' HH);
                   subst pmap0;
@@ -1361,7 +1375,7 @@ Module Parching <: ErasureSig.
               eapply MTCH_locks in HH'; eauto.
               destruct HH' as [x HH'].
               destruct x.
-              * assert (joins r phi').
+              * assert (forall l, joins (r @ l) (phi' @ l)).
                { assert (Hcmpt':=Hcmpt).
                  assert (Hcmpt'':=Hcmpt).
                  eapply
@@ -1377,6 +1391,9 @@ Module Parching <: ErasureSig.
                         (phi2:=d_phi)
                         (phi1:=r)
                    in Hcmpt''; auto.
+                 intro l0; apply resource_at_joins with (loc := l0) in Hcmpt';
+                   apply resource_at_joins with (loc := l0) in Hcmpt'';
+                   apply resource_at_join with (loc := l0) in Hadd_lock_res.
                  eapply joins_comm.
                  eapply (juicy_mem_lemmas.components_join_joins _ _ _ _ Hadd_lock_res); eauto;
                  eapply joins_comm; auto. }
@@ -1384,14 +1401,11 @@ Module Parching <: ErasureSig.
                 -- rewrite virtue_correct2.
                    inversion MATCH.
                    erewrite <- mtch_locksRes; eauto.
-                   apply perm_coh_joins;
-                     apply resource_at_joins; assumption.
+                   apply perm_coh_joins; auto.
                 -- rewrite virtue_correct1.
                    inversion MATCH.
                    erewrite <- mtch_locksRes0; eauto.
-                   apply perm_coh_joins;
-                     apply resource_at_joins;
-                     apply joins_comm; assumption.
+                   apply perm_coh_joins; apply joins_comm; auto.
               * inversion MATCH.
                 specialize (mtch_locksEmpty l _ HH' HH).
                 subst pmap0; split; intros b0 ofs0;
@@ -1676,7 +1690,7 @@ Module Parching <: ErasureSig.
         symmetry. apply mtch_perm2.
         apply Concur.mem_compat_thread_max_cohere.
         assumption.
-      + admit. (* We can probably use rmap_valid in combination with HJcanwrite to prove this. *)
+      + eapply lock_range_perm; eauto.
       + reflexivity.
       + instantiate (1:= Hlt'').
         apply restrPermMap_ext.
@@ -2488,7 +2502,6 @@ Module Parching <: ErasureSig.
       + eapply MTCH_getThreadC; eassumption.
       + reflexivity.
       + eassumption.
-(*REmove      + eapply MTCH_compat; eassumption. *)
       + apply restrPermMap_ext.
         intros b0.
         inversion MATCH; subst.
@@ -2500,8 +2513,7 @@ Module Parching <: ErasureSig.
         * eassumption.
         *  eapply Concur.compatible_threadRes_sub.
            assumption.
-      + admit.
-      (* as above *)
+      + eapply lock_range_perm; eauto.
       + apply restrPermMap_ext.
         intros b0.
         extensionality ofs0.
@@ -3592,7 +3604,7 @@ Module Parching <: ErasureSig.
        rewrite sh_after.
        if_tac; apply perm_of_writable;
          try apply shares.writable_share_glb_Rsh; eauto;
-           apply glb_Rsh_not_top.
+           apply shares.glb_Rsh_not_top.
        auto.
 
      - rewrite setPermBlock_other_1.
@@ -3960,10 +3972,16 @@ Here be dragons
         + eapply MTCH_getThreadC; eassumption.
         + reflexivity.
         + eassumption.
-        (*      + eapply MTCH_compat; eassumption. *)
         + reflexivity.
-        + admit.
-      (* Range of lock permisison, now it spans multiple locations given my LKSIZE *)
+        + destruct Hrmap as (_ & _ & Hl & _).
+          intros ??.
+          specialize (Hl (b, ofs0)) as (? & sh & ? & Hl & ? & _); [split; auto|].
+          simpl in Hl.
+          unfold Mem.perm; setoid_rewrite restrPermMap_Cur.
+          replace (MTCH_cnt _ _) with Htid' by apply proof_irr.
+          inv MATCH.
+          erewrite <- mtch_perm1; setoid_rewrite Hl; simpl.
+          apply perm_of_writable'; auto.
         + rewrite <- Hstore. f_equal.
           erewrite <- (MTCH_restrict_personal ).
           * reflexivity.
@@ -4366,12 +4384,12 @@ Here be dragons
                 rewrite perm_of_writable.
                 (*1*) constructor.
                 (*2*) eapply shares.writable_share_glb_Rsh; eauto.
-                (*3*) apply glb_Rsh_not_top.
+                (*3*) apply shares.glb_Rsh_not_top.
               * simpl.
                 rewrite perm_of_writable.
                 (*1*) constructor.
                 (*2*) eapply shares.writable_share_glb_Rsh; eauto.
-                (*3*) apply glb_Rsh_not_top.
+                (*3*) apply shares.glb_Rsh_not_top.
             + replace (MTCH_cnt MATCH Hi) with Htid' by apply proof_irrelevance.
               reflexivity.
             + intros indx ineq.
@@ -4429,8 +4447,14 @@ Here be dragons
               + reflexivity.
               + eassumption.
               + reflexivity.
-              + admit.
-      (* Range of lock permission, now it spans multiple locations given my LKSIZE *)
+              + eapply lock_range_perm in HJcanwrite; eauto.
+                intros ? H; specialize (HJcanwrite _ H).
+                unfold Mem.perm in *; setoid_rewrite restrPermMap_Cur.
+                inversion MATCH.
+                setoid_rewrite <- mtch_perm2.
+                erewrite Concur.juic2Perm_locks_correct
+                  by (apply Concur.mem_compat_thread_max_cohere; eauto).
+                setoid_rewrite restrPermMap_Cur in HJcanwrite; eauto.
               + erewrite restrPermMap_ext.
                 eassumption.
                 intros b0.
@@ -4444,7 +4468,7 @@ Here be dragons
         }
 
         Grab Existential Variables.
-    Focus 4.
+        auto.
     { (*This is side condition [Hlt'] of acquire or relese *)
        intros b0 ofs0.
              move: (Hlt' b0 ofs0).
@@ -4472,8 +4496,7 @@ Here be dragons
                assumption.
                eapply Concur.compatible_threadRes_sub; eauto.
     }
-
-  Admitted.
+  Qed.
 
 
 

@@ -1817,7 +1817,9 @@ Module OrdinalPool.
         lr_valid (lockRes tp) ->
         lr_valid (lockRes (updThread cnti c' m')).
     Proof.
-    Admitted.
+      repeat intro.
+      rewrite gsoThreadLPool; apply H.
+    Qed.
 
     Lemma contains_iff_num:
       forall tp tp'

@@ -335,9 +335,9 @@ Proof.
       { subst loc.
         split; swap 1 2.
         - (* the rmap is unchanged (but we lose the SAT information) *)
-          cut ((4 | Ptrofs.intval ofs) /\  (Ptrofs.intval ofs + LKSIZE <= Ptrofs.modulus)%Z /\
+          cut ((4 | Ptrofs.intval ofs) /\  (Ptrofs.intval ofs + LKSIZE < Ptrofs.modulus)%Z /\
                exists R0, (lkat R0 (b, Ptrofs.intval ofs)) Phi).
-          { intros (align & bound & R0 & AP). repeat (split; auto).            
+          { intros (align & bound & R0 & AP). repeat (split; auto).
             exists R0. revert AP. apply age_to_ind, lkat_hered. }
           cleanup.
           rewrite His_unlocked in lock_coh.

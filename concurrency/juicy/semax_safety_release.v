@@ -319,7 +319,7 @@ Proof.
         split; swap 1 2.
         - (* the rmap is unchanged (but we have to prove the SAT information) *)
           cut ((4 | snd (b, Ptrofs.intval ofs)) /\
-               (snd (b, Ptrofs.intval ofs) + LKSIZE <= Int.modulus)%Z /\
+               (snd (b, Ptrofs.intval ofs) + LKSIZE < Ptrofs.modulus)%Z /\
                exists (* sh0 *) R0,
                   (lkat R0 (* sh0 *) (b, Ptrofs.intval ofs)) Phi /\
                   (app_pred R0 (age_by 1 (age_to (level (getThreadR i tp cnti) - 1) d_phi))

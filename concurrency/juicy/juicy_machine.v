@@ -183,10 +183,60 @@ Typeclasses eauto := 2.
         app_pred emp r.  (*Or is is just [amp r]?*)
     Definition join_threads (tp : thread_pool) r:= join_list (getThreadsR tp) r.
 
+    Lemma list_nth_error_eq : forall {A} (l1 l2 : list A)
+      (Heq : forall j, nth_error l1 j = nth_error l2 j), l1 = l2.
+    Proof.
+      induction l1; destruct l2; auto; intros; try (specialize (Heq O); simpl in Heq; discriminate).
+      erewrite IHl1.
+      - specialize (Heq O); inv Heq; eauto.
+      - intro j; specialize (Heq (S j)); auto.
+    Qed.
+
+    Lemma nth_error_enum : forall n m (H : (n <= m)%coq_nat) i, i < n ->
+      exists Hlt, nth_error (enum_from H) i = Some (@Ordinal m (n - 1 - i)%coq_nat Hlt).
+    Proof.
+      intros ??; induction n; simpl; intros; [ssromega|].
+      destruct i; simpl.
+      - replace (n.+1 - 1 - 0)%coq_nat with n by ssromega; eauto.
+      - replace (n.+1 - 1 - i.+1)%coq_nat with (n - 1 - i)%coq_nat by abstract ssromega; eauto.
+    Qed.
+
+    Lemma minus_comm : forall a b c, ((a - b)%coq_nat - c = (a - c)%coq_nat - b)%coq_nat.
+    Proof.
+      intros.
+      omega.
+    Qed.
+
     Lemma getThreadsR_addThread tp v1 v2 phi :
       getThreadsR (addThread tp v1 v2 phi) = getThreadsR tp ++ phi :: nil.
     Proof.
-    Admitted. (* Unproven SSREFLECT thing *)
+      simpl.
+      unfold OrdinalPool.addThread, getThreadsR, enums_equality.enum; simpl.
+      rewrite map_app; repeat f_equal; simpl.
+      - apply list_nth_error_eq; intro.
+        rewrite !list_map_nth.
+        destruct (lt_dec j (num_threads tp)).
+        erewrite !initial_world.nth_error_rev by (rewrite length_enum_from; auto).
+        rewrite !length_enum_from.
+        assert (((num_threads tp - j)%coq_nat - 1)%coq_nat < num_threads tp) by ssromega.
+        repeat match goal with |-context[nth_error (enum_from ?H) ?i] =>
+          destruct (nth_error_enum H i) as [? ->]; auto end; simpl.
+        match goal with |-context[unlift ?a ?b] => destruct (@unlift_some _ a b) as [[] ? Heq] end.
+        { apply eq_true_not_negb.
+          rewrite eq_op_false; [discriminate|].
+          intro X; inv X.
+          rewrite (Nat.add_sub_eq_l _ _ j) in H1; try omega.
+          rewrite minus_comm Nat.sub_add; auto; omega. }
+        rewrite Heq; simpl in *; f_equal; f_equal.
+        apply ord_inj.
+        apply unlift_m_inv in Heq; auto.
+        { repeat match goal with |-context[nth_error ?l ?i] =>
+            destruct (nth_error_None l i) as [_ H];
+            erewrite H by (rewrite rev_length length_enum_from; omega); clear H end; auto. }
+      - unfold ordinal_pos_incr; simpl.
+        replace (introT _ _) with (pos_incr_lt (num_threads tp)) by apply proof_irr.
+        rewrite unlift_none; auto.
+    Qed.
 
     (*Join juice from all locks*)
     Fixpoint join_list' (ls: seq.seq (option res)) (r:option res):=
@@ -1161,7 +1211,7 @@ Qed.
             (Hrestrict_pmap: restrPermMap Hlt' = m1)
             (Hstore: Mem.store Mint32 m1 b (Ptrofs.intval ofs) (Vint Int.zero) = Some m')
             (His_unlocked: lockRes tp (b, Ptrofs.intval ofs) = SSome d_phi )
-            (Hadd_lock_res: join phi d_phi  phi')
+            (Hadd_lock_res: join phi d_phi phi')
             (Htp': tp' = updThread cnt0 (Kresume c Vundef) phi')
             (Htp'': tp'' = updLockSet tp' (b, Ptrofs.intval ofs) None )
             (Htp''': tp''' = age_tp_to (level phi - 1)%coq_nat tp''),
