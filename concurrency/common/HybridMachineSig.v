@@ -594,8 +594,18 @@ Module HybridMachineSig.
           m <= n ->
           csafe (sched, tr, tp) mem m.
       Proof.
-        Admitted.
-      
+        intros until 1; revert m.
+        induction H; intros.
+        - assert (m0 = 0) by omega; subst; constructor.
+        - apply HaltedSafe; auto.
+        - destruct m0; [constructor|].
+          eapply CoreSafe; eauto.
+          apply IHcsafe; omega.
+        - destruct m0; [constructor|].
+          eapply AngelSafe; eauto.
+          intro; apply H; omega.
+      Qed.
+
     End HybridCoarseMachine.
   End HybridCoarseMachine.
   
