@@ -653,58 +653,46 @@ Module DryHybridMachine.
               replace cnt with cnt' in H by apply cnt_irr;
                 rewrite H' in H; inversion H
             end.
-        + (* XXX: this broke, I don't know what age_getThreadCode is*)
-          (* inversion H; subst; *)
-          (*   try erewrite <- age_getThreadCode; *)
-          (*   try rewrite gLockSetCode; *)
-          (*   try rewrite gRemLockSetCode; *)
-          (*   try erewrite gsoAddCode; eauto; *)
-          (*     try rewrite gsoThreadCode; try eassumption. *)
-          (* * eapply cntUpdate; eauto. eapply cnt. *)
-          (* * { (*AQCUIRE*) *)
-          (*     replace cnt' with cnt0 by apply cnt_irr; *)
-      (*     exact Hcode. } *)
-          admit.  
-      - (* destruct (NatTID.eq_tid_dec i j). *)
-        (* + subst j. *)
-        (*   inversion H; subst; *)
-        (*     match goal with *)
-        (*     | [ H: getThreadC ?cnt = Krun ?c, *)
-        (*            H': getThreadC ?cnt' = Kblocked ?c' |- _ ] => *)
-        (*       try erewrite <- age_getThreadCode in H; *)
-        (*         try rewrite gLockSetCode in H; *)
-        (*         try rewrite gRemLockSetCode in H; *)
-        (*         try erewrite gsoAddCode in H; eauto; *)
-        (*           try rewrite gssThreadCode in H; *)
-        (*           try solve[inversion H] *)
-        (*     end. *)
-        (* * apply threadPool.cntUpdate; eauto. apply cnt. *)
-        (* * { (*AQCUIRE*) *)
-        (*     replace cnt with cnt0 by apply cnt_irr; *)
-        (*     exact Hcode. } *)
-        (* + *)
-          (* inversion H; subst; *)
-          (*   match goal with *)
-          (*   | [ H: getThreadC ?cnt = Krun ?c, *)
-          (*          H': getThreadC ?cnt' = Kblocked ?c' |- _ ] => *)
-          (*     try erewrite <- age_getThreadCode in H; *)
-          (*       try rewrite gLockSetCode in H; *)
-          (*       try rewrite gRemLockSetCode in H; *)
-          (*       try erewrite gsoAddCode in H; eauto; *)
-          (*         try rewrite gsoThreadCode in H; *)
-          (*         try solve[inversion H]; eauto *)
-          (*   end. *)
-          (* * apply threadPool.cntUpdate; eauto. apply cnt. *)
-          (*   { (*AQCUIRE*) *)
-          (*     replace cnt with cnt0 by apply cnt_irr; *)
-          (*       exact Hcode. } *)
-        admit.
-        Grab Existential Variables.
-        all:admit.
-
-        (* eauto. eauto. eauto. *)
-        
-    Admitted.
+        + inv H; 
+(*        try erewrite <- age_getThreadCode;*)
+             try rewrite gLockSetCode;
+             try rewrite gRemLockSetCode;
+             try unshelve erewrite gsoAddCode; intros; eauto;
+               try rewrite gsoThreadCode; try eassumption;
+             try (eapply cntUpdate; eauto).
+           (*AQCUIRE*)
+           replace cnt' with cnt0 by apply cnt_irr;
+             exact Hcode.
+      - destruct (NatTID.eq_tid_dec i j).
+        + subst j.
+          inv H;
+            match goal with
+            | [ H: getThreadC ?cnt = Krun ?c,
+                   H': getThreadC ?cnt' = Kblocked ?c' |- _ ] =>
+              try erewrite <- age_getThreadCode in H;
+                try unshelve erewrite gLockSetCode in H;
+                try unshelve erewrite gRemLockSetCode in H;
+                try unshelve erewrite gsoAddCode in H; intros; eauto;
+                  try erewrite gssThreadCode in H;
+                  try solve[inversion H]; try eapply cntUpdate; eauto
+            end.
+          (*AQCUIRE*)
+          replace cnt with cnt0 by apply cnt_irr;
+            exact Hcode.
+        + inv H;
+            match goal with
+            | [ H: getThreadC ?cnt = Krun ?c,
+                   H': getThreadC ?cnt' = Kblocked ?c' |- _ ] =>
+              try erewrite <- age_getThreadCode in H;
+                try unshelve erewrite gLockSetCode in H;
+                try unshelve erewrite gRemLockSetCode in H;
+                try unshelve erewrite gsoAddCode in H; eauto;
+                  try erewrite gsoThreadCode in H;
+                  try solve[inversion H]; try eapply cntUpdate; eauto
+            end.
+          replace cnt with cnt0 by apply cnt_irr;
+            exact Hcode.
+    Qed.
 
     Definition install_perm tp m tid (Hcmpt: mem_compatible tp m) (Hcnt: containsThread tp tid) m' :=
       m' = restrPermMap (Hcmpt tid Hcnt).1.

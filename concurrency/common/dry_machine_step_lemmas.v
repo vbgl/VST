@@ -449,7 +449,6 @@ Module StepLemmas.
       - inversion Hperm; inversion Hperm0; subst.
         rewrite Hafter_external in Hafter_external0;
           now inversion Hafter_external0.
-      - admit.
     Admitted.
 
     Ltac exec_induction base_case :=
@@ -1974,7 +1973,6 @@ Module StepType.
     intros.
     absurd_internal Hstep;
       try reflexivity.
-(*    admit. (*TODO:initial_core stuff *)*)
     apply ev_step_ax1 in Hcorestep;
       eapply corestep_disjoint_val;
         by (simpl; eauto).
