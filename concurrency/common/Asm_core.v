@@ -1,4 +1,3 @@
-Require Import VST.sepcomp.semantics.
 Require Import compcert.lib.Coqlib.
 (* Require Import VST.sepcomp.simulations. *)
 Require Import ZArith List.
