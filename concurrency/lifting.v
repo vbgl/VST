@@ -25,7 +25,7 @@ Require Import VST.concurrency.DryMachineSource.
 
 (** The new machine simulation*)
 Require Import VST.concurrency.machine_semantics. Import machine_semantics.
-Require Import VST.concurrency.machine_simulation. Import Machine_sim.
+Require Import VST.concurrency.compiler.machine_simulation. Import Machine_sim.
 
 Module lifting (SEMT: Semantics) (Machine: MachinesSig with Module SEM := SEMT).
   Section lifting.

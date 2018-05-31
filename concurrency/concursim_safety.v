@@ -20,7 +20,7 @@ Require Import VST.concurrency.x86_context.
 (** The Clight DryConc Machine*)
 Require Import VST.concurrency.DryMachineSourceCore.
 
-Require Import VST.concurrency.machine_simulation. Import machine_simulation.
+Require Import VST.concurrency.compiler.machine_simulation. Import machine_simulation.
 
 
 (*Require Import VST.concurrency.HybridMachine_simulation_proof.*)

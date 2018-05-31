@@ -28,7 +28,7 @@ Require Import VST.concurrency.TheSchedule. Import TheSchedule.
 Require Import Coq.ZArith.ZArith.
 
 Require Import VST.concurrency.permissions.
-Require Import VST.concurrency.bounded_maps.
+Require Import VST.concurrency.compiler.bounded_maps.
 Require Import VST.concurrency.threadPool.
 
 Instance LocksAndResources : Resources :=

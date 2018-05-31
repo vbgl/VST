@@ -15,7 +15,7 @@ Require Import VST.concurrency.threadPool.
 
 Require Import VST.concurrency.machine_semantics.
 Require Import VST.concurrency.permissions.
-Require Import VST.concurrency.bounded_maps.
+Require Import VST.concurrency.compiler.bounded_maps.
 Require Import VST.concurrency.addressFiniteMap.
 Require Import VST.concurrency.scheduler.
 Require Import Coq.Program.Program.

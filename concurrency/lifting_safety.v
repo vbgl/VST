@@ -21,7 +21,7 @@ Require Import VST.concurrency.dry_context.
 (** The Clight DryConc Machine*)
 Require Import VST.concurrency.DryMachineSource.
 
-Require Import VST.concurrency.machine_simulation. Import machine_simulation.
+Require Import VST.concurrency.compiler.machine_simulation. Import machine_simulation.
 
 
 Module lifting_safety (SEMT: Semantics) (Machine: MachinesSig with Module SEM := SEMT).

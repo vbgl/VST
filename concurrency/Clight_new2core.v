@@ -4,7 +4,7 @@ Require Import compcert.lib.Integers.
 
 Require Import compcert.common.Values.
 
-Require Import VST.concurrency.machine_simulation.
+Require Import VST.concurrency.compiler.machine_simulation.
 Require Import VST.concurrency.permissions.
 
 Require Import VST.concurrency.DryMachineSource.

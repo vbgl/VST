@@ -30,7 +30,7 @@ Require Import VST.veric.Clightnew_coop.
 Require Import VST.sepcomp.event_semantics.
 (*Require Import VST.veric.Clight_sim.*)
 Require Import VST.concurrency.ClightSemantincsForMachines.
-Require Import VST.concurrency.Clight_bounds.
+Require Import VST.concurrency.compiler.Clight_bounds.
 
 (*SSReflect*)
 From mathcomp.ssreflect Require Import ssreflect ssrfun ssrbool ssrnat eqtype seq.
