@@ -2277,6 +2277,8 @@ Proof.
 Qed.
 Hint Resolve unreadable_bot.
 
+Definition join_Bot := initial_world.join_Bot.
+
 Lemma join_Tsh : forall a b, sepalg.join Tsh a b -> b = Tsh /\ a = Share.bot.
 Proof.
   intros ?? (? & ?).
@@ -2926,7 +2928,7 @@ Lemma gvar_eval_var: forall i t v rho,
 Proof.
   unfold eval_var, gvar_denote; intros.
   destruct (Map.get (ve_of rho) i) as [[]|]; [contradiction|].
-  destruct (ge_of rho i); auto; contradiction.
+  destruct (Map.get (ge_of rho) i); auto; contradiction.
 Qed.
 
 Lemma force_val_sem_cast_neutral_gvar' : forall i v rho, gvar_denote i v rho ->
@@ -2991,10 +2993,10 @@ entailer.
 apply andp_right.
 - (* about gvar *)
   apply prop_right.
-  unfold gvar_denote, eval_var, Map.get.
-  destruct H as (_ & _ & DG & DS).
-  destruct (DS id _ GS) as [-> | (t & E)]; [ | congruence].
-  destruct (DG id _ GS) as [? ?]; rewrite H; auto.
+  unfold gvar_denote, eval_var.
+  destruct_var_types id.
+  destruct_glob_types id.
+  rewrite Heqo0, Heqo1; auto.
 - (* about func_ptr/func_ptr' *)
   unfold func_ptr'.
   rewrite <- andp_left_corable, andp_comm; auto.
@@ -3410,17 +3412,39 @@ apply andp_left2. apply andp_left1.
  forget (eval_exprlist tys bl rho) as vl.
  eapply check_specs_lemma; try eassumption.
  instantiate (1:=Qtemp).
- clear - CHECKG H.
- apply fold_right_and_LocalD_e in H.
- destruct H as [? [? ?]].
- apply fold_right_and_LocalD_i; auto.
- clear - CHECKG H1.
- eapply in_gvars_sub; eauto.
- clear - CHECKG H.
- apply fold_right_and_LocalD_e in H.
-  destruct H as [? [? ?]].
-  clear - H1 CHECKG.
- eapply in_gvars_sub; eauto.
+ -
+  clear - CHECKG H.
+  apply local_ext_rev.
+  specialize (fun (Q0: environ -> Prop) HH => local_ext Q0 _ _ HH H).
+  clear H; intros.
+  apply (H Q0); clear H.
+  apply list_in_map_inv in H0.
+  destruct H0 as [? [? ?]]; subst.
+  apply in_map.
+  apply LocalD_sound; apply LocalD_complete in H0.
+  rewrite Forall_forall in CHECKG.
+  destruct H0 as [| [| [| [| [| [|]]]]]]; auto 50.
+  repeat right.
+  apply list_in_map_inv in H.
+  destruct H as [? [? ?]]; subst.
+  apply in_map.
+  apply CHECKG; auto.
+ -
+  clear - CHECKG H.
+  apply local_ext_rev.
+  specialize (fun (Q0: environ -> Prop) HH => local_ext Q0 _ _ HH H).
+  clear H; intros.
+  apply (H Q0); clear H.
+  apply list_in_map_inv in H0.
+  destruct H0 as [? [? ?]]; subst.
+  apply in_map.
+  apply LocalD_sound.
+  rewrite Forall_forall in CHECKG.
+  repeat right.
+  apply list_in_map_inv in H0.
+  destruct H0 as [? [? ?]]; subst.
+  apply in_map.
+  apply CHECKG; auto.
 Qed.
 
 Lemma semax_call_id00_wow:

@@ -40,22 +40,7 @@ Proof.
     erewrite own_op by eauto; entailer!.
 Qed.
 
-Lemma own_precise : forall g a pp, precise (own g a pp).
-Proof.
-  intros ?????? (? & ? & Hg1) (? & ? & Hg2) J1 J2; simpl in *.
-  apply rmap_ext.
-  - destruct J1 as [? ?%join_level], J2 as [? ?%join_level]; omega.
-  - intro; apply join_sub_same_identity with (a0 := w1 @ l)(c := w @ l); auto.
-    + apply identity_unit'; auto.
-    + eapply join_sub_unit_for, resource_at_join_sub; eauto.
-      apply identity_unit'; auto.
-    + apply resource_at_join_sub; auto.
-  - rewrite Hg1, Hg2.
-    destruct J1 as [? ?%join_level], J2 as [? ?%join_level].
-    replace (level w1) with (level w2) by omega.
-    f_equal; f_equal; f_equal; f_equal.
-    apply exist_ext; auto.
-Qed.
+(* own isn't precise unless the ghost is a Disj_alg. Is this a problem? *)
 
 Lemma own_list_alloc : forall a0 la lp, Forall valid la -> length lp = length la ->
   emp |-- |==> (EX lg : _, !!(Zlength lg = Zlength la) && fold_right sepcon emp
@@ -107,6 +92,12 @@ Proof.
 Qed.
 
 End ghost.
+
+Instance exclusive_PCM A : Ghost := { valid a := True;
+  Join_G := Join_lower (Join_discrete A) }.
+Proof.
+  auto.
+Defined.
 
 Definition excl {A} g a := @own _ _ _ _ _ _ (exclusive_PCM A) g (Some a) NoneP.
 
@@ -438,6 +429,10 @@ Qed.
 
 End Snapshot.
 
+Definition pos_PCM := initial_world.pos_PCM.
+Definition ref_PCM := initial_world.ref_PCM.
+Notation completable := initial_world.completable.
+
 Lemma ref_sub : forall {P : Ghost} (sh : share) g (a b : @G P) pp,
   @own _ _ _ _ _ _ (ref_PCM P) g (Some (sh, a), None) pp * @own _ _ _ _ _ _ (ref_PCM P) g (None, Some b) pp |--
     !!(if eq_dec sh Tsh then a = b else exists x, join a x b).
@@ -525,19 +520,17 @@ Proof.
   - exists (Some (Tsh, v')); split; [constructor | auto].
 Qed.
 
-Lemma ex_ghost_var_exclusive : forall sh p, exclusive_mpred (EX v : A, ghost_var sh v p).
+(*Lemma ghost_var_precise : forall sh p, precise (EX v : A, ghost_var sh v p).
 Proof.
-  intros; unfold exclusive_mpred.
-  Intros v v'; setoid_rewrite own_op'.
-  Intros a; destruct a as [[]|]; simpl in *; try contradiction.
-  destruct H as (? & _ & ?%sepalg.join_self%identity_share_bot & _); contradiction.
+  intros; apply derives_precise' with (EX g : share * A, ghost g p), ex_ghost_precise.
+  Intro v; Exists (sh, v); auto.  apply derives_refl.
 Qed.
 
-Lemma ghost_var_exclusive : forall sh v p, exclusive_mpred (ghost_var sh v p).
+Lemma ghost_var_precise' : forall sh v p, precise (ghost_var sh v p).
 Proof.
-  intros; eapply derives_exclusive, ex_ghost_var_exclusive.
-  Exists v; apply derives_refl.
-Qed.
+  intros; apply derives_precise with (Q := EX v : A, ghost_var sh v p);
+    [exists v; auto | apply ghost_var_precise].
+Qed.*)
 
 End GVar.
 
@@ -1303,7 +1296,7 @@ Qed.
 End GHist.
 
 Hint Resolve hist_incl_nil hist_list_nil hist_list'_nil add_events_nil.
-Hint Resolve ghost_var_exclusive ex_ghost_var_exclusive.
+(*Hint Resolve ghost_var_precise ghost_var_precise'.*)
 Hint Resolve (*ghost_var_init*) master_init (*ghost_map_init*) ghost_hist_init : init.
 
 Ltac ghost_alloc G :=

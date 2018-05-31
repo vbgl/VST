@@ -118,7 +118,7 @@ normalize.
 rewrite prop_true_andp in H0 by auto.
 apply H0; auto.
 hnf in H2; destruct (Map.get (ve_of rho) i) as [[? ?] |  ]; try contradiction.
-destruct (ge_of rho i); try contradiction.
+destruct (Map.get (ge_of rho) i); try contradiction.
 subst.
 hnf; eauto.
 Qed.
@@ -139,7 +139,7 @@ normalize.
 rewrite prop_true_andp in H0 by auto.
 apply H0; auto.
 hnf in H2.
-destruct (ge_of rho i); try contradiction.
+destruct (Map.get (ge_of rho) i); try contradiction.
 subst.
 hnf; eauto.
 Qed.
@@ -205,13 +205,21 @@ hnf in H3. destruct v; try contradiction.
 exists i0. split3; auto.
 Qed.
 
+
+Ltac safe_subst x := subst x.
+Ltac safe_subst_any := subst_any.
+(* safe_subst is meant to avoid doing rewrites or substitution of variables that
+  are in the scope of a unification variable.  Right now, the tactic is a placeholder
+  for real tactic that will detect the scope violation and (if so) avoid doing the
+  substition.  See issue #186. *)
+
 Ltac lower_one_temp_Vint' :=
  match goal with
  | a : name ?i |- (local _ && PROPx _ (LOCALx (temp ?i ?v :: _) _)) _ |-- _ =>
      simple eapply lower_one_temp_Vint';
      [ reflexivity | ];
      let tc := fresh "TC" in
-     clear a; intros [a [? [tc ?EVAL]]]; unfold tc_val in tc; try subst v;
+     clear a; intros [a [? [tc ?EVAL]]]; unfold tc_val in tc; try safe_subst v;
      revert tc; fancy_intro true
  | |- (local _ && PROPx _ (LOCALx (temp _ ?v :: _) _)) _ |-- _ =>
     is_var v;
@@ -219,7 +227,7 @@ Ltac lower_one_temp_Vint' :=
      [ reflexivity | ];
     let v' := fresh "v" in rename v into v';
      let tc := fresh "TC" in
-     intros [v [? [tc ?EVAL]]]; unfold tc_val in tc; subst v';
+     intros [v [? [tc ?EVAL]]]; unfold tc_val in tc; safe_subst v';
      revert tc; fancy_intro true
  end.
 
@@ -409,13 +417,13 @@ Proof.
     assert (headptr v); [| split; [| split]; auto; apply headptr_isptr; auto].
     unfold gvar_denote in H0.
     destruct (Map.get (ve_of rho) i) as [[? ?] |]; [inversion H0 |].
-    destruct (ge_of rho i); [| inversion H0].
+    destruct (Map.get (ge_of rho) i); [| inversion H0].
     subst.
     hnf; eauto.
   + simpl.
     assert (headptr v); [| split; [| split]; auto; apply headptr_isptr; auto].
     unfold sgvar_denote in H0.
-    destruct (ge_of rho i); [| inversion H0].
+    destruct (Map.get (ge_of rho) i); [| inversion H0].
     subst.
     hnf; eauto.
   + simpl.
