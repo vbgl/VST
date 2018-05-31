@@ -12,7 +12,7 @@ Require Import VST.concurrency.compcert_imports. Import CompcertCommon.
 
 Require Import VST.msl.Axioms.
 
-Require Import VST.concurrency.sepcomp. Import SepComp.
+Require Import VST.concurrency.common.sepcomp. Import SepComp.
 
 Require Import VST.concurrency.pred_lemmas.
 Require Import VST.concurrency.seq_lemmas.

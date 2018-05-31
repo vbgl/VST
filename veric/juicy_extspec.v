@@ -1,5 +1,5 @@
 Require Import VST.veric.juicy_base.
-Require Import VST.concurrency.core_semantics.
+Require Import VST.concurrency.common.core_semantics.
 Require Import VST.sepcomp.extspec.
 Require Import VST.sepcomp.step_lemmas.
 Require Import VST.veric.shares.

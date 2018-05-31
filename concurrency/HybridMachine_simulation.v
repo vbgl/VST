@@ -10,16 +10,16 @@ Require Import VST.msl.Axioms.
 Require Import Coq.ZArith.ZArith.
 Require Import VST.sepcomp.semantics.
 Require Import VST.sepcomp.event_semantics.
-Require Export VST.concurrency.semantics.
-Require Export VST.concurrency.lksize.
-Require Import VST.concurrency.threadPool. Export threadPool.
+Require Export VST.concurrency.common.semantics.
+Require Export VST.concurrency.common.lksize.
+Require Import VST.concurrency.common.threadPool. Export threadPool.
 
-Require Import VST.concurrency.machine_semantics.
-Require Import VST.concurrency.permissions.
-Require Import VST.concurrency.compiler.bounded_maps.
-Require Import VST.concurrency.addressFiniteMap.
+Require Import VST.concurrency.common.machine_semantics.
+Require Import VST.concurrency.common.permissions.
+Require Import VST.concurrency.common.bounded_maps.
+Require Import VST.concurrency.common.addressFiniteMap.
 
-Require Import VST.concurrency.scheduler.
+Require Import VST.concurrency.common.scheduler.
 Require Import Coq.Program.Program.
 
 Require Import VST.concurrency.safety.
@@ -27,18 +27,18 @@ Require Import VST.concurrency.safety.
 Require Import VST.concurrency.coinductive_safety.
 
 
-Require Import VST.concurrency.HybridMachineSig.
+Require Import VST.concurrency.common.HybridMachineSig.
 
 Require Import VST.veric.res_predicates.
 
-Require Import VST.concurrency.HybridMachineSig.
-Require Import VST.concurrency.HybridMachine.
+Require Import VST.concurrency.common.HybridMachineSig.
+Require Import VST.concurrency.common.HybridMachine.
 
-Require Import VST.concurrency.compiler.CoreSemantics_sum.
+Require Import VST.concurrency.CoreSemantics_sum.
 
 Require Import compcert.common.Smallstep.
 
-Require Import VST.concurrency.machine_semantics_lemmas.
+Require Import VST.concurrency.common.machine_semantics_lemmas.
 
 
 Section HybridSimulation.

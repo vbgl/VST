@@ -10,7 +10,6 @@ Require Import compcert.common.AST.
 Require Import compcert.common.Globalenvs.
 
 Require Import VST.sepcomp.mem_lemmas.
-Require Import VST.sepcomp.semantics.
 Require Import VST.sepcomp.semantics_lemmas.
 Require Import VST.sepcomp.wholeprog_simulations.
 Require Import VST.sepcomp.closed_safety.

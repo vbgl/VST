@@ -19,10 +19,10 @@ Require Import ExposedSmallstep.
 Require Import VST.concurrency.SantiagosTactics.
 Require Import VST.concurrency.MemoryEquivalences.
 Require Import VST.concurrency.x86_context.
-Require Import VST.concurrency.HybridMachineSig.
-Require Import VST.concurrency.HybridMachine.
-Require Import VST.concurrency.HybridMachineSig.
-Require Import VST.concurrency.HybridMachine_simulation.
+Require Import VST.concurrency.common.HybridMachineSig.
+Require Import VST.concurrency.common.HybridMachine.
+Require Import VST.concurrency.common.HybridMachineSig.
+Require Import VST.concurrency.common.HybridMachine_simulation.
 (*Require Import VST.concurrency.compiler_correct.*)
 Require Import VST.concurrency.compiler.CoreSemantics_sum.
 Require Import VST.concurrency.self_simulation.
@@ -32,7 +32,7 @@ Require Import VST.concurrency.Clight_self_simulation.
 Require Import VST.concurrency.Asm_self_simulation.
 *)
 
-Require Import VST.concurrency.permissions.
+Require Import VST.concurrency.common.permissions.
 
 (*This should be removed, change for some _core.v *)
 Require Import VST.concurrency.ClightCoreSemantincsForMachines.

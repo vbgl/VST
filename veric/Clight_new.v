@@ -1,4 +1,4 @@
-Require Import VST.concurrency.core_semantics.
+Require Import VST.concurrency.common.core_semantics.
 Require Import VST.veric.base.
 Require Import VST.veric.Clight_lemmas.
 Require compcert.common.Globalenvs.

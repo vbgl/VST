@@ -13,7 +13,7 @@ Require Import compcert.cfrontend.Ctypes.
 Require Import compcert.cfrontend.Cop.
 
 Require Import VST.sepcomp.mem_lemmas.
-Require Import VST.concurrency.core_semantics.
+Require Import VST.concurrency.common.core_semantics.
 Require Import VST.sepcomp.semantics_lemmas.
 Require Import VST.sepcomp.reach.
 Require Import VST.sepcomp.effect_semantics.

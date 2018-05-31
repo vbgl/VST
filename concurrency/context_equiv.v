@@ -3,7 +3,7 @@
 Require Import VST.sepcomp. Import SepComp.
 Require Import VST.concurrency.arguments.
 
-Require Import VST.concurrency.pos.
+Require Import VST.concurrency.common.pos.
 Require Import VST.concurrency.compcert_linking.
 Require Import VST.concurrency.rc_semantics.
 Require Import VST.concurrency.rc_semantics_lemmas.

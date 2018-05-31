@@ -11,7 +11,7 @@ Require Import compcert.common.AST.
 Require Import compcert.common.Globalenvs.
 
 Require Import VST.sepcomp.mem_lemmas.
-Require Import VST.concurrency.core_semantics.
+Require Import VST.concurrency.common.core_semantics.
 Require Import VST.sepcomp.semantics_lemmas.
 Require Import VST.sepcomp.structured_injections.
 Require Import VST.sepcomp.reach.
