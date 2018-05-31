@@ -96,7 +96,7 @@ SEPCOMP_FILES = \
   FiniteMaps.v \
   mem_lemmas.v mem_wd.v \
   nucular_semantics.v \
-  semantics.v semantics_lemmas.v \
+  semantics_lemmas.v \
   globalSep.v simulations.v \
   simulations_lemmas.v \
   structured_injections.v \
@@ -114,30 +114,14 @@ SEPCOMP_FILES = \
 
 # what is:  erasure.v context.v context_equiv.v jstep.v
 
-CONCUR_FILES= \
-  core_semantics.v memsem_lemmas.v \
-  addressFiniteMap.v cast.v compcert_imports.v \
-  compcert_threads_lemmas.v threadPool.v  \
-  semantics.v \
-  disjointness.v dry_context.v  \
-  dry_context.v \
-  dry_machine_lemmas.v dry_machine_step_lemmas.v \
-  Clight_bounds.v \
-  ClightSemantincsForMachines.v  \
-  JuicyMachineModule.v DryMachineSource.v \
-  erased_machine.v erasure_proof.v erasure_safety.v erasure_signature.v \
-  fineConc_safe.v inj_lemmas.v join_sm.v juicy_machine.v enums_equality.v  \
-  lksize.v \
-  main.v mem_obs_eq.v memory_lemmas.v permissions.v permjoin_def.v pos.v pred_lemmas.v \
-  bounded_maps.v \
-  rc_semantics.v rc_semantics_lemmas.v \
-  scheduler.v TheSchedule.v sepcomp.v seq_lemmas.v ssromega.v stack.v \
-  threads_lemmas.v wf_lemmas.v \
-  x86_inj.v x86_erasure.v x86_context.v fineConc_x86.v executions.v SC_erasure.v spinlocks.v \
-  sync_preds_defs.v sync_preds.v oracular_refinement.v \
+CONCUR_JUICY_FILES= \
+  cl_step_lemmas.v erasure_proof.v erasure_safety.v erasure_signature.v \
+  join_lemmas.v juicy_machine.v JuicyMachineModule.v \
+  resource_decay_lemmas.v resource_decay_join.v \
+  rmap_locking.v \
   semax_conc_pred.v semax_conc.v semax_to_juicy_machine.v \
   semax_invariant.v semax_initial.v \
-  semax_simlemmas.v cl_step_lemmas.v \
+  semax_simlemmas.v \
   semax_progress.v semax_preservation.v \
   semax_preservation_jspec.v \
   semax_preservation_local.v \
@@ -146,23 +130,55 @@ CONCUR_FILES= \
   semax_safety_makelock.v \
   semax_safety_freelock.v \
   semax_safety_spawn.v \
-  resource_decay_lemmas.v \
-  rmap_locking.v \
-  permjoin.v \
-  resource_decay_join.v join_lemmas.v coqlib5.v \
+  sync_preds_defs.v sync_preds.v
+
+CONCUR_COMMON_FILES= \
+  addressFiniteMap.v \
+  bounded_maps.v \
+  Clight_bounds.v ClightSemantincsForMachines.v  \
+  core_semantics.v \
+  dry_context.v \
+  dry_machine_lemmas.v dry_machine_step_lemmas.v \
+  DryMachineSource.v enums_equality.v \
+  erased_machine.v \
+  HybridMachine.v \
   konig.v safety.v \
-	reestablish.v \
-	lifting.v lifting_safety.v \
-linking_spec.v	\
+  lksize.v \
   machine_semantics.v machine_semantics_lemmas.v machine_simulation.v \
-  coinductive_safety.v CoreSemantics_sum.v \
-  self_simulation.v Clight_self_simulation.v Asm_self_simulation.v\
-	HybridMachine.v HybridMachine_simulation.v \
-  HybridMachine_simulation_proof.v tactics.v \
+  permissions.v permjoin_def.v pos.v permjoin.v \
+  scheduler.v \
+  semantics.v \
+  sepcomp.v \
+  ssromega.v \
+  tactics.v \
+  threadPool.v \
+  threads_lemmas.v \
+
+CONCUR_COMPILER_FILES= \
+  CoreSemantics_sum.v \
+#  self_simulation.v Clight_self_simulation.v Asm_self_simulation.v \
+#  lifting.v lifting_safety.v \
+#  compiler_correct.v
+
+CONCUR_FILES= \
+  memsem_lemmas.v \
+  cast.v compcert_imports.v \
+  disjointness.v \
+  join_sm.v  \
+  main.v memory_lemmas.v pred_lemmas.v \
+  # rc_semantics.v rc_semantics_lemmas.v \
+  # TheSchedule.v \
+  seq_lemmas.v stack.v \
+  wf_lemmas.v \
+  oracular_refinement.v \
+  coqlib5.v \
+	reestablish.v \
+linking_spec.v	\
+  coinductive_safety.v \
+  HybridMachine_simulation.v \
+  HybridMachine_simulation_proof.v \
   Clight_safety.v main_safety.v main.v \
-  compiler_correct.v
  # concurrent_machine.v dry_machine.v
- 
 
 PACO_FILES= \
   hpattern.v\
@@ -387,7 +403,6 @@ FILES = \
  $(TWEETNACL_FILES:%=tweetnacl20140427/%) \
  $(HMACDRBG_Files:%=hmacdrbg/%)
 # $(CCC26x86_FILES:%=ccc26x86/%) \
-# $(CONCUR_FILES:%=concurrency/%) \
 # $(DRBG_FILES:%=verifiedDrbg/spec/%)
 
 %_stripped.v: %.v
@@ -465,7 +480,7 @@ all: default_target files travis hmacdrbg tweetnacl aes
 msl:     _CoqProject version.vo $(MSL_FILES:%.v=msl/%.vo)
 sepcomp: _CoqProject $(CC_TARGET) $(SEPCOMP_FILES:%.v=sepcomp/%.vo)
 ccc26x86:   _CoqProject $(CCC26x86_FILES:%.v=ccc26x86/%.vo)
-concurrency: _CoqProject $(CC_TARGET) $(SEPCOMP_FILES:%.v=sepcomp/%.vo) $(CONCUR_FILES:%.v=concurrency/%.vo)
+concurrency: _CoqProject $(CC_TARGET) $(SEPCOMP_FILES:%.v=sepcomp/%.vo) $(CONCUR_FILES:%.v=concurrency/%.vo) $(CONCUR_JUICY_FILES:%.v=concurrency/juicy/%.vo) $(CONCUR_COMMON_FILES:%.v=concurrency/common/%.vo)  $(CONCUR_COMPILER_FILES:%.v=concurrency/compiler/%.vo)
 paco: _CoqProject $(PACO_FILES:%.v=concurrency/paco/src/%.vo)
 linking: _CoqProject $(LINKING_FILES:%.v=linking/%.vo)
 veric:   _CoqProject $(VERIC_FILES:%.v=veric/%.vo)

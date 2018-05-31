@@ -198,6 +198,3 @@ Section SelfSimulation.
 
 End SelfSimulation.
 Arguments code_inject {Sem core memcore_to_state}.
-  
-  
-  

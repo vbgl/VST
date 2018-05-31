@@ -6,14 +6,14 @@ Require Import compcert.common.Globalenvs.
 (* The concurrent machinery*)
 Require Import VST.concurrency.common.HybridMachineSig.
 Require Import VST.concurrency.common.semantics.
-Require Import VST.concurrency.common.HybridMachine. Import Concur.
+Require Import VST.concurrency.common.HybridMachine. (*Import Concur.*)
 Require Import VST.concurrency.common.scheduler.
 
 (* We assume, on each thread, a structured simulation *)
-Require Import VST.sepcomp.simulations. Import SM_simulation.
+Require Import VST.sepcomp.simulations. (*Import SM_simulation.*)
 
 (* We lift to a whole-program simulation on the dry VST.concurrency machine *)
-Require Import VST.sepcomp.wholeprog_simulations. Import Wholeprog_sim.
+Require Import VST.sepcomp.wholeprog_simulations. (*Import Wholeprog_sim.*)
 
 Require Import VST.sepcomp.event_semantics.
 

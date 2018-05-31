@@ -59,7 +59,7 @@ Require Import VST.concurrency.lifting_safety.
 (** ** Target machine*)
 Require Import VST.concurrency.x86_context.
 
-Require Import VST.concurrency.executions.
+(*Require Import VST.concurrency.executions.*)
 Require Import VST.concurrency.spinlocks.
 Require Import VST.concurrency.fineConc_x86.
 Require Import VST.concurrency.x86_safe.

@@ -70,8 +70,8 @@ Definition sum_func_option {Cs Ct Cs' Ct':Type}
   end.
 
 Definition at_external_sum (Cs Ct M: Type)
-           (sat_external: Cs -> M -> option (AST.external_function * AST.signature * list Values.val))
-           (tat_external: Ct -> M -> option (AST.external_function * AST.signature * list Values.val))
+           (sat_external: Cs -> M -> option (AST.external_function * list Values.val))
+           (tat_external: Ct -> M -> option (AST.external_function * list Values.val))
            :=
   sum_func sat_external tat_external.
 
@@ -101,11 +101,11 @@ Inductive corestep_sum {M Cs Ct}
 Lemma corestep_not_at_external_sum:
   forall M Cs Ct
     {scorestep: Cs -> M -> Cs -> M -> Prop} 
-    {sat_external: Cs -> M -> option (AST.external_function * AST.signature * list Values.val)}
+    {sat_external: Cs -> M -> option (AST.external_function * list Values.val)}
     (scorestep_not_at_external: forall (m : M) (q : Cs) (m' : M) (q' : Cs),
         scorestep q m q' m' -> sat_external q m = None)
     {tcorestep: Ct -> M -> Ct -> M -> Prop}
-    {tat_external: Ct -> M -> option (AST.external_function * AST.signature * list Values.val)}
+    {tat_external: Ct -> M -> option (AST.external_function * list Values.val)}
     (tcorestep_not_at_external: forall (m : M) (q : Ct) (m' : M) (q' : Ct),
         tcorestep q m q' m' -> tat_external q m = None),
   forall (m : M) (q : state_sum Cs Ct) (m' : M) (q' : state_sum Cs Ct),
