@@ -1167,11 +1167,13 @@ Fixpoint make_arguments (rs: regset) (m: mem) (al: list (rpair loc)) (lv: list v
           | Some (rs'', m'') => make_arg rs'' m'' lo (Vint (Int64.loword v'))
           | None => None
           end
-        | Vundef =>
-          match make_arg rs' m' hi Vundef with
-          | Some (rs'', m'') => make_arg rs'' m'' lo Vundef
-          | None => None
-          end
+        | Vundef => None
+        (* this doesn't work well with the way CompCert is handling comparisons. 
+           The erasure proof won't go through *)
+          (* match make_arg rs' m' hi Vundef with *)
+          (* | Some (rs'', m'') => make_arg rs'' m'' lo Vundef *)
+          (* | None => None *)
+          (* end *)
         | _ => None
         end
       end
