@@ -26,7 +26,7 @@ Require Import VST.concurrency.common.erased_machine.
 
 (*Semantics*)
 Require Import VST.sepcomp.event_semantics.
-Require Import VST.veric.Clight_sim.
+(*Require Import VST.veric.Clight_sim.*)
 Require Import VST.concurrency.Clight_coreSemantincsForMachines.
 Require Import VST.concurrency.common.Clight_bounds.
 

@@ -9,9 +9,9 @@ Require Import compcert.cfrontend.Clight.
 (*Require Import VST.sepcomp.semantics.
 Require Import VST.sepcomp.semantics_lemmas.*)
 Require Import VST.sepcomp.mem_lemmas.
-Require Import VST.concurrency.core_semantics.
+Require Import VST.concurrency.common.core_semantics.
 
-(*
+
 Inductive CC_core : Type :=
     CC_core_State : function ->
             statement -> cont -> env -> temp_env -> CC_core
@@ -116,7 +116,7 @@ Definition cl_at_external (c: CC_core) : option (external_function * list val) :
   | CC_core_State _ (Sbuiltin _ ef _ args) _ _ _ => Some (EF_external "stuck" stuck_signature, nil)
   | _ => None
 end.
-
+(*
 Definition cl_after_external (vret: option val) (c: CC_core) : option CC_core :=
    match c with
    | CC_core_Callstate (External ef _ _ _) _ k => 

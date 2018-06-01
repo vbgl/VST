@@ -11,22 +11,19 @@ Require Import compcert.common.AST.
 Require Import compcert.common.Globalenvs.
 
 Require Import VST.sepcomp.mem_lemmas.
-Require Import VST.concurrency.common.core_semantics.
-Require Import VST.sepcomp.semantics_lemmas.
 Require Import VST.sepcomp.structured_injections.
 Require Import VST.sepcomp.reach.
 Require Import VST.sepcomp.mem_wd.
 
-Require Import VST.sepcomp.effect_semantics. (*for specialization below*)
+Require Import VST.concurrency.machine_semantics.
+Require Import VST.concurrency.machine_semantics_lemmas.
 
+Module Machine_sim. Section Machine_sim.
 
-(*
-Module Wholeprog_sim. Section Wholeprog_sim.
+Context {G1 TID SCH TR C1 M1 G2 C2 M2 : Type}
 
-Context {G1 C1 M1 G2 C2 M2 : Type}
-
-(Sem1 : @CoreSemantics G1 C1 M1)
-(Sem2 : @CoreSemantics G2 C2 M2)
+(Sem1 : @ConcurSemantics G1 TID SCH TR C1 M1)
+(Sem2 : @ConcurSemantics G2 TID SCH TR C2 M2)
 
 (ge1 : G1)
 (ge2 : G2)
@@ -37,44 +34,66 @@ Variable ge_inv : G1 -> G2 -> Prop.
 
 Variable init_inv : meminj -> G1 -> list val -> M1 -> G2 -> list val -> M2 -> Prop.
 
-Variable halt_inv : (*SM_Injection*)meminj -> G1 -> val -> M1 -> G2 -> val -> M2 -> Prop.
+Variable halt_inv : meminj -> G1 -> val -> M1 -> G2 -> val -> M2 -> Prop.
 
-Record Wholeprog_sim :=
+Record Machine_sim  :=
 { core_data : Type
 ; match_state : core_data -> (*SM_Injection*)meminj -> C1 -> M1 -> C2 -> M2 -> Prop
 ; core_ord : core_data -> core_data -> Prop
 ; core_ord_wf : well_founded core_ord
 ; genv_inv : ge_inv ge1 ge2
 ; core_initial :
-    forall j c1 vals1 m1 vals2 m2 n,
-    initial_core Sem1 n m1 c1 main vals1 ->
+    forall j c1 vals1 m1 vals2 m2,
+    initial_machine Sem1 ge1 m1 c1 main vals1 ->
     init_inv j ge1 vals1 m1 ge2 vals2 m2 ->
     exists (*mu*) cd c2,
       (*as_inj mu = j*
-      /\*) initial_core Sem2 n m2 c2 main vals2
-      /\ match_state cd (*mu*)j c1 m1 c2 m2
-; core_diagram :
-    forall st1 m1 st1' m1',
-    corestep Sem1 ge1 st1 m1 st1' m1' ->
+      /\*) initial_machine Sem2 ge2 m2 c2 main vals2
+      /\ match_state cd j c1 m1 c2 m2
+; thread_diagram :
+    forall U st1 m1 st1' m1',
+    thread_step Sem1 ge1 U st1 m1 st1' m1' ->
     forall cd st2 mu m2,
     match_state cd mu st1 m1 st2 m2 ->
     exists st2', exists m2', exists cd', exists mu',
     match_state cd' mu' st1' m1' st2' m2'
-    /\ (corestep_plus Sem2 ge2 st2 m2 st2' m2'
-        \/ (corestep_star Sem2 ge2 st2 m2 st2' m2' /\ core_ord cd' cd))
-; core_halted :
-    forall cd mu c1 m1 c2 m2 v1,
+    /\ (thread_step_plus Sem2 ge2 U st2 m2 st2' m2'
+       \/ (thread_step_star Sem2 ge2 U st2 m2 st2' m2' /\ core_ord cd' cd))
+; machine_diagram :
+    forall U tr st1 m1 U' tr' st1' m1',
+    machine_step Sem1 ge1 U tr st1 m1 U' tr' st1' m1' ->
+    forall cd st2 mu m2,
+    match_state cd mu st1 m1 st2 m2 ->
+    exists st2', exists m2', exists cd', exists mu',
+    match_state cd' mu' st1' m1' st2' m2'
+    /\ machine_step Sem2 ge2 U tr st2 m2 U' tr' st2' m2'
+
+; thread_halted :
+    forall cd mu U c1 m1 c2 m2 v1,
     match_state cd mu c1 m1 c2 m2 ->
-    halted Sem1 c1 v1 ->
+    conc_halted Sem1 U c1 = Some v1 ->
     exists j v2,
-       halt_inv j ge1 (Vint v1) m1 ge2 (Vint v2) m2
-    /\ halted Sem2 c2 v2 }.
+       halt_inv j ge1 v1 m1 ge2 v2 m2
+       /\ conc_halted Sem2 U c2 = Some v2
 
-End Wholeprog_sim.
+(*TODO:
+  We will need something like this, but can't be used other than in machines!*)
+(*
+; thread_running:
+    forall cd mu c1 m1 c2 m2 ,
+      match_state cd mu c1 m1 c2 m2 ->
+      forall i, runing_thread Sem1 c1 i <-> runing_thread Sem2 c2 i
+*)
+ }.
 
-End Wholeprog_sim.
+End Machine_sim.
+
+End Machine_sim.
 
 
+
+
+(*
 Section CompCert_wholeprog_sim.
 
 Context {F1 V1 C1 F2 V2 C2 : Type}
@@ -291,10 +310,10 @@ eapply Wholeprog_sim.Build_Wholeprog_sim with
   eapply well_founded_sem_compose_ord_eq_eq. apply SIM12. apply SIM23. }
 { exists g2; split. apply genv_inv12. apply genv_inv23. }
 { (*Init*)
-  intros j13 c1 vals1 m1 vals3 m3 n Init1 IInv13.
+  intros j13 c1 vals1 m1 vals3 m3 Init1 IInv13.
   destruct IInv13 as [j12 [j23 [vals2 [m2 [Initial12 [Initial23 Hj]]]]]].
-  destruct (Init12 _ _ _ _ _ _ _ Init1 Initial12) as [cd12 [c2 [Init2 MS12]]].
-  destruct (Init23 _ _ _ _ _ _ _ Init2 Initial23) as [cd23 [c3 [Init3 MS23]]].
+  destruct (Init12 _ _ _ _ _ _ Init1 Initial12) as [cd12 [c2 [Init2 MS12]]].
+  destruct (Init23 _ _ _ _ _ _ Init2 Initial23) as [cd23 [c3 [Init3 MS23]]].
   exists ((cd12, Some c2), cd23), c3. split; trivial.
   exists c2, m2, j12, j23; auto. }
 { apply WP_corestep_trans. }

@@ -24,7 +24,7 @@ Require Import VST.concurrency.common.HybridMachine.
 Require Import VST.concurrency.common.HybridMachineSig.
 Require Import VST.concurrency.common.HybridMachine_simulation.
 (*Require Import VST.concurrency.compiler_correct.*)
-Require Import VST.concurrency.CoreSemantics_sum.
+Require Import VST.concurrency.compiler.CoreSemantics_sum.
 Require Import VST.concurrency.self_simulation.
 
 (*
