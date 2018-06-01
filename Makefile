@@ -142,7 +142,7 @@ CONCUR_COMMON_FILES= \
   DryMachineSource.v enums_equality.v \
   erased_machine.v \
   HybridMachine.v \
-  konig.v safety.v \
+  konig.v \
   lksize.v \
   machine_semantics.v machine_semantics_lemmas.v machine_simulation.v \
   permissions.v permjoin_def.v pos.v permjoin.v \
@@ -161,7 +161,7 @@ CONCUR_COMPILER_FILES= \
 #  compiler_correct.v
 
 CONCUR_FILES= \
-  memsem_lemmas.v \
+  safety.v memsem_lemmas.v \
   cast.v compcert_imports.v \
   disjointness.v \
   join_sm.v  \
