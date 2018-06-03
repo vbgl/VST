@@ -34,7 +34,7 @@ Require Import VST.veric.res_predicates.
 Require Import VST.concurrency.common.HybridMachineSig.
 Require Import VST.concurrency.common.HybridMachine.
 
-Require Import VST.concurrency.CoreSemantics_sum.
+Require Import VST.concurrency.compiler.CoreSemantics_sum.
 
 Require Import compcert.common.Smallstep.
 
@@ -43,10 +43,10 @@ Require Import VST.concurrency.common.machine_semantics_lemmas.
 
 Section HybridSimulation.
 
-  Variable (Sems Semt : Semantics).
+  Variable (Sems Semt : semantics.Semantics).
   Variable (hb1 hb2: option nat).
-  Variable (Resources : Resources_rec).
-  Variable (MatchCAsm: meminj -> corestate -> mem -> Asm_coop.state -> mem -> Prop).
+  (*Variable (Resources : Resources_rec).
+  Variable (MatchCAsm: meminj -> corestate -> mem -> Asm_coop.state -> mem -> Prop).*)
   
   Definition HM1:=HybridMachine hb1 Sems Semt.
   Definition HM2:=HybridMachine hb2 Sems Semt.
@@ -63,7 +63,7 @@ Section HybridSimulation.
   Variable ge1:G1.
   Variable ge2:G2.
   Variable (ge_inv: G1 -> G2 -> Prop). 
-  Record HybridMachine_simulation main init_inv:=
+  Record HybridMachine_simulation:=
     { core_data : Type
       ; match_state : core_data -> (*SM_Injection*)meminj -> C1 -> mem -> C2 -> mem -> Prop
       ; core_ord : core_data -> core_data -> Prop

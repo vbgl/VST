@@ -110,8 +110,8 @@ Qed.
 
   Theorem erasure_safety: forall ge cd j js ds m n,
       Erasure.match_state ge cd j js m ds m ->
-    jm_csafe js m n ->
-    HybridMachineSig.HybridCoarseMachine.csafe ds m n.
+      jm_csafe js m n ->
+      HybridMachineSig.HybridCoarseMachine.csafe ds m n.
   Proof.
     intros ? ? ? ? ? ? ? MATCH jsafe.
     inversion MATCH. subst.
