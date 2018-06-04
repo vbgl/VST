@@ -130,7 +130,6 @@ Module HybridMachineSig.
   (** Used to erase permissions of the machine when needed, e.g. fine
   machine erases max permissions, bare machine erases all permissions
   *)
-  
   Class DiluteMem :=
     { diluteMem: mem -> mem;
       diluteMem_valid: forall m,
@@ -139,7 +138,7 @@ Module HybridMachineSig.
   
   Section HybridMachineSig.
     
-    Variable n: nat.
+    Variable n: option nat.
     Context {resources: Resources}
             {Sem: Semantics}
             {ThreadPool : ThreadPool.ThreadPool}
@@ -158,7 +157,6 @@ Module HybridMachineSig.
         (** The thread pool respects the memory*)
         ; mem_compatible: thread_pool -> mem -> Prop
         ; invariant: thread_pool -> Prop
-
         ; install_perm: forall {ms m tid},
             mem_compatible ms m -> containsThread ms tid -> mem -> Prop
                                      

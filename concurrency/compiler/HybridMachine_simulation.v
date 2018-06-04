@@ -40,8 +40,9 @@ Require Import compcert.common.Smallstep.
 Require Import VST.concurrency.common.machine_semantics_lemmas.
 
 
-Section HybridSimulation.
+Section HybridSimulation. 
 
+  (*
   Variable (Sems Semt : semantics.Semantics).
   Variable (hb1 hb2: option nat).
   (*Variable (Resources : Resources_rec).
@@ -61,13 +62,17 @@ Section HybridSimulation.
   Notation G2:= (semG (Sem hb2 Sems Semt)).
   Variable ge1:G1.
   Variable ge2:G2.
-  Variable (ge_inv: G1 -> G2 -> Prop). 
+  Variable (ge_inv: G1 -> G2 -> Prop). *)
+
+  Context (G TID SCH TR SC TC : Type).
+  Variable SourceHybridMachine: @ConcurSemantics G TID SCH TR SC mem.
+  Variable TargetHybridMachine: @ConcurSemantics G TID SCH TR TC mem.
+  
   Record HybridMachine_simulation:=
-    { core_data : Type
-      ; match_state : core_data -> (*SM_Injection*)meminj -> C1 -> mem -> C2 -> mem -> Prop
-      ; core_ord : core_data -> core_data -> Prop
+    { index : Type
+      ; match_state : index -> meminj -> SC -> mem -> TC -> mem -> Prop
+      ; core_ord : index -> index -> Prop
       ; core_ord_wf : well_founded core_ord
-      ; genv_inv : ge_inv ge1 ge2
     (*  ; core_initial :
           forall j c1 vals1 m1 vals2 m2,
             initial_machine hb1 Sem1 Sem2 ge1 main vals1 = Some c1 ->
@@ -77,33 +82,31 @@ Section HybridSimulation.
       /\*) initial_machine Sem2 ge2 main vals2 = Some c2
            /\ match_state cd j c1 m1 c2 m2*)
       ; thread_diagram :
-          forall U st1 m1 st1' m1',
-            thread_step hb1 Sem1 Sem2 ge1 U st1 m1 st1' m1' ->
+          forall ge U st1 m1 st1' m1',
+            thread_step SourceHybridMachine ge U st1 m1 st1' m1' ->
             forall cd st2 mu m2,
               match_state cd mu st1 m1 st2 m2 ->
               exists st2', exists m2', exists cd', exists mu',
                       match_state cd' mu' st1' m1' st2' m2'
-                      /\ (thread_step_plus Sem2 ge2 U st2 m2 st2' m2'
-               \/ (thread_step_star Sem2 ge2 U st2 m2 st2' m2' /\ core_ord cd' cd))
+                      /\ (thread_step_plus (TargetHybridMachine) ge U st2 m2 st2' m2'
+               \/ (thread_step_star (TargetHybridMachine) ge U st2 m2 st2' m2' /\ core_ord cd' cd))
       ; machine_diagram :
-          forall U tr st1 m1 U' tr' st1' m1',
-            machine_step hb1 Sem1 Sem2 U tr st1 m1 U' tr' st1' m1' ->
+          forall ge U tr st1 m1 U' tr' st1' m1',
+            machine_step SourceHybridMachine ge U tr st1 m1 U' tr' st1' m1' ->
             forall cd st2 mu m2,
               match_state cd mu st1 m1 st2 m2 ->
               exists st2', exists m2', exists cd', exists mu',
                       match_state cd' mu' st1' m1' st2' m2'
-                      /\ machine_step Sem2 ge2 U tr st2 m2 U' tr' st2' m2'
+                      /\ machine_step (TargetHybridMachine) ge U tr st2 m2 U' tr' st2' m2'
       ; thread_halted :
           forall cd mu U c1 m1 c2 m2 v1,
             match_state cd mu c1 m1 c2 m2 ->
-            conc_halted Sem1 U c1 = Some v1 ->
-            exists j v2,
-              halt_inv j ge1 v1 m1 ge2 v2 m2
-              /\ conc_halted Sem2 U c2 = Some v2
+            conc_halted SourceHybridMachine U c1 = Some v1 ->
+            exists v2,
+              conc_halted TargetHybridMachine U c2 = Some v2
       ; thread_running:
           forall cd mu c1 m1 c2 m2 ,
             match_state cd mu c1 m1 c2 m2 ->
-            forall i, runing_thread Sem1 c1 i <-> runing_thread Sem2 c2 i
-            (* runing_thread Sem1 c1 = runing_thread Sem2 c2 *)
+            forall i, running_thread SourceHybridMachine c1 i <-> running_thread TargetHybridMachine c2 i
  }.
                                       
