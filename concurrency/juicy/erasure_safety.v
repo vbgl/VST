@@ -1,36 +1,46 @@
+
+(** Erasure Safety *)
+
+(** Derive safety from the simulations.
+    Erasure proven in [erasure_proof.v] and [erasure_signature.v]
+    is stated as a simulation. Here we prove that the simulation
+    implies safety.
+ *)
+
+(** *Imports*)
+
+(* This file uses Proof Irrelevance: 
+   forall (P : Prop) (p1 p2 : P), p1 = p2. *)
+Require Import ProofIrrelevance.
+
+(* CompCert imports*)
 Require Import compcert.common.Memory.
 
-
+(* VST imports *)
 Require Import VST.veric.compcert_rmaps.
 Require Import VST.veric.juicy_mem.
 Require Import VST.veric.res_predicates.
 
-(*IM using proof irrelevance!*)
-Require Import ProofIrrelevance.
-
-(* The concurrent machinery*)
+(* Concurrency Imports *)
 Require Import VST.concurrency.common.HybridMachineSig.
 Require Import VST.concurrency.juicy.juicy_machine. Import Concur.
 Require Import VST.concurrency.common.HybridMachine.
 Require Import VST.concurrency.common.lksize.
 Require Import VST.concurrency.common.permissions.
+(*Erasure simulation*)
+Require Import VST.concurrency.juicy.erasure_signature.
+Require Import VST.concurrency.juicy.erasure_proof.
+Import addressFiniteMap.
 
 (*SSReflect*)
 From mathcomp.ssreflect Require Import ssreflect ssrbool ssrnat eqtype seq.
 Require Import Coq.ZArith.ZArith.
 Require Import PreOmega.
 Require Import VST.concurrency.common.ssromega. (*omega in ssrnat *)
-
-(*The simulations*)
-Require Import VST.concurrency.common.machine_simulation.
-
-(*General erasure*)
-Require Import VST.concurrency.juicy.erasure_signature.
-Require Import VST.concurrency.juicy.erasure_proof.
-
 From mathcomp.ssreflect Require Import ssreflect seq.
 
-Import addressFiniteMap.
+(*The simulations*)
+(* Require Import VST.concurrency.common.machine_simulation.*)
 
 Set Bullet Behavior "Strict Subproofs".
 
@@ -110,8 +120,8 @@ Qed.
 
   Theorem erasure_safety: forall ge cd j js ds m n,
       Erasure.match_state ge cd j js m ds m ->
-    jm_csafe js m n ->
-    HybridMachineSig.HybridCoarseMachine.csafe ds m n.
+      jm_csafe js m n ->
+      HybridMachineSig.HybridCoarseMachine.csafe ds m n.
   Proof.
     intros ? ? ? ? ? ? ? MATCH jsafe.
     inversion MATCH. subst.
@@ -201,8 +211,14 @@ Section DrySafety.
     destruct (s n tt) as (jm & ? & ? & ? & ? & ? & ?); auto.
   Qed.
 
+
+  (**  Theorem to export.
+       Explanation: 
+       
+   *)
   Theorem dry_safety_initial_state (sch : HybridMachineSig.schedule) (n : nat) :
-    HybridMachineSig.HybridCoarseMachine.csafe (sch, [::],
+    HybridMachineSig.HybridCoarseMachine.csafe
+      (sch, [::],
       DryHybridMachine.initial_machine(Sem := Sem) (getCurPerm init_mem)
         (initial_corestate CPROOF)) init_mem n.
   Proof.

@@ -1,15 +1,28 @@
+
+(** Erasure Proof *)
+
+(** This file contains the proof of erasure between 
+    juicy and dry programs
+ *)
+
+
+
+(** *Imports*)
+
+(* This file uses Proof Irrelevance: 
+   forall (P : Prop) (p1 p2 : P), p1 = p2. *)
+Require Import ProofIrrelevance.
+
+(* CompCert imports *)
 Require Import compcert.common.Memory.
 
-
+(* VST imports *)
 Require Import VST.veric.compcert_rmaps.
 Require Import VST.veric.juicy_mem.
 Require Import VST.veric.res_predicates.
 
-(*IM using proof irrelevance!*)
-Require Import ProofIrrelevance.
-
-(* The concurrent machinery*)
-Require Import VST.concurrency.common.threadPool.
+(* Concurrency Imports *)
+Require Import VST.concurrency.common.threadPool. Import addressFiniteMap.
 Require Import VST.concurrency.common.HybridMachineSig.
 Require Import VST.concurrency.juicy.juicy_machine.
 Require Import VST.concurrency.common.HybridMachine.
@@ -17,26 +30,18 @@ Require Import VST.concurrency.common.dry_machine_lemmas.
 Require Import VST.concurrency.common.lksize.
 Require Import VST.concurrency.common.permissions.
 Require Import VST.concurrency.juicy.sync_preds.
+(*The semantics*)
+Require Import VST.concurrency.juicy.JuicyMachineModule.
+Require Import VST.concurrency.common.DryMachineSource.
+(*Erasure specification*)
+Require Import VST.concurrency.juicy.erasure_signature.
 
 (*SSReflect*)
 From mathcomp.ssreflect Require Import ssreflect ssrfun ssrbool ssrnat eqtype seq.
 Require Import Coq.ZArith.ZArith.
 Require Import PreOmega.
 Require Import VST.concurrency.common.ssromega. (*omega in ssrnat *)
-
-(*The simulations*)
-Require Import VST.sepcomp.wholeprog_simulations.
-
-(*The semantics*)
-Require Import VST.concurrency.juicy.JuicyMachineModule.
-Require Import VST.concurrency.common.DryMachineSource.
-
-(*General erasure*)
-Require Import VST.concurrency.juicy.erasure_signature.
-
 From mathcomp.ssreflect Require Import ssreflect seq.
-
-Import addressFiniteMap.
 
 Set Bullet Behavior "Strict Subproofs".
 
@@ -69,22 +74,12 @@ Module Parching <: ErasureSig.
 
   Import event_semantics threadPool.ThreadPool.
 
-
-
   (** * Match relation between juicy and dry state : *)
   (* 1-2. Same threads are contained in each state:
      3.   Threads have the same c
      4-5.   Threads have the same permissions up to erasure
      6.   the locks are in the same addresses.
      7-8-9. Lock contents match up to erasure. *)
-  (*Definition lock_perm_of_res (r: resource) :=
-    (*  perm_of_sh (res_retain' r) (valshare r). *)
-    match r with
-    | YES rsh sh (LK _) _ => perm_of_sh rsh (pshare_sh sh)
-    | YES rsh sh (CT _) _ => perm_of_sh rsh (pshare_sh sh)
-    | _ => None
-    end.*)
-
   Inductive match_st' : jstate ->  dstate -> Prop:=
     MATCH_ST: forall (js:jstate) (ds:dstate)
                 (mtch_cnt: forall {tid},  containsThread js tid -> containsThread ds tid )
@@ -123,6 +118,7 @@ Module Parching <: ErasureSig.
            match_st js ds ->
            containsThread js tid -> containsThread ds tid.
   Proof. intros ? ? ? MTCH. inversion MTCH. apply mtch_cnt. Qed.
+  
   Lemma MTCH_cnt': forall {js tid ds},
            match_st js ds ->
            containsThread ds tid -> containsThread js tid.
@@ -166,7 +162,6 @@ Module Parching <: ErasureSig.
          f_equal; f_equal.
          eapply proof_irrelevance.
   Qed.
-
 
   Lemma MTCH_locks: forall ds js laddr rmap,
       match_st js ds ->
@@ -695,7 +690,6 @@ Module Parching <: ErasureSig.
         intros. setoid_rewrite OrdinalPool.find_empty in H2; inversion H2.
     Qed.
 
-    (*Lemma to prove MTCH_latestThread*)
     Lemma contains_iff_num:
       forall (js : jstate) (ds : dstate)
         (Hcnt: forall i, containsThread js i <-> containsThread ds i),
@@ -924,6 +918,11 @@ Module Parching <: ErasureSig.
         eapply mtch_locksRes0; eassumption.
     Qed.
 
+
+
+    (** *Inital state simulation*)
+    (* Erasure of the juicy initial_state is the dry initial_state AND
+       the two are related by a Match relation. *)
     Lemma init_diagram:
       forall (j : Values.Val.meminj) (U:schedule) (js : jstate)
         (vals : list Values.val) (m : Mem.mem) rmap pmap main h,
@@ -1000,27 +999,185 @@ Module Parching <: ErasureSig.
       rewrite Hofs; simpl.
       apply perm_of_readable'; auto.
   Qed.
+  
+  (** *SyncStep simulation*)
+  (** Proof of the step diagram when the step is a synchronization step.   
+      TODO: Split the proof in each diagram.
+   *)
 
-  Lemma conc_step_diagram:
-    forall m m' U js js' ds i ev
-      (MATCH: match_st js ds)
-      (dinv: invariant ds)
-      (Hi: containsThread js i)
-      (Hcmpt: mem_compatible js m)
-      (HschedN: schedPeek U = Some i)
+  Inductive deltaMap_cases (dmap:delta_map) b ofs:=
+  | DMAPS df p:  dmap ! b = Some df -> df ofs = Some p -> deltaMap_cases dmap b ofs
+  | DNONE1 df:  dmap ! b = Some df -> df ofs = None -> deltaMap_cases dmap b ofs
+  | DNONE2:  dmap ! b = None -> deltaMap_cases dmap b ofs.
+
+  Lemma deltaMap_dec: forall dmap b ofs, deltaMap_cases dmap b ofs.
+  Proof.
+    intros. destruct (dmap ! b) eqn:H1; [destruct (o ofs) eqn:H2 | ]; econstructor; eassumption.
+  Qed.
+ 
+  Lemma permMapsDisjoint2_empty: forall rmap,
+      permMapsDisjoint2 (empty_map, empty_map) rmap.
+  Proof.
+    intros rmap.
+    split; simpl;
+      apply permDisjoint_permMapsDisjoint;
+      intros b ofs.
+    - rewrite empty_map_spec.
+      apply permDisjoint_None.
+    - rewrite empty_map_spec.
+      apply permDisjoint_None.
+  Qed.
+  
+  Lemma po_None1: forall p, Mem.perm_order'' None p -> p = None.
+  Proof. intros. simpl in H. destruct p; inversion H; reflexivity. Qed.
+
+  (*Adding a thread preserves the invariant! *)
+  Lemma addThrd_inv: forall (ds : dstate) vf arg new_perm,
+      invariant ds  ->
+      (forall i cnti,
+          permMapsDisjoint2 new_perm (@getThreadR _ _ _ i ds cnti)) ->
+      (forall l rm,  lockRes ds l = Some rm ->
+                permMapsDisjoint2 new_perm rm) ->
+      permMapCoherence new_perm.1 new_perm.2 ->
+      (forall i cnti,
+          permMapCoherence new_perm.1 (@getThreadR _ _ _ i ds cnti).2) ->
+      (forall i cnti,
+          permMapCoherence (@getThreadR _ _ _ i ds cnti).1 new_perm.2) ->
+      (forall l rm,  lockRes ds l = Some rm ->
+                permMapCoherence new_perm.1 rm.2) ->
+      (forall l rm,  lockRes ds l = Some rm ->
+                permMapCoherence rm.1 new_perm.2) ->
+      invariant (addThread ds vf arg new_perm).
+  Proof.
+    move => ds vf arg new_perm dinv
+              DISJ_RES DISJ_LOCK COH_SELF COH_RES1
+              COH_RES2 COH_LOCK1 COH_LOCK2.
+    constructor.
+    - move => i j cnti cntj neq.
+      assert (cntj':=cntj).
+      assert (cnti':=cnti).
+      apply cntAdd' in cnti'.
+      apply cntAdd' in cntj'.
+      destruct cntj' as [[H1 H2] | H1];
+        destruct cnti' as [[H3 H4] | H3]; subst;
+          try solve[exfalso; apply neq; reflexivity].
+      + rewrite (gsoAddRes _ _ _ _ H1) .
+        rewrite (gsoAddRes _ _ _ _ H3).
+        inversion dinv; eauto.
+      + rewrite (gsoAddRes _ _ _ _ H1).
+        erewrite gssAddRes; auto.
+      + rewrite (gsoAddRes _ _ _ _ H3).
+        apply permMapsDisjoint2_comm.
+        erewrite gssAddRes; auto.
+    - move => l1 l2 mr1 mr2.
+      rewrite gsoAddLPool.
+      rewrite gsoAddLPool.
+      inversion dinv; eauto.
+    - move => i l cnti rm.
+      rewrite gsoAddLPool.
+      assert (cnti':=cnti).
+      apply cntAdd' in cnti'.
+      destruct cnti' as [[H1 H2] | H1].
+      + rewrite (gsoAddRes _ _ _ _ H1).
+        inversion dinv; eauto.
+      + erewrite gssAddRes; eauto.
+    - move => i cnti; split.
+      + assert (cnti':=cnti).
+        apply cntAdd' in cnti'.
+        destruct cnti' as [[H1 H2] | H1].
+        * inversion dinv.
+          move: (thread_data_lock_coh i H1)=> [] AA _.
+          move => j cntj.
+          assert (cntj':=cntj).
+          apply cntAdd' in cntj'.
+          destruct cntj' as [[H3 H4] | H3].
+          -- rewrite (gsoAddRes _ _ _ _ H1) .
+             rewrite (gsoAddRes _ _ _ _ H3).
+             eapply AA.
+          -- rewrite (gsoAddRes _ _ _ _ H1) .
+             rewrite (gssAddRes); auto.
+        * move => j cntj.
+          assert (cntj':=cntj).
+          apply cntAdd' in cntj'.
+          destruct cntj' as [[H3 H4] | H3].
+          -- rewrite (gsoAddRes _ _ _ _ H3).
+             rewrite (gssAddRes); auto.
+          -- do 2 (rewrite (gssAddRes); auto).
+      + assert (cnti':=cnti).
+        apply cntAdd' in cnti'.
+        destruct cnti' as [[H1 H2] | H1].
+        * inversion dinv.
+          move: (thread_data_lock_coh i H1)=> [] _ BB.
+          move => l rm.
+          rewrite (gsoAddRes _ _ _ _ H1).
+          rewrite gsoAddLPool.
+          eauto.
+        * move => l rm.
+          rewrite (gssAddRes); auto.
+          rewrite gsoAddLPool.
+          eauto.
+    - move=> l rm;
+              rewrite gsoAddLPool => isLock.
+      inversion dinv.
+      move: (locks_data_lock_coh l rm isLock)=> [] AA BB.
+      split.
+      + move => j cntj.
+        assert (cntj':=cntj).
+        apply cntAdd' in cntj'.
+        destruct cntj' as [[H3 H4] | H3].
+        -- rewrite (gsoAddRes _ _ _ _ H3).
+           inversion dinv; eauto.
+        -- (rewrite (gssAddRes); auto).
+           eauto.
+      + move => l2 rm2;
+                 rewrite gsoAddLPool => isLock2.
+        eauto.
+    - move => b ofs.
+      inversion dinv; simpl; eauto.
+      apply lockRes_valid.
+  Qed.
+
+  Lemma same_shape_map:
+    forall {A B} m f,
+      @bounded_maps.same_shape A B
+                               (PTree.map f m) m.
+  Proof.
+    intros until m.
+    unfold PTree.map.
+    pose (i:=1%positive); fold i.
+    generalize i; clear i.
+    induction m.
+    - intros;
+        unfold bounded_maps.same_shape;
+        simpl; auto.
+    - intros;
+        unfold bounded_maps.same_shape;
+        split; [| split].
+      + destruct o; simpl; auto.
+      + eapply IHm1.
+      + eapply IHm2.
+  Qed.
+  
+  (* Proof of the step diagram when the step is a synchronization step *)
+  Lemma sync_step_diagram:
+    forall (m m':Memory.mem) (U:seq nat) js js' ds i ev
+          (MATCH: match_st js ds)
+          (dinv: invariant ds)
+            (Hi: containsThread js i)
+            (Hcmpt: mem_compatible js m)
+            (HschedN: schedPeek U = Some i)
       (Htstep:  syncStep true Hi Hcmpt js' m' ev),
       exists ds' : dstate, exists ev',
-        invariant ds' /\
-        match_st js' ds' /\
-        DryHybridMachine.syncStep true (MTCH_cnt MATCH Hi) (MTCH_compat _ _ _ MATCH Hcmpt) ds' m'
-                      ev'.
+        invariant ds' /\ match_st js' ds' /\
+        syncStep true (MTCH_cnt MATCH Hi) (MTCH_compat _ _ _ MATCH Hcmpt) ds' m' ev'.
   Proof.
-
     intros.
     inversion Htstep; try subst.
-
+    
     (* step_acquire  *)
-    {
+    { 
+        
+        
     assert (Htid':= MTCH_cnt MATCH Hi).
     pose (inflated_delta1:=
             fun loc => match (d_phi @ loc ) with
@@ -1054,15 +1211,6 @@ Module Parching <: ErasureSig.
               destruct (d_phi @ l); try solve[intros HH; inversion HH; reflexivity].
               destruct ( proj_sumbool (Share.EqDec_share sh0 Share.bot));
                 [congruence| intros HH; inversion HH; reflexivity]. }
-
-
-            Inductive deltaMap_cases (dmap:delta_map) b ofs:=
-            | DMAPS df p:  dmap ! b = Some df -> df ofs = Some p -> deltaMap_cases dmap b ofs
-            | DNONE1 df:  dmap ! b = Some df -> df ofs = None -> deltaMap_cases dmap b ofs
-            | DNONE2:  dmap ! b = None -> deltaMap_cases dmap b ofs.
-
-            Lemma deltaMap_dec: forall dmap b ofs, deltaMap_cases dmap b ofs.
-            Proof. intros. destruct (dmap ! b) eqn:H1; [destruct (o ofs) eqn:H2 | ]; econstructor; eassumption. Qed.
 
             assert (virtue_correct1: forall b ofs,
                        (computeMap (getThreadR Htid').1 virtue1)  !! b ofs
@@ -1423,18 +1571,6 @@ Module Parching <: ErasureSig.
             { apply updLock_inv.
               - assumption.
               - intros.
-                Lemma permMapsDisjoint2_empty: forall rmap,
-                    permMapsDisjoint2 (empty_map, empty_map) rmap.
-                Proof.
-                  intros rmap.
-                  split; simpl;
-                  apply permDisjoint_permMapsDisjoint;
-                  intros b ofs.
-                  - rewrite empty_map_spec.
-                    apply permDisjoint_None.
-                  - rewrite empty_map_spec.
-                    apply permDisjoint_None.
-                Qed.
                 apply permMapsDisjoint2_empty.
 
               - intros.
@@ -1593,28 +1729,7 @@ Module Parching <: ErasureSig.
       10: eassumption.
       + (*boundedness*)
         split.
-        *
-          Lemma same_shape_map:
-            forall {A B} m f,
-              @bounded_maps.same_shape A B
-                                       (PTree.map f m) m.
-          Proof.
-            intros until m.
-            unfold PTree.map.
-            pose (i:=1%positive); fold i.
-            generalize i; clear i.
-            induction m.
-            - intros;
-              unfold bounded_maps.same_shape;
-              simpl; auto.
-            - intros;
-              unfold bounded_maps.same_shape;
-              split; [| split].
-              + destruct o; simpl; auto.
-              + eapply IHm1.
-              + eapply IHm2.
-          Qed.
-          eapply bounded_maps.sub_map_and_shape;
+        * eapply bounded_maps.sub_map_and_shape;
           [eapply same_shape_map|].
 
           move=> p f1 HH.
@@ -1642,8 +1757,6 @@ Module Parching <: ErasureSig.
           }
           { move: (Concur.compat_lockLT
                         Hcmpt _ His_unlocked p b0).
-            Lemma po_None1: forall p, Mem.perm_order'' None p -> p = None.
-            Proof. intros. simpl in H. destruct p; inversion H; reflexivity. Qed.
 
             rewrite /PMap.get HH' is_none => /po_None1 //.
             }
@@ -1734,6 +1847,7 @@ Module Parching <: ErasureSig.
              assumption.
     }
 
+    
     (* step_release *)
     {
 
@@ -2930,113 +3044,7 @@ Module Parching <: ErasureSig.
       split ;[|split].
       { (* invariant *)
         cut (invariant ds_upd).
-        {
-          Lemma addThrd_inv: forall (ds : dstate) vf arg new_perm,
-            invariant ds  ->
-            (forall i cnti,
-                permMapsDisjoint2 new_perm (@getThreadR _ _ _ i ds cnti)) ->
-            (forall l rm,  lockRes ds l = Some rm ->
-                      permMapsDisjoint2 new_perm rm) ->
-            permMapCoherence new_perm.1 new_perm.2 ->
-            (forall i cnti,
-                permMapCoherence new_perm.1 (@getThreadR _ _ _ i ds cnti).2) ->
-            (forall i cnti,
-                permMapCoherence (@getThreadR _ _ _ i ds cnti).1 new_perm.2) ->
-            (forall l rm,  lockRes ds l = Some rm ->
-                       permMapCoherence new_perm.1 rm.2) ->
-            (forall l rm,  lockRes ds l = Some rm ->
-                       permMapCoherence rm.1 new_perm.2) ->
-            invariant (addThread ds vf arg new_perm).
-          Proof.
-            move => ds vf arg new_perm dinv
-                      DISJ_RES DISJ_LOCK COH_SELF COH_RES1
-                      COH_RES2 COH_LOCK1 COH_LOCK2.
-            constructor.
-            - move => i j cnti cntj neq.
-              assert (cntj':=cntj).
-              assert (cnti':=cnti).
-              apply cntAdd' in cnti'.
-              apply cntAdd' in cntj'.
-              destruct cntj' as [[H1 H2] | H1];
-                destruct cnti' as [[H3 H4] | H3]; subst;
-              try solve[exfalso; apply neq; reflexivity].
-              + rewrite (gsoAddRes _ _ _ _ H1) .
-                rewrite (gsoAddRes _ _ _ _ H3).
-                inversion dinv; eauto.
-              + rewrite (gsoAddRes _ _ _ _ H1).
-                erewrite gssAddRes; auto.
-              + rewrite (gsoAddRes _ _ _ _ H3).
-                apply permMapsDisjoint2_comm.
-                erewrite gssAddRes; auto.
-            - move => l1 l2 mr1 mr2.
-              rewrite gsoAddLPool.
-              rewrite gsoAddLPool.
-              inversion dinv; eauto.
-            - move => i l cnti rm.
-              rewrite gsoAddLPool.
-              assert (cnti':=cnti).
-              apply cntAdd' in cnti'.
-              destruct cnti' as [[H1 H2] | H1].
-              + rewrite (gsoAddRes _ _ _ _ H1).
-                inversion dinv; eauto.
-              + erewrite gssAddRes; eauto.
-            - move => i cnti; split.
-              + assert (cnti':=cnti).
-                apply cntAdd' in cnti'.
-                destruct cnti' as [[H1 H2] | H1].
-                * inversion dinv.
-                  move: (thread_data_lock_coh i H1)=> [] AA _.
-                  move => j cntj.
-                  assert (cntj':=cntj).
-                  apply cntAdd' in cntj'.
-                  destruct cntj' as [[H3 H4] | H3].
-                  -- rewrite (gsoAddRes _ _ _ _ H1) .
-                     rewrite (gsoAddRes _ _ _ _ H3).
-                     eapply AA.
-                  -- rewrite (gsoAddRes _ _ _ _ H1) .
-                     rewrite (gssAddRes); auto.
-                * move => j cntj.
-                  assert (cntj':=cntj).
-                  apply cntAdd' in cntj'.
-                  destruct cntj' as [[H3 H4] | H3].
-                  -- rewrite (gsoAddRes _ _ _ _ H3).
-                     rewrite (gssAddRes); auto.
-                  -- do 2 (rewrite (gssAddRes); auto).
-              + assert (cnti':=cnti).
-                apply cntAdd' in cnti'.
-                destruct cnti' as [[H1 H2] | H1].
-                * inversion dinv.
-                  move: (thread_data_lock_coh i H1)=> [] _ BB.
-                  move => l rm.
-                  rewrite (gsoAddRes _ _ _ _ H1).
-                  rewrite gsoAddLPool.
-                  eauto.
-                * move => l rm.
-                  rewrite (gssAddRes); auto.
-                  rewrite gsoAddLPool.
-                  eauto.
-            - move=> l rm;
-                rewrite gsoAddLPool => isLock.
-              inversion dinv.
-              move: (locks_data_lock_coh l rm isLock)=> [] AA BB.
-              split.
-              + move => j cntj.
-                assert (cntj':=cntj).
-                apply cntAdd' in cntj'.
-                destruct cntj' as [[H3 H4] | H3].
-                -- rewrite (gsoAddRes _ _ _ _ H3).
-                   inversion dinv; eauto.
-                -- (rewrite (gssAddRes); auto).
-                   eauto.
-              + move => l2 rm2;
-                  rewrite gsoAddLPool => isLock2.
-                eauto.
-            - move => b ofs.
-              inversion dinv; simpl; eauto.
-              apply lockRes_valid.
-          Qed.
-
-          (*This is a new lemma that is missing.*)
+        { (*This is a new lemma that is missing.*)
           intro HH; apply addThrd_inv.
           - assumption.
           - move=> j cntj .
@@ -4499,111 +4507,115 @@ Here be dragons
   Qed.
 
 
+  (* 'Decaying memory' preserves invariant.
+     Note that the invariant doesnt depend on the "core" c.
+     so we can cahnge it to any c' 
+  *)
+  Lemma step_decay_invariant:
+    forall (tp : dstate)  (m : Mem.mem) i
+      (Hi : containsThread tp i) c m1 m1' c'
+      (Hinv: invariant tp)
+      (Hcompatible: DryHybridMachine.mem_compatible tp m)
+      (Hrestrict_pmap :restrPermMap ((DryHybridMachine.compat_th _ _ Hcompatible) Hi).1 = m1)
+      (Hdecay: decay m1 m1')
+      (Hcode: getThreadC Hi = Krun c),
+      invariant
+        (updThread Hi (Krun c')
+                   (getCurPerm m1', (getThreadR Hi).2)).
+  Proof.
+    intros.
+    
+    assert (CASES: forall b0 ofs0,
+               Mem.perm_order''
+                 ((getCurPerm m1) !! b0 ofs0) ((getCurPerm m1') !! b0 ofs0) \/
+               ~ Mem.valid_block m b0).
+    { move=> b ofs.
+      rewrite getCurPerm_correct getCurPerm_correct /permission_at /=.
+      destruct (Hdecay b ofs) as [_ VAL].
+      destruct (valid_block_dec m1 b); [left|right].
+      - move :( VAL v) => [] /(_ Cur).
+        move => [] -> -> //.
+        move => -> . apply po_refl.
+      - intros HH; apply n.
+        subst m1;
+          eapply restrPermMap_valid; eauto.
+    }
+    assert (m1_spec: forall b0 ofs0,
+               (getCurPerm m1) !! b0 ofs0 = (getThreadR Hi).1 !! b0 ofs0).
+    { move=> b ofs.
+      subst m1.
+      rewrite getCurPerm_correct restrPermMap_Cur //. }
 
-              Lemma step_decay_invariant:
-                forall (tp : dstate)  (m : Mem.mem) i
-                     (Hi : containsThread tp i) c m1 m1' c'
-                     (Hinv: invariant tp)
-                     (Hcompatible: DryHybridMachine.mem_compatible tp m)
-                     (Hrestrict_pmap :restrPermMap ((DryHybridMachine.compat_th _ _ Hcompatible) Hi).1 = m1)
-                     (Hdecay: decay m1 m1')
-                     (Hcode: getThreadC Hi = Krun c),
-                  invariant
-                    (updThread Hi (Krun c')
-                                   (getCurPerm m1', (getThreadR Hi).2)).
-              Proof.
-                intros.
-                assert (CASES: forall b0 ofs0,
-                           Mem.perm_order''
-                             ((getCurPerm m1) !! b0 ofs0) ((getCurPerm m1') !! b0 ofs0) \/
-                           ~ Mem.valid_block m b0).
-                { move=> b ofs.
-                  rewrite getCurPerm_correct getCurPerm_correct /permission_at /=.
-                  destruct (Hdecay b ofs) as [_ VAL].
-                  destruct (valid_block_dec m1 b); [left|right].
-                  - move :( VAL v) => [] /(_ Cur).
-                    move => [] -> -> //.
-                    move => -> . apply po_refl.
-                  - intros HH; apply n.
-                    subst m1;
-                    eapply restrPermMap_valid; eauto.
-                }
-                assert (m1_spec: forall b0 ofs0,
-                           (getCurPerm m1) !! b0 ofs0 = (getThreadR Hi).1 !! b0 ofs0).
-                { move=> b ofs.
-                  subst m1.
-                  rewrite getCurPerm_correct restrPermMap_Cur //. }
+    apply updThread_inv.
+    - assumption.
+    - intros j cnt H; split;
+        apply permDisjoint_permMapsDisjoint=> b0 ofs0.
+      + destruct (CASES b0 ofs0) as [PO | NV].
+        * eapply permDisjointLT; eauto.
+          rewrite m1_spec.
+          apply permMapsDisjoint_permDisjoint.
+          inversion Hinv; apply no_race_thr; auto.
+        * move: (mem_compatible_invalid_block ofs0 Hcompatible NV)
+          => [] /(_ j cnt) [] -> _ _.
+          apply permDisjoint_comm;
+            apply permDisjoint_None.
+      + apply permMapsDisjoint_permDisjoint.
+        inversion Hinv; apply no_race_thr; auto.
+    - intros j cnt H.
+      inversion Hinv.
+      simpl. apply thread_data_lock_coh.
+    - intros j cnt H b0 ofs0.
+      destruct (CASES b0 ofs0) as [PO | NV].
+      + eapply perm_coh_lower; [| apply po_refl | eauto].
+        rewrite m1_spec.
+        inversion Hinv.
+        apply thread_data_lock_coh.
+      + move: (mem_compatible_invalid_block ofs0 Hcompatible NV)
+        => [] /(_ j cnt) [] _ -> _.
+        apply perm_coh_empty_1.
+    - intros l pmap0 H; split;
+        apply permDisjoint_permMapsDisjoint=> b0 ofs0.
+      + destruct (CASES b0 ofs0) as [PO | NV].
+        * eapply permDisjoint_comm;
+            eapply permDisjointLT; eauto.
+          rewrite m1_spec.
+          apply permMapsDisjoint_permDisjoint.
+          inversion Hinv. eapply no_race; eauto.
+        * move: (mem_compatible_invalid_block ofs0 Hcompatible NV)
+          => [] _ /(_ l pmap0 H) [] -> _.
+          apply permDisjoint_None.
+      + eapply permDisjoint_comm;
+          apply permMapsDisjoint_permDisjoint.
+        inversion Hinv; eapply no_race; eauto.
+    - intros l pmap0 H; split=> b0 ofs0.
+      + inversion Hinv. eapply thread_data_lock_coh; eauto.
+      + destruct (CASES b0 ofs0) as [PO | NV].
+        * eapply perm_coh_lower; [| apply po_refl | eauto].
+          rewrite m1_spec.
+          inversion Hinv.
+          destruct (locks_data_lock_coh _ _ H).
+          eapply H0.
+        * move: (mem_compatible_invalid_block ofs0 Hcompatible NV)
+          => [] _ /(_ l pmap0 H) [] _ -> .
+          apply perm_coh_empty_1.
+    - move => b0 ofs0.
+      destruct (CASES b0 ofs0) as [PO | NV].
+      * eapply perm_coh_lower; [| apply po_refl | eauto].
+        rewrite m1_spec.
+        inversion Hinv.
+        destruct (thread_data_lock_coh i Hi).
+        eapply H.
+      * move: (mem_compatible_invalid_block ofs0 Hcompatible NV)
+        => [] /(_ i Hi) [] _ -> _.
+        apply perm_coh_empty_1.
 
-                apply updThread_inv.
-                - assumption.
-                - intros j cnt H; split;
-                  apply permDisjoint_permMapsDisjoint=> b0 ofs0.
-                  + destruct (CASES b0 ofs0) as [PO | NV].
-                    * eapply permDisjointLT; eauto.
-                      rewrite m1_spec.
-                      apply permMapsDisjoint_permDisjoint.
-                      inversion Hinv; apply no_race_thr; auto.
-                    * move: (mem_compatible_invalid_block ofs0 Hcompatible NV)
-                      => [] /(_ j cnt) [] -> _ _.
-                      apply permDisjoint_comm;
-                        apply permDisjoint_None.
-                  + apply permMapsDisjoint_permDisjoint.
-                    inversion Hinv; apply no_race_thr; auto.
-                - intros j cnt H.
-                  inversion Hinv.
-                  simpl. apply thread_data_lock_coh.
-                - intros j cnt H b0 ofs0.
-                  destruct (CASES b0 ofs0) as [PO | NV].
-                  + eapply perm_coh_lower; [| apply po_refl | eauto].
-                    rewrite m1_spec.
-                    inversion Hinv.
-                    apply thread_data_lock_coh.
-                  + move: (mem_compatible_invalid_block ofs0 Hcompatible NV)
-                    => [] /(_ j cnt) [] _ -> _.
-                    apply perm_coh_empty_1.
-                - intros l pmap0 H; split;
-                  apply permDisjoint_permMapsDisjoint=> b0 ofs0.
-                  + destruct (CASES b0 ofs0) as [PO | NV].
-                    * eapply permDisjoint_comm;
-                      eapply permDisjointLT; eauto.
-                      rewrite m1_spec.
-                      apply permMapsDisjoint_permDisjoint.
-                      inversion Hinv. eapply no_race; eauto.
-                    * move: (mem_compatible_invalid_block ofs0 Hcompatible NV)
-                      => [] _ /(_ l pmap0 H) [] -> _.
-                      apply permDisjoint_None.
-                  + eapply permDisjoint_comm;
-                    apply permMapsDisjoint_permDisjoint.
-                    inversion Hinv; eapply no_race; eauto.
-                - intros l pmap0 H; split=> b0 ofs0.
-                  + inversion Hinv. eapply thread_data_lock_coh; eauto.
-                  + destruct (CASES b0 ofs0) as [PO | NV].
-                    * eapply perm_coh_lower; [| apply po_refl | eauto].
-                      rewrite m1_spec.
-                      inversion Hinv.
-                      destruct (locks_data_lock_coh _ _ H).
-                      eapply H0.
-                    * move: (mem_compatible_invalid_block ofs0 Hcompatible NV)
-                      => [] _ /(_ l pmap0 H) [] _ -> .
-                      apply perm_coh_empty_1.
-                - move => b0 ofs0.
-                  destruct (CASES b0 ofs0) as [PO | NV].
-                    * eapply perm_coh_lower; [| apply po_refl | eauto].
-                      rewrite m1_spec.
-                      inversion Hinv.
-                      destruct (thread_data_lock_coh i Hi).
-                      eapply H.
-                    * move: (mem_compatible_invalid_block ofs0 Hcompatible NV)
-                      => [] /(_ i Hi) [] _ -> _.
-                      apply perm_coh_empty_1.
-
-              Qed.
+  Qed.
 
   Lemma mtch_install_perm:
     forall js ds m m' tid (MATCH : match_st js ds)
-    (Hcmpt : mem_compatible js m) (Htid : containsThread js tid)
-    (Hperm : install_perm Hcmpt Htid m'),
-    DryHybridMachine.install_perm _ _ _ (MTCH_compat _ _ _ MATCH Hcmpt) (MTCH_cnt MATCH Htid) m'.
+      (Hcmpt : mem_compatible js m) (Htid : containsThread js tid)
+      (Hperm : install_perm Hcmpt Htid m'),
+      DryHybridMachine.install_perm _ _ _ (MTCH_compat _ _ _ MATCH Hcmpt) (MTCH_cnt MATCH Htid) m'.
   Proof.
     simpl; intros; hnf.
     subst.
@@ -4613,6 +4625,7 @@ Here be dragons
     apply proof_irr.
   Qed.
 
+  (* Proof of the smallstep diagram *)
   Lemma core_diagram':
     forall (m : Mem.mem)  (U0 U U': schedule)
       (ds : dstate) dtr (js js': jstate) jtr jtr' rmap pmap
@@ -4624,72 +4637,72 @@ Here be dragons
         invariant ds' /\
         match_st js' ds' /\
         exists dtr', corestep (DMachineSem U0 pmap) (U, dtr, ds) m (U', dtr ++ dtr', ds') m'.
-Proof.
-          intros m U0 U U' ds dtr js js' jtr jtr' rmap pmap m' MATCH dinv.
-          unfold JuicyMachine.MachineSemantics; simpl.
-          unfold JuicyMachine.MachStep; simpl.
-          intros STEP;
-            inversion STEP; subst.
+  Proof.
+    intros m U0 U U' ds dtr js js' jtr jtr' rmap pmap m' MATCH dinv.
+    unfold JuicyMachine.MachineSemantics; simpl.
+    unfold JuicyMachine.MachStep; simpl.
+    intros STEP;
+      inversion STEP; subst.
 
-*         (* start_step *)
-          { inversion Htstep; subst.
-            pose (ds':= (updThreadC (MTCH_cnt MATCH ctn) (Krun c_new))).
-            exists ds'. split; [|split].
-            - apply updThreadC_invariant. assumption.
-            - apply MTCH_updt; assumption.
-            - exists nil; rewrite <- app_nil_end.
-              eapply (HybridMachineSig.start_step tid) with (Htid0 := @MTCH_cnt js tid ds MATCH Htid).
-              + assumption.
-              + { simpl in Hperm; subst.
-                  econstructor.
-                  - eapply MTCH_getThreadC. eassumption. eassumption.
-                  - reflexivity.
-                  - simpl in *; eassumption.
-                  - eassumption.
-                  - reflexivity.
-                }
-          }
-
-*          (* resume_step *)
-          { inversion MATCH; subst.
-            inversion Htstep; subst.
-            exists (updThreadC (mtch_cnt _ ctn) (Krun c')).
-            split;[|split].
-            (*Invariant*)
-            { apply updThreadC_invariant; assumption. }
-            (*Match *)
-            { apply MTCH_updt; assumption.
+    *         (* start_step *)
+      { inversion Htstep; subst.
+        pose (ds':= (updThreadC (MTCH_cnt MATCH ctn) (Krun c_new))).
+        exists ds'. split; [|split].
+        - apply updThreadC_invariant. assumption.
+        - apply MTCH_updt; assumption.
+        - exists nil; rewrite <- app_nil_end.
+          eapply (HybridMachineSig.start_step tid) with (Htid0 := @MTCH_cnt js tid ds MATCH Htid).
+          + assumption.
+          + { simpl in Hperm; subst.
+              econstructor.
+              - eapply MTCH_getThreadC. eassumption. eassumption.
+              - reflexivity.
+              - simpl in *; eassumption.
+              - eassumption.
+              - reflexivity.
             }
-            (*Step*)
-            { exists nil; rewrite <- app_nil_end.
-              econstructor 2; try eassumption.
-              - simpl. econstructor; try eassumption.
-                + apply mtch_install_perm; eauto.
-                + setoid_rewrite <- Hcode. symmetry. apply mtch_gtc.
-                + reflexivity.
-            }
-          }
+      }
 
-*          (* core_step *)
-          {
-            inversion MATCH; subst.
-            inversion Htstep; subst.
-            assert (Htid':=mtch_cnt _ Htid).
+    *          (* resume_step *)
+      { inversion MATCH; subst.
+        inversion Htstep; subst.
+        exists (updThreadC (mtch_cnt _ ctn) (Krun c')).
+        split;[|split].
+        (*Invariant*)
+        { apply updThreadC_invariant; assumption. }
+        (*Match *)
+        { apply MTCH_updt; assumption.
+        }
+        (*Step*)
+        { exists nil; rewrite <- app_nil_end.
+          econstructor 2; try eassumption.
+          - simpl. econstructor; try eassumption.
+            + apply mtch_install_perm; eauto.
+            + setoid_rewrite <- Hcode. symmetry. apply mtch_gtc.
+            + reflexivity.
+        }
+      }
+
+    *          (* core_step *)
+      {
+        inversion MATCH; subst.
+        inversion Htstep; subst.
+        assert (Htid':=mtch_cnt _ Htid).
 
 
-            exists (updThread Htid'
-                             (Krun c')
-                             (permissions.getCurPerm (m_dry jm'),
-              (getThreadR Htid').2
-              (*juice2Perm_locks (m_phi jm') m *) )).
-            split ; [|split].
-            {
-              inversion Hcorestep.
-              eapply ev_step_ax2 in H; destruct H as [T H].
-              apply ClightSemantincsForMachines.step_decay in H.
-
-  eapply step_decay_invariant
-  with (Hcompatible:= MTCH_compat _ _ _ MATCH Hcmpt); try eapply H; eauto.
+        exists (updThread Htid'
+                     (Krun c')
+                     (permissions.getCurPerm (m_dry jm'),
+                      (getThreadR Htid').2
+          (*juice2Perm_locks (m_phi jm') m *) )).
+        split ; [|split].
+        {
+          inversion Hcorestep.
+          eapply ev_step_ax2 in H; destruct H as [T H].
+          apply ClightSemantincsForMachines.step_decay in H.
+          
+          eapply step_decay_invariant
+            with (Hcompatible:= MTCH_compat _ _ _ MATCH Hcmpt); try eapply H; eauto.
 
   (*eapply DSEM.DryHybridMachineLemmas.step_decay_invariant
               with (Hcompatible:= MTCH_compat _ _ _ MATCH Hcmpt); try eapply H; eauto. *)
@@ -4785,7 +4798,7 @@ inversion MATCH; subst.
 
 *  (*Conc step*)
   {
-    destruct (conc_step_diagram m m' U js js' ds tid ev MATCH dinv Htid Hcmpt HschedN Htstep)
+    destruct (sync_step_diagram m m' U js js' ds tid ev MATCH dinv Htid Hcmpt HschedN Htstep)
       as [ds' [ev' [dinv' [MTCH' step']]]]; eauto.
     exists ds'; split; [| split]; try assumption.
     eexists; econstructor 5; simpl; try eassumption.

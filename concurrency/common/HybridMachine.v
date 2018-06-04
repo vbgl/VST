@@ -699,6 +699,7 @@ Module DryHybridMachine.
     (** The signature of a Dry HybridMachine *)
     (** This can be used to instantiate a Dry CoarseHybridMachine or a Dry
     FineHybridMachine *)
+    
     Instance DryHybridMachineSig: @HybridMachineSig.MachineSig dryResources Sem tpool :=
       (@HybridMachineSig.Build_MachineSig dryResources Sem tpool
                              richMem
