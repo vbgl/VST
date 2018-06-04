@@ -83,14 +83,6 @@ Module DryHybridMachine.
             (Hres: lockRes tp laddr = Some rmap),
             permMapsDisjoint2 (getThreadR cnti) rmap; (*resources are disjoint
              between threads and locks*)
-        (* an address is in the lockres if there is at least one >= Readable
-         lock permission - I am writing the weak version where this is required
-         only for permissions of threads*)
-        (* lock_res_perm: *)
-        (*   forall b ofs, *)
-        (*     (exists i (cnti: containsThread tp i), *)
-        (*         Mem.perm_order' ((getThreadR cnti).2 !! b ofs) Readable) ->  *)
-        (*     lockRes tp (b, ofs); *)
 
         (* if an address is a lock then there can be no data
              permission above non-empty for this address*)
@@ -720,8 +712,6 @@ Module DryHybridMachine.
       ).
 
     
-    (* Instance DryHybridMachine: HybridMachine.HybridMachine := *)
-    (*   (HybridMachine.Build_HybridMachine HybridMachine.MachineCoreSemantics new_MachineSemantics _). *)
-    
   End DryHybridMachine.
 End DryHybridMachine.
+Export DryHybridMachine.
