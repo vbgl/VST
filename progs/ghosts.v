@@ -108,7 +108,7 @@ Qed.
 
 End ghost.
 
-Definition excl {A} g a := @own _ _ _ _ _ _ (exclusive_PCM A) g (Some a) NoneP.
+Definition excl {A} g a := @own _ _ _ _ _ _ (initial_world.exclusive_PCM A) g (Some a) NoneP.
 
 Lemma exclusive_update : forall {A} (v v' : A) p, excl p v |-- |==> excl p v'.
 Proof.
@@ -250,9 +250,9 @@ Proof.
            destruct Hjoin1 as [Hd' ?]; rewrite Hd' in *; split; split; rewrite ?e0, ?Ha, ?Hc1, ?eq_dec_refl, ?Hd'; auto.
     + exists (sh', snd b); simpl.
       destruct (eq_dec (fst d) Share.bot).
-      { rewrite e0 in Hsh1; apply join_Bot in Hsh1; destruct Hsh1; contradiction. }
+      { rewrite e0 in Hsh1; apply initial_world.join_Bot in Hsh1; destruct Hsh1; contradiction. }
       destruct (eq_dec sh' Share.bot) eqn: Hn'.
-      { subst; apply join_Bot in H; destruct H; contradiction. }
+      { subst; apply initial_world.join_Bot in H; destruct H; contradiction. }
       assert (snd d = snd b) as Hd by (destruct (eq_dec (fst a) Share.bot); tauto).
       destruct Hjoin2 as [He ?]; rewrite He in *; split; split; simpl; rewrite ?Hb, ?Hn', ?Hd, ?He in *; auto.
   - intros ??? []; split; [apply join_comm; auto|].
@@ -260,8 +260,8 @@ Proof.
   - intros ???? [? Hjoin1] [? Hjoin2].
     assert (fst a = fst b) by (eapply join_positivity; eauto).
     destruct (eq_dec (fst a) Share.bot), a, a', b, b'; simpl in *; subst; f_equal.
-    + apply join_Bot in H0 as []; subst.
-      apply join_Bot in H as []; subst.
+    + apply initial_world.join_Bot in H0 as []; subst.
+      apply initial_world.join_Bot in H as []; subst.
       rewrite eq_dec_refl in Hjoin1, Hjoin2, Hjoin2.
       eapply join_positivity; eauto.
     + destruct Hjoin1; auto.
@@ -439,7 +439,7 @@ Qed.
 End Snapshot.
 
 Lemma ref_sub : forall {P : Ghost} (sh : share) g (a b : @G P) pp,
-  @own _ _ _ _ _ _ (ref_PCM P) g (Some (sh, a), None) pp * @own _ _ _ _ _ _ (ref_PCM P) g (None, Some b) pp |--
+  @own _ _ _ _ _ _ (initial_world.ref_PCM P) g (Some (sh, a), None) pp * @own _ _ _ _ _ _ (initial_world.ref_PCM P) g (None, Some b) pp |--
     !!(if eq_dec sh Tsh then a = b else exists x, join a x b).
 Proof.
   intros.
@@ -473,7 +473,7 @@ Section GVar.
 Context {A : Type}.
 
 Definition ghost_var (sh : share) (v : A) g :=
-  @own _ _ _ _ _ _ (@pos_PCM (discrete_PCM A)) g (Some (sh, v)) NoneP.
+  @own _ _ _ _ _ _ (@initial_world.pos_PCM (discrete_PCM A)) g (Some (sh, v)) NoneP.
 
 Lemma ghost_var_share_join : forall sh1 sh2 sh v p, sepalg.join sh1 sh2 sh ->
   sh1 <> Share.bot -> sh2 <> Share.bot ->
@@ -497,7 +497,7 @@ Proof.
   - Intros sh; subst.
     Exists (Some (sh, v2)); apply andp_right, derives_refl.
     apply prop_right; repeat (split; auto); simpl.
-    intro; subst; apply join_Bot in H2 as []; contradiction.
+    intro; subst; apply initial_world.join_Bot in H2 as []; contradiction.
 Qed.
 
 Lemma ghost_var_inj : forall sh1 sh2 v1 v2 p, sh1 <> Share.bot -> sh2 <> Share.bot ->
@@ -881,9 +881,9 @@ Notation hist_part := (nat -> option hist_el).
 Definition hist_sub sh (h : hist_part) hr := sh <> Share.bot /\ if eq_dec sh Tsh then h = hr
   else map_incl h hr.
 
-Lemma completable_alt : forall sh h hr, @completable map_PCM (Some (sh, h)) hr <-> hist_sub sh h hr.
+Lemma completable_alt : forall sh h hr, @initial_world.completable map_PCM (Some (sh, h)) hr <-> hist_sub sh h hr.
 Proof.
-  unfold completable, hist_sub; intros; simpl; split.
+  unfold initial_world.completable, hist_sub; intros; simpl; split.
   - intros ([(?, ?)|] & Hcase).
     + destruct Hcase as (? & ? & Hsh & Hj); split; auto.
       if_tac.
@@ -914,7 +914,7 @@ Proof.
 Qed.
 
 Definition ghost_hist (sh : share) (h : hist_part) g :=
-  @own _ _ _ _ _ _ (@ref_PCM map_PCM) g (Some (sh, h), None) NoneP.
+  @own _ _ _ _ _ _ (@initial_world.ref_PCM map_PCM) g (Some (sh, h), None) NoneP.
 
 Lemma ghost_hist_join : forall sh1 sh2 sh h1 h2 p (Hsh : sepalg.join sh1 sh2 sh)
   (Hsh1 : sh1 <> Share.bot) (Hsh2 : sh2 <> Share.bot),
@@ -931,7 +931,7 @@ Proof.
     + constructor.
     + split; auto.
       intro; subst.
-      apply join_Bot in Hsh as []; auto.
+      apply initial_world.join_Bot in Hsh as []; auto.
   - intros (? & [] & ?); simpl in *.
     destruct (fst x) as [[]|]; [|contradiction].
     split; [simpl | constructor].
@@ -969,7 +969,7 @@ Proof.
 Qed.
 
 Definition ghost_ref l g := EX hr : hist_part, !!(hist_list hr l) &&
-  @own _ _ _ _ _ _ (@ref_PCM map_PCM) g (None, Some hr) NoneP.
+  @own _ _ _ _ _ _ (@initial_world.ref_PCM map_PCM) g (None, Some hr) NoneP.
 
 Lemma hist_next : forall h l (Hlist : hist_list h l), h (length l) = None.
 Proof.
@@ -983,7 +983,7 @@ Proof.
 Qed.
 
 Definition ghost_hist_ref sh (h r : hist_part) g :=
-  @own _ _ _ _ _ _ (@ref_PCM map_PCM) g (Some (sh, h), Some r) NoneP.
+  @own _ _ _ _ _ _ (@initial_world.ref_PCM map_PCM) g (Some (sh, h), Some r) NoneP.
 
 Lemma hist_add : forall (sh : share) (h h' : hist_part) e p t' (Hfresh : h' t' = None),
   ghost_hist_ref sh h h' p |-- |==> ghost_hist_ref sh (map_upd h t' e) (map_upd h' t' e) p.
@@ -1212,7 +1212,7 @@ Proof.
       extensionality k'; if_tac; subst; auto.
 Qed.
 
-Lemma ghost_hist_init : @valid (@ref_PCM (@map_PCM nat hist_el)) (Some (Tsh, empty_map), Some empty_map).
+Lemma ghost_hist_init : @valid (@initial_world.ref_PCM (@map_PCM nat hist_el)) (Some (Tsh, empty_map), Some empty_map).
 Proof.
   split; simpl; auto.
   rewrite completable_alt; split; auto.
