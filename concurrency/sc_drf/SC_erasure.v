@@ -46,6 +46,12 @@ account of that. *)
 (** ** Erasure of Values*)
 Module ValErasure.
 
+  Definition isPointer (v : val) :=
+    match v with
+    | Vptr _ _ => true
+    | _ => false
+    end.
+  
   Definition val_erasure v1 v2 : Prop :=
     match v1, v2 with
     | Vundef, _ => True
@@ -139,12 +145,6 @@ Module ValErasure.
   Hint Immediate memval_erasure_list_refl : val_erasure.
 
   (** ** Lemmas about erased values*)
-
-  Definition isPointer (v : val) :=
-    match v with
-    | Vptr _ _ => true
-    | _ => false
-    end.
 
   Definition isDefined v :=
     match v with
@@ -709,6 +709,236 @@ Module ValErasure.
     intros. destruct v1,v2; subst; simpl; auto.
   Qed.
 
+   (*TODO: move to other file *)
+  Lemma val_erasure_offset_ptr:
+    forall v v' z
+      (Hval_erasure: val_erasure v v'),
+      val_erasure (Val.offset_ptr v z) (Val.offset_ptr v' z).
+  Proof.
+    intros.
+    destruct v; simpl; auto.
+    inv Hval_erasure.
+    reflexivity.
+  Qed.
+  Lemma val_erasure_longofintu:
+    forall v v'
+      (Hval_erasure: val_erasure v v'),
+      val_erasure (Val.longofintu v) (Val.longofintu v').
+  Proof.
+    intros.
+    destruct v; simpl; auto.
+    inv Hval_erasure.
+    reflexivity.
+  Qed.
+
+  Lemma val_erasure_longofint:
+    forall v v'
+      (Hval_erasure: val_erasure v v'),
+      val_erasure (Val.longofint v) (Val.longofint v').
+  Proof.
+    intros.
+    destruct v; simpl; auto.
+    inv Hval_erasure.
+    reflexivity.
+  Qed.
+
+  Lemma val_erasure_longoffloat:
+    forall v v'
+      (Hval_erasure: val_erasure v v'),
+      val_erasure (Val.maketotal (Val.longoffloat v)) (Val.maketotal (Val.longoffloat v')).
+  Proof.
+    intros.
+    destruct v; inv Hval_erasure; simpl;
+      eauto using val_erasure_refl.
+  Qed.
+
+  Lemma val_erasure_floatoflong:
+    forall v v'
+      (Hval_erasure: val_erasure v v'),
+      val_erasure (Val.maketotal (Val.floatoflong v)) (Val.maketotal (Val.floatoflong v')).
+  Proof.
+    intros.
+    destruct v; inv Hval_erasure; simpl;
+      eauto using val_erasure_refl.
+  Qed.
+
+  Lemma val_erasure_longofsingle:
+    forall v v'
+      (Hval_erasure: val_erasure v v'),
+      val_erasure (Val.maketotal (Val.longofsingle v)) (Val.maketotal (Val.longofsingle v')).
+  Proof.
+    intros.
+    destruct v; inv Hval_erasure; simpl;
+      eauto using val_erasure_refl.
+  Qed.
+
+  Lemma val_erasure_singleoflong:
+    forall v v'
+      (Hval_erasure: val_erasure v v'),
+      val_erasure (Val.maketotal (Val.singleoflong v)) (Val.maketotal (Val.singleoflong v')).
+  Proof.
+    intros.
+    destruct v; inv Hval_erasure; simpl;
+      eauto using val_erasure_refl.
+  Qed.
+
+  Lemma val_erasure_negl:
+    forall v v',
+      val_erasure v v' ->
+      val_erasure (Val.negl v) (Val.negl v').
+  Proof.
+    intros.
+    destruct v; inv H; simpl; auto.
+  Qed.
+
+  Lemma val_erasure_addl:
+    forall v1 v2 v1' v2',
+      val_erasure v1 v1' ->
+      val_erasure v2 v2' ->
+      val_erasure (Val.addl v1 v2) (Val.addl v1' v2').
+  Proof.
+    unfold Val.addl.
+    assert (Harch: Archi.ptr64 = false) by auto.
+    rewrite Harch.
+    destruct v1,v2; intros;
+      simpl; auto;
+        inv H; inv H0; simpl; auto.
+  Qed.
+
+  Lemma val_erasure_subl:
+    forall v1 v2 v1' v2',
+      val_erasure v1 v1' ->
+      val_erasure v2 v2' ->
+      val_erasure (Val.subl v1 v2) (Val.subl v1' v2').
+  Proof.
+    unfold Val.subl.
+    assert (Harch: Archi.ptr64 = false) by auto.
+    rewrite Harch.
+    destruct v1,v2; intros;
+      simpl; auto;
+        inv H; inv H0; simpl; auto.
+  Qed.
+
+  Lemma val_erasure_mull:
+    forall v1 v2 v1' v2',
+      val_erasure v1 v1' ->
+      val_erasure v2 v2' ->
+      val_erasure (Val.mull v1 v2) (Val.mull v1' v2').
+  Proof.
+    destruct v1,v2; intros;
+      simpl; auto;
+        inv H; inv H0; simpl; auto.
+  Qed.
+
+  Lemma val_erasure_mullhs:
+    forall v1 v2 v1' v2',
+      val_erasure v1 v1' ->
+      val_erasure v2 v2' ->
+      val_erasure (Val.mullhs v1 v2) (Val.mullhs v1' v2').
+  Proof.
+    destruct v1,v2; intros;
+      simpl; auto;
+        inv H; inv H0; simpl; auto.
+  Qed.
+
+  Lemma val_erasure_mullhu:
+    forall v1 v2 v1' v2',
+      val_erasure v1 v1' ->
+      val_erasure v2 v2' ->
+      val_erasure (Val.mullhu v1 v2) (Val.mullhu v1' v2').
+  Proof.
+    destruct v1,v2; intros;
+      simpl; auto;
+        inv H; inv H0; simpl; auto.
+  Qed.
+
+  Lemma val_erasure_shrl:
+    forall v1 v2 v1' v2',
+      val_erasure v1 v1' ->
+      val_erasure v2 v2' ->
+      val_erasure (Val.shrl v1 v2) (Val.shrl v1' v2').
+  Proof.
+    destruct v1,v2; intros;
+      simpl; auto;
+        inv H; inv H0; simpl; eauto using val_erasure_refl.
+  Qed.
+
+  Lemma val_erasure_andl:
+    forall v1 v2 v1' v2',
+      val_erasure v1 v1' ->
+      val_erasure v2 v2' ->
+      val_erasure (Val.andl v1 v2) (Val.andl v1' v2').
+  Proof.
+    destruct v1,v2; intros;
+      simpl; auto;
+        inv H; inv H0; simpl; auto.
+  Qed.
+
+  Lemma val_erasure_orl:
+    forall v1 v2 v1' v2',
+      val_erasure v1 v1' ->
+      val_erasure v2 v2' ->
+      val_erasure (Val.orl v1 v2) (Val.orl v1' v2').
+  Proof.
+    destruct v1,v2; intros;
+      simpl; auto;
+        inv H; inv H0; simpl; auto.
+  Qed.
+
+  Lemma val_erasure_xorl:
+    forall v1 v2 v1' v2',
+      val_erasure v1 v1' ->
+      val_erasure v2 v2' ->
+      val_erasure (Val.xorl v1 v2) (Val.xorl v1' v2').
+  Proof.
+    destruct v1,v2; intros;
+      simpl; auto;
+        inv H; inv H0; simpl; auto.
+  Qed.
+
+  Lemma val_erasure_notl:
+    forall v v',
+      val_erasure v v' ->
+      val_erasure (Val.notl v) (Val.notl v').
+  Proof.
+    destruct v; intros;
+      simpl; auto;
+        inv H; simpl; auto.
+  Qed.
+
+  Lemma val_erasure_shll:
+    forall v1 v2 v1' v2',
+      val_erasure v1 v1' ->
+      val_erasure v2 v2' ->
+      val_erasure (Val.shll v1 v2) (Val.shll v1' v2').
+  Proof.
+    destruct v1,v2; intros;
+      simpl; auto;
+        inv H; inv H0; simpl; eauto using val_erasure_refl.
+  Qed.
+
+  Lemma val_erasure_shrlu:
+    forall v1 v2 v1' v2',
+      val_erasure v1 v1' ->
+      val_erasure v2 v2' ->
+      val_erasure (Val.shrlu v1 v2) (Val.shrlu v1' v2').
+  Proof.
+    destruct v1,v2; intros;
+      simpl; auto;
+        inv H; inv H0; simpl; eauto using val_erasure_refl.
+  Qed.
+
+  Lemma val_erasure_rorl:
+    forall v1 v2 v1' v2',
+      val_erasure v1 v1' ->
+      val_erasure v2 v2' ->
+      val_erasure (Val.rorl v1 v2) (Val.rorl v1' v2').
+  Proof.
+    destruct v1,v2; intros;
+      simpl; auto;
+        inv H; inv H0; simpl; eauto using val_erasure_refl.
+  Qed.
+  
   Hint Resolve val_defined_add_1 val_defined_add_2 : val_defined.
 
   Hint Extern 0 (val_erasure (Vint _) (Vint _)) => reflexivity : val_erasure.
@@ -726,7 +956,13 @@ Module ValErasure.
        val_erasure_addf val_erasure_subf val_erasure_mulf
        val_erasure_divf val_erasure_negf val_erasure_absf
        val_erasure_addfs val_erasure_subfs val_erasure_mulfs
-       val_erasure_divfs val_erasure_negfs val_erasure_absfs : val_erasure.
+       val_erasure_divfs val_erasure_negfs val_erasure_absfs
+       val_erasure_offset_ptr val_erasure_longofintu val_erasure_longofint
+       val_erasure_longoffloat val_erasure_longofsingle val_erasure_singleoflong
+       val_erasure_floatoflong val_erasure_negl val_erasure_addl val_erasure_subl
+       val_erasure_mull val_erasure_mullhs val_erasure_mullhu val_erasure_shrl
+       val_erasure_andl val_erasure_orl val_erasure_xorl val_erasure_notl val_erasure_shll
+       val_erasure_shrlu val_erasure_rorl : val_erasure.
 
   Hint Immediate val_erasure_refl : val_erasure.
 
@@ -1585,16 +1821,14 @@ Module CoreErasure.
         core_erasure_refl: forall c, core_erasure c c;
 
         at_external_erase:
-          forall c c' m m'
+          forall c c' m m' ef vs
             (Hcore_erase: core_erasure c c')
-            (Hmem_erase: mem_erasure m m'),
-            match at_external semSem c m, at_external semSem c' m' with
-            | Some (ef, vs), Some (ef', vs') =>
-              ef = ef' /\ val_erasure_list vs vs'
-            | None, None => True
-            | _, _ => False
-            end;
-
+            (Hmem_erase: mem_erasure m m')
+            (Hat_ext:at_external semSem c m = Some (ef, vs)),
+          exists vs',
+            at_external semSem c' m' = Some (ef, vs') /\
+            val_erasure_list vs vs';
+           
         after_external_erase:
           forall v v' c c' m m' c2
             (HeraseCores: core_erasure c c')
@@ -1955,25 +2189,18 @@ Module SCErasure.
           try match goal with
               | [|- _ <> Vundef] => intro Hcontra; discriminate
               end;
-          match goal with
-          | [H: at_external _ _ (restrPermMap ?E1) = _, H1: core_erasure _ _   |- _] =>
-            pose proof (at_external_erase _ _ H1 (mem_erasure_restr E1 Hmem_erasure)) as Hat_external';
-              match goal with
-              | [H2: match at_external _ _ _ with _ => _ end |- _] =>
-                rewrite H in H2;
-                  match goal with
-                  | [H3: match at_external ?E1 ?E2 ?E3 with _ => _ end |- _] =>
-                    destruct (at_external E1 E2 E3) as [[? ?]|] eqn:?; try by exfalso
-                  end
-              end
-          end;
-          repeat match goal with
-                 | [H: _ /\ _ |- _] => destruct H
-                 | [H: val_erasure_list _ _ |- _] =>
-                   inv H
-                 | [H: val_erasure (Vptr _ _) _ |- _] => inv H
-                 | [H:val_erasure (Vint _) _ |- _] => inv H
-                 end; subst.
+      match goal with
+      | [H: at_external _ _ (restrPermMap ?E1) = _, H1: core_erasure _ _   |- _] =>
+        pose proof (at_external_erase _ _ H1 (mem_erasure_restr E1 Hmem_erasure) H) as Hat_external';
+        destruct Hat_external' as [vs' [Hat_external' Hval_erasure]]
+      end;
+      repeat match goal with
+             | [H: _ /\ _ |- _] => destruct H
+             | [H: val_erasure_list _ _ |- _] =>
+               inv H
+             | [H: val_erasure (Vptr _ _) _ |- _] => inv H
+             | [H:val_erasure (Vint _) _ |- _] => inv H
+             end; subst.
       - exists (updThreadC cnti' (Kresume s Vundef)), m2'.
         split; [econstructor; eauto | split; eauto].
         constructor. simpl; eauto.
@@ -2141,13 +2368,10 @@ Module SCErasure.
         end; try (by exfalso).
       destruct Hthreads as [HeraseCores Heq]. subst v.
       inversion Hperm; subst.
-      pose proof (at_external_erase _ _ HeraseCores
-                                    (mem_erasure_restr (DryHybridMachine.compat_th tp1 m1 Hcmpt cnti)#1 Herase_mem)).
-      rewrite Hat_external in H.
       destruct X.
-      destruct (at_external semSem s m1') eqn:Hat_external'; try by exfalso.
-      destruct p as [? ?].
-      destruct H as [? ?]; subst.
+      pose proof (at_external_erase _ _ HeraseCores
+                                    (mem_erasure_restr (DryHybridMachine.compat_th tp1 m1 Hcmpt cnti)#1 Herase_mem) Hat_external) as Hat_external'.
+      destruct Hat_external' as [vs' [Hat_external' Hval_erasure]].
       eapply after_external_erase with (v' := None) in Hafter_external;
         eauto with val_erasure erased.
       destruct Hafter_external as [c2' [Hafter_external' Hcore_erasure']].
@@ -2183,13 +2407,10 @@ Module SCErasure.
                      simpl in H
         end; try (by exfalso).
       inversion Hperm; subst.
-      pose proof (at_external_erase _ _ Hthreads
-                                    (mem_erasure_restr (DryHybridMachine.compat_th tp1 m1 Hcmpt cnti)#1 Herase_mem)).
-      rewrite Hat_external in H.
       destruct X.
-      destruct (at_external semSem s m1') eqn:Hat_external'; try by exfalso.
-      destruct p as [? ?].
-      destruct H as [? ?]; subst.
+      pose proof (at_external_erase _ _ Hthreads
+                                    (mem_erasure_restr (DryHybridMachine.compat_th tp1 m1 Hcmpt cnti)#1 Herase_mem) Hat_external) as Hat_external'.
+      destruct Hat_external' as [vs' [Hat_external' Hval_erasure]].
       exists (updThreadC cnti' (Kblocked s)).
       split.
       - eapply @SuspendThread with (c := s) (Hcmpt := Hcomp1'); simpl in *; eauto.

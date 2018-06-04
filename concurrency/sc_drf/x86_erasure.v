@@ -109,24 +109,13 @@ Module X86CoreErasure.
     Notation the_ge := (the_ge the_program).
     (** ** Result about at_external, after_external and initial_core *)    
     Lemma at_external_erase:
-      forall c c' (Herase: core_erasure c c'),
-        match at_external the_ge c, at_external the_ge c' with
-        | Some (ef, vs), Some (ef', vs') =>
-          ef = ef' /\ val_erasure_list vs vs'
-        | None, None => True
-        | _, _ => False
-        end.
+      forall c c' ef vs
+        (Herase: core_erasure c c')
+        (Hat_external: at_external the_ge c = Some (ef, vs)),
+      exists vs',
+        at_external the_ge c' = Some (ef, vs') /\
+        val_erasure_list vs vs'.
     Proof.
-      (* intros. *)
-      (* unfold core_erasure in *. *)
-      (* destruct c, c'; try (by exfalso); *)
-      (*   repeat match goal with *)
-      (*          | [H: _ /\ _ |- _] => destruct H *)
-      (*          end; subst; *)
-      (*     unfold at_external; simpl; auto. *)
-      (* split; auto. *)
-      (* eapply val_erasure_list_decode; eauto. *)
-      
       intros.
       unfold core_erasure in *.
       unfold regs_erasure, reg_erasure, Pregmap.get in *.
@@ -141,7 +130,7 @@ Module X86CoreErasure.
                | [H: r ?R = _, H1 : r0 ?R = _, H2: forall r, val_erasure _ _ |- _] =>
                  specialize (H2 R); rewrite H in H2; rewrite H1 in H2;
                    simpl in H2; inversion H2; subst
-               end; subst; try discriminate; try congruence.
+               end; subst; try discriminate; try congruence. Focus 3.
       all:admit.
       (* XXX: does not hold*)
       (*   rewrite Heqv in H. *)
@@ -254,37 +243,23 @@ Module X86CoreErasure.
         now eauto.
     Qed.
 
-  Lemma erasure_initial_core:
-    forall h v arg v' arg' c m m'
-      (Hv: val_erasure v v')
-      (Harg: val_erasure arg arg')
-      (Hmem: mem_erasure m m')
-      (Hinit: initial_core semSem h m c v [:: arg]),
-      initial_core semSem h m' c v' [:: arg'].
-  Proof.
-    intros.
-    unfold initial_core in *; simpl in *.
-    inversion Hinit; subst.
-    simpl in Hv; subst.
-    econstructor; eauto.
-     
     Lemma make_arguments_erasure:
       forall rs rs2 rs' m m2 m' locs arg arg'
         (Hregs: regs_erasure rs rs')
         (Hmem: mem_erasure m m')
         (Hargs: val_erasure arg arg')
         (Hmake: make_arguments rs m locs [:: arg] = Some (rs2, m2)),
-        exists rs2' m2',
-          make_arguments rs' m' locs [:: arg'] = Some (rs2', m2')/\
-          regs_erasure rs2 rs2' /\
-          mem_erasure m2 m2'.
+      exists rs2' m2',
+        make_arguments rs' m' locs [:: arg'] = Some (rs2', m2')/\
+        regs_erasure rs2 rs2' /\
+        mem_erasure m2 m2'.
     Proof.
       intros. destruct locs.
       - simpl in *.
         discriminate.
       - simpl in Hmake.
         simpl.
-        destruct (make_arguments rs m locs [::]) as [[? ?]|] eqn:Hmake_args.
+        destruct (make_arguments rs m locs [::]) as [[? ?]|] eqn:Hmake_args; try discriminate.
         assert (Heq := make_arguments_nil_locs _ Hregs Hmem Hmake_args); subst.
         eapply make_arguments_nil_erasure in Hmake_args; eauto.
         destruct Hmake_args as [rs2' [m2' [Hmake_args' [Hregs_erasure' Hmem']]]].
@@ -292,16 +267,39 @@ Module X86CoreErasure.
         simpl in Hmake_args'; inv Hmake_args'.
         destruct r.
         eapply make_arg_erasure in Hmake; eauto.
-        destruct arg; try discriminate.
-        destruct (make_arg r0 m0 rhi Vundef) as [[? ?]|] eqn:Hmake_arg1; try discriminate.
-        eapply make_arg_erasure in Hmake_arg1; eauto.
+        destruct arg; try discriminate;
+          simpl in Hargs; subst.
+        destruct (make_arg r0 m0 rhi (Vint (Int64.hiword i))) as [[? ?]|] eqn:Hmake_arg1; try discriminate.
+        eapply make_arg_erasure with (arg' := Vint (Int64.hiword i)) in Hmake_arg1; eauto with val_erasure.
         destruct Hmake_arg1 as [? [? [? [? ?]]]].
-        eapply make_arg_erasure in Hmake; eauto.
+        eapply make_arg_erasure in Hmake; eauto with val_erasure.
         destruct Hmake as [? [? [? [? ?]]]].
-        (* This is broken if arg is Vundef, and it doesn't feel fixable because VInt returns none *)
-        admit.
-    Admitted.
-
+        exists x1,x2.
+        rewrite H.
+        now eauto.
+    Qed.
+        
+  Lemma erasure_initial_core:
+    forall h v arg v' arg' c m m'
+      (Hv: val_erasure v v')
+      (Harg: val_erasure arg arg')
+      (Hmem: mem_erasure m m')
+      (Hinit: initial_core semSem h m c v [:: arg]),
+      exists c',
+        initial_core semSem h m' c' v' [:: arg'] /\
+        core_erasure c c'.
+  Proof.
+    intros.
+    unfold initial_core in *; simpl in *.
+    inversion Hinit; subst.
+    simpl in Hv; subst.
+    eapply make_arguments_erasure in H0; eauto with regs_erasure.
+    destruct H0 as [? [? [? [? ?]]]].
+    exists (State x x0).
+    split; econstructor;
+      now eauto.
+  Qed.    
+        
   Lemma halted_erase:
     forall c c' h
       (HeraseCores: core_erasure c c')
@@ -454,13 +452,8 @@ Module X86CoreErasure.
     unfold eval_addrmode.
     assert (Hptr64: Archi.ptr64 = false) by auto.
     rewrite Hptr64.
-    unfold eval_addrmode32 in *.
-    destruct a, base, ofs, const;
-      try destruct p; try destruct p0;
-      try match goal with
-          | [|- context[match ?Expr with _ => _ end]] =>
-            destruct Expr
-          end...
+    eapply eval_addrmode32_erase;
+      now eauto.
   Qed.
 
   Lemma compare_ints_erasure:
@@ -522,13 +515,6 @@ Module X86CoreErasure.
            end...
   Qed.
 
-
-  Hint Resolve compare_ints_erasure compare_floats_erasure
-       compare_floats32_erasure val_erasure_addrmode
-       regs_erasure_undef : regs_erasure.
-  Hint Extern 0 (val_erasure (undef_regs _ _ # _ <- _ _) _) =>
-  eapply regs_erasure_set : regs_erasure.
-
   Hint Transparent undef_regs: regs_erasure.
 
     (* TODO: move this to the right place*)
@@ -566,244 +552,6 @@ Module X86CoreErasure.
             end; auto.
   Qed.
 
-  (*TODO: move to other file *)
-  Lemma val_erasure_offset_ptr:
-    forall v v' z
-      (Hval_erasure: val_erasure v v'),
-      val_erasure (Val.offset_ptr v z) (Val.offset_ptr v' z).
-  Proof.
-    intros.
-    destruct v; simpl; auto.
-    inv Hval_erasure.
-    reflexivity.
-  Qed.
-  Lemma val_erasure_longofintu:
-    forall v v'
-      (Hval_erasure: val_erasure v v'),
-      val_erasure (Val.longofintu v) (Val.longofintu v').
-  Proof.
-    intros.
-    destruct v; simpl; auto.
-    inv Hval_erasure.
-    reflexivity.
-  Qed.
-
-  Lemma val_erasure_longofint:
-    forall v v'
-      (Hval_erasure: val_erasure v v'),
-      val_erasure (Val.longofint v) (Val.longofint v').
-  Proof.
-    intros.
-    destruct v; simpl; auto.
-    inv Hval_erasure.
-    reflexivity.
-  Qed.
-
-  Lemma val_erasure_longoffloat:
-    forall v v'
-      (Hval_erasure: val_erasure v v'),
-      val_erasure (Val.maketotal (Val.longoffloat v)) (Val.maketotal (Val.longoffloat v')).
-  Proof.
-    intros.
-    destruct v; inv Hval_erasure; simpl;
-      eauto using val_erasure_refl.
-  Qed.
-
-  Lemma val_erasure_floatoflong:
-    forall v v'
-      (Hval_erasure: val_erasure v v'),
-      val_erasure (Val.maketotal (Val.floatoflong v)) (Val.maketotal (Val.floatoflong v')).
-  Proof.
-    intros.
-    destruct v; inv Hval_erasure; simpl;
-      eauto using val_erasure_refl.
-  Qed.
-
-  Lemma val_erasure_longofsingle:
-    forall v v'
-      (Hval_erasure: val_erasure v v'),
-      val_erasure (Val.maketotal (Val.longofsingle v)) (Val.maketotal (Val.longofsingle v')).
-  Proof.
-    intros.
-    destruct v; inv Hval_erasure; simpl;
-      eauto using val_erasure_refl.
-  Qed.
-
-  Lemma val_erasure_singleoflong:
-    forall v v'
-      (Hval_erasure: val_erasure v v'),
-      val_erasure (Val.maketotal (Val.singleoflong v)) (Val.maketotal (Val.singleoflong v')).
-  Proof.
-    intros.
-    destruct v; inv Hval_erasure; simpl;
-      eauto using val_erasure_refl.
-  Qed.
-
-  Lemma val_erasure_negl:
-    forall v v',
-      val_erasure v v' ->
-      val_erasure (Val.negl v) (Val.negl v').
-  Proof.
-    intros.
-    destruct v; inv H; simpl; auto.
-  Qed.
-
-  Lemma val_erasure_addl:
-    forall v1 v2 v1' v2',
-      val_erasure v1 v1' ->
-      val_erasure v2 v2' ->
-      val_erasure (Val.addl v1 v2) (Val.addl v1' v2').
-  Proof.
-    unfold Val.addl.
-    assert (Harch: Archi.ptr64 = false) by auto.
-    rewrite Harch.
-    destruct v1,v2; intros;
-      simpl; auto;
-        inv H; inv H0; simpl; auto.
-  Qed.
-
-  Lemma val_erasure_subl:
-    forall v1 v2 v1' v2',
-      val_erasure v1 v1' ->
-      val_erasure v2 v2' ->
-      val_erasure (Val.subl v1 v2) (Val.subl v1' v2').
-  Proof.
-    unfold Val.subl.
-    assert (Harch: Archi.ptr64 = false) by auto.
-    rewrite Harch.
-    destruct v1,v2; intros;
-      simpl; auto;
-        inv H; inv H0; simpl; auto.
-  Qed.
-
-  Lemma val_erasure_mull:
-    forall v1 v2 v1' v2',
-      val_erasure v1 v1' ->
-      val_erasure v2 v2' ->
-      val_erasure (Val.mull v1 v2) (Val.mull v1' v2').
-  Proof.
-    destruct v1,v2; intros;
-      simpl; auto;
-        inv H; inv H0; simpl; auto.
-  Qed.
-
-  Lemma val_erasure_mullhs:
-    forall v1 v2 v1' v2',
-      val_erasure v1 v1' ->
-      val_erasure v2 v2' ->
-      val_erasure (Val.mullhs v1 v2) (Val.mullhs v1' v2').
-  Proof.
-    destruct v1,v2; intros;
-      simpl; auto;
-        inv H; inv H0; simpl; auto.
-  Qed.
-
-  Lemma val_erasure_mullhu:
-    forall v1 v2 v1' v2',
-      val_erasure v1 v1' ->
-      val_erasure v2 v2' ->
-      val_erasure (Val.mullhu v1 v2) (Val.mullhu v1' v2').
-  Proof.
-    destruct v1,v2; intros;
-      simpl; auto;
-        inv H; inv H0; simpl; auto.
-  Qed.
-
-  Lemma val_erasure_shrl:
-    forall v1 v2 v1' v2',
-      val_erasure v1 v1' ->
-      val_erasure v2 v2' ->
-      val_erasure (Val.shrl v1 v2) (Val.shrl v1' v2').
-  Proof.
-    destruct v1,v2; intros;
-      simpl; auto;
-        inv H; inv H0; simpl; eauto using val_erasure_refl.
-  Qed.
-
-  Lemma val_erasure_andl:
-    forall v1 v2 v1' v2',
-      val_erasure v1 v1' ->
-      val_erasure v2 v2' ->
-      val_erasure (Val.andl v1 v2) (Val.andl v1' v2').
-  Proof.
-    destruct v1,v2; intros;
-      simpl; auto;
-        inv H; inv H0; simpl; auto.
-  Qed.
-
-  Lemma val_erasure_orl:
-    forall v1 v2 v1' v2',
-      val_erasure v1 v1' ->
-      val_erasure v2 v2' ->
-      val_erasure (Val.orl v1 v2) (Val.orl v1' v2').
-  Proof.
-    destruct v1,v2; intros;
-      simpl; auto;
-        inv H; inv H0; simpl; auto.
-  Qed.
-
-  Lemma val_erasure_xorl:
-    forall v1 v2 v1' v2',
-      val_erasure v1 v1' ->
-      val_erasure v2 v2' ->
-      val_erasure (Val.xorl v1 v2) (Val.xorl v1' v2').
-  Proof.
-    destruct v1,v2; intros;
-      simpl; auto;
-        inv H; inv H0; simpl; auto.
-  Qed.
-
-  Lemma val_erasure_notl:
-    forall v v',
-      val_erasure v v' ->
-      val_erasure (Val.notl v) (Val.notl v').
-  Proof.
-    destruct v; intros;
-      simpl; auto;
-        inv H; simpl; auto.
-  Qed.
-
-  Lemma val_erasure_shll:
-    forall v1 v2 v1' v2',
-      val_erasure v1 v1' ->
-      val_erasure v2 v2' ->
-      val_erasure (Val.shll v1 v2) (Val.shll v1' v2').
-  Proof.
-    destruct v1,v2; intros;
-      simpl; auto;
-        inv H; inv H0; simpl; eauto using val_erasure_refl.
-  Qed.
-
-  Lemma val_erasure_shrlu:
-    forall v1 v2 v1' v2',
-      val_erasure v1 v1' ->
-      val_erasure v2 v2' ->
-      val_erasure (Val.shrlu v1 v2) (Val.shrlu v1' v2').
-  Proof.
-    destruct v1,v2; intros;
-      simpl; auto;
-        inv H; inv H0; simpl; eauto using val_erasure_refl.
-  Qed.
-
-  Lemma val_erasure_rorl:
-    forall v1 v2 v1' v2',
-      val_erasure v1 v1' ->
-      val_erasure v2 v2' ->
-      val_erasure (Val.rorl v1 v2) (Val.rorl v1' v2').
-  Proof.
-    destruct v1,v2; intros;
-      simpl; auto;
-        inv H; inv H0; simpl; eauto using val_erasure_refl.
-  Qed.
-
-  
-  Hint Resolve val_erasure_offset_ptr val_erasure_longofintu val_erasure_longofint
-       val_erasure_longoffloat val_erasure_longofsingle val_erasure_singleoflong
-       val_erasure_floatoflong val_erasure_negl val_erasure_addl val_erasure_subl
-       val_erasure_mull val_erasure_mullhs val_erasure_mullhu val_erasure_shrl
-       val_erasure_andl val_erasure_orl val_erasure_xorl val_erasure_notl val_erasure_shll
-       val_erasure_shrlu val_erasure_rorl : val_erasure.
-
   Lemma eval_addrmode64_erase:
     forall g a rs rs',
       regs_erasure rs rs' ->
@@ -824,6 +572,13 @@ Module X86CoreErasure.
       eauto with val_erasure regs_erasure.
   Qed.
 
+  Hint Resolve compare_ints_erasure compare_floats_erasure
+       compare_floats32_erasure val_erasure_addrmode eval_addrmode32_erase
+       eval_addrmode64_erase regs_erasure_undef : regs_erasure.
+  Hint Extern 0 (val_erasure (undef_regs _ _ # _ <- _ _) _) =>
+  eapply regs_erasure_set : regs_erasure.
+
+
   Lemma exec_instr_erased:
     forall (g : genv) (fn : function) (i : instruction) (rs rs' rs2: regset)
       (m m' m2 : mem) ev
@@ -838,7 +593,6 @@ Module X86CoreErasure.
       mem_event_list_erasure ev ev'.
   Proof.
     intros.
-    Opaque eval_addrmode.
     destruct i eqn:?; simpl in *;
     unfold goto_label in *;
     repeat match goal with
@@ -849,7 +603,7 @@ Module X86CoreErasure.
                by (eauto; rewrite H; congruence);
                rewrite H;
                destruct b
-           end. Focus 44.
+           end;
     (* see if this does anything*)
       repeat match goal with
              | [|- match (?Rs ?R) with _ => _ end = _] =>
@@ -927,10 +681,7 @@ Module X86CoreErasure.
                eapply loadbytes_erasure in H; eauto;
                destruct H as [? [? ?]]
              end;
-      unfold nextinstr_nf, nextinstr, Vone, Vzero. Focus 44.
-      (* unfold eval_addrmode in *; *)
-      (* assert (Harchi: Archi.ptr64 = false) by auto; *)
-      (* try erewrite Harchi in *; *)
+      unfold nextinstr_nf, nextinstr, Vone, Vzero;
       repeat match goal with
              | [H: Val.divu (rs ?R) (rs # ?R2 <- ?V ?R3) = _ |- _] =>
                eapply val_erasure_divu_result with (v1' := rs' R)
@@ -985,8 +736,6 @@ Module X86CoreErasure.
                eauto with val_erasure regs_erasure
              | [|- exists _ _ _, _ ] => do 3 eexists; split; try reflexivity
              end; try (by exfalso); try assumption.
-    
-    
     destruct (eval_testcond c rs) as [[]|] eqn:Heq; simpl;
     try pose proof (erasure_eval_testcond _ HeraseCores Heq);
     try congruence;
