@@ -1086,7 +1086,7 @@ Module Parching <: ErasureSig.
         apply cntAdd' in cnti'.
         destruct cnti' as [[H1 H2] | H1].
         * inversion dinv.
-          move: (thread_data_lock_coh i H1)=> [] AA _.
+          move: (thread_data_lock_coh0 i H1)=> [] AA _.
           move => j cntj.
           assert (cntj':=cntj).
           apply cntAdd' in cntj'.
@@ -1107,7 +1107,7 @@ Module Parching <: ErasureSig.
         apply cntAdd' in cnti'.
         destruct cnti' as [[H1 H2] | H1].
         * inversion dinv.
-          move: (thread_data_lock_coh i H1)=> [] _ BB.
+          move: (thread_data_lock_coh0 i H1)=> [] _ BB.
           move => l rm.
           rewrite (gsoAddRes _ _ _ _ H1).
           rewrite gsoAddLPool.
@@ -1119,7 +1119,7 @@ Module Parching <: ErasureSig.
     - move=> l rm;
               rewrite gsoAddLPool => isLock.
       inversion dinv.
-      move: (locks_data_lock_coh l rm isLock)=> [] AA BB.
+      move: (locks_data_lock_coh0 l rm isLock)=> [] AA BB.
       split.
       + move => j cntj.
         assert (cntj':=cntj).
@@ -1134,7 +1134,7 @@ Module Parching <: ErasureSig.
         eauto.
     - move => b ofs.
       inversion dinv; simpl; eauto.
-      apply lockRes_valid.
+      apply lockRes_valid0.
   Qed.
 
   Lemma same_shape_map:
@@ -4563,13 +4563,13 @@ Here be dragons
         inversion Hinv; apply no_race_thr; auto.
     - intros j cnt H.
       inversion Hinv.
-      simpl. apply thread_data_lock_coh.
+      simpl. apply thread_data_lock_coh0.
     - intros j cnt H b0 ofs0.
       destruct (CASES b0 ofs0) as [PO | NV].
       + eapply perm_coh_lower; [| apply po_refl | eauto].
         rewrite m1_spec.
         inversion Hinv.
-        apply thread_data_lock_coh.
+        apply thread_data_lock_coh0.
       + move: (mem_compatible_invalid_block ofs0 Hcompatible NV)
         => [] /(_ j cnt) [] _ -> _.
         apply perm_coh_empty_1.
@@ -4588,12 +4588,12 @@ Here be dragons
           apply permMapsDisjoint_permDisjoint.
         inversion Hinv; eapply no_race; eauto.
     - intros l pmap0 H; split=> b0 ofs0.
-      + inversion Hinv. eapply thread_data_lock_coh; eauto.
+      + inversion Hinv. eapply thread_data_lock_coh0; eauto.
       + destruct (CASES b0 ofs0) as [PO | NV].
         * eapply perm_coh_lower; [| apply po_refl | eauto].
           rewrite m1_spec.
           inversion Hinv.
-          destruct (locks_data_lock_coh _ _ H).
+          destruct (locks_data_lock_coh0 _ _ H).
           eapply H0.
         * move: (mem_compatible_invalid_block ofs0 Hcompatible NV)
           => [] _ /(_ l pmap0 H) [] _ -> .
@@ -4603,7 +4603,7 @@ Here be dragons
       * eapply perm_coh_lower; [| apply po_refl | eauto].
         rewrite m1_spec.
         inversion Hinv.
-        destruct (thread_data_lock_coh i Hi).
+        destruct (thread_data_lock_coh0 i Hi).
         eapply H.
       * move: (mem_compatible_invalid_block ofs0 Hcompatible NV)
         => [] /(_ i Hi) [] _ -> _.
