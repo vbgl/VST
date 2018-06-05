@@ -518,9 +518,9 @@ Module HybridMachineSig.
       Qed.
       Lemma step_equivalence3: forall U tr st m U' tr' st' m',
           @external_step U tr st m U' tr' st' m' ->
-          @machine_step U tr st m U' tr' st' m'.
+          exists tr1, tr' = tr ++ tr1 /\ @machine_step U tr st m U' tr' st' m'.
       Proof. move=>  U tr st m U' nil st' m' estp.
-             inversion estp;
+             inversion estp; do 2 eexists; try reflexivity; try solve [symmetry; apply List.app_nil_r];
                [
                  solve[econstructor 1 ; eauto]|
                  solve[econstructor 2 ; eauto]|
@@ -667,17 +667,17 @@ Module HybridMachineSig.
         - constructor.
         - constructor; auto.
         - apply step_equivalence1 in Hstep as [[]|].
-          + eapply concur_CoreSafe; eauto.
+          + eapply concur_Internal; eauto.
           + simpl in *.
-            inversion H0; subst; try solve [apply schedSkip_id in HschedS; subst; constructor; auto].
-            * admit.
-            * admit.
+            inversion H0; subst; try solve [apply schedSkip_id in HschedS; subst; constructor; auto];
+              eapply concur_External; eauto.
         - apply step_equivalence1 in Hstep as [[]|].
           + simpl in *.
             apply schedSkip_id in H0; subst.
             constructor; auto.
-          + eapply concur_AngelSafe; eauto.
-      Admitted.
+          + simpl in *.
+            eapply concur_External_Angel; eauto.
+      Qed.
 
       Lemma concur_safe_csafe: forall U tr tp m n, concur_safe U tp m n -> csafe (U, tr, tp) m n.
       Proof.
@@ -687,9 +687,17 @@ Module HybridMachineSig.
         - constructor; auto.
         - eapply step_equivalence2 in Hstep as [].
           eapply CoreSafe; hnf; simpl; eauto.
-        - inversion Hstep; subst; eapply AngelSafe; hnf; simpl; eauto.
-          + admit.
-          + admit.
+        - inversion Hstep; subst; try solve [apply schedSkip_id in HschedS; subst; constructor; auto];
+            eapply CoreSafe; hnf; simpl; eauto.
+          + setoid_rewrite List.app_nil_r.
+            rewrite <- H4 at 2.
+            eapply start_step; eauto.
+          + setoid_rewrite List.app_nil_r.
+            rewrite <- H4 at 2.
+            eapply resume_step; eauto.
+        - inversion Hstep; subst;
+            try solve [symmetry in H4; simpl in H4; apply schedSkip_id in H4; subst; constructor; auto];
+            eapply AngelSafe; hnf; simpl; eauto.
           + setoid_rewrite List.app_nil_r.
             eapply suspend_step; eauto.
           + eapply sync_step; eauto.
@@ -697,7 +705,7 @@ Module HybridMachineSig.
             eapply halted_step; eauto.
           + setoid_rewrite List.app_nil_r.
             eapply schedfail; eauto.
-      Admitted.
+      Qed.
 
     End HybridCoarseMachine.
   End HybridCoarseMachine.
