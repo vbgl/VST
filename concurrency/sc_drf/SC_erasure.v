@@ -720,6 +720,7 @@ Module ValErasure.
     inv Hval_erasure.
     reflexivity.
   Qed.
+
   Lemma val_erasure_longofintu:
     forall v v'
       (Hval_erasure: val_erasure v v'),
@@ -772,6 +773,17 @@ Module ValErasure.
       eauto using val_erasure_refl.
   Qed.
 
+  Lemma val_erasure_longofwords:
+    forall v1 v1' v2 v2'
+      (Hval_erasure: val_erasure v1 v1')
+      (Hval_erasure: val_erasure v2 v2'),
+      val_erasure (Val.longofwords v1 v2) (Val.longofwords v1' v2').
+  Proof.
+    intros.
+    destruct v1, v2; simpl in *; subst;
+      now auto.
+  Qed.
+
   Lemma val_erasure_singleoflong:
     forall v v'
       (Hval_erasure: val_erasure v v'),
@@ -817,6 +829,19 @@ Module ValErasure.
     destruct v1,v2; intros;
       simpl; auto;
         inv H; inv H0; simpl; auto.
+  Qed.
+
+  Lemma val_erasure_subl_overflow:
+    forall v1 v2 v1' v2',
+      val_erasure v1 v1' ->
+      val_erasure v2 v2' ->
+      val_erasure (Val.subl_overflow v1 v2) (Val.subl_overflow v1' v2').
+  Proof.
+    unfold Val.subl_overflow.
+    destruct v1,v2; intros;
+      simpl; auto;
+        inv H; inv H0; simpl;
+          now auto.
   Qed.
 
   Lemma val_erasure_mull:
@@ -938,6 +963,16 @@ Module ValErasure.
       simpl; auto;
         inv H; inv H0; simpl; eauto using val_erasure_refl.
   Qed.
+
+  Lemma val_erasure_negativel:
+    forall v v',
+      val_erasure v v' ->
+      val_erasure (Val.negativel v) (Val.negativel v').
+  Proof.
+    intros.
+    destruct v; inv H; simpl; now auto.
+  Qed.
+
   
   Hint Resolve val_defined_add_1 val_defined_add_2 : val_defined.
 
@@ -959,10 +994,11 @@ Module ValErasure.
        val_erasure_divfs val_erasure_negfs val_erasure_absfs
        val_erasure_offset_ptr val_erasure_longofintu val_erasure_longofint
        val_erasure_longoffloat val_erasure_longofsingle val_erasure_singleoflong
-       val_erasure_floatoflong val_erasure_negl val_erasure_addl val_erasure_subl
+       val_erasure_floatoflong val_erasure_longofwords
+       val_erasure_negl val_erasure_addl val_erasure_subl val_erasure_subl_overflow
        val_erasure_mull val_erasure_mullhs val_erasure_mullhu val_erasure_shrl
        val_erasure_andl val_erasure_orl val_erasure_xorl val_erasure_notl val_erasure_shll
-       val_erasure_shrlu val_erasure_rorl : val_erasure.
+       val_erasure_shrlu val_erasure_rorl val_erasure_negativel : val_erasure.
 
   Hint Immediate val_erasure_refl : val_erasure.
 
@@ -1456,6 +1492,26 @@ Module MemErasure.
       eapply mem_erasure_valid_pointer in Heqb2; eauto.
       exfalso; now eauto.
   Qed.
+
+  Lemma val_erasure_cmplu:
+    forall v1 v2 v1' v2' m m' cmp
+      (Hval_erasure: val_erasure v1 v1')
+      (Hval_erasure2: val_erasure v2 v2')
+      (Hmem: mem_erasure m m'),
+      val_erasure (Val.maketotal (Val.cmplu (Mem.valid_pointer m) cmp v1 v2))
+                  (Val.maketotal (Val.cmplu (Mem.valid_pointer m') cmp v1' v2')).
+  Proof with eauto with val_erasure.
+    intros.
+    destruct v1,v2; simpl in *; inv Hval_erasure; auto;
+      unfold Val.cmplu, Val.cmplu_bool; simpl; eauto with val_erasure;
+        do 2 rewrite andb_if;
+        repeat match goal with
+               | [|- context[match ?Expr with | _ => _ end]] =>
+                 destruct Expr eqn:?
+               end; simpl; eauto with val_erasure.
+  Qed.
+
+  Hint Resolve val_erasure_cmplu : val_erasure.
 
   Lemma storev_pointer:
     forall chunk m vptr v m',

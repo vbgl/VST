@@ -148,13 +148,15 @@ Definition drf_instr (ge:genv) (c: code) (i: instruction) (rs: regset) (m: mem)
                                   end
                   | _ => None
                   end
-  | Pmov_rm_a rd a => match eval_addrmode ge a rs with
-                    Vptr b ofs => match Mem.loadbytes m b (Ptrofs.unsigned ofs) (size_chunk Many32) with
-                                    Some bytes => Some [Read b (Ptrofs.unsigned ofs) (size_chunk Many32) bytes]
-                                  | None => None
-                                  end
-                  | _ => None
-                  end
+  | Pmov_rm_a rd a =>
+    match eval_addrmode ge a rs with
+      Vptr b ofs =>
+      match Mem.loadbytes m b (Ptrofs.unsigned ofs) (size_chunk (if Archi.ptr64 then Many64 else Many32)) with
+        Some bytes => Some [Read b (Ptrofs.unsigned ofs) (size_chunk (if Archi.ptr64 then Many64 else Many32)) bytes]
+      | None => None
+      end
+    | _ => None
+    end
   | Pmovsd_fm_a rd a => match eval_addrmode ge a rs with
                     Vptr b ofs => match Mem.loadbytes m b (Ptrofs.unsigned ofs) (size_chunk Many64) with
                                     Some bytes => Some [Read b (Ptrofs.unsigned ofs) (size_chunk Many64) bytes]
@@ -464,8 +466,8 @@ Inductive asm_ev_step ge: state -> mem -> list mem_event -> state -> mem -> Prop
       Genv.find_funct_ptr ge b = Some (Internal f) ->
       find_instr (Ptrofs.unsigned ofs) f.(fn_code) = Some i ->
       exec_instr ge f i rs m = Next rs' m' ->
-      drf_instr ge (fn_code f) i rs m = T ->
-      asm_ev_step ge (State rs m1) m (option_list_to_list T) (State rs' m1') m'
+      drf_instr ge (fn_code f) i rs m = Some T ->
+      asm_ev_step ge (State rs m1) m T (State rs' m1') m'
   | exec_step_builtin:
       forall b ofs f ef args res rs m1 m vargs t T1 T2 vres rs' m1' m',
       rs PC = Vptr b ofs ->
@@ -500,10 +502,62 @@ Qed.
 Lemma asm_ev_ax2 g (Hsafe : safe_genv g) :
   forall c m c' m' (CS:corestep (Asm_mem_sem g Hsafe (*hf*)) c m c' m'),
    exists T, asm_ev_step g c m T c' m'.
-Proof. inversion 1; subst.
+Proof.
+  inversion 1; subst.
   destruct c, c'; simpl in *.
   inv H.
-- eexists; econstructor; eauto.
+  - remember (drf_instr g (fn_code f) i r m) eqn:Hdrf.
+    pose proof Hdrf as Hdrf'.
+    symmetry in Hdrf'. 
+    unfold drf_instr in Hdrf.
+    unfold exec_instr in *.
+    assert (exists T, drf_instr g (fn_code f) i r m = Some T).
+    { clear H0.
+      assert (Archi.ptr64 = false) by auto.
+      destruct i; subst; 
+        repeat match goal with
+               |[H: exec_load _ _ _ _ _ _ = _ |- _] =>
+                unfold exec_load in H
+               |[H: exec_store _ _ _ _ _ _ _ = _ |- _] =>
+                unfold exec_store in H
+               |[H:context[Mem.loadv _ _ (eval_addrmode ?E1 ?E2 ?E3)] |- _] =>
+                destruct (eval_addrmode E1 E2 E3); simpl in H; try discriminate
+               |[H:context[Mem.storev _ _ (eval_addrmode ?E1 ?E2 ?E3) _] |- _] =>
+                destruct (eval_addrmode E1 E2 E3); simpl in H; try discriminate
+               |[H: match Mem.load ?E1 ?E2 ?E3 ?E4 with _ => _ end = _ |- _] =>
+                destruct (Mem.load E1 E2 E3 E4) eqn:?; try discriminate
+               |[H: match Mem.store ?E1 ?E2 ?E3 ?E4 ?E5 with _ => _ end = _ |- _] =>
+                destruct (Mem.store E1 E2 E3 E4 E5) eqn:?; try discriminate
+               |[H: Mem.load _ _ _ _ = _  |- _] =>
+                eapply Mem.load_loadbytes in H;
+                  destruct H as [? [? ?]]
+               |[H: Mem.store _ _ _ _ _ = _  |- _] =>
+                eapply Mem.store_storebytes in H
+               |[H: Mem.loadbytes _ _ _ _ = _, H1: _ = match Mem.loadbytes _ _ _ _ with _ => _ end |- _] =>
+                rewrite H in H1
+               |[H: Mem.storebytes _ _ _ _ _ = _, H1: _ = match Mem.storebytes _ _ _ _ _ with _ => _ end |- _] =>
+                rewrite H in H1
+               |[H: context[if Archi.ptr64 then _ else _] |- _] =>
+                destruct (Archi.ptr64)
+               |[H: context[Mem.alloc ?E1 ?E2 ?E3] |- _] =>
+                destruct (Mem.alloc E1 E2 E3)
+               |[H: match Mem.storev ?E1 ?E2 ?E3 ?E4 with _ => _ end = _ |- _] =>
+                destruct (Mem.storev E1 E2 E3 E4); try discriminate
+               |[H: match ?Expr with _ => _ end = _ |- _] =>
+                destruct Expr eqn:?; try discriminate
+               end;
+        try (eexists; now eauto).
+      destruct ((Val.offset_ptr (Vptr b0 i) ofs_ra)); simpl in Heqo; try discriminate.
+      destruct ((Val.offset_ptr (Vptr b0 i) ofs_link)); simpl in Heqo0; try discriminate.
+      eapply Mem.load_loadbytes in Heqo; eauto.
+      eapply Mem.load_loadbytes in Heqo0.
+      destruct Heqo as [? [Hload ?]].
+      destruct Heqo0 as [? [Hload0 ?]].
+      rewrite Hload, Hload0 in Hdrf'.
+      now eauto.
+    }
+    destruct H.
+    eexists; econstructor; now eauto.
 - exploit Hsafe; eauto.
   apply eval_builtin_args_eval_builtin_args_ev in H9 as [T H9].
   destruct ef; try solve [intros []; subst; exists (T ++ nil); econstructor 2; eauto; constructor; auto]; intros _.
@@ -539,32 +593,35 @@ Lemma asm_ev_elim g (Hsafe : safe_genv g): forall c m T c' m'
 Proof.
 intros.
 inv Estep; try contradiction.
-clear - H2.
-destruct i; inv H2;
-  try solve [simpl; eexists; split; eauto];
+clear - H2 H3.
+(* assert (Harchi: Archi.ptr64 = false) by auto. *)
+destruct i; inv H2; simpl in *; inv H3; simpl; eauto;
   unfold exec_load, exec_store in *;
-  simpl;
-try solve [
-  try match goal with
+  simpl in *;
+try match goal with
     | H0 : match ?L with Some _ => _ | None => _ end = _ |- _ =>
         destruct L eqn:H; inv H0
-   end;
-   try match goal with
-   H: context [eval_addrmode ?G ?A ?C] |- _  => 
-     destruct (eval_addrmode G A C) eqn:H2; try discriminate; simpl in H
-   end;
-   try (destruct (Mem.load_loadbytes _ _ _ _ _ H) as [bytes [LB V]]; simpl in LB; rewrite LB;
-         simpl; split; auto);
-   try (apply Mem.store_storebytes in H; simpl; eexists; split; eauto);
+    end;
    repeat match goal with
+          | [H: context [eval_addrmode ?G ?A ?C] |- _]  => 
+            destruct (eval_addrmode G A C) eqn:H2; try discriminate; simpl in H
+          | [H: Mem.load _ _ _ _ = _, H1: match Mem.loadbytes _ _ _ _ with _ => _ end = _ |- _] =>
+            eapply Mem.load_loadbytes in H;
+              destruct H as [bytes [LB LV]]; simpl in LB; rewrite LB in H1; inv H1
+          | [H: Some _ = Some _ |- _] =>
+            inv H
+          | [H: Mem.storev _ _ _ _ = _ |- _] =>
+            eapply Mem.store_storebytes in H; try (simpl; eexists; split; now eauto)
+          end; try (simpl; split; auto);
+   try (repeat match goal with
    | H: match ?X with Vundef => _ | Vint _ => _ | Vlong _ => _ | Vfloat _ => _ | Vsingle _ => _ | Vptr _ _ => _ end = _ |- _ => destruct X; inv H
    | H: match ?X with Some _ => _ | None => _ end = _ |- _ => first [destruct X as [[]|] | destruct X]; inv H
-   | H: (if ?B then _ else _) = _ |- _ => destruct b; try discriminate
+   (* | H: context[if Archi.ptr64 then _ else _] |- _ => rewrite Harchi in H *)
+   | H: context[if ?B then _ else _] |- _ => destruct B; try discriminate
    | H: goto_label _ _ _ _ = Next _ _ |- _ => apply goto_label_mem_same in H; subst
    | H: Next _ _ = Next _ _ |- _ => inv H 
    end;
-   eexists; split; eauto].
-
+        eexists; split; now eauto).
   - (*Pallocframe*)
     destruct (Mem.alloc m 0 sz) eqn:?H.
     destruct (Mem.store Mptr m0 b (Ptrofs.unsigned (Ptrofs.add Ptrofs.zero ofs_link)) (rs RSP)) eqn:?H;
@@ -572,27 +629,29 @@ try solve [
     destruct (Mem.store Mptr m1 b (Ptrofs.unsigned (Ptrofs.add Ptrofs.zero ofs_ra)) (rs RA)) eqn:?H;
       try discriminate.
     inv H0.
-    apply Mem.store_storebytes in H1.
     apply Mem.store_storebytes in H2.
+    apply Mem.store_storebytes in H3.
     rewrite Ptrofs.add_zero_l in *.
-    econstructor. split. eassumption.
-    econstructor. split. eassumption.
-    econstructor. split. eassumption.
-    econstructor.
+    inv H1.
+    simpl.
+    eexists; split;
+      now eauto.
   - (*Pfreeframe*)
-    destruct (Mem.loadv Mptr m (Val.offset_ptr (rs RSP) ofs_ra)) eqn:?H; try discriminate.
     destruct (Mem.loadv Mptr m (Val.offset_ptr (rs RSP) ofs_link)) eqn:?H; try discriminate.
     destruct (rs RSP); try discriminate.
-    destruct (Mem.free m b 0 sz) eqn:?H; inv H0.
-    simpl.
+    destruct (Mem.free m b 0 sz) eqn:Hfree. inv H0.
     destruct (Mem.load_loadbytes _ _ _ _ _ H) as [bytes1 [Bytes1 LD1]].
     destruct (Mem.load_loadbytes _ _ _ _ _ H1) as [bytes2 [Bytes2 LD2]].
-    simpl in Bytes1, Bytes2.
-    rewrite Bytes1, Bytes2.
-    econstructor. trivial.
-    econstructor. trivial.
-    econstructor. split. simpl. rewrite H2; trivial.
-    econstructor.
+    subst.
+    destruct (Val.offset_ptr (Vptr b i) ofs_ra); try discriminate.
+    destruct (Val.offset_ptr (Vptr b i) ofs_link); try discriminate.
+    destruct (Mem.loadbytes m b0 (Ptrofs.unsigned i0) (size_chunk Mptr)) eqn:?,
+    (Mem.loadbytes m b1 (Ptrofs.unsigned i1) (size_chunk Mptr)) eqn:?; try discriminate.
+    inv H3.
+    simpl.
+    split; auto. split; auto.
+    eexists. rewrite Hfree; split; eauto.
+    discriminate.
 - destruct (eval_builtin_args_ev_elim_strong _ _ _ _ _ _ _ H2).
   eapply ev_elim_app; eauto.
   exploit Hsafe; eauto.
@@ -643,8 +702,10 @@ Qed.
 Lemma asm_ev_elim_strong g (Hsafe : safe_genv g): forall c m T c' m' (Estep: asm_ev_step g c m T c' m'),
       ev_elim m T m' /\ (forall mm mm', ev_elim mm T mm' -> exists cc', asm_ev_step g c mm T cc' mm').
 Proof.
-induction 1; intros; try contradiction.
-destruct i; inv H2; try solve [split;
+  induction 1; intros; try contradiction.
+  destruct i; inv H2;
+  simpl in H3; inv H3;
+  try solve [split; simpl;
         first [eexists; split; reflexivity |
                intros mm mm' EV'; inv EV'; destruct H2 as [FL EV']; inv EV'; inv FL;
                  eexists (State _ m1); econstructor; try eassumption; reflexivity]];
@@ -656,7 +717,7 @@ destruct i; inv H2; try solve [split;
     remember (eval_addrmode g a rs) as q.
     destruct q; try discriminate.
     destruct (Mem.load_loadbytes _ _ _ _ _ Heqp) as [bytes [LB V]]; simpl in LB.
-    rewrite LB. (* in H4; inv H4. *) inv H5.
+    rewrite LB in H4. inv H4. inv H5.
     split.
     * constructor; simpl; trivial.
     * intros mm mm' EV'; inv EV'. inv H3.
@@ -671,7 +732,7 @@ destruct i; inv H2; try solve [split;
     remember (eval_addrmode g a rs) as q.
     destruct q; try discriminate.
     destruct (Mem.load_loadbytes _ _ _ _ _ Heqp) as [bytes [LB V]]; simpl in LB.
-    rewrite LB. (* in H4; inv H4. *) inv H5.
+    rewrite LB in H4; inv H4. inv H5.
     split.
     * constructor; simpl; trivial.
     * intros mm mm' EV'; inv EV'. inv H3.
@@ -684,7 +745,7 @@ destruct i; inv H2; try solve [split;
     remember (Mem.storev Mint32 m (eval_addrmode g a rs) (rs rs0)) as p.
     destruct p; try discriminate; symmetry in Heqp.
     remember (eval_addrmode g a rs) as q.
-    destruct q; try discriminate. inv H5 (*; inv H4 *) .
+    destruct q; try discriminate. inv H5; inv H4.
     destruct (Mem.store_valid_access_3 _ _ _ _ _ _ Heqp) as [_ ALIGN].
     apply Mem.store_storebytes in Heqp.
     split.
@@ -698,7 +759,7 @@ destruct i; inv H2; try solve [split;
     remember (Mem.storev Mint64 m (eval_addrmode g a rs) (rs rs0)) as p.
     destruct p; try discriminate; symmetry in Heqp.
     remember (eval_addrmode g a rs) as q.
-    destruct q; try discriminate. inv H5 (*; inv H4 *) .
+    destruct q; try discriminate. inv H5; inv H4.
     destruct (Mem.store_valid_access_3 _ _ _ _ _ _ Heqp) as [_ ALIGN].
     apply Mem.store_storebytes in Heqp.
     split.
@@ -714,7 +775,7 @@ destruct i; inv H2; try solve [split;
     remember (eval_addrmode g a rs) as q.
     destruct q; try discriminate.
     destruct (Mem.load_loadbytes _ _ _ _ _ Heqp) as [bytes [LB V]]; simpl in LB.
-    rewrite LB (*in H4; inv H4*). inv H5.
+    rewrite LB in H4; inv H4. inv H5.
     split.
     * constructor; simpl; trivial.
     * intros mm mm' EV'; inv EV'. inv H3.
@@ -727,7 +788,7 @@ destruct i; inv H2; try solve [split;
     remember (Mem.storev Mfloat64 m (eval_addrmode g a rs) (rs r1)) as p.
     destruct p; try discriminate; symmetry in Heqp.
     remember (eval_addrmode g a rs) as q.
-    destruct q; try discriminate. inv H5 (*; inv H4*).
+    destruct q; try discriminate. inv H5; inv H4.
     destruct (Mem.store_valid_access_3 _ _ _ _ _ _ Heqp) as [_ ALIGN].
     apply Mem.store_storebytes in Heqp.
     split.
@@ -743,7 +804,7 @@ destruct i; inv H2; try solve [split;
     remember (eval_addrmode g a rs) as q.
     destruct q; try discriminate.
     destruct (Mem.load_loadbytes _ _ _ _ _ Heqp) as [bytes [LB V]]; simpl in LB.
-    rewrite LB (*in H4; inv H4*). inv H5.
+    rewrite LB in H4; inv H4. inv H5.
     split.
     * constructor; simpl; trivial.
     * intros mm mm' EV'; inv EV'. inv H3.
@@ -756,7 +817,7 @@ destruct i; inv H2; try solve [split;
     remember (Mem.storev Mfloat32 m (eval_addrmode g a rs) (rs r1)) as p.
     destruct p; try discriminate; symmetry in Heqp.
     remember (eval_addrmode g a rs) as q.
-    destruct q; try discriminate. inv H5 (*; inv H4*).
+    destruct q; try discriminate. inv H5; inv H4.
     destruct (Mem.store_valid_access_3 _ _ _ _ _ _ Heqp) as [_ ALIGN].
     apply Mem.store_storebytes in Heqp.
     split.
@@ -772,7 +833,7 @@ destruct i; inv H2; try solve [split;
     remember (eval_addrmode g a rs) as q.
     destruct q; try discriminate.
     destruct (Mem.load_loadbytes _ _ _ _ _ Heqp) as [bytes [LB V]]; simpl in LB.
-    rewrite LB (*in H4; inv H4*). inv H5.
+    rewrite LB in H4; inv H4. inv H5.
     split.
     * constructor; simpl; trivial.
     * intros mm mm' EV'; inv EV'. inv H3.
@@ -785,7 +846,7 @@ destruct i; inv H2; try solve [split;
     remember (Mem.storev Mfloat64 m (eval_addrmode g a rs) (rs ST0)) as p.
     destruct p; try discriminate; symmetry in Heqp.
     remember (eval_addrmode g a rs) as q.
-    destruct q; try discriminate. inv H5 (*; inv H4*).
+    destruct q; try discriminate. inv H5; inv H4.
     destruct (Mem.store_valid_access_3 _ _ _ _ _ _ Heqp) as [_ ALIGN].
     apply Mem.store_storebytes in Heqp.
     split.
@@ -800,7 +861,7 @@ destruct i; inv H2; try solve [split;
     remember (eval_addrmode g a rs) as q.
     destruct q; try discriminate.
     destruct (Mem.load_loadbytes _ _ _ _ _ Heqp) as [bytes [LB V]]; simpl in LB.
-    rewrite LB (*in H4; inv H4*). inv H5.
+    rewrite LB in H4; inv H4. inv H5.
     split.
     * constructor; simpl; trivial.
     * intros mm mm' EV'; inv EV'. inv H3.
@@ -813,7 +874,7 @@ destruct i; inv H2; try solve [split;
     remember (Mem.storev Mfloat32 m (eval_addrmode g a rs) (rs ST0)) as p.
     destruct p; try discriminate; symmetry in Heqp.
     remember (eval_addrmode g a rs) as q.
-    destruct q; try discriminate. inv H5 (*; inv H4*).
+    destruct q; try discriminate. inv H5; inv H4.
     destruct (Mem.store_valid_access_3 _ _ _ _ _ _ Heqp) as [_ ALIGN].
     apply Mem.store_storebytes in Heqp.
     split.
@@ -830,6 +891,7 @@ destruct i; inv H2; try solve [split;
     destruct q; try discriminate. inv H5.
     destruct (Mem.store_valid_access_3 _ _ _ _ _ _ Heqp) as [_ ALIGN].
     apply Mem.store_storebytes in Heqp.
+    inv H4.
     split.
     * econstructor. split; simpl; trivial. eassumption.
     * intros mm mm' EV'; inv EV'. destruct H2. inv H3.
@@ -844,6 +906,7 @@ destruct i; inv H2; try solve [split;
     destruct q; try discriminate. inv H5.
     destruct (Mem.store_valid_access_3 _ _ _ _ _ _ Heqp) as [_ ALIGN].
     apply Mem.store_storebytes in Heqp.
+    inv H4.
     split.
     * econstructor. split; simpl; trivial. eassumption.
     * intros mm mm' EV'; inv EV'. destruct H2. inv H3.
@@ -857,7 +920,7 @@ destruct i; inv H2; try solve [split;
     remember (eval_addrmode g a rs) as q.
     destruct q; try discriminate.
     destruct (Mem.load_loadbytes _ _ _ _ _ Heqp) as [bytes [LB V]]; simpl in LB.
-    rewrite LB. inv H5.
+    rewrite LB in H4. inv H5. inv H4.
     split.
     * constructor; simpl; trivial.
     * intros mm mm' EV'; inv EV'. inv H3.
@@ -871,7 +934,7 @@ destruct i; inv H2; try solve [split;
     remember (eval_addrmode g a rs) as q.
     destruct q; try discriminate.
     destruct (Mem.load_loadbytes _ _ _ _ _ Heqp) as [bytes [LB V]]; simpl in LB.
-    rewrite LB. inv H5.
+    rewrite LB in H4. inv H5. inv H4.
     split.
     * constructor; simpl; trivial.
     * intros mm mm' EV'; inv EV'. inv H3.
@@ -886,7 +949,7 @@ destruct i; inv H2; try solve [split;
     remember (eval_addrmode g a rs) as q.
     destruct q; try discriminate.
     destruct (Mem.load_loadbytes _ _ _ _ _ Heqp) as [bytes [LB V]]; simpl in LB.
-    rewrite LB. inv H5.
+    rewrite LB in H4. inv H5. inv H4.
     split.
     * constructor; simpl; trivial.
     * intros mm mm' EV'; inv EV'. inv H3.
@@ -901,7 +964,7 @@ destruct i; inv H2; try solve [split;
     remember (eval_addrmode g a rs) as q.
     destruct q; try discriminate.
     destruct (Mem.load_loadbytes _ _ _ _ _ Heqp) as [bytes [LB V]]; simpl in LB.
-    rewrite LB. inv H5.
+    rewrite LB in H4. inv H5. inv H4.
     split.
     * constructor; simpl; trivial.
     * intros mm mm' EV'; inv EV'. inv H3.
@@ -1034,8 +1097,9 @@ destruct i; inv H2; try solve [split;
     destruct p; try discriminate; symmetry in Heqp.
     remember (eval_addrmode g a rs) as q.
     destruct q; try discriminate.
-    destruct (Mem.load_loadbytes _ _ _ _ _ Heqp) as [bytes [LB V]]; simpl in LB.
-    rewrite LB. inv H5.
+    remember (if Archi.ptr64 then Many64 else Many32) as mchunk.
+    destruct (Mem.load_loadbytes _ _ _ _ _ Heqp) as [bytes [LB V]]; simpl in LB;
+    rewrite LB in H4; inv H5. inv H4.
     split.
     * constructor; simpl; trivial.
     * intros mm mm' EV'; inv EV'. inv H3.
@@ -1049,8 +1113,9 @@ destruct i; inv H2; try solve [split;
     destruct p; try discriminate; symmetry in Heqp.
     remember (eval_addrmode g a rs) as q.
     destruct q; try discriminate. inv H5.
+    remember (if Archi.ptr64 then Many64 else Many32) as mchunk.
     destruct (Mem.store_valid_access_3 _ _ _ _ _ _ Heqp) as [_ ALIGN].
-    apply Mem.store_storebytes in Heqp.
+    apply Mem.store_storebytes in Heqp. inv H4.
     split.
     * econstructor. split; simpl; trivial. eassumption.
     * intros mm mm' EV'; inv EV'. destruct H2. inv H3.
@@ -1064,7 +1129,7 @@ destruct i; inv H2; try solve [split;
     remember (eval_addrmode g a rs) as q.
     destruct q; try discriminate.
     destruct (Mem.load_loadbytes _ _ _ _ _ Heqp) as [bytes [LB V]]; simpl in LB.
-    rewrite LB. inv H5.
+    rewrite LB in H4. inv H5. inv H4.
     split.
     * constructor; simpl; trivial.
     * intros mm mm' EV'; inv EV'. inv H3.
@@ -1079,7 +1144,7 @@ destruct i; inv H2; try solve [split;
     remember (eval_addrmode g a rs) as q.
     destruct q; try discriminate. inv H5.
     destruct (Mem.store_valid_access_3 _ _ _ _ _ _ Heqp) as [_ ALIGN].
-    apply Mem.store_storebytes in Heqp.
+    apply Mem.store_storebytes in Heqp. inv H4.
     split.
     * econstructor. split; simpl; trivial. eassumption.
     * intros mm mm' EV'; inv EV'. destruct H2. inv H3.
@@ -1099,7 +1164,7 @@ destruct i; inv H2; try solve [split;
     destruct (Mem.store_valid_access_3 _ _ _ _ _ _ Heqq) as [_ ALIGNq].
     apply Mem.store_storebytes in Heqp.
     apply Mem.store_storebytes in Heqq.
-    rewrite Ptrofs.add_zero_l in *.
+    rewrite Ptrofs.add_zero_l in *. inv H4.
     split.
     * econstructor. split. eassumption.
       econstructor. split. eassumption.
@@ -1118,7 +1183,7 @@ destruct i; inv H2; try solve [split;
     inv H5.
     destruct (Mem.load_loadbytes _ _ _ _ _  Heqp) as [bytes1 [Bytes1 LD1]].
     destruct (Mem.load_loadbytes _ _ _ _ _  Heqq) as [bytes2 [Bytes2 LD2]].
-    simpl in *; rewrite Bytes1, Bytes2 in *. (* inv H3. *)
+    simpl in *; rewrite Bytes1, Bytes2 in *. inv H4.
     destruct (Mem.load_valid_access _ _ _ _ _ Heqp) as [_ ALIGN1].
     destruct (Mem.load_valid_access _ _ _ _ _ Heqq) as [_ ALIGN2].
     split.
@@ -1200,6 +1265,6 @@ eapply Build_EvSem with (msem := Asm_mem_sem ge Hsafe (*hf*)) (ev_step:=asm_ev_s
 + eapply asm_ev_ax2; eassumption.
 + eapply asm_ev_fun; eassumption.
 + eapply asm_ev_elim_strong; eassumption.
-Defined. (*helper_functions declared*)
+Defined.
 
 End ASM_EV.
