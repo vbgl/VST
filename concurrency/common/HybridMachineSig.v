@@ -1,3 +1,35 @@
+(* Hybrid Machine Signature *)
+
+(** Defines the structure of Hybrid Machines. Some notable definitions:
+    - MachineSig: The definitions that make a machine possible. That includes
+      The definition of thread_steps, synchronization steps and other 
+      accounting steps (resume, suspend, halt)... It also includes lemmas 
+      about the relations (e.g. syncstep_equal_halted doesn't change halted threads)
+    - machine_step/MachStep: gathers all the posible steps of the hybrid machine in
+      a single smallstep relation. Used to define a Core-semantics for the 
+      HybridMachine.
+    - internal_step/external_step: two smallstep relations that together cover
+      all possible steps of the machine. [internal_step] covers all threadsteps and
+      external_step covers all other steps (synchronizations and accounting)
+    - new_MachineSemantics: builds a ConcurSemantics out of a MachineSig, by using 
+      internal_step/external_step steps.
+    - MachineCoreSemantics: defines a coresemantics for the machine, by using
+      MachStep as a smallstep, and it's never at_external, after_external.
+    - HybridMachine: wraps both definitions of Core-semantics and ConcurSemantics 
+      in a record. The two semantics are identical, except concure-semantics
+      distinguishes between internal/external_step.
+ *)
+
+(**
+   This file also constructs the Coarse and Finegrained HybridMachines 
+   - HybridCoarseMachine
+   - HybridFineMachine
+   
+   Moreover, it defines a notion of csafe for HybridCoarseMachine. (TODO: can this
+   be moved elsewhere? Is this not compatible with fineMachines?
+*)
+
+
 From mathcomp.ssreflect Require Import ssreflect seq ssrbool.
 Require Import compcert.common.Memory.
 Require Import compcert.common.AST.     (*for typ*)
@@ -130,7 +162,6 @@ Module HybridMachineSig.
   (** Used to erase permissions of the machine when needed, e.g. fine
   machine erases max permissions, bare machine erases all permissions
   *)
-  
   Class DiluteMem :=
     { diluteMem: mem -> mem;
       diluteMem_valid: forall m,
@@ -139,15 +170,14 @@ Module HybridMachineSig.
   
   Section HybridMachineSig.
     
-    Variable n: nat.
+    Variable n: option nat.
     Context {resources: Resources}
             {Sem: Semantics}
             {ThreadPool : ThreadPool.ThreadPool}
             {DilMem : DiluteMem}.
     Definition thread_pool := ThreadPool.t.
-    Definition C:= (semC).
-    Definition G:= (semG).
-    
+    Definition C:= (@semC Sem).
+    Definition G:= (@semG Sem).
     Local Notation ctl := (@ctl C).
 
     Class MachineSig :=
@@ -158,7 +188,6 @@ Module HybridMachineSig.
         (** The thread pool respects the memory*)
         ; mem_compatible: thread_pool -> mem -> Prop
         ; invariant: thread_pool -> Prop
-
         ; install_perm: forall {ms m tid},
             mem_compatible ms m -> containsThread ms tid -> mem -> Prop
                                      
@@ -224,7 +253,6 @@ Module HybridMachineSig.
 
     Definition event_trace := (seq machine_event).
     Definition schedule := (seq nat).
-    
     Definition MachState : Type:= (schedule * event_trace * t)%type.
   
     Definition schedPeek sch: option nat:=
@@ -236,11 +264,6 @@ Module HybridMachineSig.
   Definition schedSkip sch: (seq nat):= List.tl sch.
   Definition machine_state := thread_pool.
 
-  (** Resume and Suspend: threads running must be preceded by a Resume
-     and followed by Suspend.  This functions wrap the state to
-     indicate it's ready to take a syncronisation step or resume
-     running. (This keeps the invariant that at most one thread is not
-     at_external) *)
   (*TODO: probably need to update the permissions for initial core too*)
    Inductive start_thread : forall (m: mem) {tid0} {ms:machine_state},
       containsThread ms tid0 -> machine_state -> mem -> Prop:=
@@ -255,7 +278,11 @@ Module HybridMachineSig.
                     (Hms': updThreadC ctn (Krun c_new)  = ms'),
       start_thread m ctn ms' m.
 
-
+   (** Resume and Suspend: threads running must be preceded by a Resume
+       and followed by Suspend.  This functions wrap the state to
+       indicate it's ready to take a syncronisation step or resume
+       running. (This keeps the invariant that at most one thread is not
+       at_external) *)
    Inductive resume_thread' : forall (m: mem) {tid0} {ms:machine_state},
       containsThread ms tid0 -> machine_state -> Prop:=
   | ResumeThread: forall m tid0 ms ms' c c' X m'
@@ -286,13 +313,11 @@ Module HybridMachineSig.
   Definition suspend_thread: forall (m: mem) {tid0 ms},
       containsThread ms tid0 -> machine_state -> Prop:=
     @suspend_thread'.
-
     (** Provides control over scheduling. For example,
         for FineMach this is schedSkip, for CoarseMach this is just id *)
   Class Scheduler :=
     { isCoarse : bool;
       yield: schedule -> schedule}.
-  
   Context {scheduler : Scheduler}.
 
   Inductive machine_step:
@@ -413,8 +438,8 @@ Module HybridMachineSig.
 
       (** The new semantics below makes internal (thread) and external (machine)
           steps explicit *)
-      Inductive internal_step:
-        schedule -> machine_state -> mem -> machine_state -> mem -> Prop :=
+    Inductive internal_step:
+      schedule -> machine_state -> mem -> machine_state -> mem -> Prop :=
       | thread_step':
           forall tid U ms ms' m m' ev
             (HschedN: schedPeek U = Some tid)
@@ -486,16 +511,16 @@ Module HybridMachineSig.
       Lemma step_equivalence2: forall U st m st' m' tr,
           @internal_step U st m st' m' ->
           exists tr',
-            @machine_step U tr st m (yield U) tr' st' m'.
+            @machine_step U tr st m (yield U) (tr ++ tr') st' m'.
       Proof.
         move=>  U st m st' m' tr istp;
                  inversion istp; eexists; solve [econstructor; eauto].
       Qed.
       Lemma step_equivalence3: forall U tr st m U' tr' st' m',
           @external_step U tr st m U' tr' st' m' ->
-          @machine_step U tr st m U' tr' st' m'.
+          exists tr1, tr' = tr ++ tr1 /\ @machine_step U tr st m U' tr' st' m'.
       Proof. move=>  U tr st m U' nil st' m' estp.
-             inversion estp;
+             inversion estp; do 2 eexists; try reflexivity; try solve [symmetry; apply List.app_nil_r];
                [
                  solve[econstructor 1 ; eauto]|
                  solve[econstructor 2 ; eauto]|
@@ -568,12 +593,14 @@ Module HybridMachineSig.
       Notation schedule := (seq nat).
       Notation event_trace := (seq machine_event).
 
-      Definition HybridCoarseMachine : HybridMachine:=
+      Definition HybridCoarseMachine : HybridMachine :=
         @Build_HybridMachine resources Sem ThreadPool _ _ _
                              (MachineCoreSemantics)
                              (new_MachineSemantics)
                              (hybrid_initial_schedule).
 
+
+      
       (** Schedule safety of the coarse-grained machine*)
       Inductive csafe (st : MachState) (m : mem) : nat -> Prop :=
       | Safe_0: csafe st m 0
@@ -587,6 +614,24 @@ Module HybridMachineSig.
                      (Hsafe: forall U'', csafe (U'',(snd (fst st)) ++ tr,tp') m' n),
           csafe st m (S n).
 
+      
+      (** Schedule safety of the coarse-grained machine*)
+      Inductive concur_safe U tp (m : mem) : nat -> Prop :=
+      | concur_Safe_0: concur_safe U tp m 0
+      | concur_HaltedSafe: forall n, halted_machine (U, nil, tp) -> concur_safe U tp m n
+      | concur_Internal : forall tp' m' n
+                     (Hstep: internal_step U tp m tp' m')
+                     (Hsafe: concur_safe U tp' m' n),
+          concur_safe U tp m (S n)
+      | concur_External: forall tp' m' n (tr tr': event_trace)
+                     (Hstep: external_step U tr tp m U tr' tp' m')
+                     (Hsafe: concur_safe U tp' m' n),
+          concur_safe U tp m (S n)
+      | concur_External_Angel: forall tp' m' n (tr tr': event_trace)
+                     (Hstep: external_step U tr tp m (schedSkip U) tr' tp' m')
+                     (Hsafe: forall U'', concur_safe U'' tp' m' n),
+          concur_safe U tp m (S n).
+      
       (* TODO: Make a new file with safety lemmas. *)
       Lemma csafe_reduce:
         forall sched tp tr mem n m,
@@ -604,6 +649,62 @@ Module HybridMachineSig.
         - destruct m0; [constructor|].
           eapply AngelSafe; eauto.
           intro; apply H; omega.
+      Qed.
+
+      Lemma schedSkip_id: forall U, schedSkip U = U -> U = nil.
+      Proof.
+        induction U; auto; simpl; intros.
+        destruct U; try discriminate; simpl in *.
+        inversion H; subst.
+        specialize (IHU H2); discriminate.
+      Qed.
+
+      Lemma csafe_concur_safe: forall U tr tp m n, csafe (U, tr, tp) m n -> concur_safe U tp m n.
+      Proof.
+        intros.
+        remember (U, tr, tp) as st; revert dependent tp; revert U tr.
+        induction H; intros; subst; simpl in *.
+        - constructor.
+        - constructor; auto.
+        - apply step_equivalence1 in Hstep as [[]|].
+          + eapply concur_Internal; eauto.
+          + simpl in *.
+            inversion H0; subst; try solve [apply schedSkip_id in HschedS; subst; constructor; auto];
+              eapply concur_External; eauto.
+        - apply step_equivalence1 in Hstep as [[]|].
+          + simpl in *.
+            apply schedSkip_id in H0; subst.
+            constructor; auto.
+          + simpl in *.
+            eapply concur_External_Angel; eauto.
+      Qed.
+
+      Lemma concur_safe_csafe: forall U tr tp m n, concur_safe U tp m n -> csafe (U, tr, tp) m n.
+      Proof.
+        intros; revert tr.
+        induction H; intro.
+        - constructor.
+        - constructor; auto.
+        - eapply step_equivalence2 in Hstep as [].
+          eapply CoreSafe; hnf; simpl; eauto.
+        - inversion Hstep; subst; try solve [apply schedSkip_id in HschedS; subst; constructor; auto];
+            eapply CoreSafe; hnf; simpl; eauto.
+          + setoid_rewrite List.app_nil_r.
+            rewrite <- H4 at 2.
+            eapply start_step; eauto.
+          + setoid_rewrite List.app_nil_r.
+            rewrite <- H4 at 2.
+            eapply resume_step; eauto.
+        - inversion Hstep; subst;
+            try solve [symmetry in H4; simpl in H4; apply schedSkip_id in H4; subst; constructor; auto];
+            eapply AngelSafe; hnf; simpl; eauto.
+          + setoid_rewrite List.app_nil_r.
+            eapply suspend_step; eauto.
+          + eapply sync_step; eauto.
+          + setoid_rewrite List.app_nil_r.
+            eapply halted_step; eauto.
+          + setoid_rewrite List.app_nil_r.
+            eapply schedfail; eauto.
       Qed.
 
     End HybridCoarseMachine.

@@ -61,7 +61,16 @@ Module THE_DRY_MACHINE_SOURCE.
   Existing Instance OrdinalPool.OrdinalThreadPool.
   Instance DSem : Semantics := ClightSem ge.
 
-  Definition DMachineSem := MachineSemantics(HybridMachine := HybridCoarseMachine.HybridCoarseMachine(machineSig := DryHybridMachine.DryHybridMachineSig)).
+
+  (* First construct the Clight machine and the two projections:
+     - ClightMachineSem (i.e.  MachineSemantics) 
+     - ClightConcurSem (i.e. ConcurMachineSemantics)
+  *)
+  
+  Definition ClightMachine :=(HybridCoarseMachine.HybridCoarseMachine
+                                 (machineSig := DryHybridMachine.DryHybridMachineSig)).
+  Definition ClightMachineSem := (MachineSemantics(HybridMachine := ClightMachine)).
+  Definition ClightConcurSem := (ConcurMachineSemantics(HybridMachine := ClightMachine)).                            
 
 (*  Existing Instance DryHybridMachine.DryHybridMachineSig.
   Existing Instance BareMachine.BareMachineSig.

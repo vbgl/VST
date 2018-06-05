@@ -139,7 +139,7 @@ Qed.
       initial_core (JMachineSem U (Some rmap0)) h
          m (U, [::], js) main vals  ->
       exists (ds : dstate genv),
-        initial_core (DMachineSem U (Some pmap)) h
+        initial_core (ClightMachineSem U (Some pmap)) h
                      m (U, [::], ds) main vals /\
         invariant ds /\ match_st genv js ds.
   Proof.
