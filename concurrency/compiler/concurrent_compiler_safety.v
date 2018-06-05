@@ -4,38 +4,35 @@
     the x86 concurrent semantics.
 *)
 
+Require Import VST.concurrency.common.HybridMachineSig.
 Require Import VST.concurrency.compiler.HybridMachine_simulation.
-
-(*Clight Machine *)
-Require Import VST.concurrency.common.DryMachineSource.
-(*Asm Machine*)
-Require Import VST.concurrency.common.dry_context.
-
 Require Import VST.concurrency.compiler.concurrent_compiler_simulation.
 
 
-Section ConcurrentCopmpilerSpecification.
-  (*Import the Clight Hybrid Machine*)
-  Import THE_DRY_MACHINE_SOURCE.
-  Import DMS.
+Section ConcurrentCopmpilerSafety.
+  Import HybridMachineSig HybridCoarseMachine.
 
-  (*Import the Asm Hybrid Machine*)
-  Import AsmContext.
-  Context (Clight_g : Clight.genv).
-  Context (Asm_g : Clight.genv).
-
-  (*TODO: Define this thing!!! *)
-  Context (Asm_semantics : Semantics).
-
-
-  (* Definition ClightConcurSem := @ClightMachine Clight_g. *)
-  Definition AsmHybridMachine    := @dryCoarseMach Asm_semantics.
-  Definition AsmConcurSem    := HybridMachineSig.HybridMachineSig.ConcurMachineSemantics
-                                  (HybridMachine:= AsmHybridMachine).
-
-  Definition ConcurrentCompilerCorrectness_specification: Type:=
-    forall U r,
-      HybridMachine_simulation _ _ _ _ _ _ _
-                               (ClightConcurSem(ge:=Clight_g) U r) (AsmConcurSem U r).
-
-End ConcurrentCopmpilerSpecification.
+  Context {resources: Resources}
+          {SemSource SemTarget: Semantics}
+          {SourceThreadPool : @ThreadPool.ThreadPool _ SemSource}
+          {TargetThreadPool : @ThreadPool.ThreadPool _ SemTarget}
+          {SourceMachineSig: @MachineSig _ _ SourceThreadPool}
+          {TargetMachineSig: @MachineSig _ _ TargetThreadPool}.
+  
+  Definition SourceHybridMachine:=
+    @HybridCoarseMachine resources SemSource SourceThreadPool SourceMachineSig.
+  
+  Definition TargetHybridMachine:=
+    @HybridCoarseMachine resources SemTarget TargetThreadPool TargetMachineSig.
+  
+  Lemma concurrent_simulation_safety_preservation:
+    forall U res,
+      HybridMachine_simulation
+        _ _ _ _ _ _ _
+        (ConcurMachineSemantics(HybridMachine:=SourceHybridMachine) U res)
+        (ConcurMachineSemantics(HybridMachine:=TargetHybridMachine) U res) ->
+      forall SourceMachineState m,
+      (forall n, HybridCoarseMachine.csafe SourceMachineState n) 
+  .
+      
+End ConcurrentCopmpilerSafety.

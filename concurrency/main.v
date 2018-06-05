@@ -32,32 +32,32 @@ Require Import VST.veric.coqlib4.
 Require Import VST.sepcomp.semantics.
 Require Import VST.sepcomp.step_lemmas.
 Require Import VST.sepcomp.event_semantics.
-Require Import VST.concurrency.semax_conc_pred.
-Require Import VST.concurrency.semax_conc.
-Require Import VST.concurrency.juicy_machine.
+Require Import VST.concurrency.juicy.semax_conc_pred.
+Require Import VST.concurrency.juicy.semax_conc.
+Require Import VST.concurrency.juicy.juicy_machine.
 Require Import VST.concurrency.common.HybridMachineSig.
 Require Import VST.concurrency.common.scheduler.
 Require Import VST.concurrency.common.addressFiniteMap.
 Require Import VST.concurrency.common.permissions.
-Require Import VST.concurrency.common.HybridMachine_lemmas.
+(*Require Import VST.concurrency.common.HybridMachine_lemmas.*)
 
-Require Import VST.concurrency.semax_invariant.
-Require Import VST.concurrency.semax_initial.
+Require Import VST.concurrency.juicy.semax_invariant.
+Require Import VST.concurrency.juicy.semax_initial.
 (* Require Import VST.concurrency.semax_to_juicy_machine. *)
 
 (** ** Erasure Imports*)
-Require Import VST.concurrency.erasure_signature.
-Require Import VST.concurrency.erasure_proof.
-Require Import VST.concurrency.erasure_safety.
+Require Import VST.concurrency.juicy.erasure_signature.
+Require Import VST.concurrency.juicy.erasure_proof.
+Require Import VST.concurrency.juicy.erasure_safety.
 
 (* Require Import VST.concurrency.fineConc_safe. *)
 
 (** ** Compiler simulation*)
-Require Import VST.concurrency.lifting.
-Require Import VST.concurrency.lifting_safety.
+(* Require Import VST.concurrency.lifting.
+Require Import VST.concurrency.lifting_safety. *)
 
 (** ** Target machine*)
-Require Import VST.concurrency.x86_context.
+Require Import VST.concurrency.sc_drf.x86_context.
 
 (*Require Import VST.concurrency.executions.*)
 Require Import VST.concurrency.spinlocks.
