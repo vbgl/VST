@@ -931,7 +931,7 @@ Module Parching <: ErasureSig.
         no_locks_perm rmap ->
         initial_core (JMachineSem U (Some rmap)) h m (U, nil, js) main vals ->
         exists (ds : dstate),
-          initial_core (DMachineSem U (Some pmap)) h m (U, nil,ds) main vals /\
+          initial_core (ClightMachineSem U (Some pmap)) h m (U, nil,ds) main vals /\
           invariant ds /\
           match_st js ds.
     Proof.
@@ -4636,7 +4636,7 @@ Here be dragons
       exists (ds' : dstate),
         invariant ds' /\
         match_st js' ds' /\
-        exists dtr', corestep (DMachineSem U0 pmap) (U, dtr, ds) m (U', dtr ++ dtr', ds') m'.
+        exists dtr', corestep (ClightMachineSem U0 pmap) (U, dtr, ds) m (U', dtr ++ dtr', ds') m'.
   Proof.
     intros m U0 U U' ds dtr js js' jtr jtr' rmap pmap m' MATCH dinv.
     unfold JuicyMachine.MachineSemantics; simpl.
@@ -4847,7 +4847,7 @@ inversion MATCH; subst.
       exists (ds' : dstate),
         invariant ds' /\
         match_st js' ds' /\
-        exists dtr', corestep (DMachineSem U0 pmap) (U, dtr, ds) m (U', dtr ++ dtr', ds') m'.
+        exists dtr', corestep (ClightMachineSem U0 pmap) (U, dtr, ds) m (U', dtr ++ dtr', ds') m'.
   Proof.
     intros. destruct (core_diagram' m U0 U U' ds dtr js js' jtr jtr' rmap0 pmap m' H0 H1 H) as [ds' [A[B C]]].
     exists ds'; split;[|split]; try assumption.
@@ -4857,7 +4857,7 @@ inversion MATCH; subst.
   Lemma halted_diagram:
     forall U ds js rmap pmap,
       fst (fst js) = fst (fst ds) ->
-      halted (JMachineSem(ge := ge) U rmap) js = halted (DMachineSem(ge := ge) U pmap) ds.
+      halted (JMachineSem(ge := ge) U rmap) js = halted (ClightMachineSem(ge := ge) U pmap) ds.
         intros until pmap. destruct ds as [dp ?], js as [jp ?]; destruct dp, jp; simpl; intros HH; rewrite HH.
         reflexivity.
   Qed.

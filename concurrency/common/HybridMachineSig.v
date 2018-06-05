@@ -1,3 +1,35 @@
+(* Hybrid Machine Signature *)
+
+(** Defines the structure of Hybrid Machines. Some notable definitions:
+    - MachineSig: The definitions that make a machine possible. That includes
+      The definition of thread_steps, synchronization steps and other 
+      accounting steps (resume, suspend, halt)... It also includes lemmas 
+      about the relations (e.g. syncstep_equal_halted doesn't change halted threads)
+    - machine_step/MachStep: gathers all the posible steps of the hybrid machine in
+      a single smallstep relation. Used to define a Core-semantics for the 
+      HybridMachine.
+    - internal_step/external_step: two smallstep relations that together cover
+      all possible steps of the machine. [internal_step] covers all threadsteps and
+      external_step covers all other steps (synchronizations and accounting)
+    - new_MachineSemantics: builds a ConcurSemantics out of a MachineSig, by using 
+      internal_step/external_step steps.
+    - MachineCoreSemantics: defines a coresemantics for the machine, by using
+      MachStep as a smallstep, and it's never at_external, after_external.
+    - HybridMachine: wraps both definitions of Core-semantics and ConcurSemantics 
+      in a record. The two semantics are identical, except concure-semantics
+      distinguishes between internal/external_step.
+ *)
+
+(**
+   This file also constructs the Coarse and Finegrained HybridMachines 
+   - HybridCoarseMachine
+   - HybridFineMachine
+   
+   Moreover, it defines a notion of csafe for HybridCoarseMachine. (TODO: can this
+   be moved elsewhere? Is this not compatible with fineMachines?
+*)
+
+
 From mathcomp.ssreflect Require Import ssreflect seq ssrbool.
 Require Import compcert.common.Memory.
 Require Import compcert.common.AST.     (*for typ*)
@@ -144,9 +176,8 @@ Module HybridMachineSig.
             {ThreadPool : ThreadPool.ThreadPool}
             {DilMem : DiluteMem}.
     Definition thread_pool := ThreadPool.t.
-    Definition C:= (semC).
-    Definition G:= (semG).
-    
+    Definition C:= (@semC Sem).
+    Definition G:= (@semG Sem).
     Local Notation ctl := (@ctl C).
 
     Class MachineSig :=
@@ -222,7 +253,6 @@ Module HybridMachineSig.
 
     Definition event_trace := (seq machine_event).
     Definition schedule := (seq nat).
-    
     Definition MachState : Type:= (schedule * event_trace * t)%type.
   
     Definition schedPeek sch: option nat:=
@@ -234,11 +264,6 @@ Module HybridMachineSig.
   Definition schedSkip sch: (seq nat):= List.tl sch.
   Definition machine_state := thread_pool.
 
-  (** Resume and Suspend: threads running must be preceded by a Resume
-     and followed by Suspend.  This functions wrap the state to
-     indicate it's ready to take a syncronisation step or resume
-     running. (This keeps the invariant that at most one thread is not
-     at_external) *)
   (*TODO: probably need to update the permissions for initial core too*)
    Inductive start_thread : forall (m: mem) {tid0} {ms:machine_state},
       containsThread ms tid0 -> machine_state -> mem -> Prop:=
@@ -253,7 +278,11 @@ Module HybridMachineSig.
                     (Hms': updThreadC ctn (Krun c_new)  = ms'),
       start_thread m ctn ms' m.
 
-
+   (** Resume and Suspend: threads running must be preceded by a Resume
+       and followed by Suspend.  This functions wrap the state to
+       indicate it's ready to take a syncronisation step or resume
+       running. (This keeps the invariant that at most one thread is not
+       at_external) *)
    Inductive resume_thread' : forall (m: mem) {tid0} {ms:machine_state},
       containsThread ms tid0 -> machine_state -> Prop:=
   | ResumeThread: forall m tid0 ms ms' c c' X m'
@@ -284,13 +313,11 @@ Module HybridMachineSig.
   Definition suspend_thread: forall (m: mem) {tid0 ms},
       containsThread ms tid0 -> machine_state -> Prop:=
     @suspend_thread'.
-
     (** Provides control over scheduling. For example,
         for FineMach this is schedSkip, for CoarseMach this is just id *)
   Class Scheduler :=
     { isCoarse : bool;
       yield: schedule -> schedule}.
-  
   Context {scheduler : Scheduler}.
 
   Inductive machine_step:
@@ -411,8 +438,8 @@ Module HybridMachineSig.
 
       (** The new semantics below makes internal (thread) and external (machine)
           steps explicit *)
-      Inductive internal_step:
-        schedule -> machine_state -> mem -> machine_state -> mem -> Prop :=
+    Inductive internal_step:
+      schedule -> machine_state -> mem -> machine_state -> mem -> Prop :=
       | thread_step':
           forall tid U ms ms' m m' ev
             (HschedN: schedPeek U = Some tid)
@@ -566,7 +593,7 @@ Module HybridMachineSig.
       Notation schedule := (seq nat).
       Notation event_trace := (seq machine_event).
 
-      Definition HybridCoarseMachine : HybridMachine:=
+      Definition HybridCoarseMachine : HybridMachine :=
         @Build_HybridMachine resources Sem ThreadPool _ _ _
                              (MachineCoreSemantics)
                              (new_MachineSemantics)
@@ -629,7 +656,7 @@ Module HybridMachineSig.
       Instance scheduler : Scheduler :=
         {| isCoarse := false;
            yield := fun x => schedSkip x |}.
-
+      
       Definition HybridFineMachine : HybridMachine:=
         @Build_HybridMachine resources Sem ThreadPool _ _ _
                              (MachineCoreSemantics)

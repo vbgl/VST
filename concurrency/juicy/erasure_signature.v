@@ -1,3 +1,4 @@
+
 (** Erasure Signature  *)
 
 (** Describes the specification of the erasure in two parts:
@@ -40,7 +41,7 @@ Module Type ErasureSig.
   Declare Instance JMS (ge : Clight.genv) : MachineSig(ThreadPool := JTP ge).
   Declare Instance DilMem : DiluteMem.
   Declare Instance scheduler : Scheduler.
-  Declare Instance JuicyMachine (ge : Clight.genv) : HybridMachine(machineSig := JMS ge).
+  Declare Instance JuicyMachine (ge : Clight.genv) : HybridMachine(machineSig:=JMS ge).
   Notation JMachineSem ge := (MachineSemantics(HybridMachine := JuicyMachine ge)).
   Notation jres := (@res JR).
   Notation jstate ge := (@ThreadPool.t _ _ (JTP ge)).

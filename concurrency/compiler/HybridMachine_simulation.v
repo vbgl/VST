@@ -64,9 +64,9 @@ Section HybridSimulation.
   Variable ge2:G2.
   Variable (ge_inv: G1 -> G2 -> Prop). *)
 
-  Context (G TID SCH TR SC TC : Type).
-  Variable SourceHybridMachine: @ConcurSemantics G TID SCH TR SC mem.
-  Variable TargetHybridMachine: @ConcurSemantics G TID SCH TR TC mem.
+  Context (SG TG TID SCH TR SC TC : Type).
+  Variable SourceHybridMachine: @ConcurSemantics SG TID SCH TR SC mem.
+  Variable TargetHybridMachine: @ConcurSemantics TG TID SCH TR TC mem.
   
   Record HybridMachine_simulation:=
     { index : Type
@@ -82,22 +82,22 @@ Section HybridSimulation.
       /\*) initial_machine Sem2 ge2 main vals2 = Some c2
            /\ match_state cd j c1 m1 c2 m2*)
       ; thread_diagram :
-          forall ge U st1 m1 st1' m1',
-            thread_step SourceHybridMachine ge U st1 m1 st1' m1' ->
+          forall sge tge U st1 m1 st1' m1',
+            thread_step SourceHybridMachine sge U st1 m1 st1' m1' ->
             forall cd st2 mu m2,
               match_state cd mu st1 m1 st2 m2 ->
               exists st2', exists m2', exists cd', exists mu',
                       match_state cd' mu' st1' m1' st2' m2'
-                      /\ (thread_step_plus (TargetHybridMachine) ge U st2 m2 st2' m2'
-               \/ (thread_step_star (TargetHybridMachine) ge U st2 m2 st2' m2' /\ core_ord cd' cd))
+                      /\ (thread_step_plus (TargetHybridMachine) tge U st2 m2 st2' m2'
+               \/ (thread_step_star (TargetHybridMachine) tge U st2 m2 st2' m2' /\ core_ord cd' cd))
       ; machine_diagram :
-          forall ge U tr st1 m1 U' tr' st1' m1',
-            machine_step SourceHybridMachine ge U tr st1 m1 U' tr' st1' m1' ->
+          forall sge tge U tr st1 m1 U' tr' st1' m1',
+            machine_step SourceHybridMachine sge U tr st1 m1 U' tr' st1' m1' ->
             forall cd st2 mu m2,
               match_state cd mu st1 m1 st2 m2 ->
               exists st2', exists m2', exists cd', exists mu',
                       match_state cd' mu' st1' m1' st2' m2'
-                      /\ machine_step (TargetHybridMachine) ge U tr st2 m2 U' tr' st2' m2'
+                      /\ machine_step (TargetHybridMachine) tge U tr st2 m2 U' tr' st2' m2'
       ; thread_halted :
           forall cd mu U c1 m1 c2 m2 v1,
             match_state cd mu c1 m1 c2 m2 ->
@@ -110,3 +110,4 @@ Section HybridSimulation.
             forall i, running_thread SourceHybridMachine c1 i <-> running_thread TargetHybridMachine c2 i
  }.
                                       
+End HybridSimulation.
