@@ -619,14 +619,18 @@ Module HybridMachineSig.
       Inductive concur_safe U tp (m : mem) : nat -> Prop :=
       | concur_Safe_0: concur_safe U tp m 0
       | concur_HaltedSafe: forall n, halted_machine (U, nil, tp) -> concur_safe U tp m n
-      | concur_CoreSafe : forall tp' m' n
+      | concur_Internal : forall tp' m' n
                      (Hstep: internal_step U tp m tp' m')
                      (Hsafe: concur_safe U tp' m' n),
           concur_safe U tp m (S n)
-      | concur_AngelSafe: forall tp' m' n (tr tr': event_trace)
+      | concur_External: forall tp' m' n (tr tr': event_trace)
+                     (Hstep: external_step U tr tp m U tr' tp' m')
+                     (Hsafe: concur_safe U tp' m' n),
+          concur_safe U tp m (S n)
+      | concur_External_Angel: forall tp' m' n (tr tr': event_trace)
                      (Hstep: external_step U tr tp m (schedSkip U) tr' tp' m')
                      (Hsafe: forall U'', concur_safe U'' tp' m' n),
-          concur_safe (yield U) tp m (S n).
+          concur_safe U tp m (S n).
       
       (* TODO: Make a new file with safety lemmas. *)
       Lemma csafe_reduce:
