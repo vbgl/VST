@@ -599,6 +599,8 @@ Module HybridMachineSig.
                              (new_MachineSemantics)
                              (hybrid_initial_schedule).
 
+
+      
       (** Schedule safety of the coarse-grained machine*)
       Inductive csafe (st : MachState) (m : mem) : nat -> Prop :=
       | Safe_0: csafe st m 0
@@ -612,6 +614,20 @@ Module HybridMachineSig.
                      (Hsafe: forall U'', csafe (U'',(snd (fst st)) ++ tr,tp') m' n),
           csafe st m (S n).
 
+      
+      (** Schedule safety of the coarse-grained machine*)
+      Inductive concur_safe U tp (m : mem) : nat -> Prop :=
+      | concur_Safe_0: concur_safe U tp m 0
+      | concur_HaltedSafe: forall n, halted_machine (U, nil, tp) -> concur_safe U tp m n
+      | concur_CoreSafe : forall tp' m' n
+                     (Hstep: internal_step U tp m tp' m')
+                     (Hsafe: concur_safe U tp' m' n),
+          concur_safe U tp m (S n)
+      | concur_AngelSafe: forall tp' m' n (tr tr': event_trace)
+                     (Hstep: external_step U tr tp m (schedSkip U) tr' tp' m')
+                     (Hsafe: forall U'', concur_safe U'' tp' m' n),
+          concur_safe (yield U) tp m (S n).
+      
       (* TODO: Make a new file with safety lemmas. *)
       Lemma csafe_reduce:
         forall sched tp tr mem n m,
@@ -656,7 +672,7 @@ Module HybridMachineSig.
       Instance scheduler : Scheduler :=
         {| isCoarse := false;
            yield := fun x => schedSkip x |}.
-      
+
       Definition HybridFineMachine : HybridMachine:=
         @Build_HybridMachine resources Sem ThreadPool _ _ _
                              (MachineCoreSemantics)
