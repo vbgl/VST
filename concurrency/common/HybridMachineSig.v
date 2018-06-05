@@ -511,7 +511,7 @@ Module HybridMachineSig.
       Lemma step_equivalence2: forall U st m st' m' tr,
           @internal_step U st m st' m' ->
           exists tr',
-            @machine_step U tr st m (yield U) tr' st' m'.
+            @machine_step U tr st m (yield U) (tr ++ tr') st' m'.
       Proof.
         move=>  U st m st' m' tr istp;
                  inversion istp; eexists; solve [econstructor; eauto].
@@ -650,6 +650,54 @@ Module HybridMachineSig.
           eapply AngelSafe; eauto.
           intro; apply H; omega.
       Qed.
+
+      Lemma schedSkip_id: forall U, schedSkip U = U -> U = nil.
+      Proof.
+        induction U; auto; simpl; intros.
+        destruct U; try discriminate; simpl in *.
+        inversion H; subst.
+        specialize (IHU H2); discriminate.
+      Qed.
+
+      Lemma csafe_concur_safe: forall U tr tp m n, csafe (U, tr, tp) m n -> concur_safe U tp m n.
+      Proof.
+        intros.
+        remember (U, tr, tp) as st; revert dependent tp; revert U tr.
+        induction H; intros; subst; simpl in *.
+        - constructor.
+        - constructor; auto.
+        - apply step_equivalence1 in Hstep as [[]|].
+          + eapply concur_CoreSafe; eauto.
+          + simpl in *.
+            inversion H0; subst; try solve [apply schedSkip_id in HschedS; subst; constructor; auto].
+            * admit.
+            * admit.
+        - apply step_equivalence1 in Hstep as [[]|].
+          + simpl in *.
+            apply schedSkip_id in H0; subst.
+            constructor; auto.
+          + eapply concur_AngelSafe; eauto.
+      Admitted.
+
+      Lemma concur_safe_csafe: forall U tr tp m n, concur_safe U tp m n -> csafe (U, tr, tp) m n.
+      Proof.
+        intros; revert tr.
+        induction H; intro.
+        - constructor.
+        - constructor; auto.
+        - eapply step_equivalence2 in Hstep as [].
+          eapply CoreSafe; hnf; simpl; eauto.
+        - inversion Hstep; subst; eapply AngelSafe; hnf; simpl; eauto.
+          + admit.
+          + admit.
+          + setoid_rewrite List.app_nil_r.
+            eapply suspend_step; eauto.
+          + eapply sync_step; eauto.
+          + setoid_rewrite List.app_nil_r.
+            eapply halted_step; eauto.
+          + setoid_rewrite List.app_nil_r.
+            eapply schedfail; eauto.
+      Admitted.
 
     End HybridCoarseMachine.
   End HybridCoarseMachine.
