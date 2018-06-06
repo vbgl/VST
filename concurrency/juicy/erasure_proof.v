@@ -32,7 +32,7 @@ Require Import VST.concurrency.common.permissions.
 Require Import VST.concurrency.juicy.sync_preds.
 (*The semantics*)
 Require Import VST.concurrency.juicy.JuicyMachineModule.
-Require Import VST.concurrency.common.DryMachineSource.
+Require Import VST.concurrency.common.ClightMachine.
 (*Erasure specification*)
 Require Import VST.concurrency.juicy.erasure_signature.
 

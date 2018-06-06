@@ -62,7 +62,7 @@ Module ErasureSafety.
   Definition step_diagram:= ErasureProof.core_diagram.
 
   Import JuicyMachineModule.THE_JUICY_MACHINE.
-  Import DryMachineSource.THE_DRY_MACHINE_SOURCE.DMS.
+  Import ClightMachine.THE_DRY_MACHINE_SOURCE.DMS.
 
   Existing Instance DMS.
 

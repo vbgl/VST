@@ -6,7 +6,7 @@ Require Import VST.concurrency.compiler.concurrent_compiler_simulation_proof.
 
 
 (*Clight Machine *)
-Require Import VST.concurrency.common.DryMachineSource.
+Require Import VST.concurrency.common.ClightMachine.
 (*Asm Machine*)
 Require Import VST.concurrency.common.x86_context.
 
@@ -20,6 +20,7 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
   Module ConcurCC_correct:= (Concurrent_correctness CC_correct).
   Import ConcurCC_correct.
 
+  
   Parameter init_state_source:
     forall p,
     Clight.genv -> Memory.mem -> @semantics.semC (@DSem (Clight.globalenv p)) -> Values.val -> list Values.val -> Prop.

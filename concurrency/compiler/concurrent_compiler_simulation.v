@@ -7,7 +7,7 @@
 Require Import VST.concurrency.compiler.HybridMachine_simulation.
 
 (*Clight Machine *)
-Require Import VST.concurrency.common.DryMachineSource.
+Require Import VST.concurrency.common.ClightMachine.
 (*Asm Machine*)
 Require Import VST.concurrency.common.x86_context.
 

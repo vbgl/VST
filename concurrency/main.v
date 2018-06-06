@@ -40,12 +40,27 @@ Module Main (CC_correct: CompCert_correctness).
   Proof.
     intros.
     eapply ConcurrentCompilerSafety.
-    3: eapply dry_safety_initial_state.
+    3: eapply dry_safety_initial_state. (*slow*)
     - eexact compilation.
     - instantiate(1:=nil).
       instantiate (2:=Clight.globalenv Clight_prog).
+      simpl.
+      
       (* This is should follow from CPROOF, and should be proven in folder juicy*)
       admit. 
   Admitted.
-    unfold concurrent_compiler_safety.concurrent_simulation_safety_preservation in *.
-    eapply H.
+
+End Main.
+
+Module CC_correct: CompCert_correctness.
+  Axiom CompCert_compiler : Clight.program -> option Asm.program.
+  Axiom simpl_clight_semantic_preservation :
+    forall (p : Clight.program) (tp : Asm.program),
+      CompCert_compiler p = Some tp ->
+      ExposedSimulations.fsim_properties_inj (Clight.semantics2 p) (Asm.semantics tp)
+                                             Clight.get_mem Asm.get_mem.
+
+End CC_correct.
+
+Module Test_Main:= (Main CC_correct).
+Import Test_Main.

@@ -19,7 +19,7 @@ Require Import VST.sepcomp.event_semantics.
 Require Import VST.concurrency.common.dry_context.
 
 (** The Clight DryConc Machine*)
-Require Import VST.concurrency.common.DryMachineSource.
+Require Import VST.concurrency.common.ClightMachine.
 
 Require Import VST.concurrency.common.machine_simulation. Import machine_simulation.
 
