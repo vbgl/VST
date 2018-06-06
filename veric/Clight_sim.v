@@ -468,7 +468,7 @@ Inductive match_states: forall (qm: corestate) (st: CC'.CC_core), Prop :=
 
 Lemma Clightnew_Clight_sim_eq_noOrder_SSplusConclusion:
 forall (c1 : corestate) (m : mem) (c1' : corestate) (m' : mem),
-corestep cl_core_sem ge c1 m c1' m' ->
+corestep (cl_core_sem ge) c1 m c1' m' ->
 forall (c2 : CC'.CC_core),
  match_states c1 c2 ->
 exists c2' : CC'.CC_core,
@@ -942,26 +942,24 @@ Qed.
 
 End GE.
 
-Definition coresem_extract_cenv {M} {core} (CS: @CoreSemantics genv core M)
+Definition coresem_extract_cenv {M} {core} (CS: @CoreSemantics core M)
                          (cenv: composite_env) :
-            @CoreSemantics (Genv.t fundef type) core M :=
-  Build_CoreSemantics _ _ _
-             (fun n ge => CS.(initial_core) n (Build_genv ge cenv))
-             (fun ge => CS.(at_external) (Build_genv ge cenv))
-             (fun ge => CS.(after_external) (Build_genv ge cenv))
+            @CoreSemantics core M :=
+  Build_CoreSemantics _ _
+             (CS.(initial_core))
+             (CS.(core_semantics.at_external))
+             (CS.(core_semantics.after_external))
              CS.(halted)
-            (fun ge => CS.(corestep) (Build_genv ge cenv))
-            (fun ge => CS.(corestep_not_at_external) (Build_genv ge cenv))
-            (fun ge => CS.(corestep_not_halted) (Build_genv ge cenv))
-            (fun ge => CS.(at_external_halted_excl) _).
+            (CS.(corestep) )
+            (CS.(corestep_not_halted) )
+            CS.(corestep_not_at_external).
 
 Require Import VST.sepcomp.step_lemmas.
 
  Lemma sim_dry_safeN:
   forall dryspec (prog: Clight.program) b q m h,
-  initial_core Clight_new.cl_core_sem h
-           (Build_genv (Genv.globalenv prog) (prog_comp_env prog)) m
-          (Vptr b Ptrofs.zero) nil = Some q ->
+  initial_core (Clight_new.cl_core_sem (globalenv prog)) h m q
+          (Vptr b Ptrofs.zero) nil ->
   (forall n, 
     @dry_safeN _ _ _ _ (@Genv.genv_symb _ _)
    (coresem_extract_cenv Clight_new.cl_core_sem 
