@@ -416,10 +416,14 @@ Module HybridMachineSig.
     intros. inversion H; subst; rewrite HschedN; intro Hcontra; discriminate.
     Defined.
 
-    Definition init_machine' (r : option res) (the_ge : semG) m
-               (c : machine_state) (f : val) (args : list val) 
-      : Prop :=
-      init_mach r m c f args.
+    Definition make_init_machine c r:= 
+        mkPool (Krun c) r.
+    Definition init_machine' (the_ge : semG) m
+               c (f : val) (args : list val) 
+      : option res -> Prop := fun op_r =>
+                            if op_r is Some r then 
+                              init_mach op_r m (make_init_machine c r) f args
+                            else False.
     
     Definition unique_Krun tp i :=
       forall j cnti q,
@@ -530,10 +534,11 @@ Module HybridMachineSig.
                  solve[econstructor 7 ; eauto]].
       Qed.
 
-      Program Definition new_MachineSemantics (U:schedule) (r : option res):
-        @ConcurSemantics G nat schedule event_trace machine_state mem.
-      apply (@Build_ConcurSemantics _ nat schedule event_trace  machine_state _
-                                    (init_machine' r)
+      Set Printing Implicit.
+      Program Definition new_MachineSemantics (U:schedule):
+        @ConcurSemantics G nat schedule event_trace machine_state mem res (@semC Sem).
+      apply (@Build_ConcurSemantics _ nat schedule event_trace  machine_state _ _ _
+                                    (init_machine')
                                     (fun U st => halted_machine (U, nil, st))
                                     (fun ge U st m st' m' =>
                                        @internal_step U st m
@@ -557,8 +562,8 @@ Module HybridMachineSig.
       {
         MachineSemantics: schedule -> option res ->
                           CoreSemantics MachState mem
-        ; ConcurMachineSemantics: schedule -> option res ->
-                                  @ConcurSemantics G nat (seq.seq nat) event_trace t mem
+        ; ConcurMachineSemantics: schedule ->
+                                  @ConcurSemantics G nat (seq.seq nat) event_trace t mem res (@semC Sem)
         ; initial_schedule: forall m main vals U p st n,
             initial_core (MachineCoreSemantics U p) n m st main vals ->
             exists c, st = (U, nil, c) (*XXX:this seems wrong *)

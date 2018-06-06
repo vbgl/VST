@@ -39,6 +39,7 @@ Require Import compcert.common.Smallstep.
 
 Require Import VST.concurrency.common.machine_semantics_lemmas.
 
+Set Implicit Arguments.
 
 Section HybridSimulation. 
 
@@ -64,23 +65,27 @@ Section HybridSimulation.
   Variable ge2:G2.
   Variable (ge_inv: G1 -> G2 -> Prop). *)
 
-  Context (SG TG TID SCH TR SC TC : Type).
-  Variable SourceHybridMachine: @ConcurSemantics SG TID SCH TR SC mem.
-  Variable TargetHybridMachine: @ConcurSemantics TG TID SCH TR TC mem.
+  Context (SG TG TID SCH TR SC TC R1 R2 s_thread_type t_thread_type: Type).
+  Variable SourceHybridMachine: @ConcurSemantics SG TID SCH TR SC mem R1 s_thread_type.
+  Variable TargetHybridMachine: @ConcurSemantics TG TID SCH TR TC mem R2 t_thread_type.
   
   Record HybridMachine_simulation:=
     { index : Type
       ; match_state : index -> meminj -> SC -> mem -> TC -> mem -> Prop
       ; core_ord : index -> index -> Prop
       ; core_ord_wf : well_founded core_ord
-    (*  ; core_initial :
-          forall j c1 vals1 m1 vals2 m2,
-            initial_machine hb1 Sem1 Sem2 ge1 main vals1 = Some c1 ->
-            init_inv j ge1 vals1 m1 ge2 vals2 m2 ->
-    exists (*mu*) cd c2,
-      (*as_inj mu = j*
-      /\*) initial_machine Sem2 ge2 main vals2 = Some c2
-           /\ match_state cd j c1 m1 c2 m2*)
+
+      (* This is the match relation for initial state of the initial core:*)
+      (* That is property given by sequential theorem about inital_states *)
+      ; match_initial_thread:
+          SG -> mem -> s_thread_type -> val -> seq.seq val -> Prop
+      ; initial_setup :
+          forall tge sge s_init_thread s_init_mem main main_args s_mach_state r1,
+            match_initial_thread sge s_init_mem s_init_thread main main_args ->
+            machine_semantics.initial_machine SourceHybridMachine sge s_init_mem s_init_thread main main_args r1= Some s_mach_state ->
+            exists j cd tc t_mach_state t_init_mem r2,
+              machine_semantics.initial_machine TargetHybridMachine tge t_init_mem tc main main_args r2 = Some t_mach_state
+           /\ match_state cd j s_mach_state s_init_mem t_mach_state t_init_mem
       ; thread_diagram :
           forall sge tge U st1 m1 st1' m1',
             thread_step SourceHybridMachine sge U st1 m1 st1' m1' ->

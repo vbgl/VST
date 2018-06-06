@@ -36,6 +36,12 @@ Module X86Context.
          the_ge := the_ge
       }.
 
+  (*Import the Asm Hybrid Machine*)
+  Import AsmContext.
+  Definition AsmHybridMachine    := @dryCoarseMach X86Sem.
+  Definition AsmConcurSem    := HybridMachineSig.HybridMachineSig.ConcurMachineSemantics
+                                  (HybridMachine:= AsmHybridMachine).
+
   End X86Context.
 End X86Context.
 
