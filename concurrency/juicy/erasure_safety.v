@@ -30,6 +30,7 @@ Require Import VST.concurrency.common.permissions.
 (*Erasure simulation*)
 Require Import VST.concurrency.juicy.erasure_signature.
 Require Import VST.concurrency.juicy.erasure_proof.
+Require Import VST.concurrency.juicy.Clight_safety.
 Import addressFiniteMap.
 
 (*SSReflect*)
@@ -233,6 +234,22 @@ Section DrySafety.
     - apply init_no_locks.
   Qed.
 
+  Notation ClightSem:= ClightSemantincsForMachines.ClightSem.
+  Theorem Clight_initial_safe (sch : HybridMachineSig.schedule) (n : nat) :
+    HybridMachineSig.HybridCoarseMachine.csafe
+      (Sem := ClightSem ge)
+      (ThreadPool:= threadPool.OrdinalPool.OrdinalThreadPool(Sem:=ClightSem ge))
+      (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig)
+      (sch, nil,
+       DryHybridMachine.initial_machine(Sem := ClightSem ge)
+                                       (permissions.getCurPerm init_mem)
+                                       (initial_Clight_state CPROOF)) init_mem n.
+  Proof.
+    rewrite <- initial_Clight_state_correct.
+    eapply Clight_new_Clight_safety.
+    eapply dry_safety_initial_state.
+  Qed.
+    
 End DrySafety.
 
 (*  Existing Instance HybridMachineSig.HybridCoarseMachine.DilMem.

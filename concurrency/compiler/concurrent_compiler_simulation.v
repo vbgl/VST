@@ -14,7 +14,7 @@ Require Import VST.concurrency.common.x86_context.
 
 Section ConcurrentCopmpilerSpecification.
   (*Import the Clight Hybrid Machine*)
-  Import Clight_newMachine.
+  Import ClightMachine.
   Import DMS.  
   (*Import the Asm X86 Hybrid Machine*)
   Import X86Context.

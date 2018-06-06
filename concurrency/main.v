@@ -40,7 +40,7 @@ Module Main (CC_correct: CompCert_correctness).
   Proof.
     intros.
     eapply ConcurrentCompilerSafety.
-    3: eapply dry_safety_initial_state. (*slow*)
+    3: eapply Clight_initial_safe.
     - eexact compilation.
     - instantiate(1:=nil).
       instantiate (2:=Clight.globalenv Clight_prog).
@@ -52,6 +52,8 @@ Module Main (CC_correct: CompCert_correctness).
 
 End Main.
 
+
+(* Test an instantiation of Main theorem. *)
 Module CC_correct: CompCert_correctness.
   Axiom CompCert_compiler : Clight.program -> option Asm.program.
   Axiom simpl_clight_semantic_preservation :
@@ -64,3 +66,4 @@ End CC_correct.
 
 Module Test_Main:= (Main CC_correct).
 Import Test_Main.
+Print Assumptions CSL2CoarseAsm_safety.

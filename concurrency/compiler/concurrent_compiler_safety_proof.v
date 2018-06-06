@@ -12,7 +12,7 @@ Require Import VST.concurrency.common.x86_context.
 
 Module Concurrent_Safety (CC_correct: CompCert_correctness).
   (*Import the Clight Hybrid Machine*)
-  Import Clight_newMachine.
+  Import ClightMachine.
   Import DMS.
   (*Import the Asm X86 Hybrid Machine*)
   Import X86Context.
@@ -30,7 +30,7 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
     forall (p : Clight.program) (tp : Asm.program),
        CC_correct.CompCert_compiler p = Some tp ->
        forall asm_genv_safety : Asm_core.safe_genv (the_ge tp),
-         let SemSource:= (ClightSemantincsForMachines.Clight_newSem (Clight.globalenv p)) in
+         let SemSource:= (ClightSemantincsForMachines.ClightSem (Clight.globalenv p)) in
          let SemTarget:= X86Sem tp asm_genv_safety in
     concurrent_simulation_safety_preservation_export 
       (SemSource:= SemSource)
