@@ -12,8 +12,11 @@ Require Import VST.concurrency.compiler.concurrent_compiler_simulation.
 Section ConcurrentCopmpilerSafety.
   Import HybridMachineSig HybridCoarseMachine.
 
-  Context {resources: Resources}
-          {SemSource SemTarget: Semantics}
+  (*This definitions are specialized to dry machines
+    Why? to show that the initial res is defined by the initial mem
+   *)
+  Notation resources:= HybridMachine.DryHybridMachine.dryResources.
+  Context {SemSource SemTarget: Semantics}
           {SourceThreadPool : @ThreadPool.ThreadPool _ SemSource}
           {TargetThreadPool : @ThreadPool.ThreadPool _ SemTarget}
           {SourceMachineSig: @MachineSig _ _ SourceThreadPool}
@@ -25,14 +28,22 @@ Section ConcurrentCopmpilerSafety.
   Definition TargetHybridMachine:=
     @HybridCoarseMachine resources SemTarget TargetThreadPool TargetMachineSig.
   
-  Lemma concurrent_simulation_safety_preservation:
-    forall U res,
-      HybridMachine_simulation
-        _ _ _ _ _ _ _
-        (ConcurMachineSemantics(HybridMachine:=SourceHybridMachine) U res)
-        (ConcurMachineSemantics(HybridMachine:=TargetHybridMachine) U res) ->
-      forall SourceMachineState m,
-      (forall n, HybridCoarseMachine.csafe SourceMachineState n) 
-  .
-      
+  Definition concurrent_simulation_safety_preservation:=
+    forall U
+      (SIM: HybridMachine_simulation 
+        (ConcurMachineSemantics(HybridMachine:=SourceHybridMachine) U)
+        (ConcurMachineSemantics(HybridMachine:=TargetHybridMachine) U)),
+      forall ge m init_thread main args,
+        match_initial_thread SIM ge m init_thread main args ->
+        let res:= permissions.getCurPerm m in
+        let init_tp_source:= ThreadPool.mkPool (Krun init_thread) (res,permissions.empty_map) in
+        let init_MachState_source:= (U, nil, init_tp_source) in
+        (forall n, HybridCoarseMachine.csafe init_MachState_source m n) ->
+        exists init_mem_target init_thread_target,
+        let res_target:= permissions.getCurPerm init_mem_target in
+        let init_tp_target:= ThreadPool.mkPool (Krun init_thread_target) (res_target,permissions.empty_map) in
+        let init_MachState_target:= (U, nil, init_tp_target) in
+        (forall n, HybridCoarseMachine.csafe init_MachState_target m n).
+
+  
 End ConcurrentCopmpilerSafety.

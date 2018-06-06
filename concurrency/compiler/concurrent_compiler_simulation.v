@@ -32,8 +32,7 @@ Section ConcurrentCopmpilerSpecification.
                                   (HybridMachine:= AsmHybridMachine).
 
   Definition ConcurrentCompilerCorrectness_specification: Type:=
-    forall U r,
-      HybridMachine_simulation _ _ _ _ _ _ _
-                               (ClightConcurSem(ge:=Clight_g) U r) (AsmConcurSem U r).
+    forall U,
+      HybridMachine_simulation (ClightConcurSem(ge:=Clight_g) U) (AsmConcurSem U).
 
 End ConcurrentCopmpilerSpecification.

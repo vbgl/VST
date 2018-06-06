@@ -39,8 +39,8 @@ Require Import VST.sepcomp.mem_lemmas.
 Definition option_proj {A: Type} (default: A) (x: option A) :=
  match x with Some y => y | None => default end.
 
-Record ConcurSemantics {G TID SCH TR C M: Type} : Type :=
-  { initial_machine : G -> M -> C -> val -> list val -> Prop
+Record ConcurSemantics {G TID SCH TR C M res thread_type: Type} : Type :=
+  { initial_machine :  G -> M -> thread_type -> val -> list val -> option res -> Prop
     ; conc_halted : SCH -> C -> option val
     ; thread_step : G -> SCH -> C -> M -> C -> M -> Prop
     ; machine_step : G -> SCH -> TR -> C -> M -> SCH -> TR -> C -> M -> Prop
