@@ -1612,10 +1612,10 @@ Module MemErasure.
   Qed.
 
   Lemma alloc_erasure':
-    forall m m' sz m2 m2' b b'
+    forall m m' lo hi m2 m2' b b'
       (Herased: mem_erasure m m')
-      (Halloc: Mem.alloc m 0 sz = (m2, b))
-      (Halloc': Mem.alloc m' 0 sz = (m2', b')),
+      (Halloc: Mem.alloc m lo hi = (m2, b))
+      (Halloc': Mem.alloc m' lo hi = (m2', b')),
       mem_erasure' m2 m2' /\ b = b'.
   Proof.
     intros.
@@ -1630,10 +1630,10 @@ Module MemErasure.
     - intros.
       destruct (Pos.eq_dec b b').
       + subst.
-        destruct (Z_le_dec 0 ofs);
-          destruct (Z_lt_dec ofs sz).
+        destruct (Z_le_dec lo ofs);
+          destruct (Z_lt_dec ofs hi).
         * assert (Heq:=
-                    MemoryLemmas.permission_at_alloc_2 _ _ _ _ _ _ Halloc' ltac:(eauto)).
+                    memory_lemmas.MemoryLemmas.permission_at_alloc_2 _ _ _ _ _ _ Halloc' ltac:(eauto)).
           unfold permission_at in Heq.
           specialize (Heq k).
           rewrite Heq.
