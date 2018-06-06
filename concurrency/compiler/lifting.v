@@ -29,8 +29,8 @@ Require Import VST.concurrency.common.machine_simulation. Import Machine_sim.
 
 Module lifting (SEMT: Semantics) (Machine: MachinesSig with Module SEM := SEMT).
   Section lifting.
-    Import THE_DRY_MACHINE_SOURCE.
-    Import THE_DRY_MACHINE_SOURCE.DMS.
+    Import Clight_newMachine.
+    Import Clight_newMachine.DMS.
     Notation GS := (SEM.G).
     Notation GT := (SEMT.G).
     Variable gT : GT.

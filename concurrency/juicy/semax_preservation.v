@@ -937,7 +937,7 @@ Section Preservation.
   (sch : list nat)
   sch'
   (tp tp' : jstate ge)
-  (jmstep : @JuicyMachine.machine_step _ (ClightSemantincsForMachines.ClightSem ge) _ HybridCoarseMachine.DilMem JuicyMachineShell HybridMachineSig.HybridCoarseMachine.scheduler (i :: sch) tr tp m sch'
+  (jmstep : @JuicyMachine.machine_step _ (ClightSemantincsForMachines.Clight_newSem ge) _ HybridCoarseMachine.DilMem JuicyMachineShell HybridMachineSig.HybridCoarseMachine.scheduler (i :: sch) tr tp m sch'
              tr' tp' m')
   (INV : @state_invariant (@OK_ty (Concurrent_Espec unit CS ext_link)) Jspec' _ Gamma (S n) (m, (tr, i :: sch, tp)))
   (Phi : rmap)
@@ -1199,7 +1199,7 @@ Qed. (* Lemma preservation_Kinit *)
           inv Htstep. getThread_inv.
           injection H as <-.
           evar (mx: Memory.mem).
-          assert (H: at_external (@semSem (ClightSemantincsForMachines.ClightSem ge)) (State ve te k) mx = Some X). {
+          assert (H: at_external (@semSem (ClightSemantincsForMachines.Clight_newSem ge)) (State ve te k) mx = Some X). {
             simpl in *.
             subst mx; eassumption.
           }

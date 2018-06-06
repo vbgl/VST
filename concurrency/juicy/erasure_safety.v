@@ -62,7 +62,7 @@ Module ErasureSafety.
   Definition step_diagram:= ErasureProof.core_diagram.
 
   Import JuicyMachineModule.THE_JUICY_MACHINE.
-  Import ClightMachine.THE_DRY_MACHINE_SOURCE.DMS.
+  Import ClightMachine.Clight_newMachine.DMS.
 
   Existing Instance DMS.
 
@@ -183,7 +183,7 @@ Section DrySafety.
 
   Variable (CPROOF : CSL_proof).
 
-  Instance Sem : Semantics := ClightSemantincsForMachines.ClightSem (globalenv CPROOF.(CSL_prog)).
+  Instance Sem : Semantics := ClightSemantincsForMachines.Clight_newSem (globalenv CPROOF.(CSL_prog)).
   Definition ge := globalenv CPROOF.(CSL_prog).
   Instance DTP : threadPool.ThreadPool.ThreadPool := Parching.DTP ge.
   Instance DMS : HybridMachineSig.MachineSig := Parching.DMS ge.

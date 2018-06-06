@@ -20,10 +20,10 @@ Require Import VST.concurrency.common.machine_semantics_lemmas.
 
 Module Machine_sim. Section Machine_sim.
 
-Context {G1 TID SCH TR C1 M1 G2 C2 M2 R1 R2: Type}
+Context {G1 TID SCH TR C1 M1 G2 C2 M2 R1 R2 thread_type1 thread_type2: Type}
 
-(Sem1 : @ConcurSemantics G1 TID SCH TR C1 M1 R1)
-(Sem2 : @ConcurSemantics G2 TID SCH TR C2 M2 R2)
+(Sem1 : @ConcurSemantics G1 TID SCH TR C1 M1 R1 thread_type1)
+(Sem2 : @ConcurSemantics G2 TID SCH TR C2 M2 R2 thread_type2)
 
 (ge1 : G1)
 (ge2 : G2)
@@ -42,14 +42,13 @@ Record Machine_sim  :=
 ; core_ord : core_data -> core_data -> Prop
 ; core_ord_wf : well_founded core_ord
 ; genv_inv : ge_inv ge1 ge2
-; core_initial :
+(*; core_initial :
     forall j c1 vals1 m1 vals2 m2 res1,
     initial_machine Sem1 ge1 m1 c1 main vals1 res1 ->
     init_inv j ge1 vals1 m1 ge2 vals2 m2 ->
-    exists (*mu*) cd c2 res2,
-      (*as_inj mu = j*
-      /\*) initial_machine Sem2 ge2 m2 c2 main vals2 res2
-      /\ match_state cd j c1 m1 c2 m2
+    exists cd c2 res2,
+      initial_machine Sem2 ge2 m2 c2 main vals2 res2
+      /\ match_state cd j c1 m1 c2 m2 *)
 ; thread_diagram :
     forall U st1 m1 st1' m1',
     thread_step Sem1 ge1 U st1 m1 st1' m1' ->
