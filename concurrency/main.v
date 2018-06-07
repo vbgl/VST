@@ -20,13 +20,13 @@ Module Main (CC_correct: CompCert_correctness).
   (*Use a section to contain the parameters.*)
   Section MainTheorem.
   (*Assumptions *)
-  Parameter (CPROOF : semax_to_juicy_machine.CSL_proof).
+  Context (CPROOF : semax_to_juicy_machine.CSL_proof).
   Definition Clight_prog:= semax_to_juicy_machine.CSL_prog CPROOF.
   Definition Main_ptr:=Values.Vptr (Ctypes.prog_main Clight_prog) Integers.Ptrofs.zero.
-  Parameter (Asm_prog: Asm.program).
-  Parameter (asm_genv_safe: Asm_core.safe_genv (x86_context.X86Context.the_ge Asm_prog)).
-  Parameter (compilation : CC_correct.CompCert_compiler Clight_prog = Some Asm_prog).
-  Parameter (CPROOF_initial:
+  Context (Asm_prog: Asm.program).
+  Context (asm_genv_safe: Asm_core.safe_genv (x86_context.X86Context.the_ge Asm_prog)).
+  Context (compilation : CC_correct.CompCert_compiler Clight_prog = Some Asm_prog).
+  Context (CPROOF_initial:
                init_state_source (semax_to_juicy_machine.CSL_prog CPROOF)
     (Clight.globalenv Clight_prog) (init_mem CPROOF)
     (Clight_safety.initial_Clight_state CPROOF) Main_ptr nil).
