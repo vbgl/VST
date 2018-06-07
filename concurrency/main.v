@@ -5,6 +5,7 @@ Require Import VST.concurrency.juicy.erasure_safety.
 Require Import VST.concurrency.compiler.concurrent_compiler_safety_proof.
 Require Import VST.concurrency.compiler.sequential_compiler_correct.
 
+Require Import VST.concurrency.sc_drf.Coarse2Fine_safety.
 
 
 Module Main (CC_correct: CompCert_correctness).
@@ -12,13 +13,24 @@ Module Main (CC_correct: CompCert_correctness).
   (*Import the safety of the compiler for concurrent programs*)
   Module ConcurCC_safe:= (Concurrent_Safety CC_correct).
   Import ConcurCC_safe.
-  
+
+  (*Importing the definition for ASM semantics and machines*)
+  Import dry_context.AsmContext.
+
+  (*Use a section to contain the parameters.*)
+  Section MainTheorem.
   (*Assumptions *)
-  Context (CPROOF : semax_to_juicy_machine.CSL_proof).
-  Definition Clight_prog:= semax_to_juicy_machine.CSL_prog CPROOF. 
-  Context (Asm_prog: Asm.program).
-  Context (asm_genv_safe: Asm_core.safe_genv (x86_context.X86Context.the_ge Asm_prog)).
-  Context (compilation : CC_correct.CompCert_compiler Clight_prog = Some Asm_prog).
+  Parameter (CPROOF : semax_to_juicy_machine.CSL_proof).
+  Definition Clight_prog:= semax_to_juicy_machine.CSL_prog CPROOF.
+  Definition Main_ptr:=Values.Vptr (Ctypes.prog_main Clight_prog) Integers.Ptrofs.zero.
+  Parameter (Asm_prog: Asm.program).
+  Parameter (asm_genv_safe: Asm_core.safe_genv (x86_context.X86Context.the_ge Asm_prog)).
+  Parameter (compilation : CC_correct.CompCert_compiler Clight_prog = Some Asm_prog).
+  Parameter (CPROOF_initial:
+               init_state_source (semax_to_juicy_machine.CSL_prog CPROOF)
+    (Clight.globalenv Clight_prog) (init_mem CPROOF)
+    (Clight_safety.initial_Clight_state CPROOF) Main_ptr nil).
+  
 
   (*Safety from CSL to Coarse Asm*)
   Lemma CSL2CoarseAsm_safety:
@@ -42,14 +54,40 @@ Module Main (CC_correct: CompCert_correctness).
     eapply ConcurrentCompilerSafety.
     3: eapply Clight_initial_safe.
     - eexact compilation.
-    - instantiate(1:=nil).
-      instantiate (2:=Clight.globalenv Clight_prog).
-      simpl.
-      
-      (* This is should follow from CPROOF, and should be proven in folder juicy*)
-      admit. 
-  Admitted.
+    - exact CPROOF_initial.
+  Qed.
 
+
+  Theorem CSL2FineBareAsm_safety:
+    forall U,
+    exists init_mem_target init_thread_target,
+      let res_target := permissions.getCurPerm init_mem_target in
+      let init_tp_target :=
+          threadPool.ThreadPool.mkPool
+            (resources:=erasure_proof.Parching.DR)
+            (threadPool.Krun init_thread_target)
+            (res_target, permissions.empty_map) in  
+      forall n,
+        HybridMachineSig.HybridMachineSig.HybridFineMachine.fsafe
+          (dilMem:= BareDilMem)
+          (ThreadPool:=threadPool.OrdinalPool.OrdinalThreadPool
+                         (resources:=erasure_proof.Parching.DR)
+                         (Sem:=x86_context.X86Context.X86Sem Asm_prog asm_genv_safe))
+          (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig)
+          init_tp_target init_mem_target U n.
+  Proof.
+    intros U.
+    pose proof (CSL2CoarseAsm_safety U) as (init_mem_target & init_thread_target & HH).
+    exists init_mem_target, init_thread_target.
+    simpl.
+    pose proof Coarse2FineAsm_safety as HH2.
+    specialize (HH2 _ _ U init_mem_target init_thread_target).
+    simpl in *.
+    specialize (HH2 HH).
+    eauto.
+  Qed.
+  End MainTheorem.
+  
 End Main.
 
 
@@ -66,4 +104,6 @@ End CC_correct.
 
 Module Test_Main:= (Main CC_correct).
 Import Test_Main.
-Print Assumptions CSL2CoarseAsm_safety.
+
+Check CSL2FineBareAsm_safety.
+Print Assumptions CSL2FineBareAsm_safety.
