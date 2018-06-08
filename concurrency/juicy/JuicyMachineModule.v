@@ -31,7 +31,7 @@ Module THE_JUICY_MACHINE.
   Section THE_JUICY_MACHINE.
 
   Context {ge : genv}.
-  Instance JSem : Semantics := ClightSem ge.
+  Instance JSem : Semantics := Clight_newSem ge.
   Definition JMachineSem := MachineSemantics(HybridMachine := HybridCoarseMachine.HybridCoarseMachine(machineSig:=JuicyMachineShell)).
   Definition jstate := ThreadPool.t(resources := LocksAndResources)(ThreadPool := OrdinalPool.OrdinalThreadPool).
   Definition jmachine_state := MachState(resources := LocksAndResources)(ThreadPool := OrdinalPool.OrdinalThreadPool).

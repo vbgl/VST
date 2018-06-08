@@ -560,7 +560,7 @@ Section Progress.
 
             assert (Ecall: EF_external name sg = LOCK) by congruence.
 
-            assert (Eae : at_external (@semSem (ClightSemantincsForMachines.ClightSem ge)) (ExtCall (EF_external name sg) args lid ve te k) m =
+            assert (Eae : at_external (@semSem (ClightSemantincsForMachines.Clight_newSem ge)) (ExtCall (EF_external name sg) args lid ve te k) m =
                     Some (LOCK, Vptr b ofs :: nil)). {
               simpl.
               repeat f_equal; congruence.
@@ -626,7 +626,7 @@ Section Progress.
 
           assert (Ecall: EF_external name sg = LOCK) by congruence.
 
-          assert (Eae : at_external (@semSem (ClightSemantincsForMachines.ClightSem ge)) (ExtCall (EF_external name sg) args lid ve te k) m =
+          assert (Eae : at_external (@semSem (ClightSemantincsForMachines.Clight_newSem ge)) (ExtCall (EF_external name sg) args lid ve te k) m =
                         Some (LOCK, Vptr b ofs :: nil)). {
             simpl.
             repeat f_equal; congruence.
@@ -809,7 +809,7 @@ Section Progress.
 
           assert (Ecall: EF_external name sg = UNLOCK) by congruence.
 
-          assert (Eae : at_external (@semSem (ClightSemantincsForMachines.ClightSem ge)) (ExtCall (EF_external name sg) args lid ve te k) m =
+          assert (Eae : at_external (@semSem (ClightSemantincsForMachines.Clight_newSem ge)) (ExtCall (EF_external name sg) args lid ve te k) m =
                         Some (UNLOCK, Vptr b ofs :: nil)). {
             simpl.
             auto.
@@ -1037,7 +1037,7 @@ Section Progress.
 
         assert (Ecall: EF_external name sg = MKLOCK) by congruence.
 
-        assert (Eae : at_external (@semSem (ClightSemantincsForMachines.ClightSem ge)) (ExtCall (EF_external name sg) args lid ve te k) m =
+        assert (Eae : at_external (@semSem (ClightSemantincsForMachines.Clight_newSem ge)) (ExtCall (EF_external name sg) args lid ve te k) m =
                       Some (MKLOCK, Vptr b ofs :: nil)). {
           simpl.
           repeat f_equal; congruence.
@@ -1183,7 +1183,7 @@ Section Progress.
 
         assert (Ecall: EF_external name sg = FREE_LOCK) by congruence.
 
-        assert (Eae : at_external (@semSem (ClightSemantincsForMachines.ClightSem ge)) (ExtCall (EF_external name sg) args lid ve te k) m =
+        assert (Eae : at_external (@semSem (ClightSemantincsForMachines.Clight_newSem ge)) (ExtCall (EF_external name sg) args lid ve te k) m =
                       Some (FREE_LOCK, Vptr b ofs :: nil)). {
           simpl.
           repeat f_equal; congruence.

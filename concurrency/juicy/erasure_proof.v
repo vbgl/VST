@@ -32,7 +32,7 @@ Require Import VST.concurrency.common.permissions.
 Require Import VST.concurrency.juicy.sync_preds.
 (*The semantics*)
 Require Import VST.concurrency.juicy.JuicyMachineModule.
-Require Import VST.concurrency.common.DryMachineSource.
+Require Import VST.concurrency.common.ClightMachine.
 (*Erasure specification*)
 Require Import VST.concurrency.juicy.erasure_signature.
 
@@ -47,7 +47,7 @@ Set Bullet Behavior "Strict Subproofs".
 
 Module Parching <: ErasureSig.
   Import THE_JUICY_MACHINE.
-  Import THE_DRY_MACHINE_SOURCE.
+  Import Clight_newMachine.
   Import DMS.
   Import ThreadPoolWF.
 
@@ -55,7 +55,7 @@ Module Parching <: ErasureSig.
 
   Context (ge : genv).
 
-  Instance Sem : Semantics := ClightSemantincsForMachines.ClightSem ge.
+  Instance Sem : Semantics := ClightSemantincsForMachines.Clight_newSem ge.
 
   Instance JR : Resources := LocksAndResources.
   Instance JTP : ThreadPool.ThreadPool := OrdinalPool.OrdinalThreadPool.
@@ -69,7 +69,12 @@ Module Parching <: ErasureSig.
   Instance DTP : ThreadPool.ThreadPool := OrdinalPool.OrdinalThreadPool.
   Instance DMS : MachineSig := DryHybridMachine.DryHybridMachineSig.
   Instance DryMachine : HybridMachine := HybridCoarseMachine.HybridCoarseMachine.
-  Definition dstate := ThreadPool.t(ThreadPool := OrdinalPool.OrdinalThreadPool).
+  Definition dstate := ThreadPool.t
+                         (ThreadPool := OrdinalPool.OrdinalThreadPool)
+                         (*
+                         @t dryResources DSem (@OrdinalPool.OrdinalThreadPool dryResources DSem)
+                          *).
+                         
   Definition dmachine_state:= MachState(ThreadPool := OrdinalPool.OrdinalThreadPool).
 
   Import event_semantics threadPool.ThreadPool.
@@ -923,6 +928,7 @@ Module Parching <: ErasureSig.
     (** *Inital state simulation*)
     (* Erasure of the juicy initial_state is the dry initial_state AND
        the two are related by a Match relation. *)
+    Set Printing Implicit.
     Lemma init_diagram:
       forall (j : Values.Val.meminj) (U:schedule) (js : jstate)
         (vals : list Values.val) (m : Mem.mem) rmap pmap main h,
@@ -931,7 +937,7 @@ Module Parching <: ErasureSig.
         no_locks_perm rmap ->
         initial_core (JMachineSem U (Some rmap)) h m (U, nil, js) main vals ->
         exists (ds : dstate),
-          initial_core (ClightMachineSem U (Some pmap)) h m (U, nil,ds) main vals /\
+          initial_core (ClightMachineSem U (Some pmap)) h m (U, nil, ds) main vals /\
           invariant ds /\
           match_st js ds.
     Proof.
@@ -4699,7 +4705,7 @@ Here be dragons
         {
           inversion Hcorestep.
           eapply ev_step_ax2 in H; destruct H as [T H].
-          apply ClightSemantincsForMachines.step_decay in H.
+          apply ClightSemantincsForMachines.CLN_step_decay in H.
           
           eapply step_decay_invariant
             with (Hcompatible:= MTCH_compat _ _ _ MATCH Hcmpt); try eapply H; eauto.
@@ -4724,7 +4730,7 @@ Here be dragons
     (*is decay *)
     inversion Hcorestep.
     eapply ev_step_ax2 in H; destruct H as [T H].
-    apply ClightSemantincsForMachines.step_decay in H.
+    apply ClightSemantincsForMachines.CLN_step_decay in H.
     { (*decay preserves lock permissions!!*)
       replace (MTCH_cnt' MATCH Htid') with Htid by apply proof_irrelevance.
       move: H0 => [] [] _ /(_ (b,ofs)) [] A B _.

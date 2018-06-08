@@ -36,12 +36,26 @@ Module X86Context.
          the_ge := the_ge
       }.
 
-  (*Import the Asm Hybrid Machine*)
+    (*Import the Asm Hybrid Machine*)
+    (** *Coarse Asm Machine*)
   Import AsmContext.
   Definition AsmHybridMachine    := @dryCoarseMach X86Sem.
   Definition AsmConcurSem    := HybridMachineSig.HybridMachineSig.ConcurMachineSemantics
                                   (HybridMachine:= AsmHybridMachine).
 
+  (** *Fine Asm Machine*)
+  
+  Import AsmContext.
+  Definition AsmFineHybridMachine    := @dryFineMach X86Sem.
+  Definition AsmFineConcurSem    := HybridMachineSig.HybridMachineSig.ConcurMachineSemantics
+                                  (HybridMachine:= AsmFineHybridMachine).
+
+  (** The initial state 
+      There are three, but all should be equivalent. *)
+  Definition Asm_initial_state := tpc_init(asmSem:=X86Sem).
+  Definition Asm_initial_state_fine := tpf_init(asmSem:=X86Sem).
+  Definition Asm_initial_state_bare := bare_init(asmSem:=X86Sem).
+  
   End X86Context.
 End X86Context.
 

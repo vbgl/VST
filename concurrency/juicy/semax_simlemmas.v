@@ -389,7 +389,7 @@ Proof.
   apply join_comm; auto.
 Qed.
 
-Lemma Ejuicy_sem : forall ge, (@juicy_sem (ClightSem ge)) = juicy_core_sem (cl_core_sem ge).
+Lemma Ejuicy_sem : forall ge, (@juicy_sem (Clight_newSem ge)) = juicy_core_sem (cl_core_sem ge).
 Proof.
   unfold juicy_sem; simpl.
   reflexivity.

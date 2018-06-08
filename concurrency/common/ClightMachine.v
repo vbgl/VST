@@ -39,22 +39,37 @@ Set Bullet Behavior "Strict Subproofs".
 
 Import threadPool.
 
-Module THE_DRY_MACHINE_SOURCE.
-(*  Module SEM:= ClightSEM.*)
+Module Clight_newMachine.
 
   Import HybridMachineSig.
 
-  (*Module DSEM := DryMachineShell SEM.
-  Module DryMachine <: ConcurrentMachine:= CoarseMachine SCH DSEM.
-  Notation DMachineSem:= DryMachine.MachineSemantics.
-  Notation new_DMachineSem:= DryMachine.new_MachineSemantics.
-  Notation dstate:= DryMachine.SIG.ThreadPool.t.
-  Notation dmachine_state:= DryMachine.MachState.
-  (*Module DTP:= DryMachine.SIG.ThreadPool.*)
-  Import DSEM.DryMachineLemmas event_semantics.*)
+  Module DMS.
+  Section DMS.
+
+  Context {ge : genv}.
+  Existing Instance OrdinalPool.OrdinalThreadPool.
+  Instance DSem : Semantics := Clight_newSem ge.
+
+
+  (* First construct the Clight machine and the two projections:
+     - ClightMachineSem (i.e.  MachineSemantics) 
+     - ClightConcurSem (i.e. ConcurMachineSemantics)
+  *)
+  
+  Definition ClightMachine :=(HybridCoarseMachine.HybridCoarseMachine
+                                 (machineSig := DryHybridMachine.DryHybridMachineSig)).
+  Definition ClightMachineSem := (MachineSemantics(HybridMachine := ClightMachine)).
+  Definition ClightConcurSem := (ConcurMachineSemantics(HybridMachine := ClightMachine)).   
+  End DMS.
+  End DMS.
+End Clight_newMachine.
+
+
+Module ClightMachine.
+
+  Import HybridMachineSig.
 
   Module DMS.
-
   Section DMS.
 
   Context {ge : genv}.
@@ -70,43 +85,17 @@ Module THE_DRY_MACHINE_SOURCE.
   Definition ClightMachine :=(HybridCoarseMachine.HybridCoarseMachine
                                  (machineSig := DryHybridMachine.DryHybridMachineSig)).
   Definition ClightMachineSem := (MachineSemantics(HybridMachine := ClightMachine)).
-  Definition ClightConcurSem := (ConcurMachineSemantics(HybridMachine := ClightMachine)).                            
-
-(*  Existing Instance DryHybridMachine.DryHybridMachineSig.
-  Existing Instance BareMachine.BareMachineSig.
-  Existing Instance HybridMachineSig.HybridCoarseMachine.HybridCoarseMachine.
-(*  Definition DMachineSem := HybridMachineSig.MachineSemantics(HybridMachine := HybridMachineSig.HybridCoarseMachine.HybridCoarseMachine).*)
-
-
-  Instance DMS : HybridMachineSig.MachineSig.
-
-  Module DMS  <: MachinesSig with Module SEM := ClightSEM.
-     Module SEM:= ClightSEM .
-
-     (*Old DSEM*)
-     Module DryMachine <: DryMachineSig SEM := DryMachineShell SEM.
-     Module ErasedMachine :=  ErasedMachineShell SEM.
-
-     Module DryConc <: ConcurrentMachine :=
-      CoarseMachine SCH DryMachine.
-     Notation DMachineSem:= DryConc.MachineSemantics.
-     Notation new_DMachineSem:= DryConc.new_MachineSemantics.
-
-     Module FineConc := HybridMachineSig.FineMachine SCH DryMachine.
-     (** SC machine*)
-     Module SC := HybridMachineSig.FineMachine SCH ErasedMachine.
-     Module DTP<: ThreadPoolSig:= DryConc.SIG.ThreadPool.
-
-     Import DryMachine DTP.*)
-
+  Definition ClightConcurSem := (ConcurMachineSemantics(HybridMachine := ClightMachine)).   
   End DMS.
-
   End DMS.
+End ClightMachine.
 
-  Module FiniteBranching.
+
+
+Module FiniteBranching.
 
   (** *Finite Branching*)
-    (* Probably need to assume something about memory.
+(* Probably need to assume something about memory.
      Such as:
      1. Next block increases at most by one
      2. semantics is deterministic, so we know all possible changes to memory.
@@ -731,7 +720,7 @@ Module THE_DRY_MACHINE_SOURCE.
                       H' : at_external ?SEM _ ?c _ = Some (_, _ ) |- _ ] =>
                  rewrite H in H'; inversion H'
                end; simpl in *; try subst);
-*)
+ *)
           try solve[rewrite Hone_zero in Hload; inversion Hload].
         unfold tp'0, tp_upd0. subst.
         rewrite AtExt in Hat_external. inv Hat_external.
@@ -1430,10 +1419,8 @@ Module THE_DRY_MACHINE_SOURCE.
             * rewrite ineq''; auto.
       }
   Qed.
-*)
+ *)
 
 
   End FiniteBranching.
-
-End THE_DRY_MACHINE_SOURCE.
 

@@ -19,7 +19,7 @@ Require Import VST.sepcomp.event_semantics.
 Require Import VST.concurrency.common.dry_context.
 
 (** The Clight DryConc Machine*)
-Require Import VST.concurrency.common.DryMachineSource.
+Require Import VST.concurrency.common.ClightMachine.
 
 Require Import VST.concurrency.common.machine_simulation. Import machine_simulation.
 
@@ -27,8 +27,8 @@ Require Import VST.concurrency.common.machine_simulation. Import machine_simulat
 Module lifting_safety (SEMT: Semantics) (Machine: MachinesSig with Module SEM := SEMT).
   Module lftng:= lifting SEMT Machine. Import lftng.
   Module foo:= Machine.
-  Import THE_DRY_MACHINE_SOURCE.
-  Import THE_DRY_MACHINE_SOURCE.DMS.
+  Import Clight_newMachine.
+  Import Clight_newMachine.DMS.
 
 
   Definition match_st gT gS main psrc ptgt sch:=
@@ -65,7 +65,7 @@ Module lifting_safety (SEMT: Semantics) (Machine: MachinesSig with Module SEM :=
       _ _ _ _ _ _ _ _
       (concur_sim gT gS main psrc ptgt sch).
 
-(*  THE_DRY_MACHINE_SOURCE.dmachine_state
+(*  Clight_newMachine.dmachine_state
     Machine.DryConc.MachState
  *)
   (* This axiom comes from the new simulation*)
@@ -182,7 +182,7 @@ Module lifting_safety (SEMT: Semantics) (Machine: MachinesSig with Module SEM :=
     { rewrite /DryConc.valid
               /DryConc.correct_schedule
               /DryConc.unique_Krun
-              /THE_DRY_MACHINE_SOURCE.SCH.schedPeek
+              /Clight_newMachine.SCH.schedPeek
               /Machine.DryConc.valid
               /Machine.DryConc.correct_schedule
               /Machine.DryConc.unique_Krun

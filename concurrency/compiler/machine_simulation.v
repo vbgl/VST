@@ -15,8 +15,8 @@ Require Import VST.sepcomp.structured_injections.
 Require Import VST.sepcomp.reach.
 Require Import VST.sepcomp.mem_wd.
 
-Require Import VST.concurrency.machine_semantics.
-Require Import VST.concurrency.machine_semantics_lemmas.
+Require Import VST.concurrency.common.machine_semantics.
+Require Import VST.concurrency.common.machine_semantics_lemmas.
 
 Module Machine_sim. Section Machine_sim.
 

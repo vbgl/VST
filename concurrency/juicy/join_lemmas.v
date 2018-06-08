@@ -646,7 +646,7 @@ Proof.
       omega.
 Qed.
 
-Instance JSem : Semantics := ClightSemantincsForMachines.ClightSem ge.
+Instance JSem : Semantics := ClightSemantincsForMachines.Clight_newSem ge.
 
 Lemma getThreadR_nth i tp cnti :
   nth_error (getThreadsR tp) i = Some (@getThreadR _ _ _ i tp cnti).

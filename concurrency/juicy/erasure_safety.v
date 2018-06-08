@@ -30,6 +30,7 @@ Require Import VST.concurrency.common.permissions.
 (*Erasure simulation*)
 Require Import VST.concurrency.juicy.erasure_signature.
 Require Import VST.concurrency.juicy.erasure_proof.
+Require Import VST.concurrency.juicy.Clight_safety.
 Import addressFiniteMap.
 
 (*SSReflect*)
@@ -62,7 +63,7 @@ Module ErasureSafety.
   Definition step_diagram:= ErasureProof.core_diagram.
 
   Import JuicyMachineModule.THE_JUICY_MACHINE.
-  Import DryMachineSource.THE_DRY_MACHINE_SOURCE.DMS.
+  Import ClightMachine.Clight_newMachine.DMS.
 
   Existing Instance DMS.
 
@@ -183,7 +184,7 @@ Section DrySafety.
 
   Variable (CPROOF : CSL_proof).
 
-  Instance Sem : Semantics := ClightSemantincsForMachines.ClightSem (globalenv CPROOF.(CSL_prog)).
+  Instance Sem : Semantics := ClightSemantincsForMachines.Clight_newSem (globalenv CPROOF.(CSL_prog)).
   Definition ge := globalenv CPROOF.(CSL_prog).
   Instance DTP : threadPool.ThreadPool.ThreadPool := Parching.DTP ge.
   Instance DMS : HybridMachineSig.MachineSig := Parching.DMS ge.
@@ -233,6 +234,22 @@ Section DrySafety.
     - apply init_no_locks.
   Qed.
 
+  Notation ClightSem:= ClightSemantincsForMachines.ClightSem.
+  Theorem Clight_initial_safe (sch : HybridMachineSig.schedule) (n : nat) :
+    HybridMachineSig.HybridCoarseMachine.csafe
+      (Sem := ClightSem ge)
+      (ThreadPool:= threadPool.OrdinalPool.OrdinalThreadPool(Sem:=ClightSem ge))
+      (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig)
+      (sch, nil,
+       DryHybridMachine.initial_machine(Sem := ClightSem ge)
+                                       (permissions.getCurPerm init_mem)
+                                       (initial_Clight_state CPROOF)) init_mem n.
+  Proof.
+    rewrite <- initial_Clight_state_correct.
+    eapply Clight_new_Clight_safety.
+    eapply dry_safety_initial_state.
+  Qed.
+    
 End DrySafety.
 
 (*  Existing Instance HybridMachineSig.HybridCoarseMachine.DilMem.

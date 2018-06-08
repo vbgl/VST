@@ -1,40 +1,41 @@
-Require Import sepcomp.semantics.
-Require Import sepcomp.semantics_lemmas.
-Require Import sepcomp.mem_lemmas.
-Require Import veric.base.
-Require Import veric.Clight_core.
+Require Import VST.concurrency.common.core_semantics.
+Require Import VST.sepcomp.semantics_lemmas.
+Require Import VST.sepcomp.mem_lemmas.
+Require Import VST.veric.base.
+Require Import VST.veric.Clight_core.
 
 Lemma alloc_variables_mem_step: forall cenv vars m e e2 m'
       (M: alloc_variables cenv e m vars e2 m'), mem_step m m'.
 Proof. intros.
   induction M.
   apply mem_step_refl.
-  eapply mem_step_trans.
-    eapply mem_step_alloc; eassumption. eassumption.
+  eapply core_semantics.mem_step_trans.
+    eapply core_semantics.mem_step_alloc; eassumption. eassumption.
 Qed.
 
 Lemma bind_parameters_mem_step: forall cenv e m pars vargs m'
-      (M: bind_parameters cenv e m pars vargs m'), mem_step m m'.
+      (M: bind_parameters cenv e m pars vargs m'), core_semantics.mem_step m m'.
 Proof. intros.
   induction M.
   apply mem_step_refl.
   inv H0.
-+ eapply mem_step_trans; try eassumption. simpl in H2.
++ eapply core_semantics.mem_step_trans; try eassumption. simpl in H2.
   eapply mem_step_store; eassumption.
-+ eapply mem_step_trans; try eassumption.
-  eapply mem_step_storebytes; eassumption.
++ eapply core_semantics.mem_step_trans; try eassumption.
+  eapply core_semantics.mem_step_storebytes; eassumption.
 Qed.
 
 Lemma CLC_corestep_mem:
-  forall (g : genv) (c : CC_core) (m : mem) (c' : CC_core) (m' : mem),
-    corestep cl_core_sem g c m c' m' -> mem_step m m'.
+  forall (g : genv) c (m : mem) c'  (m' : mem),
+    core_semantics.corestep (cl_core_sem g) c m c' m' ->
+    core_semantics.mem_step m m'.
 Admitted.
 
 
-Program Definition CLC_memsem :
-  @MemSem Clight.genv (*(Genv.t fundef type)*) CC_core.
-apply Build_MemSem with (csem := cl_core_sem).
-exact CLC_corestep_mem.
+Program Definition CLC_memsem  (ge : Clight.genv) :
+  @MemSem state.
+apply Build_MemSem with (csem := cl_core_sem ge).
+eapply CLC_corestep_mem.
 Defined.
 
 

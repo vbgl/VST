@@ -85,7 +85,7 @@ Inductive state_step : cm_state -> cm_state -> Prop :=
       (m, (tr, nil, jstate))
       (m, (tr, nil, jstate))
 | state_step_c m m' tr tr' sch sch' jstate jstate':
-    @JuicyMachine.machine_step _ (ClightSem ge) _ HybridCoarseMachine.DilMem JuicyMachineShell HybridMachineSig.HybridCoarseMachine.scheduler sch tr jstate m sch' tr' jstate' m' ->
+    @JuicyMachine.machine_step _ (Clight_newSem ge) _ HybridCoarseMachine.DilMem JuicyMachineShell HybridMachineSig.HybridCoarseMachine.scheduler sch tr jstate m sch' tr' jstate' m' ->
     state_step
       (m, (tr, sch, jstate))
       (m',(tr', sch', jstate')).

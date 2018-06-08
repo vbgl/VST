@@ -19,8 +19,6 @@ Record CoreSemantics {C M : Type} : Type :=
   ; after_external : option val -> C -> M -> option C
   ; halted : C -> int -> Prop
   ; corestep : C -> M -> C -> M -> Prop
-
-  
   ; corestep_not_halted:
       forall m q m' q' i, corestep q m q' m' -> ~ halted q i
   ; corestep_not_at_external:
