@@ -1647,7 +1647,7 @@ Module MemErasure.
           specialize (H1 k). specialize (H2 k).
           rewrite H1 H2.
           simpl. auto.
-        * assert (ofs < 0)
+        * assert (ofs < lo)
             by omega.
           assert (H1:= MemoryLemmas.permission_at_alloc_3 _ _ _ _ _ ofs Halloc'
                                                           ltac:(eauto)).
@@ -1656,7 +1656,7 @@ Module MemErasure.
           specialize (H1 k). specialize (H2 k).
           rewrite H1 H2.
           simpl. auto.
-        * assert (ofs < 0)
+        * assert (ofs < lo)
             by omega.
           assert (H1:= MemoryLemmas.permission_at_alloc_3 _ _ _ _ _ ofs Halloc'
                                                           ltac:(eauto)).
@@ -1669,7 +1669,7 @@ Module MemErasure.
         destruct H; try by exfalso.
         unfold Mem.valid_block in H.
         rewrite erased_nb0 in H.
-        assert (H2:= MemoryLemmas.permission_at_alloc_1 _ _  0%Z sz _ b ofs
+        assert (H2:= MemoryLemmas.permission_at_alloc_1 _ _  lo hi _ b ofs
                                                         Halloc' ltac:(eauto)).
         unfold permission_at in H2.
         specialize (H2 k).

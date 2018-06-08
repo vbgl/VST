@@ -47,8 +47,8 @@ Module MemoryLemmas.
   Transparent Mem.alloc.
 
   Lemma val_at_alloc_1:
-    forall m m' sz nb b ofs
-      (Halloc: Mem.alloc m 0 sz = (m', nb))
+    forall m m' lo hi nb b ofs
+      (Halloc: Mem.alloc m lo hi  = (m', nb))
       (Hvalid: Mem.valid_block m b),
       Maps.ZMap.get ofs (Maps.PMap.get b (Mem.mem_contents m)) =
       Maps.ZMap.get ofs (Maps.PMap.get b (Mem.mem_contents m')).
@@ -63,8 +63,8 @@ Module MemoryLemmas.
   Qed.
 
   Lemma val_at_alloc_2:
-    forall m m' sz nb ofs
-      (Halloc: Mem.alloc m 0 sz = (m', nb)),
+    forall m m' lo hi nb ofs
+      (Halloc: Mem.alloc m lo hi = (m', nb)),
       Maps.ZMap.get ofs (Maps.PMap.get nb (Mem.mem_contents m')) = Undef.
   Proof.
     intros.
@@ -77,8 +77,8 @@ Module MemoryLemmas.
 
   (*stronger version of val_at_alloc_1*)
   Lemma val_at_alloc_3:
-    forall m m' sz nb b ofs
-      (Halloc: Mem.alloc m 0 sz = (m', nb))
+    forall m m' lo hi  nb b ofs
+      (Halloc: Mem.alloc m lo hi = (m', nb))
       (Hvalid: b <> nb),
       Maps.ZMap.get ofs (Maps.PMap.get b (Mem.mem_contents m)) =
       Maps.ZMap.get ofs (Maps.PMap.get b (Mem.mem_contents m')).
