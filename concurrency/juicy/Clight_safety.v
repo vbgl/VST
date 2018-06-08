@@ -16,8 +16,12 @@ Context (CPROOF : semax_to_juicy_machine.CSL_proof).
 Definition prog:= CPROOF.(CSL_prog).
 Definition ge:= Clight.globalenv prog.
 Definition init_mem:= proj1_sig (init_mem CPROOF).
+
+(*We should be able to construct a Clight.state from the proof. *)
 Axiom initial_Clight_state: CSL_proof -> Clight.state.
+(*...And we should be able to constructe an intial state from the Clight_new and mem.*)
 Axiom new2Clight_state: Clight_new.corestate -> Memory.mem -> Clight.state.
+(*The two constructions commute.*)
 Axiom initial_Clight_state_correct:
   new2Clight_state
     (initial_corestate CPROOF)

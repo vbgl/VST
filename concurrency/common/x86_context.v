@@ -50,6 +50,12 @@ Module X86Context.
   Definition AsmFineConcurSem    := HybridMachineSig.HybridMachineSig.ConcurMachineSemantics
                                   (HybridMachine:= AsmFineHybridMachine).
 
+  (** The initial state 
+      There are three, but all should be equivalent. *)
+  Definition Asm_initial_state := tpc_init(asmSem:=X86Sem).
+  Definition Asm_initial_state_fine := tpf_init(asmSem:=X86Sem).
+  Definition Asm_initial_state_bare := bare_init(asmSem:=X86Sem).
+  
   End X86Context.
 End X86Context.
 

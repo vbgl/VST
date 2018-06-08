@@ -34,13 +34,14 @@ Section ConcurrentCopmpilerSafety.
       (SIM: HybridMachine_simulation 
               (ConcurMachineSemantics(HybridMachine:=SourceHybridMachine) init_U)
               (ConcurMachineSemantics(HybridMachine:=TargetHybridMachine) init_U)):=
-    forall U ge init_mem_source init_thread main args,
-      match_initial_thread SIM ge init_mem_source init_thread main args ->
+    forall U init_mem_source init_thread main args,
+      initial_source_thread SIM init_mem_source init_thread main args ->
       let res:= permissions.getCurPerm init_mem_source in
       let init_tp_source:= ThreadPool.mkPool (Krun init_thread) (res,permissions.empty_map) in
       let init_MachState_source:= (U, nil, init_tp_source) in
       (forall n, HybridCoarseMachine.csafe init_MachState_source init_mem_source n) ->
       exists init_mem_target init_thread_target,
+        initial_target_thread SIM init_mem_target init_thread_target main args /\
         let res_target:= permissions.getCurPerm init_mem_target in
         let init_tp_target:= ThreadPool.mkPool (Krun init_thread_target) (res_target,permissions.empty_map) in
         let init_MachState_target:= (U, nil, init_tp_target) in
@@ -53,9 +54,11 @@ Section ConcurrentCopmpilerSafety.
    *)
   Definition concurrent_simulation_safety_preservation_export
              (source_init_state:
-                @G SemSource -> Memory.mem -> @semC SemSource -> Values.val -> list Values.val -> Prop)  :=
-    forall U ge init_mem_source init_thread main args,
-      source_init_state ge init_mem_source init_thread main args ->
+                Memory.mem -> @semC SemSource -> Values.val -> list Values.val -> Prop) 
+             (target_init_state:
+                Memory.mem -> @semC SemTarget -> Values.val -> list Values.val -> Prop)   :=
+    forall U init_mem_source init_thread main args,
+      source_init_state init_mem_source init_thread main args ->
       let res:= permissions.getCurPerm init_mem_source in
       let init_tp_source:= ThreadPool.mkPool
                              (Sem:=SemSource)
@@ -67,6 +70,7 @@ Section ConcurrentCopmpilerSafety.
               (machineSig:=SourceMachineSig)
               init_MachState_source init_mem_source n) ->
       exists init_mem_target init_thread_target,
+        target_init_state init_mem_target init_thread_target main args /\
         let res_target:= permissions.getCurPerm init_mem_target in
         let init_tp_target:= ThreadPool.mkPool
                                (Sem:=SemTarget) (Krun init_thread_target) (res_target,permissions.empty_map) in
@@ -77,18 +81,33 @@ Section ConcurrentCopmpilerSafety.
                 (machineSig:=TargetMachineSig)
                 init_MachState_target init_mem_target n).
 
+  Lemma forall_exists_commute:
+      forall {A} (P Q: A -> Prop),
+        (forall k, P k -> Q k) ->
+        (exists k, P k) ->
+        (exists k, Q k).
+    Proof.
+      intros ? ? ? ? (?&?); eexists; eauto.
+    Qed.
+    
   Lemma concur_safety_preserv_equiv:
     forall (source_init_state:
-       @G SemSource -> Memory.mem -> @semC SemSource -> Values.val -> list Values.val -> Prop)
+         Memory.mem -> @semC SemSource -> Values.val -> list Values.val -> Prop)
+      (target_init_state:
+       Memory.mem -> @semC SemTarget -> Values.val -> list Values.val -> Prop)
       init_U SIM,
-      (forall ge init_mem_source init_thread main args,
-        source_init_state ge init_mem_source init_thread main args ->
-        match_initial_thread SIM ge init_mem_source init_thread main args) ->
+      (forall init_mem_source init_thread main args,
+        source_init_state init_mem_source init_thread main args ->
+        initial_source_thread SIM init_mem_source init_thread main args) ->
+      (forall init_mem_target init_thread main args,
+        initial_target_thread SIM init_mem_target init_thread main args ->
+        target_init_state init_mem_target init_thread main args) ->
     @concurrent_simulation_safety_preservation init_U SIM ->
-    concurrent_simulation_safety_preservation_export source_init_state.
+    concurrent_simulation_safety_preservation_export source_init_state target_init_state.
   Proof.
-    intros ???? H ?; intros.
-    eapply H; eauto.
+    intros ?????? H ?; intros.
+    eapply forall_exists_commute; [ intros H4 |eapply H; eauto].
+    eapply forall_exists_commute; intros ? (?&?); auto.
   Qed.
     
 End ConcurrentCopmpilerSafety.

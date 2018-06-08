@@ -1,11 +1,15 @@
 (* Main File putting all together. *)
 
+  Require Import compcert.cfrontend.Clight.
 Require Import VST.concurrency.juicy.erasure_safety.
 
 Require Import VST.concurrency.compiler.concurrent_compiler_safety_proof.
 Require Import VST.concurrency.compiler.sequential_compiler_correct.
 
 Require Import VST.concurrency.sc_drf.Coarse2Fine_safety.
+
+Require Import VST.concurrency.common.threadPool.
+Require Import VST.concurrency.common.erased_machine.
 
 
 Module Main (CC_correct: CompCert_correctness).
@@ -26,27 +30,37 @@ Module Main (CC_correct: CompCert_correctness).
   Context (Asm_prog: Asm.program).
   Context (asm_genv_safe: Asm_core.safe_genv (x86_context.X86Context.the_ge Asm_prog)).
   Context (compilation : CC_correct.CompCert_compiler Clight_prog = Some Asm_prog).
+  Definition AsmSem:= x86_context.X86Context.X86Sem Asm_prog asm_genv_safe.
+  
+  (* This should be instantiated:
+     it says initial_Clight_state taken from CPROOF, is an initial state of CompCert.
+   *)
   Context (CPROOF_initial:
-               init_state_source (semax_to_juicy_machine.CSL_prog CPROOF)
-    (Clight.globalenv Clight_prog) (init_mem CPROOF)
-    (Clight_safety.initial_Clight_state CPROOF) Main_ptr nil).
+             Clight.entry_point (Clight.globalenv Clight_prog)
+                                (init_mem CPROOF)
+                                (Clight_safety.initial_Clight_state CPROOF)
+                                Main_ptr nil).
   
 
   (*Safety from CSL to Coarse Asm*)
   Lemma CSL2CoarseAsm_safety:
     forall U,
     exists init_mem_target init_thread_target,
+      Asm.entry_point (Globalenvs.Genv.globalenv Asm_prog)
+                      init_mem_target init_thread_target Main_ptr
+      nil /\
     let res_target := permissions.getCurPerm init_mem_target in
   let init_tp_target :=
       threadPool.ThreadPool.mkPool
+        (Sem:=AsmSem)
         (resources:=erasure_proof.Parching.DR)
-        (threadPool.Krun init_thread_target)
+        (Krun init_thread_target)
       (res_target, permissions.empty_map) in
   let init_MachState_target := (U, nil, init_tp_target) in  
   forall n,
     HybridMachineSig.HybridMachineSig.HybridCoarseMachine.csafe
       (ThreadPool:=threadPool.OrdinalPool.OrdinalThreadPool
-                     (Sem:=x86_context.X86Context.X86Sem Asm_prog asm_genv_safe))
+                     (Sem:=AsmSem))
       (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig)
       init_MachState_target init_mem_target n.
   Proof.
@@ -61,30 +75,29 @@ Module Main (CC_correct: CompCert_correctness).
   Theorem CSL2FineBareAsm_safety:
     forall U,
     exists init_mem_target init_thread_target,
-      let res_target := permissions.getCurPerm init_mem_target in
-      let init_tp_target :=
+      Asm.entry_point (Globalenvs.Genv.globalenv Asm_prog)
+                      init_mem_target init_thread_target Main_ptr
+      nil /\
+      let init_tp_bare :=
           threadPool.ThreadPool.mkPool
-            (resources:=erasure_proof.Parching.DR)
-            (threadPool.Krun init_thread_target)
-            (res_target, permissions.empty_map) in  
+            (Sem:=AsmSem)
+            (resources:=BareMachine.resources)
+            (Krun init_thread_target) tt in  
       forall n,
         HybridMachineSig.HybridMachineSig.HybridFineMachine.fsafe
           (dilMem:= BareDilMem)
           (ThreadPool:=threadPool.OrdinalPool.OrdinalThreadPool
-                         (resources:=erasure_proof.Parching.DR)
-                         (Sem:=x86_context.X86Context.X86Sem Asm_prog asm_genv_safe))
-          (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig)
-          init_tp_target init_mem_target U n.
+                         (resources:=BareMachine.resources)
+                         (Sem:=AsmSem))
+          (machineSig:= BareMachine.BareMachineSig)
+          init_tp_bare init_mem_target U n.
   Proof.
     intros U.
-    pose proof (CSL2CoarseAsm_safety U) as (init_mem_target & init_thread_target & HH).
+    pose proof (CSL2CoarseAsm_safety U) as
+        (init_mem_target & init_thread_target & INIT & HH).
     exists init_mem_target, init_thread_target.
-    simpl.
-    pose proof Coarse2FineAsm_safety as HH2.
-    specialize (HH2 _ _ U init_mem_target init_thread_target).
-    simpl in *.
-    specialize (HH2 HH).
-    eauto.
+    split; auto; simpl.
+    eapply Coarse2FineAsm_safety; eauto.
   Qed.
   End MainTheorem.
   

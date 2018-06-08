@@ -20,8 +20,14 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
   Module ConcurCC_correct:= (Concurrent_correctness CC_correct).
   Import ConcurCC_correct.
 
+  Definition Clight_init_state (p: Clight.program):=
+    Clight.entry_point (Clight.globalenv p).
+
+    Definition Asm_init_state (p: Asm.program):=
+    Asm.entry_point (the_ge p).
   
-  Parameter init_state_source:
+  
+  Parameter init_state_source'':
     forall p,
     Clight.genv -> Memory.mem -> @semantics.semC (@DSem (Clight.globalenv p)) -> Values.val -> list Values.val -> Prop.
   
@@ -39,7 +45,8 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
       (SemTarget :=  SemTarget)
       (TargetThreadPool:= threadPool.OrdinalPool.OrdinalThreadPool(Sem:=SemTarget))
       (TargetMachineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig)
-      (init_state_source p)
+      (Clight_init_state p)
+      (Asm_init_state tp)
   .
     unfold concurrent_simulation_safety_preservation; simpl; intros.
   Admitted.
