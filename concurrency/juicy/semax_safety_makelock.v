@@ -233,8 +233,7 @@ Proof.
   assert (Ephi : level (getThreadR _ _ cnti) = S n). {
     rewrite getThread_level with (Phi0 := Phi). auto. apply compat.
   }
-  assert (El : (level (getThreadR _ _ cnti) - 1 = n)%nat) by omega.
-  setoid_rewrite El.
+  replace (level (getThreadR _ _ cnti) - 1)%nat with n by omega.
 
   (*
   assert (j : join_sub (getThreadR i tp cnti) Phi) by apply compatible_threadRes_sub, compat.

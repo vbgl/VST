@@ -1451,12 +1451,14 @@ Section Progress.
         + eapply JuicyMachine.StartThread with (c_new := q_new).
           * apply Eci.
           * simpl; reflexivity.
-          * auto.
+          * simpl; eauto.
           * reflexivity.
           * reflexivity.
+          * admit.
+          * constructor.
     }
     (* end of Kinit *)
     Unshelve. eexists; eauto. eexists; eauto.
-Qed. (* Theorem progress *)
+Admitted. (* Theorem progress *)
 
 End Progress.

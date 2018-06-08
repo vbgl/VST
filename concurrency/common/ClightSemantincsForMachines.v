@@ -65,10 +65,6 @@ Section ClightSEM.
       decay m m'.
   Admitted.
 
-  Lemma initial_core_mem_congr: forall n ge m m' q v vl,
-    initial_core (CLN_evsem ge) n m q v vl <-> initial_core (CLN_evsem ge) n m' q v vl.
-  Proof. reflexivity. Qed.
-
   Lemma at_external_SEM_eq:
      forall ge c m, at_external (CLN_evsem ge) c m =
       match c with
@@ -83,8 +79,8 @@ Section ClightSEM.
   
 
 
-  (** *Event semantics for Clight_new*)
-  (* This should be a version of CLN_memsem annotated with memory events. *)
+  (** *Event semantics for Clight_core*)
+  (* This should be a version of CLC_memsem annotated with memory events. *)
   Program Definition CLC_evsem ge : @EvSem state := {| msem := CLC_memsem ge |}.
   Next Obligation.
   Admitted.

@@ -460,6 +460,11 @@ Section Safety.
     exists n; split; auto. apply initial_invariant.
   Qed.
 
+  Goal Smallstep.initial_state (semantics2 prog) (initial_corestate).
+  Proof.
+    
+  Abort.
+
   Lemma jmsafe_csafe n m tr sch s : jmsafe (globalenv prog) n (m, (tr, sch, s)) -> jm_csafe (sch, tr, s) m n.
   Proof.
     clear.

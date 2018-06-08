@@ -931,13 +931,13 @@ Module Parching <: ErasureSig.
     Set Printing Implicit.
     Lemma init_diagram:
       forall (j : Values.Val.meminj) (U:schedule) (js : jstate)
-        (vals : list Values.val) (m : Mem.mem) rmap pmap main h,
+        (vals : list Values.val) (m m' : Mem.mem) rmap pmap main h,
         init_inj_ok j m ->
         match_rmap_perm rmap pmap ->
         no_locks_perm rmap ->
-        initial_core (JMachineSem U (Some rmap)) h m (U, nil, js) main vals ->
+        initial_core (JMachineSem U (Some rmap)) h m (U, nil, js) m' main vals ->
         exists (ds : dstate),
-          initial_core (ClightMachineSem U (Some pmap)) h m (U, nil, ds) main vals /\
+          initial_core (ClightMachineSem U (Some pmap)) h m (U, nil, ds) m' main vals /\
           invariant ds /\
           match_st js ds.
     Proof.
@@ -4663,7 +4663,13 @@ Here be dragons
               econstructor.
               - eapply MTCH_getThreadC. eassumption. eassumption.
               - reflexivity.
-              - simpl in *; eassumption.
+              - simpl in *.
+                destruct Hinitial; split; eauto.
+                replace Htid with ctn by apply proof_irr.
+                remember (Concur.install_perm _ _) as m1.
+                apply mtch_install_perm with (ds := ds)(MATCH := MATCH) in Heqm1; hnf in Heqm1.
+                rewrite Heqm1 in e0; rewrite e0; simpl.
+                replace Htid with ctn by apply proof_irr; reflexivity.
               - eassumption.
               - reflexivity.
             }
@@ -4840,7 +4846,6 @@ inversion MATCH; subst.
   - assumption.
   - assumption.
   - assumption.
-  - eapply MTCH_compat; eauto.
   Qed.
 
   Lemma core_diagram:

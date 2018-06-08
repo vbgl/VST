@@ -14,7 +14,7 @@ Require Import compcert.common.Smallstep.
 (** * Core Semantics *)
 
 Record CoreSemantics {C M : Type} : Type :=
-  { initial_core : nat -> M -> C -> val -> list val -> Prop
+  { initial_core : nat -> M -> C -> M -> val -> list val -> Prop
   ; at_external : C -> M -> option (external_function * list val)
   ; after_external : option val -> C -> M -> option C
   ; halted : C -> int -> Prop
@@ -33,7 +33,7 @@ Inductive step2corestep (sem:part_semantics):(state sem) -> mem -> (state sem) -
     
 Program Definition sem2coresem (sem:part_semantics) corestep_not_halted : CoreSemantics:=
   {|
-    initial_core := fun _:nat => entry_point sem
+    initial_core := fun _ m c m' f args => entry_point sem m c f args /\ get_mem c = m'
     ; at_external := fun s m => Smallstep.at_external sem (set_mem s m) 
     ; after_external := Smallstep.after_external sem
     ; halted:= final_state sem

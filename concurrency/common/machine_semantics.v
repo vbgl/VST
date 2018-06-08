@@ -19,7 +19,7 @@ Require Import VST.sepcomp.mem_lemmas.
     [SCH] is the type of schedules, the type [C] is the type of
     machine states  *)
 
-(** [initial_core] produces the core state corresponding to an entry
+(** [initial_core] produces the core state (and memory) corresponding to an entry
    point of a module.  The arguments are the genv, a pointer to the
    function to run, and the arguments for that function. *)
 
@@ -40,7 +40,7 @@ Definition option_proj {A: Type} (default: A) (x: option A) :=
  match x with Some y => y | None => default end.
 
 Record ConcurSemantics {G TID SCH TR C M res thread_type: Type} : Type :=
-  { initial_machine :  G -> M -> thread_type -> val -> list val -> option res -> Prop
+  { initial_machine :  G -> M -> thread_type -> M -> val -> list val -> option res -> Prop
     ; conc_halted : SCH -> C -> option val
     ; thread_step : G -> SCH -> C -> M -> C -> M -> Prop
     ; machine_step : G -> SCH -> TR -> C -> M -> SCH -> TR -> C -> M -> Prop
