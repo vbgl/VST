@@ -26,11 +26,6 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
     Definition Asm_init_state (p: Asm.program):=
     Asm.entry_point (the_ge p).
   
-  
-  Parameter init_state_source'':
-    forall p,
-    Clight.genv -> Memory.mem -> @semantics.semC (@DSem (Clight.globalenv p)) -> Values.val -> list Values.val -> Prop.
-  
   Search semantics.Semantics.
   Lemma ConcurrentCompilerSafety:
     forall (p : Clight.program) (tp : Asm.program),
