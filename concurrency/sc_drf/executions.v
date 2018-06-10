@@ -26,7 +26,7 @@ Require Import VST.concurrency.common.permjoin_def.
 Require Import VST.concurrency.common.HybridMachineSig.
 Require Import VST.concurrency.common.semantics.
 Require Import VST.concurrency.memory_lemmas.
-Require Import VST.concurrency.common.ClightSemantincsForMachines.
+(* Require Import VST.concurrency.common.ClightSemantincsForMachines. *)
 Require Import VST.concurrency.common.dry_context.
 Require Import VST.concurrency.common.dry_machine_lemmas.
 Require Import VST.concurrency.common.dry_machine_step_lemmas.

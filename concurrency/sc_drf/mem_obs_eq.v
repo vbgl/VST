@@ -3200,6 +3200,41 @@ as big as [m] *)
     eapply load_None_obs in Hload; eauto.
   Qed.
 
+  Transparent Mem.loadbytes.
+  Lemma loadbytes_val_obs:
+    forall (mc mf : mem) (f:memren)
+      (b1 b2 : block) (ofs sz : Z) mv
+      (Hsz: sz >= 0)
+      (Hload: Mem.loadbytes mc b1 ofs sz = Some mv)
+      (Hf: f b1 = Some b2)
+      (Hinjective: forall b0 b1' b3 : block, f b0 = Some b3 -> f b1' = Some b3 -> b0 = b1')
+      (Hobs_eq: strong_mem_obs_eq f mc mf),
+    exists mv',
+      Mem.loadbytes mf b2 ofs sz = Some mv' /\
+      list_forall2 (fun a b => memval_obs_eq f a b) mv mv'.
+  Proof.
+    intros.
+    unfold Mem.loadbytes in *.
+    destruct (Mem.range_perm_dec mc b1 ofs (ofs + sz) Cur Readable) as [Hperm|]; try discriminate.
+    destruct (Mem.range_perm_dec mf b2 ofs (ofs + sz) Cur Readable) as [Hperm'|Hcontra].
+    - replace sz with (Z.of_nat (nat_of_Z sz)) in Hperm by (eapply Z2Nat.id; ssromega).
+      eapply getN_obs in Hperm; eauto.
+      exists (Mem.getN (nat_of_Z sz) ofs (Mem.mem_contents mf) # b2).
+      inv Hload.
+      split;
+        now auto.
+    - unfold Mem.range_perm in *.
+      exfalso.
+      eapply Hcontra.
+      intros ofs0 Hofs0.
+      specialize (Hperm _ Hofs0).
+      destruct Hobs_eq as [Hperm_eq _].
+      unfold Mem.perm, permission_at in *.
+      erewrite Hperm_eq by eauto.
+      now auto.
+  Qed.
+  Opaque Mem.loadbytes.
+  
   (** ** Lemmas about [Mem.store] and [mem_obs_eq]*)
 
   Lemma encode_val_obs_eq:
@@ -3332,6 +3367,66 @@ as big as [m] *)
     inversion Hf; subst.
     eapply store_val_obs in Hstore; eauto.
   Qed.
+
+  Transparent Mem.storebytes.
+  Lemma storebytes_val_obs:
+    forall (mc mc' mf : mem) (f:memren)
+      (b1 b2 : block) (ofs: Z) mv1 mv2
+      (Hstore: Mem.storebytes mc b1 ofs mv1 = Some mc')
+      (Hf: f b1 = Some b2)
+      (Hval_obs_eq: list_forall2 (fun a b => memval_obs_eq f a b) mv1 mv2)
+      (Hobs_eq: mem_obs_eq f mc mf),
+    exists mf',
+      Mem.storebytes mf b2 ofs mv2 = Some mf' /\
+      mem_obs_eq f mc' mf'.
+  Proof.
+    intros.
+    unfold Mem.storebytes in *.
+    destruct (Mem.range_perm_dec mc b1 ofs (ofs + Z.of_nat (length mv1)) Cur Writable)
+      as [Hperm|]; try discriminate.
+    inv Hstore.
+    destruct (Mem.range_perm_dec mf b2 ofs (ofs + Z.of_nat (length mv2)) Cur Writable)
+      as [Hperm'|Hcontra].
+    - eexists.
+      split; [reflexivity|].
+      destruct Hobs_eq.
+      destruct weak_obs_eq0, strong_obs_eq0.
+      econstructor; econstructor; eauto.
+      intros.
+      unfold Mem.perm in Hperm0.
+      simpl in Hperm0.
+      simpl.
+      destruct (Pos.eq_dec b1 b0).
+      + subst.
+        assert (b2 = b3)
+          by (rewrite Hrenaming in Hf; inversion Hf; subst; auto).
+        subst b3.
+        do 2 rewrite Maps.PMap.gss.
+        (* destruct (Intv.In_dec ofs0 *)
+        (*                       (ofs, *)
+        (*                        (ofs + Z.of_nat (length (encode_val chunk v1)))%Z)). *)
+        apply setN_obs_eq with
+            (access := fun ofs => Mem.perm mc b0 ofs Cur Readable);
+          now auto.
+      + rewrite Maps.PMap.gso; auto.
+        rewrite Maps.PMap.gso; auto.
+        intros Hcontra. subst.
+        specialize (injective0 _ _ _ Hrenaming Hf).
+        now auto.
+    - unfold Mem.range_perm in *.
+      exfalso.
+      eapply Hcontra.
+      intros ofs0 Hofs0.
+      eapply list_forall2_length in Hval_obs_eq.
+      rewrite <- Hval_obs_eq in Hofs0.
+      specialize (Hperm _ Hofs0).
+      destruct Hobs_eq as [_ Hstrong_obs_eq].
+      destruct Hstrong_obs_eq as [Hperm_eq _].
+      unfold Mem.perm, permission_at in *.
+      erewrite Hperm_eq by eauto.
+      now auto.
+  Qed.
+  Opaque Mem.storebytes.
 
   Lemma mem_obs_eq_storeF:
     forall f mc mf mf' chunk b ofs v pmap pmap2
@@ -3642,10 +3737,10 @@ as big as [m] *)
 
 
   Lemma alloc_perm_eq:
-    forall f m m' sz m2 m2' b b'
+    forall f m m' lo hi m2 m2' b b'
       (Hobs_eq: mem_obs_eq f m m')
-      (Halloc: Mem.alloc m 0 sz = (m2, b))
-      (Halloc': Mem.alloc m' 0 sz = (m2', b'))
+      (Halloc: Mem.alloc m lo hi = (m2, b))
+      (Halloc': Mem.alloc m' lo hi = (m2', b'))
       b1 b2 ofs
       (Hf: (if proj_sumbool (valid_block_dec m b1)
             then f b1
@@ -3665,7 +3760,7 @@ as big as [m] *)
       inv Hf.
       eapply Mem.valid_block_alloc_inv in v; eauto.
       destruct v; subst; try (by exfalso).
-      destruct (zle 0 ofs), (zlt ofs sz);
+      destruct (zle lo ofs), (zlt ofs hi);
         [erewrite permission_at_alloc_2 by eauto;
          erewrite permission_at_alloc_2 by eauto;
          reflexivity | | |];
@@ -3852,11 +3947,11 @@ Lemma setPermBlock_var_eq:
   Qed.
 
   Lemma mem_free_obs_perm:
-    forall f m m' m2 m2' sz b1 b2
+    forall f m m' m2 m2' lo hi b1 b2
       (Hmem_obs_eq: mem_obs_eq f m m')
       (Hf: f b1 = Some b2)
-      (Hfree: Mem.free m b1 0 sz = Some m2)
-      (Hfree': Mem.free m' b2 0 sz = Some m2') b0 b3 ofs
+      (Hfree: Mem.free m b1 lo hi = Some m2)
+      (Hfree': Mem.free m' b2 lo hi = Some m2') b0 b3 ofs
       (Hf0: f b0 = Some b3),
       permissions.permission_at m2 b0 ofs Cur =
       permissions.permission_at m2' b3 ofs Cur.
@@ -3887,18 +3982,18 @@ Lemma setPermBlock_var_eq:
   Transparent Mem.free.
 
   Lemma mem_free_obs:
-    forall f m m' sz b1 b2 m2
+    forall f m m' lo hi b1 b2 m2
       (Hmem_obs_eq: mem_obs_eq f m m')
       (Hf: f b1 = Some b2)
-      (Hfree: Mem.free m b1 0 sz = Some m2),
+      (Hfree: Mem.free m b1 lo hi = Some m2),
     exists m2',
-      Mem.free m' b2 0 sz = Some m2' /\
+      Mem.free m' b2 lo hi = Some m2' /\
       mem_obs_eq f m2 m2'.
   Proof.
     intros.
-    assert (Hfree': Mem.free m' b2 0 sz = Some (Mem.unchecked_free m' b2 0 sz)).
+    assert (Hfree': Mem.free m' b2 lo hi  = Some (Mem.unchecked_free m' b2 lo hi)).
     { unfold Mem.free.
-      destruct (Mem.range_perm_dec m' b2 0 sz Cur Freeable); auto.
+      destruct (Mem.range_perm_dec m' b2 lo hi Cur Freeable); auto.
       apply Mem.free_range_perm in Hfree.
       unfold Mem.range_perm in *.
       destruct Hmem_obs_eq as [_ [HpermEq _]].
@@ -3925,7 +4020,7 @@ Lemma setPermBlock_var_eq:
         erewrite mem_free_obs_perm with (b1 := b1) (b0 := b0); eauto.
         intros.
         erewrite <- mem_free_contents; eauto.
-        erewrite <- mem_free_contents with (m2 := Mem.unchecked_free m' b2 0 sz);
+        erewrite <- mem_free_contents with (m2 := Mem.unchecked_free m' b2 lo hi);
           eauto.
         apply (val_obs_eq (strong_obs_eq Hmem_obs_eq)); auto.
         eapply Mem.perm_free_3; eauto.

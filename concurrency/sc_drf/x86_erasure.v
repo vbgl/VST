@@ -1121,13 +1121,7 @@ Module X86CoreErasure.
         remember (Mem.alloc m1' (-size_chunk Mptr) (Ptrofs.unsigned n)) eqn:ALLOC'.
         destruct p as [m2'' b2'].
         symmetry in ALLOC'.
-        Lemma alloc_erasure':
-          forall m m' lo hi m2 m2' b b'
-            (Herased: mem_erasure m m')
-            (Halloc: Mem.alloc m lo hi = (m2, b))
-            (Halloc': Mem.alloc m' lo hi = (m2', b')),
-            mem_erasure' m2 m2' /\ b = b'.
-        Proof. Admitted.
+
         
         - pose proof ALLOC' as Hmem''.
           eapply alloc_erasure' in Hmem''; eauto.

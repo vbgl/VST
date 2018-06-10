@@ -1614,10 +1614,10 @@ Module X86Inj.
   Qed.
 
   Lemma alloc_obs_eq:
-    forall f m m' sz m2 m2' b b'
+    forall f m m' lo hi m2 m2' b b'
       (Hobs_eq: mem_obs_eq f m m')
-      (Halloc: Mem.alloc m 0 sz = (m2, b))
-      (Halloc': Mem.alloc m' 0 sz = (m2', b')),
+      (Halloc: Mem.alloc m lo hi = (m2, b))
+      (Halloc': Mem.alloc m' lo hi = (m2', b')),
     exists f',
       f' b = Some b' /\
       mem_obs_eq f' m2 m2' /\
@@ -2273,9 +2273,177 @@ Module X86Inj.
                split; simpl; eauto with renamings reg_renamings val_renamings; try contradiction
              end; apply regset_ren_set; try apply val_obs_offset_ptr; eauto with renamings reg_renamings val_renamings];
              intros _.
-      + admit.
-      + admit.
-      + admit.
+      + (* EF_malloc case*)
+        pose proof H10 as Hext_call.
+        simpl in H10.
+        inv H10.
+        remember (Mem.alloc mf (- size_chunk Mptr) (Ptrofs.unsigned sz)) as p eqn:HallocF.
+        destruct p as [mf' b0F].
+        symmetry in HallocF.
+        destruct (alloc_obs_eq Hobs_eq H4 HallocF)
+          as [f' [Hb0 [Hobs_eq' [Hincr' [Hsep [Hnextblock_eq [Hmap_spec Hunchanged_map]]]]]]].
+        pose proof H8 as Hstore.
+        eapply store_val_obs with (v2 := Vptrofs sz) in H8; eauto.
+        destruct H8 as [mf'' [HstoreF Hobs_eq'']].
+        exists (State (nextinstr_nf
+                    (set_res res (Vptr b0F Ptrofs.zero)
+                             (undef_regs (List.map preg_of (Machregs.destroyed_by_builtin
+                                                              EF_malloc)) rsF))) mf''), mf'', f'.
+        repeat match goal with
+               | [|- _ /\ _] => split
+               end; eauto.
+        * (* injected machine steps *)
+          simpl.
+          econstructor; eauto.
+          simpl.
+          eapply Asm.exec_step_builtin; eauto.
+          simpl.
+          inv H2.
+          inv H12.
+          assert (v' = Vptrofs sz)
+            by (unfold Vptrofs in *;
+                destruct Archi.ptr64; inv H10; reflexivity); subst.
+          econstructor.
+          eauto.
+          eauto.
+        * (* injection on cores is preserved *)
+          simpl.
+          unfold nextinstr_nf, nextinstr.
+          eauto 15 using regset_ren_incr with reg_renamings val_renamings renamings.
+        * (* nextblock relation *)
+          eapply Mem.nextblock_store in Hstore.
+          eapply Mem.nextblock_store in HstoreF.
+          rewrite Hstore HstoreF.
+          destruct Hnextblock_eq as [[? [? ?]] | [? ?]];
+            [left; eexists; now eauto | right; now eauto].
+        * intros b1 Hvalid'' Hinvalid.
+          simpl.
+          eapply Hmap_spec; eauto.
+          eapply Mem.store_valid_block_2;
+            now eauto.
+        * intros b2 Hunmapped ofs0.
+          assert (b2 <> b0F)
+            by (intros Hcontra; subst;
+                eapply Hunmapped; eexists; eauto).
+          erewrite permission_at_alloc_4 by eauto.
+          unfold permissions.permission_at.
+          erewrite Mem.store_access with (m2 := mf'') by eauto.
+          reflexivity.
+        * econstructor.
+      + (*EF_free*)
+        pose proof H10 as Hext_call.
+        simpl in H10.
+        inv H10.
+        inv H2. inv H14.
+        inv H12.
+        destruct (mem_free_obs _ _ _ Hobs_eq H13 H9) as [mf' [HfreeF Hobs_eq']].
+        eapply load_val_obs with (mf := mf) in H4; eauto.
+        destruct H4 as [vF [HloadF Hval_obs]].
+        assert (vF = Vptrofs sz)
+          by (unfold Vptrofs in *;
+              destruct (Archi.ptr64); inv Hval_obs; reflexivity); subst.
+        exists (State (nextinstr_nf
+                    (set_res res Vundef
+                             (undef_regs (List.map preg_of
+                                                   (Machregs.destroyed_by_builtin EF_free)) rsF)))
+                 mf'), mf', f.
+        repeat match goal with
+               | [|- _ /\ _] => split
+               end; eauto.
+        * (* injected machine steps *)
+          simpl.
+          econstructor; eauto.
+          simpl.
+          eapply Asm.exec_step_builtin; eauto.
+          simpl.
+          econstructor;
+            now eauto.
+        * (* injection on cores is preserved *)
+          simpl.
+          unfold nextinstr_nf, nextinstr.
+          eauto 15 using regset_ren_incr with reg_renamings val_renamings renamings.
+        * (*ren_incr *)
+          eauto using ren_incr_refl.
+        * eauto using ren_separated_refl.
+        * (* nextblock relation *)
+          eapply Mem.nextblock_free in HfreeF.
+          eapply Mem.nextblock_free in H9.
+          rewrite H9 HfreeF.
+          right; now eauto.
+        * intros b1 Hvalid'' Hinvalid.
+          exfalso.
+          eapply Hinvalid.
+          eapply Mem.valid_block_free_2; eauto.
+        * intros b1 Hunmmaped ofs0.
+          erewrite permission_at_free_2; eauto.
+          intros Hcontra.
+          subst. now eauto.
+        * destruct Hobs_eq.
+          destruct weak_obs_eq0.
+          now eauto.
+        * destruct Hobs_eq;
+            now eauto.
+      + (* EF_memcpy *)
+        pose proof H10 as Hext_call.
+        simpl in H10.
+        inv H10.
+        inv H2.
+        inv H19.
+        inv H17.
+        inv H20.
+        inv H16.
+        eapply loadbytes_val_obs with (f := f) (mf := mf) in H14; eauto.
+        destruct H14 as [mv' [HloadbytesF Hmemval_obs]].
+        pose proof H15 as Hstore.
+        eapply storebytes_val_obs with (mv2 := mv') in H15; eauto.
+        destruct H15 as [mf'' [HstoreF Hobs_eq'']].
+        exists (State (nextinstr_nf
+                    (set_res res Vundef
+                             (undef_regs (List.map preg_of (Machregs.destroyed_by_builtin
+                                                              (EF_memcpy sz al)))
+                                         rsF))) mf''), mf'', f.
+        repeat match goal with
+               | [|- _ /\ _] => split
+               end; eauto.
+        * (* injected machine steps *)
+          simpl.
+          econstructor; eauto.
+          simpl.
+          eapply Asm.exec_step_builtin; eauto.
+          simpl.
+          econstructor; eauto.
+          destruct H13 as [Hneq | ?]; [|now auto].
+          left.
+          intros Hcontra.
+          subst.
+          eapply Hneq.
+          eapply (injective (weak_obs_eq Hobs_eq));
+            now eauto.
+        * (* injection on cores is preserved *)
+          simpl.
+          unfold nextinstr_nf, nextinstr.
+          eauto 15 using regset_ren_incr with reg_renamings val_renamings renamings.
+        * (*ren_incr *)
+          eauto using ren_incr_refl.
+        * eauto using ren_separated_refl.
+        * (* nextblock relation *)
+          eapply Mem.nextblock_storebytes in Hstore.
+          eapply Mem.nextblock_storebytes in HstoreF.
+          rewrite Hstore HstoreF.
+          right; now auto.
+        * intros b1 Hvalid'' Hinvalid.
+          simpl.
+          exfalso.
+          eapply Hinvalid.
+          eapply Mem.storebytes_valid_block_2;
+            now eauto.
+        * intros b1 Hunmapped ofs0.
+          unfold permissions.permission_at.
+          erewrite Mem.storebytes_access with (m2 := mf'') by eauto.
+          reflexivity.
+        * now eapply (injective (weak_obs_eq Hobs_eq)).
+        * destruct Hobs_eq;
+            now auto.
     - simpl in H0.
       rewrite H5 in H0.
       destruct (Ptrofs.eq_dec _ _); [|contradiction].

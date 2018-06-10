@@ -6,7 +6,7 @@ Require Import VST.concurrency.juicy.erasure_safety.
 Require Import VST.concurrency.compiler.concurrent_compiler_safety_proof.
 Require Import VST.concurrency.compiler.sequential_compiler_correct.
 
-Require Import VST.concurrency.sc_drf.Coarse2Fine_safety.
+Require Import VST.concurrency.sc_drf.x86_safe.
 
 Require Import VST.concurrency.common.threadPool.
 Require Import VST.concurrency.common.erased_machine.

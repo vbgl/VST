@@ -214,8 +214,8 @@ Module MemoryLemmas.
   Qed.
 
   Lemma mem_free_contents:
-    forall m m2 sz b
-      (Hfree: Mem.free m b 0 sz = Some m2),
+    forall m m2 lo hi b
+      (Hfree: Mem.free m b lo hi = Some m2),
     forall b' ofs,
       Maps.ZMap.get ofs (Maps.PMap.get b' (Mem.mem_contents m)) =
       Maps.ZMap.get ofs (Maps.PMap.get b' (Mem.mem_contents m2)).
