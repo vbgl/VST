@@ -11,15 +11,15 @@ Require Import VST.veric.tycontext.
 Require Import VST.veric.semax_prog.
 
 (** *Juicy safetyn*)
-Require Import VST.concurrency.semax_initial.
-Require Import VST.concurrency.semax_conc.
-Require Import VST.concurrency.semax_to_juicy_machine.
+Require Import VST.concurrency.juicy.semax_initial.
+Require Import VST.concurrency.juicy.semax_conc.
+Require Import VST.concurrency.juicy.semax_to_juicy_machine.
 Require Import VST.concurrency.common.permissions.
 
 (** *Erasure Imports*)
-Require Import VST.concurrency.erasure_signature.
-Require Import VST.concurrency.erasure_proof.
-Require Import VST.concurrency.erasure_safety.
+Require Import VST.concurrency.juicy.erasure_signature.
+Require Import VST.concurrency.juicy.erasure_proof.
+Require Import VST.concurrency.juicy.erasure_safety.
 
 (** *SAFETY*)
 Require Import VST.concurrency.safety.
@@ -33,6 +33,8 @@ Set Bullet Behavior "Strict Subproofs".
 Require Import Coq.Logic.Classical_Prop.
 
 (*The following variables represent a program satisfying some CSL*)
+
+(*
 Section Clight_safety.
   Variable CPROOF: CSL_proof.
   Definition CS :=   CPROOF.(CSL_CS).
@@ -62,7 +64,7 @@ Section Clight_safety.
       safety_initial_state CPROOF.
 
     Import JuicyMachineModule.THE_JUICY_MACHINE.JuicyMachine.
-    Import JuicyMachineModule.THE_JUICY_MACHINE.SCH.
+    (*Import JuicyMachineModule.THE_JUICY_MACHINE.SCH.*)
 
 
         Lemma initial_equivalence_trivial:
@@ -217,13 +219,61 @@ Section Clight_safety.
       erewrite HH' in HH. inversion HH; subst; auto.
     Qed.
       
-End Csafety_Clight.
+End Csafety_Clight. *)
 
+Section Csafe_KSafe.
+  Import HybridMachineSig.HybridMachineSig.
+  Import HybridCoarseMachine.
+  Import threadPool.
+  Context (resources:semantics.Resources)
+          (Sem:semantics.Semantics)
+          (TP:threadPool.ThreadPool.ThreadPool).
+  Definition CoreSem:= core_semantics.csem (event_semantics.msem (@semantics.semSem Sem)).
+  Context (Machine: MachineSig).
+  Existing Instance Machine.
+  
+  Print csafe.
+
+  (** *Setup *)
+  (** We must reorganize the types of the machine to match those 
+      from konig/safety. So we change the types of MachState and MachStep
+   *)
+  
+  Definition correct_schedule (tp:  ThreadPool.t) U : Prop:=
+    match schedPeek U with
+    | Some i => unique_Krun tp i
+    | None => True
+    end.
+
+  Inductive sem_with_halt ge: MachState -> mem -> MachState -> mem -> Prop:=
+  | halt_with_step st m v: core_semantics.halted CoreSem st v -> sem_with_halt ge st m st m
+  | step_with_halt st m st' m' : MachStep ge st m st' m' -> sem_with_halt ge st m st' m'.
+
+  Definition kstate:Type:= (event_trace * ThreadPool.t * mem).
+  Definition new_valid (kst:kstate) U := correct_schedule (snd (fst kst)) U.
+  Definition cstate2kstate (st:MachState) (m:mem): kstate:=
+    (snd (fst st), snd st, m).
+  Definition ksafe_new_step (st : MachState) (m : mem) : nat -> Prop :=
+    ksafe _ _ (new_step ge) new_valid (cstate2kstate st m) (fst (fst st)).
+  
 Section Ksafety_Clight.
-  Import DryMachineSource.THE_DRY_MACHINE_SOURCE.DMS.DryConc.
+  (* Import DryMachineSource.THE_DRY_MACHINE_SOURCE.DMS.DryConc.
   Import DryMachineSource.THE_DRY_MACHINE_SOURCE.SCH.
   Import DryMachineSource.THE_DRY_MACHINE_SOURCE.DMS.DryMachine.
+   *)
+\
+  Import HybridMachineSig.HybridMachineSig.
+  Import HybridMachine.
 
+  (** *Clight setup *)
+  (** We define state and step to match the type of ksafe (in konig/safety)
+   *)
+  Parameter machine_event:Type.
+  Definition new_state: Type:= list machine_event * machine_state * mem.
+  Definition mk_nstate (st:MachState) m:new_state:= (snd (fst st), snd st, m).
+  Definition ksafe_new_step (ge : G) (st : MachState) (m : mem) : nat -> Prop :=
+    ksafe _ _ (new_step ge) new_valid (mk_nstate st m) (fst (fst st)).
+  
   (** *First show Csafety -> Ksafety*)
   Lemma Clight_csafe2ksafe:
       forall ge st_ m,

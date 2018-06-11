@@ -1629,6 +1629,30 @@ Module OrdinalPool.
       rewrite H. auto.
     Qed.
 
+    Lemma updThread_same :
+      forall tp i (cnti : containsThread tp i),
+      updThread cnti (getThreadC cnti) (getThreadR cnti) = tp.
+    Proof.
+      intros; destruct tp; simpl.
+      unfold updThread; simpl; f_equal.
+      - extensionality.
+        destruct (_ == _) eqn: eq; auto.
+        destruct (eqP eq); auto.
+      - extensionality.
+        destruct (_ == _) eqn: eq; auto.
+        destruct (eqP eq); auto.
+    Qed.
+
+    Lemma updThreadRC : forall tp i (cnti : containsThread tp i) c,
+      updThread cnti c (getThreadR cnti) = updThreadC cnti c.
+    Proof.
+      intros; destruct tp; simpl.
+      unfold updThread, updThreadC; simpl; f_equal.
+      extensionality.
+      destruct (_ == _) eqn: eq; auto.
+      destruct (eqP eq); auto.
+    Qed.
+
     Lemma gsoThreadCLPool:
       forall {i tp} c (cnti: containsThread tp i) addr,
         lockRes (updThreadC cnti c) addr = lockRes tp addr.
@@ -1961,7 +1985,7 @@ Module OrdinalPool.
 
       
 
-      Lemma resourceList_spec: forall i tp
+    Lemma resourceList_spec: forall i tp
             (cnti: containsThread tp i),
             List.nth_error (resourceList tp) i = Some (getThreadR cnti).
     Proof.

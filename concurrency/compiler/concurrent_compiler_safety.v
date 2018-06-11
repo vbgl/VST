@@ -111,3 +111,20 @@ Section ConcurrentCopmpilerSafety.
   Qed.
     
 End ConcurrentCopmpilerSafety.
+
+
+(** We derive safety preservation from simulation in two steps:
+    - Show csafe implies safe (the coinductive safety)
+    - Show a simulation preserves safety.
+*)
+Section SimulationSafety.
+
+  (** * finite safety implies infinite safety*)
+  (** Csafe implies safe in languages with 
+      "finite branching"
+   *)
+  Lemma csafe
+  
+
+End SimulationSafety.
+  

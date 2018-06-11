@@ -19,6 +19,11 @@ Section cardinality.
 (*Here goes cardinality stuff*)
 End cardinality.
 
+(**  We will reduce the safety result 
+     to a subset of the type satisfign 
+     some predicate [Filter]. Given that 
+     the relation R presrves the predicate.
+*)
 Section filtered_konig.
   Variable X: Type.
   Axiom X_dec: forall x y:X, {x=y} + {x<>y}.
@@ -26,6 +31,8 @@ Section filtered_konig.
   Variable R: X->X->Prop.
   Axiom  preservation :  forall P P', Filter P -> R P P' -> Filter P'.
 
+  (* From the relation R, we derive a, dependently typed relation 
+     RR for all elements satyisfying the predicate Filter*)
   Record TT :Type:= mkTT {thing: X; prf: Filter thing}.
   Inductive RR: TT->TT->Prop:=
   | stepstep: forall P x' (stp: R (thing P) x'), RR P (mkTT x' (preservation _ _ (prf P) stp)).
@@ -58,6 +65,7 @@ Section filtered_konig.
       by apply: IHn.
   Qed.
 
+  (* the number of different elements in X is finite *)
   Inductive cardinality {X} (P:X->Prop): nat -> Prop:=
   |Cardinality n (f:nat-> X): (forall i j, i<n -> j<n -> i<>j -> f(i)<>f(j)) ->
                            (forall i, i<n -> P (f i)) ->
@@ -202,6 +210,8 @@ Section filtered_konig.
     }
 Qed.
 
+  (* If every element in the filter, is finitely branching
+     then finite safety safeN implies infinite safetyy safe.*)
   Lemma filtered_konigsafe:
     forall (x : X),
       (forall P : Prop, P \/ ~ P) ->
