@@ -1058,86 +1058,49 @@ Section Preservation.
       assert (B : rmap_bound (Mem.nextblock m) Phi) by apply compat.
       simpl JuicyMachine.add_block in *.
       unfold add_block in *.
-      destruct (juicy_mem_ops.JuicyMemOps.juicy_mem_alloc _ _ _) as (jm', b') eqn: Halloc;
-        simpl m_phi in *.
-      assert (level (m_phi jm') = level (OrdinalPool.getThreadR cnti)) as HL.
-      { erewrite <- level_juice_level_phi, <- juicy_mem_ops.JuicyMemOps.juicy_mem_alloc_level
-          by eauto; auto. }
-      destruct (resource_decay_join_all'(cnti := cnti) (phi' := m_phi jm') _ (Krun c_new) B)
-        as [Phi'' [J'' [RD [G L]]]]; auto.
-      { repeat split; auto.
-        - rewrite HL; auto.
-        - apply all_coh, compatible_threadRes_cohere; auto.
-        - erewrite HL, juicy_mem_ops.JuicyMemOps.juicy_mem_alloc_at by eauto; simpl.
-          rewrite resource_at_approx.
-          if_tac; auto.
-          destruct l as (b1, ofs1); destruct H0; subst.
-          assert (b1 = nextblock m); [|subst; right; right; left; split; eauto; simpl; omega].
-          apply juicy_mem_ops.JuicyMemOps.juicy_mem_alloc_succeeds in Halloc.
-          simpl in Halloc.
-          symmetry in Halloc; apply alloc_result in Halloc; auto.
-        - clear - Halloc; inv Halloc; simpl.
-          rewrite after_alloc_0, ghost_of_approx; auto. }
-      { apply compat. }
-      assert (Phi'' = Phi'); subst.
-      { destruct (join_all_eq _ _ Phi' J''); auto.
-        rewrite <- (age_to_eq _ (m_phi jm') eq_refl) at 3.
-        rewrite <- age_to_updThread with (cnti := cnti).
-        erewrite age_tp_to_eq; try apply Hcmpt'.
-        unshelve setoid_rewrite <- getThread_level with (Phi0 := Phi'); try apply Hcmpt'; eauto.
-        rewrite gssThreadRes; auto.
+      assert (Phi' = Phi); subst.
+      { destruct Hcmpt'.
+        destruct (join_all_eq _ _ Phi juice_join0); auto.
+        { rewrite join_all_res; apply compat. }
         { destruct H0 as (Hnil & _ & _ & _).
-          pose proof (updThread_but _ _ (cnt_age'(age := level (m_phi jm')) cnti) (Krun c_new) (m_phi jm'))
-            as Hthreads.
+          pose proof (updThread_but _ _ cnti (Krun c_new)
+            (getThreadR(ThreadPool := OrdinalThreadPool) _ _ cnti)) as Hthreads.
           setoid_rewrite Hnil in Hthreads.
           apply Permutation.Permutation_nil in Hthreads; discriminate. } }
       apply state_invariant_c with (mcompat := Hcmpt'); auto.
-      - setoid_rewrite <- L; assumption.
-      - eapply env_coherence_resource_decay; try apply RD; auto.
-      - rewrite G.
-        destruct extcompat as [? Je]; eapply ghost_fmap_join in Je; eexists; eauto.
       - intro; simpl.
         pose proof (lock_coh loc) as lock_coh'.
-        destruct (AMap.find _ _) eqn: Hloc.
-        + assert (forall v, load_at (restrPermMap
-            (mem_compatible_locks_ltwritable (mem_compatible_forget compat))) loc = Some v ->
-            load_at (restrPermMap
-            (mem_compatible_locks_ltwritable (mem_compatible_forget Hcmpt'))) loc = Some v).
-          { intro.
-            unfold load_at; intro Hload.
-            apply lock_coh_bound in lock_coh.
-            specialize (lock_coh loc).
-            setoid_rewrite Hloc in lock_coh; spec lock_coh; [simpl; auto|].
-            unfold load in *.
-            destruct (valid_access_dec (restrPermMap (mem_compatible_locks_ltwritable
-              (mem_compatible_forget compat))) _ _ _ _); [|discriminate].
-            hnf in Hperm; subst.
-            rewrite if_true; simpl in *.
-            Local Transparent alloc.
-            simpl.
-            Opaque alloc.
-            rewrite PMap.gso; auto.
-            zify; omega.
-            { unfold install_perm, juicyRestrict.
-              destruct v0; split; auto.
-              apply Mem.range_perm_implies with Writable; [|constructor].
-              destruct loc as (?, ofs).
-              repeat intro.
-              eapply lset_range_perm with (ofs := ofs); eauto.
-              destruct (AMap.find (elt:=option rmap) _ _); discriminate.
-              { lkomega. } } }
-          assert (forall R, lkat R loc Phi -> lkat R loc Phi').
-          { intros; eapply resource_decay_lkat''; eauto.
-            eapply lock_coh_bound; eauto.
-            setoid_rewrite Hloc; simpl; auto. }
-          destruct o.
-          ** destruct lock_coh' as (? & ? & ? & ? & ? & ?); setoid_rewrite <- L; eauto 8.
-          ** destruct lock_coh' as (? & ? & ? & ? & ?); eauto 7.
-        + destruct RD as [_ RD]; specialize (RD loc) as [_ RD].
-          intros (? & ? & ? & ? & Hlk); contradiction lock_coh'; unfold isLK.
-          destruct RD as [Heq | [(? & ? & ? & ? & Hphi & Hphi') | [(? & ? & ?) | (? & ? & ? & ?)]]]; try congruence.
-          rewrite Hlk in Heq.
-          destruct (Phi @ loc); inv Heq; eauto.
+        destruct (AMap.find _ _) eqn: Hloc; auto.
+        assert (forall v, load_at (restrPermMap
+          (mem_compatible_locks_ltwritable (mem_compatible_forget compat))) loc = Some v ->
+          load_at (restrPermMap
+          (mem_compatible_locks_ltwritable (mem_compatible_forget Hcmpt'))) loc = Some v).
+        { intro.
+          unfold load_at; intro Hload.
+          apply lock_coh_bound in lock_coh.
+          specialize (lock_coh loc).
+          setoid_rewrite Hloc in lock_coh; spec lock_coh; [simpl; auto|].
+          unfold load in *.
+          destruct (valid_access_dec (restrPermMap (mem_compatible_locks_ltwritable
+            (mem_compatible_forget compat))) _ _ _ _); [|discriminate].
+          hnf in Hperm; subst.
+          rewrite if_true; simpl in *.
+          Local Transparent alloc.
+          simpl.
+          Opaque alloc.
+          rewrite PMap.gso; auto.
+          zify; omega.
+          { unfold install_perm, juicyRestrict.
+            destruct v0; split; auto.
+            apply Mem.range_perm_implies with Writable; [|constructor].
+            destruct loc as (?, ofs).
+            repeat intro.
+            eapply lset_range_perm with (ofs := ofs); eauto.
+            destruct (AMap.find (elt:=option rmap) _ _); discriminate.
+            { lkomega. } } }
+        destruct o.
+        + destruct lock_coh' as (? & ? & ? & ? & ? & ?); eauto 7.
+        + destruct lock_coh' as (? & ? & ? & ? & ?); eauto 6.
       - intros j cntj [].
         destruct (eq_dec i j) as [<-|ne].
         + REWR.
@@ -1145,8 +1108,6 @@ Section Preservation.
           apply safety.
           rewrite m_phi_jm_.
           REWR.
-          inv Halloc; simpl in *.
-          rewrite after_alloc_0; auto.
         + REWR.
           specialize (safety' j cntj tt).
           destruct (getThreadC j tp cntj) eqn: Ej; try solve [erewrite gsoThreadRes; eauto].

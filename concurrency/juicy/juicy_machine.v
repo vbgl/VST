@@ -1948,9 +1948,9 @@ Qed.
     Definition install_perm {tp m tid} (Hcompat : mem_compatible tp m) (cnt : containsThread tp tid) :=
       juicyRestrict (max_acc_coh_acc_coh (max_coh (thread_mem_compatible Hcompat cnt))).
 
+    (* Allocating a block of size 0 doesn't actually change the rmap. *)
     Definition add_block {tp m tid} (Hcompat : mem_compatible tp m) (cnt : containsThread tp tid) (m' : mem) :=
-      m_phi (fst (juicy_mem_ops.JuicyMemOps.juicy_mem_alloc
-        (personal_mem (thread_mem_compatible Hcompat cnt)) 0 0)).
+      getThreadR cnt.
 
     Instance JuicyMachineShell : HybridMachineSig.MachineSig :=
       HybridMachineSig.Build_MachineSig richMem dryMem mem_compatible invariant

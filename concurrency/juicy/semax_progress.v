@@ -1448,17 +1448,48 @@ Section Progress.
       - constructor.
         apply JuicyMachine.start_step with (tid := i) (Htid := cnti).
         + reflexivity.
-        + eapply JuicyMachine.StartThread with (c_new := q_new).
+        + eapply JuicyMachine.StartThread with (c_new := q_new)(Hcmpt := mem_compatible_forget compat).
           * apply Eci.
           * simpl; reflexivity.
           * simpl; eauto.
           * reflexivity.
           * reflexivity.
-          * admit.
+          * inversion compat; exists Phi; constructor; auto.
+            -- rewrite join_all_res; auto.
+            -- destruct (juicy_mem_ops.JuicyMemOps.juicy_mem_alloc
+                 (mkJuicyMem _ _ (juicyRestrictContentCoh (acc_coh all_cohere0) (cont_coh all_cohere0)) (juicyRestrictAccCoh (acc_coh all_cohere0)) (juicyRestrictMaxCoh (acc_coh all_cohere0) (max_coh all_cohere0)) (all_coh all_cohere0)) 0 0)
+                  as (jm', b') eqn: Hjm.
+                apply mem_cohere_same_except_cur with (m := m_dry jm').
+                { inv Hjm; hnf; unfold max_access_at; simpl; repeat split; auto.
+                  extensionality l; destruct l as (b, ofs).
+                  destruct (alloc _ _ _) eqn: Ha1.
+                  destruct (alloc (install_perm _ _) _ _) eqn: Ha2.
+                  assert (ofs < 0 \/ ofs >= 0)%Z by omega.
+                  erewrite <- (alloc_access_other _ _ _ _ _ Ha1),
+                    <- (alloc_access_other _ _ _ _ _ Ha2) by auto.
+                  unfold install_perm.
+                  setoid_rewrite <- juicyRestrictMax; auto. }
+                destruct jm'; inv Hjm; simpl.
+                rewrite after_alloc_0 in *.
+                constructor; auto.
+             -- simpl.
+                repeat intro.
+                exploit loc_writable0; eauto.
+                destruct (alloc _ _ _) eqn: Ha.
+                unfold install_perm in Ha.
+                pose proof (juicyRestrictMax (max_acc_coh_acc_coh (max_coh (thread_mem_compatible (mem_compatible_forget compat) cnti)))
+                  (b, ofs0)) as Heq.
+                unfold max_access_at, access_at in Heq; simpl in Heq; rewrite Heq.
+                destruct ((mem_access (fst _)) !! _ _ _) eqn: Haccess.
+                { eapply semantics_lemmas.alloc_access_inv in Haccess; eauto.
+                  destruct Haccess as [[] | []]; try omega.
+                  setoid_rewrite H2; auto. }
+                { eapply semantics_lemmas.alloc_access_inv_None in Haccess; eauto.
+                  setoid_rewrite Haccess; auto. }
           * constructor.
     }
     (* end of Kinit *)
-    Unshelve. eexists; eauto. eexists; eauto.
-Admitted. (* Theorem progress *)
+    Unshelve. eexists; eauto.
+Qed. (* Theorem progress *)
 
 End Progress.

@@ -786,6 +786,15 @@ Proof.
     inversion L.
 Qed.
 
+Lemma join_all_res : forall ge i (tp : jstate ge) (cnti : containsThread tp i) c Phi,
+  join_all (updThread cnti (Krun c) (getThreadR cnti)) Phi <->
+  join_all tp Phi.
+Proof.
+  intros.
+  rewrite !join_all_joinlist, maps_updthread, <- maps_updthread; simpl.
+  rewrite updThread_same; reflexivity.
+Qed.
+
 Definition thread_safety {Z} (Jspec : juicy_ext_spec Z) m ge (tp : jstate ge) PHI (mcompat : mem_compatible_with tp m PHI) n
   i (cnti : containsThread tp i) := forall (ora : Z),
     match getThreadC cnti with

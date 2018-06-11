@@ -131,7 +131,7 @@ Qed.
 
   (*there is something weird about this theorem.*)
   (*The injection is trivial... but it shouldn't*)
-  Theorem initial_safety:
+(*  Theorem initial_safety:
     forall genv (U : HybridMachineSig.schedule) (js : jstate genv)
       (vals : seq Values.val) m
       (rmap0 : rmap) (pmap : access_map * access_map) main h,
@@ -148,7 +148,7 @@ Qed.
     destruct (init_diagram genv (fun _ => None) U js vals m rmap0 pmap main h)
     as [ds [dinit [dinv MTCH]]]; eauto.
     unfold init_inj_ok; intros b b' ofs H. inversion H.
-  Qed.
+  Qed.*)
 
   End ErasureSafety.
 
