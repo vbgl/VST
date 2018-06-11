@@ -123,7 +123,7 @@ Section SimulationSafety.
   (** Csafe implies safe in languages with 
       "finite branching"
    *)
-  Lemma
+  Lemma csafe
   
 
 End SimulationSafety.

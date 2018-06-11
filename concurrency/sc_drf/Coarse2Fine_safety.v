@@ -13,10 +13,12 @@ Section Coarse2FineAsm_safety.
   Context (Asm_prog: Asm.program).
   Context (asm_genv_safe: Asm_core.safe_genv (x86_context.X86Context.the_ge Asm_prog)).
   Definition x86Sem:=X86Context.X86Sem Asm_prog asm_genv_safe.
-  
+    
+    
 Lemma Coarse2FineAsm_safety:
     forall U Main_ptr,
     forall init_mem_target init_thread_target,
+      
       Asm.entry_point (Globalenvs.Genv.globalenv Asm_prog)
                       init_mem_target init_thread_target Main_ptr nil ->
     let res_target := permissions.getCurPerm init_mem_target in
