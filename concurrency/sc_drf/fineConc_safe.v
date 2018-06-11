@@ -394,7 +394,7 @@ Module FineConcSafe.
       Notation fsafe := (@HybridFineMachine.fsafe _ _ _ _ FineDilMem).
 
       (** If a thread has reached an external then it cannot be in the
-  list that denotes the delta of execution between the two machines *)
+          list that denotes the delta of execution between the two machines *)
       Lemma at_external_not_in_xs:
         forall tpc trc mc tpf trf mf xs f fg fp i n
           (Hsim: SimDefs.sim tpc trc mc tpf trf mf xs f fg fp n)
@@ -481,7 +481,7 @@ Module FineConcSafe.
               unfold corestep in Hstep.
               simpl in Hstep.
               eapply @HybridFineMachine.StepSafe with (dilMem := FineDilMem);
-           now eauto.
+                now eauto.
           + pose proof (@SimProofs.sim_internal _ _ _ initU init_mem _ _ _ _ _ _ _ _ _ _ _ _ cnti Hsim Htype) as
                 (tpf' & m' & fp' & tr' & Hstep & Hsim').
             specialize (Hstep sched).
@@ -514,6 +514,21 @@ Module FineConcSafe.
            econstructor 3; eauto.
       Qed.
 
+      Lemma fsafe_reduce:
+        forall sched tp mem n m,
+          fsafe tp mem sched n ->
+          (m <= n)%nat ->
+          fsafe tp mem sched m.
+      Proof.
+        intros until 1; revert m.
+        induction H; intros.
+        - assert (m0 = 0%nat) by ssromega; subst; constructor.
+        - eapply @HybridFineMachine.HaltedSafe with (tr := tr); eauto.
+        - destruct m0; [constructor|].
+          eapply HybridFineMachine.StepSafe;
+            now eauto.
+      Qed.
+      
       (** *** Safety preservation for the FineConc machine starting from the initial state*)
       Theorem init_fine_safe:
         forall n tpf m

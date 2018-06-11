@@ -208,7 +208,6 @@ Module DryHybridMachine.
             (Hstore: Mem.store Mint32 m1 b (Ptrofs.intval ofs) (Vint Int.one) = Some m')
             (HisLock: lockRes tp (b, Ptrofs.intval ofs) = Some rmap)
             (Hrmap: forall b ofs, rmap.1 !! b ofs = None /\ rmap.2 !! b ofs = None)
-            (HvirtueLP: isCanonical virtueLP.1 /\ isCanonical virtueLP.2)
             (Hangel1: permMapJoin newThreadPerm.1 virtueLP.1 (getThreadR cnt0).1)
             (Hangel2: permMapJoin newThreadPerm.2 virtueLP.2 (getThreadR cnt0).2)
             (Htp': tp' = updThread cnt0 (Kresume c Vundef)

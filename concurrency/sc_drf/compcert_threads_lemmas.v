@@ -259,24 +259,24 @@ Module SimDefs.
     forall tpc trc tpf trf (mc mf : Mem.mem) fuelF
       (xs : Sch) (f fg : memren) (fp : fpool tpc) (i : NatTID.tid)
       (pff: containsThread tpf i)
-      (Hsim: sim tpc trc mc tpf trf mf xs f fg fp (S fuelF)),
+      (Hsim: sim tpc trc mc tpf trf mf xs f fg fp (S (S fuelF))),
       let mrestr := restrPermMap (((compat_th _ _ (mem_compf Hsim)) pff).1) in
       forall (Hinternal: pff$mrestr @ I),
       exists tpf' mf' fp' tr',
         (forall U, fmachine_step (i :: U, trf, tpf) mf (U, tr', tpf') mf') /\
-        sim tpc trc mc tpf' trf mf' (i :: xs) f fg fp' fuelF.
+        sim tpc trc mc tpf' trf mf' (i :: xs) f fg fp' (S fuelF).
 
   Definition sim_external_def :=
     forall tpc trc tpf trf (mc mf : Mem.mem) fuelF
       (xs : Sch) (f fg : memren) (fp : fpool tpc) (i : NatTID.tid)
       (pff: containsThread tpf i)
       (Hsynced: ~ List.In i xs)
-      (Hsim: sim tpc trc mc tpf trf mf xs f fg fp (S fuelF)),
+      (Hsim: sim tpc trc mc tpf trf mf xs f fg fp (S (S fuelF))),
       let mrestr := restrPermMap (((compat_th _ _ (mem_compf Hsim)) pff).1) in
       forall (Hexternal: pff$mrestr @ E),
     exists tpc' trc' mc' tpf' mf' f' fp' tr',
       (forall U, fmachine_step (i :: U, trf, tpf) mf (U, tr', tpf') mf') /\
-      (fuelF > 0 -> sim tpc' trc' mc' tpf' tr' mf' xs f' fg fp' fuelF).
+      sim tpc' trc' mc' tpf' tr' mf' xs f' fg fp' (S fuelF).
 
   (** When we reach a suspend step, we can ``synchronize'' the two
   machines by executing on the coarse machine the internal steps of
@@ -287,32 +287,33 @@ Module SimDefs.
     forall tpc trc tpf trf (mc mf : Mem.mem) fuelF
       (xs : Sch) (f fg : memren) (fp : fpool tpc) (i : NatTID.tid)
       (pff: containsThread tpf i)
-      (Hsim: sim tpc trc mc tpf trf mf xs f fg fp (S fuelF)),
+      (Hsim: sim tpc trc mc tpf trf mf xs f fg fp (S (S fuelF))),
       let mrestr := restrPermMap (((compat_th _ _ (mem_compf Hsim)) pff).1) in
       forall (Hsuspend: pff$mrestr @ S),
     exists tpc' trc' mc' tpf' mf' f' fp' tr',
       (forall U, fmachine_step (i :: U, trf, tpf) mf (U, tr', tpf') mf') /\
-      sim tpc' (trc ++ trc') mc' tpf' trf mf' [seq x <- xs | x != i] f' fg fp' fuelF.
+      sim tpc' (trc ++ trc') mc' tpf' trf mf' [seq x <- xs | x != i] f' fg fp'
+          (S fuelF).
 
   Definition sim_halted_def :=
     forall tpc trc tpf trf (mc mf : Mem.mem) fuelF
       (xs : Sch) (f fg : memren) (fp : fpool tpc) (i : NatTID.tid)
       (pff: containsThread tpf i)
-      (Hsim: sim tpc trc mc tpf trf mf xs f fg fp (S fuelF)),
+      (Hsim: sim tpc trc mc tpf trf mf xs f fg fp (S (S fuelF))),
       let mrestr := restrPermMap (((compat_th _ _ (mem_compf Hsim)) pff).1) in
       forall (Hhalt: pff$mrestr @ H),
       exists tr',
         (forall U, fmachine_step (i :: U, trf, tpf) mf (U, tr', tpf) mf) /\
-        sim tpc trc mc tpf trf mf xs f fg fp fuelF.
+        sim tpc trc mc tpf trf mf xs f fg fp (S fuelF).
 
   Definition sim_fail_def :=
     forall tpc trc tpf trf (mc mf : Mem.mem) fuelF
       (xs : Sch) (f fg : memren) (fp : fpool tpc) (i : NatTID.tid)
       (pff: ~ containsThread tpf i)
-      (Hsim: sim tpc trc mc tpf trf mf xs f fg fp (S fuelF)),
+      (Hsim: sim tpc trc mc tpf trf mf xs f fg fp (S (S fuelF))),
     exists tr',
       (forall U, fmachine_step (i :: U, trf, tpf) mf (U, tr', tpf) mf) /\
-      sim tpc trc mc tpf trf mf xs f fg fp fuelF.
+      sim tpc trc mc tpf trf mf xs f fg fp (S fuelF).
 
   End SimDefs.
 
@@ -1729,7 +1730,7 @@ Module SimProofs.
     specialize (HsafeC ([:: i])).
     assert (HcoreN := safety_det_corestepN_internal xs HsafeC Hexec).
     destruct HcoreN as [trc' [HcorestepN Hsafety]].
-    destruct (@csafe_internal_step _ _ _ _ pfc' _ (fuelF.+1 + size [seq x <- xs | x != i])
+    destruct (@csafe_internal_step _ _ _ _ pfc' _ (fuelF.+2 + size [seq x <- xs | x != i])
                                    ltac:(ssromega) memCompC' Hinternal_pfc' Hsafety) as
         (tpc'' & trc'' & mc'' & Hstep').
     assert (HinvC: invariant tpc)
@@ -7733,14 +7734,14 @@ relation*)
     (** the invariant for tpc is implied by safety*)
     assert (Hsafe := safeCoarse Hsim).
     assert (HinvC: invariant tpc)
-      by (eapply StepLemmas.safeC_invariant with (n := (fuelF.+1 + size xs)); eauto).
+      by (eapply StepLemmas.safeC_invariant with (n := (fuelF.+2 + size xs)); eauto).
     (** An external step pops the schedule and executes a concurrent call *)
     assert (HconcC: exists ev, syncStep true pfc HmemCompC tpc' mc' ev /\ trc' = [:: external i ev])
       by (destruct (external_step_inverse _ _ _ HexternalC Hstep') as [_ [? [? ?]]];
           eexists; eauto).
     destruct HconcC as [ev [HconcC ?]]; subst.
-    assert (HmemCompC': fuelF > 0 -> mem_compatible tpc' mc').
-      by (intros; eapply StepLemmas.safeC_compatible with (n := (fuelF + size xs)); eauto; try ssromega).
+    assert (HmemCompC': mem_compatible tpc' mc')
+      by (eapply StepLemmas.safeC_compatible with (n := (fuelF.+1 + size xs)); eauto).
     (** domain of f*)
     assert (Hdomain_f: domain_memren (fp i pfc) mc)
       by (apply (weak_obs_eq_domain_ren (weak_tsim_data (HsimWeak _ pfc pff)))).
@@ -7910,14 +7911,13 @@ relation*)
                                               (Some (virtueF))))
           by (eapply step_acquire with (b0:=b2); eauto).
         econstructor;
-          now eauto.
+           now eauto.
         (** Proof that the new coarse and fine state are in simulation*)
-        intros HhasFuel.
         assert (HinvC':
                   invariant (updLockSet
                                (updThread pfc (Kresume c Vundef) newThreadPerm)
                                (b, Ptrofs.intval ofs) (emptyRes.1,  emptyRes.2)))
-          by  (eapply StepLemmas.safeC_invariant with (n := fuelF + size xs); eauto; try ssromega).
+          by  (eapply StepLemmas.safeC_invariant with (n := fuelF.+1 + size xs); eauto).
 
         (** The new FineConc memory after storing still satisfies the [max_inv] invariant*)
         assert (HmaxF': max_inv mf')
@@ -7955,7 +7955,7 @@ relation*)
               split;
               [eapply Mem.store_valid_block_1 | eapply Mem.store_valid_block_2];
                 by eauto).
-        specialize (HmemCompC' HhasFuel).
+
         eapply Build_sim with (mem_compc := HmemCompC') (mem_compf := HmemCompF'').
         - (** containsThread *)
           clear - HnumThreads.
@@ -8749,14 +8749,13 @@ relation*)
       destruct (HsimRes _ _ _ _ _ Hfb HisLock HisLockF) as [HsimRes1 HsimRes2].
 
       assert (HangelF1: permMapJoin (computeMap (getThreadR pff).1 virtueF.1) virtueLPF.1 (getThreadR pff).1).
-      { (* assert (Hcanonical: isCanonical virtueLP.1) *)
-        (*   by (destruct (@compat_lp _ _ _ _ HmemCompC' (b, Ptrofs.intval ofs) virtueLP *)
-        (*                            ltac:(rewrite gsslockResUpdLock; reflexivity)); *)
-        (*       eapply canonical_lt; eauto). *)
+      { assert (Hcanonical: isCanonical virtueLP.1)
+          by (destruct (@compat_lp _ _ _ _ HmemCompC' (b, Ptrofs.intval ofs) virtueLP
+                                   ltac:(rewrite gsslockResUpdLock; reflexivity));
+              eapply canonical_lt; eauto).
         pose proof (obs_eq_data Htsim) as Hmem_obs_eq.
         pose proof (perm_obs_strong (strong_obs_eq Hmem_obs_eq)) as Hperm_eq.
         eapply permMapJoin_project with (f := fp i pfc) (pmap := newThreadPerm.1) (pmap' := virtueLP.1); eauto.
-        destruct HvirtueLP as [Hcanonical _].
         unfold isCanonical in Hcanonical.
         intros b0 Hunmapped ofs0. subst.
         simpl. erewrite projectMap_correct_2 by eauto.
@@ -8776,14 +8775,13 @@ relation*)
       }
 
       assert (HangelF2: permMapJoin (computeMap (getThreadR pff).2 virtueF.2) virtueLPF.2 (getThreadR pff).2).
-      { (* assert (Hcanonical: isCanonical virtueLP.2) *)
-        (*   by (destruct (@compat_lp _ _ _ _ HmemCompC' (b, Ptrofs.intval ofs) virtueLP *)
-        (*                            ltac:(rewrite gsslockResUpdLock; reflexivity)); *)
-        (*       eapply canonical_lt; eauto). *)
+      { assert (Hcanonical: isCanonical virtueLP.2)
+          by (destruct (@compat_lp _ _ _ _ HmemCompC' (b, Ptrofs.intval ofs) virtueLP
+                                   ltac:(rewrite gsslockResUpdLock; reflexivity));
+              eapply canonical_lt; eauto).
         pose proof (obs_eq_locks Htsim) as Hmem_obs_eq.
         pose proof (perm_obs_strong (strong_obs_eq Hmem_obs_eq)) as Hperm_eq.
         eapply permMapJoin_project with (f := fp i pfc) (pmap := newThreadPerm.2) (pmap' := virtueLP.2); eauto.
-        destruct HvirtueLP as [_ Hcanonical].
         unfold isCanonical in Hcanonical.
         intros b0 Hunmapped ofs0. subst.
         simpl. erewrite projectMap_correct_2 by eauto.
@@ -8830,14 +8828,7 @@ relation*)
         erewrite Hperm_eq;
           by eauto.
       }
-
-      (** and the virtue of the LP are canonical *)
-      assert (isCanonical virtueLPF.1 /\ isCanonical virtueLPF.2).
-      { subst.
-        unfold projectMap, isCanonical.
-        simpl.
-        now eapply HvirtueLP.
-      }
+      
       (** and finally build the final fine-grained state*)
       remember (updLockSet tpf' (b2, Ptrofs.intval ofs) virtueLPF)
         as tpf'' eqn:Htpf'';
@@ -8855,33 +8846,35 @@ relation*)
       econstructor; simpl;
         by eauto.
       (* Proof that the new coarse and fine state are in simulation*)
-      intros HhasFuel.
       assert (HinvC':
                 invariant (updLockSet
                              (updThread pfc (Kresume c Vundef) newThreadPerm)
                              (b, Ptrofs.intval ofs) virtueLP))
-        by  (eapply StepLemmas.safeC_invariant with (n := fuelF + size xs); eauto; try ssromega).
+        by  (eapply StepLemmas.safeC_invariant with (n := fuelF.+1 + size xs); eauto).
       (** The new FineConc memory after storing still satisfies the [max_inv] invariant*)
       assert (HmaxF': max_inv mf')
         by (eapply max_inv_store; eauto).
 
-      (* (** A useful result is that the virtueLP will be canonical*) *)
-      (* assert (Hcanonical: isCanonical virtueLP.1 /\ isCanonical virtueLP.2). *)
-      (* { clear - HmemCompC'. *)
-      (*   destruct HmemCompC'. *)
-      (*   destruct (compat_lp0 (b, Ptrofs.intval ofs) virtueLP *)
-      (*                          ltac:(erewrite gssLockRes; eauto)). *)
-      (*   split; *)
-      (*   eapply canonical_lt; eauto. *)
-      (* } *)
+      (** A useful result is that the virtueLP will be canonical*)
+      assert (Hcanonical: isCanonical virtueLP.1 /\ isCanonical virtueLP.2).
+      { clear - HmemCompC'.
+        destruct HmemCompC'.
+        destruct (compat_lp0 (b, Ptrofs.intval ofs) virtueLP
+                               ltac:(erewrite gssLockRes; eauto)).
+        split;
+        eapply canonical_lt; eauto.
+      }
 
       (** And the new FineConc threadPool and memory are [mem_compatible]*)
       assert (HmemCompF'' : mem_compatible tpf'' mf').
       { subst.
-        destruct HvirtueLP.
         eapply store_compatible; eauto.
         eapply mem_compatible_sync; eauto.
-        now eapply (mem_compf Hsim).
+        unfold isCanonical.
+        rewrite Hcanonical.1. reflexivity.
+        unfold isCanonical.
+        rewrite Hcanonical.2. reflexivity.
+        eapply (mem_compf Hsim).
         eapply (codomain_valid (weak_obs_eq (obs_eq_data Htsim))).
       }
       subst.
@@ -8906,7 +8899,7 @@ relation*)
               split;
               [eapply Mem.store_valid_block_1 | eapply Mem.store_valid_block_2];
                 by eauto).
-        specialize (HmemCompC' HhasFuel).
+
       eapply Build_sim with (mem_compc := HmemCompC') (mem_compf := HmemCompF'').
       - (** containsThread *)
         clear - HnumThreads.
@@ -9053,7 +9046,7 @@ relation*)
           assert (Hlt1: permMapLt (computeMap (getThreadR pfc).1 virtueThread.1) (getMaxPerm mc')).
           { destruct mem_compc'.
             destruct (compat_th0 _ pfc').
-            rewrite gLockSetRes gssThreadRes in H0.
+            rewrite gLockSetRes  gssThreadRes in H.
             eauto.
           }
 
@@ -9063,7 +9056,7 @@ relation*)
           assert (Hlt1F: permMapLt (computeMap (getThreadR pff).1 virtueF.1) (getMaxPerm mf')).
           { destruct HmemCompF''.
             destruct (compat_th0 _ pff0).
-            rewrite gLockSetRes gssThreadRes in H0.
+            rewrite gLockSetRes  gssThreadRes in H.
             eauto.
           }
           erewrite restrPermMap_irr' with (Hlt' := Hlt1F)
@@ -9079,7 +9072,7 @@ relation*)
           erewrite projectMap_correct_2 by eauto.
           simpl.
           erewrite computeMap_projection_2 by eauto.
-          rewrite HvirtueLP.1. left; auto.
+          rewrite Hcanonical.1. left; auto.
           intros; simpl; erewrite computeMap_projection_1 by eauto.
           reflexivity.
           intros; erewrite projectMap_correct by eauto.
@@ -9090,7 +9083,7 @@ relation*)
           assert (Hlt2: permMapLt (computeMap (getThreadR pfc).2 virtueThread.2) (getMaxPerm mc')).
           { destruct mem_compc'.
             destruct (compat_th0 _ pfc').
-            rewrite gLockSetRes  gssThreadRes in H1.
+            rewrite gLockSetRes  gssThreadRes in H0.
             eauto.
           }
           erewrite restrPermMap_irr' with (Hlt' := Hlt2)
@@ -9099,7 +9092,7 @@ relation*)
           assert (Hlt2F: permMapLt (computeMap (getThreadR pff).2 virtueF.2) (getMaxPerm mf')).
           { destruct HmemCompF''.
             destruct (compat_th0 _ pff0).
-            rewrite gLockSetRes  gssThreadRes in H1.
+            rewrite gLockSetRes  gssThreadRes in H0.
             eauto.
           }
           erewrite restrPermMap_irr' with (Hlt' := Hlt2F)
@@ -9114,7 +9107,7 @@ relation*)
           erewrite projectMap_correct_2 by eauto.
           simpl.
           erewrite computeMap_projection_2 by eauto.
-          rewrite HvirtueLP.2. left; auto.
+          rewrite Hcanonical.2. left; auto.
           intros; simpl; erewrite computeMap_projection_1 by eauto.
           reflexivity.
           intros; erewrite projectMap_correct by eauto.
@@ -9201,7 +9194,7 @@ relation*)
               apply Mem.load_valid_access in Hload.
               destruct Hload as [Hload _].
               intros.
-              specialize (Haccess ofs' H0).
+              specialize (Haccess ofs' H).
               unfold Mem.perm in Haccess.
               intros Hcontra.
               pose proof (restrPermMap_Cur (compat_th _ _ HmemCompC pfc).2 b ofs') as Hperm_at.
@@ -9220,9 +9213,9 @@ relation*)
             destruct Htsimj_id as [Htpc_id_wd [Hctlj_id [Hmem_obs_eqj_id Hnextblock]]].
 
             (** Step 2.*)
-            assert (Hobs_eq := mem_obs_eq_execution _ _ _ _ _ HinvC' Hfg Hge_wd Hge_incr_id
+            assert (H := mem_obs_eq_execution _ _ _ _ _ HinvC' Hfg Hge_wd Hge_incr_id
                                               Hmemc_wd Htpc_id_wd Hctlj_id Hmem_obs_eqj_id Hexecj).
-            destruct Hobs_eq as
+            destruct H as
                 (tp2' & m2' & f' & Hexecj'& Hincrj' & Hsepj'
                  & Hnextblock' & Hinvj' & Htsimj' & Hid').
             destruct Htsimj' as (pf2j & pf2j' & Hcomp2 & Hcomp2' & Hctl_eqj' & Hmem_obs_eq').
@@ -9408,13 +9401,13 @@ relation*)
             eapply Mem.store_valid_block_1; eauto.
             (** the contents of [mcj] are equal to the contents of [mc] for locations [Readable] by locks on thread [tid]*)
             intros.
-            unfold Mem.perm in H2.
-            erewrite Hperm_eqj in H2.
+            unfold Mem.perm in H1.
+            erewrite Hperm_eqj in H1.
             erewrite <- Hstable_mc2' by eauto.
             erewrite <- Hstable_mcj by eauto.
             (** we can now prove that for all lock locations that tid can access, other than the one updated, the contents will be equal*)
             erewrite Mem.store_mem_contents with (m2 := mc') by eauto.
-            destruct H1 as [Hb_neq | [? Hofs_neq]].
+            destruct H0 as [Hb_neq | [? Hofs_neq]].
             (** if b0 is not the block that was updated*)
             erewrite Maps.PMap.gso by eauto.
             reflexivity.
@@ -9481,7 +9474,7 @@ relation*)
             }
             simpl.
             erewrite! projectMap_correct_2 by eauto.
-            rewrite HvirtueLP.1 HvirtueLP.2.
+            rewrite Hcanonical.1 Hcanonical.2.
             split;
               reflexivity.
             (** case it is another resource map*)
@@ -9630,7 +9623,7 @@ relation*)
             inversion Hres; subst.
             simpl.
             erewrite! projectMap_correct_2 by auto.
-            rewrite HvirtueLP.1 HvirtueLP.2.
+            rewrite Hcanonical.1 Hcanonical.2.
             split; reflexivity.
           + erewrite gsolockResUpdLock in Hres by auto.
             rewrite gsoThreadLPool in Hres.
@@ -9639,7 +9632,7 @@ relation*)
         - (** Proof of invariant preservation for fine-grained machine*)
           destruct Htsim.
           eapply invariant_project; eauto;
-            by destruct HvirtueLP.
+            by destruct Hcanonical.
         - (** Max permission invariant*)
           assumption.
         - (** new memory is well-defined*)
@@ -9759,12 +9752,12 @@ relation*)
             now eauto).
 
       econstructor; now eauto.
-      intros HhasFuel.
       (** Proof that the new coarse and fine state are in simulation*)
       assert (HinvC': invariant
                         (addThread (updThread pfc (Kresume c Vundef) threadPerm')
                                    (Vptr b ofs) arg newThreadPerm))
-        by  (eapply StepLemmas.safeC_invariant with (n := fuelF + size xs); try ssromega; eauto).
+        by  (eapply StepLemmas.safeC_invariant with (n := fuelF.+1 + size xs); eauto).
+
       (** The new FineConc threadPool and memory are related by [mem_compatible]*)
       assert (HmemCompF'' : mem_compatible tpf' mf)
         by (pose proof (codomain_valid (weak_obs_eq (obs_eq_data Htsim))); subst;
@@ -9774,8 +9767,7 @@ relation*)
 
       (** The two threadPools have the same number of threads*)
       assert (Hnum: OrdinalPool.num_threads tpc = OrdinalPool.num_threads tpf)
-        by (eapply OrdinalPool.contains_iff_num; eauto).
-      specialize (HmemCompC' HhasFuel).
+          by (eapply OrdinalPool.contains_iff_num; eauto).
       eapply Build_sim with (mem_compc := HmemCompC') (mem_compf := HmemCompF'').
         - (** containsThread *)
           clear - HnumThreads Hnum.
@@ -10340,12 +10332,12 @@ relation*)
       }
       econstructor;
         by eauto.
-      intros HhasFuel.
+
       (** The [invariant] holds in the new DryConc state*)
       assert (HinvC':
                 invariant (updLockSet (updThread pfc (Kresume c Vundef) pmap_tid')
                                       (b, Ptrofs.intval ofs) (empty_map, empty_map)))
-        by  (eapply StepLemmas.safeC_invariant with (n := fuelF + size xs); try ssromega; eauto).
+        by  (eapply StepLemmas.safeC_invariant with (n := fuelF.+1 + size xs); eauto).
       (** The [max_inv] holds for thew new memory of FineConc*)
       assert (HmaxF': max_inv mf')
         by (eapply max_inv_store; eauto).
@@ -10434,7 +10426,6 @@ relation*)
             eauto).
 
       (** Proof that the DryCond and FineConc machines are in simulation*)
-      specialize (HmemCompC' HhasFuel).
       eapply Build_sim with (mem_compc := HmemCompC') (mem_compf := HmemCompF'').
       - (** containsThread *)
         clear - HnumThreads.
@@ -11378,13 +11369,13 @@ relation*)
         by (eapply step_freelock with (b0 := b2); now eauto).
       econstructor;
         by eauto.
-      intros HhasFuel.
+
       (** Proof that the new DryConc and FineConc states are in simulation*)
       assert (HinvC':
                 invariant (remLockSet
                              (updThread pfc (Kresume c Vundef) pmap_tid')
                              (b, Ptrofs.intval ofs)))
-        by  (eapply StepLemmas.safeC_invariant with (n := fuelF + size xs); try ssromega; eauto).
+        by  (eapply StepLemmas.safeC_invariant with (n := fuelF.+1 + size xs); eauto).
       assert (HlockRes_valid:  lr_valid
                                  (lockRes
                                     (updThread pff (Kresume cf Vundef) (pmap_tidF', pmap_tidF2')))).
@@ -11448,7 +11439,7 @@ relation*)
         }
       }
       subst.
-      specialize (HmemCompC' HhasFuel).
+
       assert (Hlt1: forall (pfc': containsThread (remLockSet (updThread pfc (Kresume c Vundef) pmap_tid') (b, Ptrofs.intval ofs)) i),
                  permMapLt (setPermBlock_var pdata b (Ptrofs.intval ofs) (getThreadR pfc)#1 lksize.LKSIZE_nat) (getMaxPerm mc))
         by (intros; pose proof (compat_th _ _ HmemCompC' pfc') as Hlt;
@@ -11866,8 +11857,7 @@ relation*)
       erewrite Hperm_eq;
         now eauto.
       (** Proof that the new coarse and fine state are in simulation*)
-      intros HhasFuel.
-      eapply sim_reduce with (n := fuelF.+1); eauto.
+      eapply sim_reduce; eauto.
       admit. (* easy, but get back to it, once sim relation includes traces*)
     }
     Unshelve. all:eauto.
