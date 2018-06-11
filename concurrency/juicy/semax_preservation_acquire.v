@@ -214,7 +214,7 @@ Proof.
           exfalso.
           clear -Hat_external step.
           apply (corestep_not_at_external (juicy_core_sem _)) in step.
-          rewrite jstep.JuicyFSem.t_obligation_3 in step.
+          rewrite jstep.JuicyFSem.t_obligation_2 in step.
           set (u := at_external _ _ _) in Hat_external.
           set (v := at_external _ _ _) in step.
           assert (u = v).
@@ -509,7 +509,7 @@ Proof.
           exfalso.
           clear -Hat_external step.
           apply (corestep_not_at_external (juicy_core_sem _)) in step.
-          rewrite jstep.JuicyFSem.t_obligation_3 in step.
+          rewrite jstep.JuicyFSem.t_obligation_2 in step.
           set (u := at_external _ _ _) in Hat_external.
           set (v := at_external _ _ _) in step.
           assert (u = v).

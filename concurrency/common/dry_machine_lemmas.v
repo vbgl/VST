@@ -769,8 +769,8 @@ Module ThreadPoolWF.
 
   (** The initial thread is thread 0*)
   Lemma init_thread:
-    forall m pmap f arg tp i
-      (Hinit: init_mach pmap m tp f arg),
+    forall m m' pmap f arg tp i
+      (Hinit: init_mach pmap m tp m' f arg),
       containsThread tp i ->
       i = 0.
   Proof.
@@ -791,8 +791,8 @@ Module ThreadPoolWF.
   (** [getThreadR] on the initial thread returns the [access_map] that was used
   in [init_mach] and the [empty_map]*)
   Lemma getThreadR_init:
-    forall pmap m f arg tp
-      (Hinit: init_mach (Some pmap) m tp f arg)
+    forall pmap m m' f arg tp
+      (Hinit: init_mach (Some pmap) m tp m' f arg)
       (cnt: containsThread tp 0),
       getThreadR cnt = (pmap.1, empty_map).
   Proof.
@@ -805,8 +805,8 @@ Module ThreadPoolWF.
 
   (** If there was no [access_map] provided [init_mach] is not defined*)
   Lemma init_mach_none:
-    forall m tp f arg,
-      ~init_mach None m tp f arg.
+    forall m tp m' f arg,
+      ~init_mach None m tp m' f arg.
   Proof.
     intros.
     simpl in *.
@@ -816,8 +816,8 @@ Module ThreadPoolWF.
 
   (** There are no locks in the initial machine *)
   Lemma init_lockRes_empty:
-    forall m pmap f arg tp laddr
-      (Hinit: init_mach pmap m tp f arg),
+    forall m m' pmap f arg tp laddr
+      (Hinit: init_mach pmap m tp m' f arg),
       lockRes tp laddr = None.
   Proof.
     intros.
@@ -834,8 +834,8 @@ Module ThreadPoolWF.
 
   (** The [invariant] holds for the initial state*)
   Lemma initial_invariant:
-    forall m pmap f arg tp
-      (Hinit: init_mach pmap m tp f arg),
+    forall m m' pmap f arg tp
+      (Hinit: init_mach pmap m tp m' f arg),
       invariant tp.
   Proof.
     intros.
@@ -914,10 +914,10 @@ Module CoreLanguage.
             forall q m, at_external semSem q m = None \/ forall i, ~ halted semSem q i;
           (** [initial_core] is deterministic *)
           initial_core_det:
-            forall i m v args c c',
-              initial_core semSem i m c v args ->
-              initial_core semSem i m c' v args ->
-              c = c'
+            forall i m v args c c' m' m'',
+              initial_core semSem i m c m' v args ->
+              initial_core semSem i m c' m'' v args ->
+              c = c' /\ m' = m''
         }.
           
       Context {SemAx : SemAxioms}.

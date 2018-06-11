@@ -24,9 +24,10 @@ Class OracleKind := {
 }.
 
 Definition j_initial_core {C} (csem: @CoreSemantics C mem)
-     (n: nat) (m: juicy_mem) (q: C) (v: val) (args: list val) 
+     (n: nat) (m: juicy_mem) (q: C) (m': juicy_mem) (v: val) (args: list val) 
      : Prop :=
-  core_semantics.initial_core csem n (m_dry m) q v args.
+  m' = fst (JuicyMemOps.juicy_mem_alloc m 0 0) /\
+  core_semantics.initial_core csem n (m_dry m) q (m_dry m') v args.
 
 Definition j_at_external {C} (csem: @CoreSemantics C mem)
    (q: C) (jm: juicy_mem) : option (external_function * list val) :=

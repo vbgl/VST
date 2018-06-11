@@ -296,11 +296,14 @@ Module BareMachine.
     Qed.
 
     Definition init_mach (_ : option unit) (m: mem)
-               (tp:thread_pool)(v:val)(args:list val) : Prop :=
-      exists c, initial_core semSem 0 m c v args /\ tp = mkPool (Krun c) tt.
+               (tp:thread_pool)(m':mem)(v:val)(args:list val) : Prop :=
+      exists c, initial_core semSem 0 m c m' v args /\ tp = mkPool (Krun c) tt.
 
     Definition install_perm tp m tid (Hcmpt: mem_compatible tp m) (Hcnt: containsThread tp tid) m' :=
-      m = m'. 
+      m = m'.
+
+    Definition add_block tp m tid (Hcmpt: mem_compatible tp m) (Hcnt: containsThread tp tid) (m': mem) := tt.
+
     (** The signature of the Bare Machine *)
     Instance BareMachineSig: HybridMachineSig.MachineSig :=
       (HybridMachineSig.Build_MachineSig
@@ -309,6 +312,7 @@ Module BareMachine.
                                        mem_compatible
                                        invariant
                                        install_perm
+                                       add_block
                                        (@threadStep)
                                        threadStep_equal_run
                                        (@syncStep)

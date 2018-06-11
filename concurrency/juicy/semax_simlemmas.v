@@ -105,6 +105,17 @@ Proof.
   - apply lockSet_in_juicyLocks_age. easy.
 Qed.
 
+Lemma after_alloc_0 : forall b phi H, after_alloc 0 0 b phi H = phi.
+Proof.
+  intros; apply rmap_ext; unfold after_alloc.
+  - rewrite level_make_rmap; auto.
+  - intro; rewrite resource_at_make_rmap.
+    unfold after_alloc'.
+    if_tac; auto.
+    destruct l, H0; omega.
+  - rewrite ghost_of_make_rmap; auto.
+Qed.
+
 Lemma PURE_SomeP_inj1 k A1 A2 pp1 pp2 : PURE k (SomeP A1 pp1) = PURE k (SomeP A2 pp2) -> A1 = A2.
 Proof.
   intros.

@@ -94,14 +94,14 @@ Module Type ErasureSig.
 
   Axiom init_diagram:
     forall ge (j : Values.Val.meminj) (U:_) (js : jstate ge)
-      (vals : list Values.val) (m : mem)
+      (vals : list Values.val) (m m' : mem)
       (rmap: jres) (pmap: dres) main h,
       init_inj_ok j m ->
       match_rmap_perm rmap pmap ->
       no_locks_perm rmap ->
-      initial_core (JMachineSem ge U (Some rmap)) h m (U, nil, js) main vals ->
+      initial_core (JMachineSem ge U (Some rmap)) h m (U, nil, js) m' main vals ->
       exists (ds : dstate ge),
-        initial_core (DMachineSem ge U (Some pmap)) h m (U, nil, ds) main vals /\
+        initial_core (DMachineSem ge U (Some pmap)) h m (U, nil, ds) m' main vals /\
         invariant ds /\
         match_st ge js ds.
 

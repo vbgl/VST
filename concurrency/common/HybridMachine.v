@@ -573,8 +573,8 @@ Module DryHybridMachine.
     Definition initial_machine pmap c := mkPool (Krun c) (pmap, empty_map).
 
     Definition init_mach (pmap : option res) (m: mem)
-               (ms:thread_pool) (v:val) (args:list val) : Prop :=
-      exists c, core_semantics.initial_core semSem 0 m c v args /\
+               (ms:thread_pool) (m' : mem) (v:val) (args:list val) : Prop :=
+      exists c, core_semantics.initial_core semSem 0 m c m' v args /\
         match pmap with
         | Some pmap => ms = mkPool (Krun c) (pmap.1, empty_map)
         | None => False
@@ -688,6 +688,10 @@ Module DryHybridMachine.
 
     Definition install_perm tp m tid (Hcmpt: mem_compatible tp m) (Hcnt: containsThread tp tid) m' :=
       m' = restrPermMap (Hcmpt tid Hcnt).1.
+
+    Definition add_block tp m tid (Hcmpt: mem_compatible tp m) (Hcnt: containsThread tp tid) m' :=
+      (getCurPerm m', (getThreadR Hcnt).2).
+
     (** The signature of a Dry HybridMachine *)
     (** This can be used to instantiate a Dry CoarseHybridMachine or a Dry
     FineHybridMachine *)
@@ -699,6 +703,7 @@ Module DryHybridMachine.
                              mem_compatible
                              invariant
                              install_perm
+                             add_block
                              (@threadStep)
                              threadStep_equal_run
                              (@syncStep)
@@ -714,5 +719,5 @@ Module DryHybridMachine.
     
   End DryHybridMachine.
 End DryHybridMachine.
-Set Printing All.
+
 Export DryHybridMachine.

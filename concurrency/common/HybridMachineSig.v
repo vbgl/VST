@@ -190,6 +190,8 @@ Module HybridMachineSig.
         ; invariant: thread_pool -> Prop
         ; install_perm: forall {ms m tid},
             mem_compatible ms m -> containsThread ms tid -> mem -> Prop
+        ; add_block: forall {ms m tid},
+            mem_compatible ms m -> containsThread ms tid -> mem -> res
                                      
         (** Step relations *)
         ; threadStep:
@@ -246,7 +248,7 @@ Module HybridMachineSig.
                  (@threadHalted j tp cnt) ->
                  (@threadHalted j tp' cnt') *)
 
-        ; init_mach : option res -> mem -> thread_pool -> val -> list val -> Prop}.
+        ; init_mach : option res -> mem -> thread_pool -> mem -> val -> list val -> Prop}.
 
 
     Context {machineSig: MachineSig}.
@@ -264,19 +266,20 @@ Module HybridMachineSig.
   Definition schedSkip sch: (seq nat):= List.tl sch.
   Definition machine_state := thread_pool.
 
-  (*TODO: probably need to update the permissions for initial core too*)
    Inductive start_thread : forall (m: mem) {tid0} {ms:machine_state},
       containsThread ms tid0 -> machine_state -> mem -> Prop:=
-  | StartThread: forall m m' tid0 ms ms' c_new vf arg
+  | StartThread: forall m m' m_new tid0 ms ms' c_new vf arg
                     (ctn: containsThread ms tid0)
                     (Hcode: getThreadC ctn = Kinit vf arg)
                     (Hcmpt: mem_compatible ms m)
                     (Hperm: install_perm Hcmpt ctn m')
                     (Hinitial: initial_core semSem tid0
-                                            m' c_new vf (arg::nil))
+                                            m' c_new m_new vf (arg::nil))
                     (Hinv: invariant ms)
-                    (Hms': updThreadC ctn (Krun c_new)  = ms'),
-      start_thread m ctn ms' m.
+                    (Hms': updThread ctn (Krun c_new) (add_block Hcmpt ctn m_new) = ms')
+                    (Hcmpt': mem_compatible ms' m_new)
+                    (Hinv': invariant ms'),
+      start_thread m ctn ms' m_new.
 
    (** Resume and Suspend: threads running must be preceded by a Resume
        and followed by Suspend.  This functions wrap the state to
@@ -398,9 +401,9 @@ Module HybridMachineSig.
       end.
 
     Definition init_machine (U:schedule) (r : option res) (m: mem)
-               (st : MachState) (f : val) (args : list val)
+               (st : MachState) (m': mem) (f : val) (args : list val)
       : Prop :=
-      match st with (U', [::], c) => U' = U /\ init_mach r m c f args | _ => False end.
+      match st with (U', [::], c) => U' = U /\ init_mach r m c m' f args | _ => False end.
 
     Program Definition MachineCoreSemantics (U:schedule) (r : option res):
       CoreSemantics MachState mem.
@@ -419,10 +422,10 @@ Module HybridMachineSig.
     Definition make_init_machine c r:= 
         mkPool (Krun c) r.
     Definition init_machine' (the_ge : semG) m
-               c (f : val) (args : list val) 
+               c m' (f : val) (args : list val) 
       : option res -> Prop := fun op_r =>
                             if op_r is Some r then 
-                              init_mach op_r m (make_init_machine c r) f args
+                              init_mach op_r m (make_init_machine c r) m' f args
                             else False.
     
     Definition unique_Krun tp i :=
@@ -431,9 +434,8 @@ Module HybridMachineSig.
         ~ @threadHalted _ j tp cnti  ->
         eq_nat_dec i j.
 
-    (* XXX: Wrong? *)
-    Lemma hybrid_initial_schedule: forall m main vals U p st n,
-        initial_core (MachineCoreSemantics U p) n m st main vals ->
+    Lemma hybrid_initial_schedule: forall m m' main vals U p st n,
+        initial_core (MachineCoreSemantics U p) n m st m' main vals ->
         exists c, st = (U, nil, c).
       simpl. destruct st as ((?, ?), ?); simpl; intros.
       destruct e; [|contradiction].
@@ -564,8 +566,8 @@ Module HybridMachineSig.
                           CoreSemantics MachState mem
         ; ConcurMachineSemantics: schedule ->
                                   @ConcurSemantics G nat (seq.seq nat) event_trace t mem res (@semC Sem)
-        ; initial_schedule: forall m main vals U p st n,
-            initial_core (MachineCoreSemantics U p) n m st main vals ->
+        ; initial_schedule: forall m m' main vals U p st n,
+            initial_core (MachineCoreSemantics U p) n m st m' main vals ->
             exists c, st = (U, nil, c) (*XXX:this seems wrong *)
       }.
 

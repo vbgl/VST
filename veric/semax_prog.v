@@ -1281,8 +1281,8 @@ Lemma semax_prog_rule' {CS: compspecs} :
      Genv.init_mem prog = Some m ->
      { b : block & { q : corestate &
        (Genv.find_symbol (globalenv prog) (prog_main prog) = Some b) *
-       (forall jm, m_dry jm = m -> core_semantics.initial_core (juicy_core_sem (cl_core_sem (globalenv prog))) h
-                    jm q (Vptr b Ptrofs.zero) nil) *
+       (forall jm, m_dry jm = m -> exists jm', core_semantics.initial_core (juicy_core_sem (cl_core_sem (globalenv prog))) h
+                    jm q jm' (Vptr b Ptrofs.zero) nil) *
        forall n z,
          { jm |
            m_dry jm = m /\ level jm = n /\
@@ -1334,7 +1334,7 @@ Proof.
   (* destruct f as [func | ]; [ | exfalso; discriminate ]. *)
   (* set (func' := func) at 1; destruct func' eqn:Ef. *)
   econstructor.
-  repeat split; auto.
+  repeat split; eauto.
   intros n z.
   exists (initial_jm_ext z _ _ _ n H1 H0 H2).
   repeat split.
@@ -1491,8 +1491,8 @@ Lemma semax_prog_rule {CS: compspecs} :
      Genv.init_mem prog = Some m ->
      { b : block & { q : corestate &
        (Genv.find_symbol (globalenv prog) (prog_main prog) = Some b) *
-       (forall jm, m_dry jm = m -> core_semantics.initial_core (juicy_core_sem (cl_core_sem (globalenv prog))) h
-                    jm q (Vptr b Ptrofs.zero) nil) *
+       (forall jm, m_dry jm = m -> exists jm', core_semantics.initial_core (juicy_core_sem (cl_core_sem (globalenv prog))) h
+                    jm q jm' (Vptr b Ptrofs.zero) nil) *
        forall n,
          { jm |
            m_dry jm = m /\ level jm = n /\
@@ -1543,7 +1543,7 @@ Proof.
   (* destruct f as [func | ]; [ | exfalso; discriminate ]. *)
   (* set (func' := func) at 1; destruct func' eqn:Ef. *)
   econstructor.
-  repeat split; auto.
+  repeat split; eauto.
   intro n.
   exists (initial_jm _ _ _ n H1 H0 H2).
   repeat split.
@@ -1782,9 +1782,9 @@ Lemma semax_prog_entry_point {CS: compspecs} V G prog b id_fun id_arg arg A P Q 
           (PTree.set id_arg arg (PTree.empty val))) in
 
   { q : corestate |
-    (forall jm, core_semantics.initial_core
+    (forall jm, exists jm', core_semantics.initial_core
       (juicy_core_sem (cl_core_sem (globalenv prog))) h
-      jm q (Vptr b Ptrofs.zero) (arg :: nil)) /\
+      jm q jm' (Vptr b Ptrofs.zero) (arg :: nil)) /\
 
     forall (jm : juicy_mem) ts a,
       app_pred (P ts a rho1) (m_phi jm) ->

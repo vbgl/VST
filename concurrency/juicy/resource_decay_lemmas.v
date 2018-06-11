@@ -134,6 +134,25 @@ Proof.
   - apply (resource_decay_CT RD) in E. rewrite E; reflexivity.
 Qed.
 
+Lemma resource_decay_lkat'' {b phi phi' R loc} :
+  resource_decay b phi phi' ->
+  (fst loc < b)%positive ->
+  (lkat R loc) phi ->
+  (lkat R loc) phi'.
+Proof.
+  intros RD LT LKAT loc' r.
+  eapply resource_decay_lkat' in LKAT; eauto.
+  specialize (LKAT loc' r).
+  destruct LKAT as (sh & rsh & E); exists sh, rsh.
+  rewrite E.
+  replace (pack_res_inv _) with (pack_res_inv (approx (level phi') R)); auto.
+  unfold pack_res_inv; f_equal.
+  extensionality.
+  change (approx _ (approx _ _)) with ((approx (level phi') oo approx (level phi)) R).
+  rewrite approx_oo_approx'; auto.
+  apply RD.
+Qed.
+
 Lemma resource_decay_lkat {b phi phi' R loc} :
   resource_decay b phi phi' ->
   (fst loc < b)%positive ->

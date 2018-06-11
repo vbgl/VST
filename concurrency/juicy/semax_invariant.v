@@ -367,8 +367,7 @@ Proof.
   - subst.
     rewrite gssThreadCode.
     injection 1 as <-. eauto.
-  - Set Printing Implicit.
-    unshelve erewrite gsoThreadCode; auto.
+  - unshelve erewrite gsoThreadCode; auto.
     intros E; specialize (NO _ _ _ E). destruct NO.
 Qed.
 

@@ -2,6 +2,7 @@ Require Import VST.concurrency.common.core_semantics.
 Require Import VST.veric.base.
 Require Import VST.veric.Clight_lemmas.
 Require compcert.common.Globalenvs.
+Require compcert.common.Smallstep.
 
 Inductive cont': Type :=
   | Kseq: statement -> cont'       (**r [Kseq s2 k] = after [s1] in [s1;s2] *)
@@ -314,7 +315,7 @@ Program Definition cl_core_sem (ge: genv):
   @CoreSemantics corestate mem :=
   @Build_CoreSemantics _ _
     (*deprecated cl_init_mem*)
-    (fun _ _ c v args => cl_initial_core ge v args = Some c)
+    (fun _ m c m' v args => cl_initial_core ge v args = Some c /\ m' = fst (Mem.alloc m 0 0))
     (fun c _ => cl_at_external c)
     (fun ret c _ => cl_after_external ret c)
     (fun _ _ => False)

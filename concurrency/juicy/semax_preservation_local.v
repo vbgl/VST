@@ -703,7 +703,7 @@ Proof.
             destruct (AMap.find (elt:=option rmap) (b, ofs) (lset tp)).
             * discriminate.
             * tauto.
-            * unfold LKSIZE; simpl in range; clear - range; rewrite size_chunk_Mptr; simple_if_tac; omega.
+            * lkomega.
           + constructor.
         - (* basic alignment *)
           eapply lock_coherence_align; eauto.
