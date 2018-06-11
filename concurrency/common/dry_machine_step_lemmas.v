@@ -1790,9 +1790,15 @@ Module StepLemmas.
         simpl.
         erewrite @OrdinalPool.gsoAddRes; now eauto.
         rewrite add_update_comm.
+        simpl (add_block).
+        unfold HybridMachine.DryHybridMachine.add_block.
+        erewrite <- @gsoAddRes with (cntj' := cnti') (cntj := ctn).
+        reflexivity.
+        admit.
+        admit.
         Unshelve.
         assumption.
-    Qed.
+    Admitted.
 
 
     Lemma addThread_internal_execution:
