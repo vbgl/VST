@@ -82,12 +82,12 @@ Section HybridSimulation.
       ; initial_target_thread:
           mem -> t_thread_type -> val -> seq.seq val -> Prop
       ; initial_setup :
-          forall tge sge s_init_thread s_init_mem main main_args s_mach_state r1,
-            initial_source_thread s_init_mem s_init_thread main main_args ->
-            machine_semantics.initial_machine SourceHybridMachine sge s_init_mem s_init_thread main main_args r1= Some s_mach_state ->
-            exists j cd tc t_mach_state t_init_mem r2,
-              machine_semantics.initial_machine TargetHybridMachine tge t_init_mem tc main main_args r2 = Some t_mach_state
-           /\ match_state cd j s_mach_state s_init_mem t_mach_state t_init_mem
+          forall tge sge s_init_thread s_mem s_mem' main main_args s_mach_state r1,
+            initial_source_thread s_mem s_init_thread main main_args ->
+            machine_semantics.initial_machine SourceHybridMachine sge s_mem s_init_thread s_mem' main main_args r1= Some s_mach_state ->
+            exists j cd tc t_mach_state t_mem t_mem' r2,
+              machine_semantics.initial_machine TargetHybridMachine tge t_mem tc t_mem' main main_args r2 = Some t_mach_state
+           /\ match_state cd j s_mach_state s_mem' t_mach_state t_mem'
       ; thread_diagram :
           forall sge tge U st1 m1 st1' m1',
             thread_step SourceHybridMachine sge U st1 m1 st1' m1' ->

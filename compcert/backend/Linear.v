@@ -309,7 +309,7 @@ Inductive initial_state (p: program): state -> Prop :=
 (* This lets the stack frame for a spawned thread be an arbitrary internal function, but in fact
    it should be fixed or possibly passed as an argument to entry_point. *)
 Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
-  | entry_point_intro: forall b f b0 f0 ra0 m0 m1 stk args,
+  | entry_point_intro: forall b f b0 f0 m0 m1 stk args,
       let ge := Genv.globalenv p in
       Mem.mem_wd m0 ->
       globals_not_fresh ge m0 ->

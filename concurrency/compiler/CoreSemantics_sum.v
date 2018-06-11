@@ -47,13 +47,13 @@ Definition lt_op (n: nat) (no:option nat): bool :=
   end.
 
 Definition initial_core_sum (no:option nat) (Cs Ct:Type) (M: Type)
-           (sinitial_core : nat -> M -> Cs -> Values.val -> list Values.val -> Prop)
-           (tinitial_core : nat -> M -> Ct -> Values.val -> list Values.val -> Prop):
-  nat -> M -> state_sum Cs Ct -> Values.val -> list Values.val -> Prop :=
-  fun (n:nat) m c val vals =>
+           (sinitial_core : nat -> M -> Cs -> M -> Values.val -> list Values.val -> Prop)
+           (tinitial_core : nat -> M -> Ct -> M -> Values.val -> list Values.val -> Prop):
+  nat -> M -> state_sum Cs Ct -> M -> Values.val -> list Values.val -> Prop :=
+  fun (n:nat) m c m' val vals =>
     match c with
-    | SState c => sinitial_core n m c val vals
-    | TState c => tinitial_core n m c val vals
+    | SState c => sinitial_core n m c m' val vals
+    | TState c => tinitial_core n m c m' val vals
     end.
 
 Definition sum_func {Cs Ct X:Type} (fs:Cs -> X) (ft:Ct-> X) s:=
