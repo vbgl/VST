@@ -1,3 +1,4 @@
+(* A version of juicy_machine that keeps track of lock invariants. *)
 Require Import compcert.lib.Axioms.
 
 Require Import VST.msl.age_to.
@@ -37,6 +38,7 @@ Require Import VST.veric.juicy_mem.
 Require Import VST.veric.juicy_mem_lemmas.
 Require Import VST.veric.juicy_extspec.
 Require Import VST.veric.jstep.
+Require Import VST.veric.tycontext.
 
 Set Bullet Behavior "Strict Subproofs".
 
@@ -53,7 +55,7 @@ Notation "x <= y" := (x <= y)%nat.
 Notation "x < y" := (x < y)%nat.
 
 
-Instance LocksAndResources : Resources := { res := rmap; lock_info := option rmap }.
+Instance LockInvsAndResources : Resources := { res := rmap; lock_info := mpred * option rmap }.
 
 Module ThreadPool.
   Section ThreadPool.
@@ -68,10 +70,10 @@ Module ThreadPool.
 
 End ThreadPool.
 
-Module Concur.
+Module InvMachine.
 
   (** Semantics of the coarse-grained juicy concurrent machine*)
-  Section JuicyMachineShell.
+  Section InvMachineShell.
 
     Import event_semantics Events.
 
@@ -83,8 +85,6 @@ Module Concur.
     Notation tid:= nat.
 
     Notation lockMap:= (AMap.t lock_info).
-    Notation SSome x:= (Some (Some x)).
-    Notation SNone:= (Some None).
 
     (** Memories*)
     Definition richMem: Type:= juicy_mem.
@@ -123,7 +123,7 @@ Module Concur.
       forall {tid} (cnt: containsThread tp tid), mem_cohere' m (getThreadR cnt).
 
     Definition mem_lock_cohere (ls:lockMap) m:=
-      forall loc rm, AMap.find loc ls = SSome rm -> mem_cohere' m rm.
+      forall loc R rm, AMap.find loc ls = Some (R, Some rm) -> mem_cohere' m rm.
 
     Lemma length_enum_from n m pr : List.length (@enums_equality.enum_from n m pr) = n.
     Proof.
@@ -204,8 +204,8 @@ Module Concur.
     Qed.
 
     (*Join juice from all locks*)
-    Fixpoint join_list' (ls: seq.seq (option res)) (r:option res):=
-      if ls is phi::ls' then exists (r':option res),
+    Fixpoint join_list' (ls: seq.seq (mpred * option res)) (r:option res):=
+      if ls is (_, phi)::ls' then exists (r':option res),
           @join _ (@Join_lower res _) phi r' r /\ join_list' ls' r' else r=None.
     Definition join_locks tp r:= join_list' (map snd (AMap.elements (lset tp))) r.
 
@@ -273,9 +273,9 @@ Module Concur.
         lr_valid (AMap.find (elt:=lock_info)^~ (ls)).
     Proof.
       simpl; repeat intro.
-      destruct (AMap.find (elt:=option rmap) (b, ofs) ls) eqn:MAP.
+      destruct (AMap.find (b, ofs) ls) eqn:MAP.
       - intros ofs0 ineq.
-        destruct (AMap.find (elt:=option rmap) (b, ofs0) ls) eqn:MAP'; try reflexivity.
+        destruct (AMap.find (b, ofs0) ls) eqn:MAP'; try reflexivity.
         assert (H':=H).
         specialize (H (b,ofs) ltac:(rewrite MAP; auto)).
         destruct H as [sh [psh [P H]]].
@@ -363,57 +363,60 @@ Module Concur.
     Lemma compatible_lockRes_join:
       forall (js : thread_pool) (m : mem),
         mem_compatible js m ->
-        forall (l1 l2 : address) (phi1 phi2 : rmap),
+        forall (l1 l2 : address) (R1 R2 : mpred) (phi1 phi2 : rmap),
           l1 <> l2 ->
-          ThreadPool.lockRes js l1 = Some (Some phi1) ->
-          ThreadPool.lockRes js l2 = Some (Some phi2) ->
+          ThreadPool.lockRes js l1 = Some (R1, Some phi1) ->
+          ThreadPool.lockRes js l2 = Some (R2, Some phi2) ->
           joins phi1 phi2.
-    Proof. intros ? ? Hcompat; intros ? ? ? ? Hneq; intros.
+    Proof. intros ? ? Hcompat; intros ? ? ? ? ? ? Hneq; intros.
            destruct Hcompat as [allj Hcompat].
            inversion Hcompat.
            inversion juice_join0; subst.
            unfold join_locks in H2.
-           clear - Hneq H2 H H0. unfold lockRes,lockGuts in H, H0.
+           clear - Hneq H2 H H0.
            apply AMap.find_2 in H. apply AMap.find_2 in H0.
   assert (forall x e, AMap.MapsTo x e (lset js) <->
                SetoidList.InA (@AMap.eq_key_elt lock_info) (x,e) (AMap.elements (lset js))). {
     split; intros. apply AMap.elements_1; auto.  apply AMap.elements_2; auto.
   } forget (AMap.elements (elt:=lock_info) (lset js)) as el.
-  assert (SetoidList.InA (@AMap.eq_key_elt lock_info) (l1, Some phi1) el).
+  assert (SetoidList.InA (@AMap.eq_key_elt lock_info) (l1, (R1, Some phi1)) el).
    apply H1; auto.
-  assert (SetoidList.InA (@AMap.eq_key_elt lock_info) (l2, Some phi2) el).
+  assert (SetoidList.InA (@AMap.eq_key_elt lock_info) (l2, (R2, Some phi2)) el).
    apply H1; auto.
  clear - H2 H3 H4 Hneq.
  revert r1 H2 H3 H4; induction el; simpl; intros.
  inv H3.
- destruct H2 as [r2 [? ?]]. destruct a.
+ destruct a as (k, (R, o)).
+ destruct H2 as [r2 [? ?]].
   assert (H8: joins (Some phi1) (Some phi2));
     [ | destruct H8 as [x H8]; destruct x; inv H8; eauto].
  inv H3; [ | inv H4].
  {  (* case 1: l1=k *)
-  inv H2. simpl in *. subst. inv H4. inv H2. simpl in *; subst; congruence.
+  inv H2. simpl in *. inv H3. inv H4. inv H2. simpl in *; subst; congruence.
   clear - H2 H H0 Hneq.
   assert (exists r1', r1 = Some r1').
-  destruct r1; inv H; eauto.
+  { destruct r1; inv H; eauto. }
   destruct H1 as [r1' ?]. subst r1.
   assert (joins (Some phi1) r2) by eauto. clear H.
   eapply join_sub_joins'; try apply H1. apply join_sub_refl.
   clear - H0 H2.
   revert r2 H0; induction el; simpl in *; intros. inv H2.
-  destruct H0 as [? [? ?]]. inv H2. destruct a; inv H3. simpl in *; subst.
+  destruct a as (k, (R, o)).
+  destruct H0 as [? [? ?]]. inv H2. inv H3. inv H2. simpl in *; subst.
   exists x; auto.
   apply IHel in H0; eauto. apply join_sub_trans with x; auto.
   eexists; eauto.
  }
  { (* case 2: l2 = k *)
-  inv H3. simpl in *. subst.
+  inv H3. simpl in *. inv H4.
   assert (joins r2 (Some phi2)) by eauto.
   clear - H1 H2 H0.
   eapply join_sub_joins'; try apply H1.
   clear  H1.
   revert r2 H0; induction el; simpl in *; intros. inv H2.
-  destruct H0 as [? [? ?]]. inv H2. destruct a; inv H3. simpl in *; subst.
-  exists x; auto. destruct a; simpl in *.
+  destruct a as [? []].
+  destruct H0 as [? [? ?]]. inv H2. inv H3. simpl in *; inv H2.
+  exists x; auto.
   apply IHel in H0; auto. apply join_sub_trans with x; auto. exists o; auto.
   apply join_sub_refl.
  }
@@ -429,23 +432,21 @@ Qed.
     Definition disjoint_threads tp :=
       forall i j (cnti : containsThread tp i)
         (cntj: containsThread tp j) (Hneq: i <> j),
-        joins (getThreadR(resources:=LocksAndResources) cnti)
+        joins (getThreadR(resources:=LockInvsAndResources) cnti)
               (getThreadR cntj).
     (* Per-lock disjointness definition*)
     Definition disjoint_locks tp :=
-      forall loc1 loc2 r1 r2,
-        lockRes tp loc1 = SSome r1 ->
-        lockRes tp loc2 = SSome r2 ->
+      forall loc1 loc2 R1 R2 r1 r2,
+        lockRes tp loc1 = Some (R1, Some r1) ->
+        lockRes tp loc2 = Some (R2, Some r2) ->
         joins r1 r2.
     (* lock-thread disjointness definition*)
     Definition disjoint_lock_thread tp :=
-      forall i loc r (cnti : containsThread tp i),
-        lockRes tp loc = SSome r ->
-        joins (getThreadR cnti)r.
+      forall i loc R r (cnti : containsThread tp i),
+        lockRes tp loc = Some (R, Some r) ->
+        joins (getThreadR cnti) r.
 
     Variant invariant' (tp:t) := True. (* The invariant has been absorbed my mem_compat*)
-     (* { no_race : disjoint_threads tp
-      }.*)
 
     Definition invariant := invariant'.
 
@@ -871,8 +872,8 @@ Qed.
            eapply mem_cohere_sub; eauto.
     Qed.
 
-    Lemma compatible_lockRes_sub: forall js l phi,
-        lockRes js l = Some (Some phi) ->
+    Lemma compatible_lockRes_sub: forall js l R phi,
+        lockRes js l = Some (R, Some phi) ->
         forall all_juice,
           join_all js all_juice ->
           join_sub phi all_juice.
@@ -886,9 +887,10 @@ Qed.
      hnf in H2. simpl in H. simpl in *.
      apply AMap.find_2 in H. unfold OrdinalPool.lockGuts in H.
      apply AMap.elements_1 in H. simpl in *.
-     forget (AMap.elements (elt:= option rmap) (lset js)) as el.
+     forget (AMap.elements (elt:=mpred * option rmap) (lset js)) as el.
      revert r1 H2; induction el; simpl; intros. inv H.
-     destruct H2 as [? [? ?]]. destruct a; simpl in *. inv H. inv H3. simpl in *; subst.
+     destruct a as [? []].
+     destruct H2 as [? [? ?]]. inv H. inv H3. simpl in *; inv H2.
      exists x; auto. apply IHel in H1; auto.
      apply join_sub_trans with x; auto. exists o; auto.
    Qed.
@@ -932,35 +934,11 @@ Qed.
 
     Definition tp_level_is_above n tp :=
       (forall i (cnti : containsThread tp i), le n (level (getThreadR cnti))) /\
-      (forall i phi, lockRes(resources:=LocksAndResources) tp i = Some (Some phi) -> le n (level phi)).
+      (forall i R phi, lockRes(resources:=LockInvsAndResources) tp i = Some (R, Some phi) -> le n (level phi)).
 
     Definition tp_level_is n tp :=
       (forall i (cnti : containsThread tp i), level (getThreadR cnti) = n) /\
-      (forall i phi, lockRes(resources:=LocksAndResources) tp i = Some (Some phi) -> level phi = n).
-
-    (*
-    Lemma mem_compatible_same_level tp m :
-      mem_compatible tp m -> tp_level_is (level_tp tp) tp.
-    Proof.
-      intros M.
-      pose proof disjoint_threads_compat M as DT.
-      pose proof disjoint_locks_t_hread_compat M as DLT.
-      destruct M as [Phi M].
-      unfold level_tp, first_phi.
-      split.
-      - intros i cnti.
-        destruct (eq_dec i 0%nat).
-        + subst.
-          repeat f_equal.
-          now apply cnt_irr.
-        + apply rmap_join_eq_level.
-          apply DT.
-          auto.
-      - intros i phi E.
-        apply rmap_join_eq_level.
-        rewrite joins_sym.
-        eapply (DLT _); eauto.
-    Qed. *)
+      (forall i R phi, lockRes(resources:=LockInvsAndResources) tp i = Some (R, Some phi) -> level phi = n).
 
     Definition cnt_from_ordinal tp : forall i : ordinal (pos.n (num_threads tp)), containsThread tp i.
       intros [i pr]; apply pr. Defined.
@@ -970,7 +948,7 @@ Qed.
         mk n pool maps lset =>
         mk n pool
            ((age_to k) oo maps)
-           (AMap.map (option_map (age_to k)) lset)
+           (AMap.map (fun '(R, r) => (R, option_map (age_to k) r)) lset)
       end.
 
     Lemma level_age_tp_to tp k : tp_level_is_above k tp -> tp_level_is k (age_tp_to k tp).
@@ -980,12 +958,11 @@ Qed.
         destruct tp.
         apply level_age_to.
         apply T.
-      - intros i phi' IN. destruct tp as [n thds phis lset].
+      - intros i ? phi' IN. destruct tp as [n thds phis lset].
         simpl in IN.
-        unfold lockRes in IN; simpl in IN.
-        destruct (@AMap_find_map_inv (option rmap) _ _ _ _ _ IN) as [phi [IN' E]].
-        destruct phi as [phi | ]. 2:inversion E.
-        simpl in E. injection E as ->.
+        unfold OrdinalPool.lockRes in IN; simpl in IN.
+        apply @AMap_find_map_inv in IN as [[? phi] [IN' E]].
+        destruct phi as [phi | ]; inv E.
         apply level_age_to.
         eapply L, IN'.
     Qed.
@@ -1010,12 +987,12 @@ Qed.
           eapply join_level; eauto.
     Qed.
 
-    Lemma join_list'_age_to k (l : list (option res)) (Phi : option res) :
+    Lemma join_list'_age_to k l (Phi : option res) :
       (match Phi with None => Logic.True | Some phi => le k (level phi) end) ->
       join_list' l Phi ->
-      join_list' (map (option_map (age_to k)) l) (option_map (age_to k) Phi).
+      join_list' (map (fun '(R, r) => (R, option_map (age_to k) r)) l) (option_map (age_to k) Phi).
     Proof.
-      revert Phi. induction l as [| phi l IHl]; intros Phi L; simpl.
+      revert Phi. induction l as [| [R phi] l IHl]; intros Phi L; simpl.
       - destruct Phi; simpl; auto. discriminate.
       - intros [[a | ] [aphi la]].
         + destruct Phi as [Phi|]; [|inversion aphi].
@@ -1145,6 +1122,11 @@ Qed.
 
     Notation Kblocked := (threadPool.Kblocked).
     Open Scope Z_scope.
+    (* This differs from juicy_machine.syncStep' in two ways:
+       1) The lockRes tracks the invariant associated with each lock.
+       2) The release and acquire events include the permission changes involved.
+       This should allow us to show that events are preserved by erasure, and that they are
+       consistent with the associated invariants. *)
     Inductive syncStep' {isCoarse: bool} {tid0 tp m}
               (cnt0:containsThread tp tid0)(Hcompat:mem_compatible tp m):
       thread_pool -> mem -> sync_event -> Prop :=
@@ -1175,12 +1157,16 @@ Qed.
                It should follow from the mem_compat statement... somehow... *)
             (Hrestrict_pmap: restrPermMap Hlt' = m1)
             (Hstore: Mem.store Mint32 m1 b (Ptrofs.intval ofs) (Vint Int.zero) = Some m')
-            (His_unlocked: lockRes tp (b, Ptrofs.intval ofs) = SSome d_phi )
+            (His_unlocked: lockRes tp (b, Ptrofs.intval ofs) = Some (R, Some d_phi))
             (Hadd_lock_res: join phi d_phi phi')
             (Htp': tp' = updThread cnt0 (Kresume c Vundef) phi')
-            (Htp'': tp'' = updLockSet tp' (b, Ptrofs.intval ofs) None )
-            (Htp''': tp''' = age_tp_to (level phi - 1)%coq_nat tp''),
-            syncStep' cnt0 Hcompat tp''' m' (acquire (b, Ptrofs.intval ofs) None)
+            (Htp'': tp'' = updLockSet tp' (b, Ptrofs.intval ofs) (R, None) )
+            (Htp''': tp''' = age_tp_to (level phi - 1)%coq_nat tp'')
+            (virtueThread : delta_map * delta_map)
+            (Hcompute: juice2Perm phi' m' = computeMap (juice2Perm phi m) virtueThread.1 /\
+                       juice2Perm_locks phi' m' = computeMap (juice2Perm_locks phi m) virtueThread.1),
+            syncStep' cnt0 Hcompat tp''' m'
+              (acquire (b, Ptrofs.intval ofs) (Some virtueThread))
     | step_release :
         forall  (tp' tp'' tp''':thread_pool) c m0 m1 b ofs  (phi d_phi :rmap) (R: pred rmap) phi' m' pmap_tid',
           forall
@@ -1208,14 +1194,14 @@ Qed.
                It should follow from the mem_compat statement... somehow... *)
             (Hrestrict_pmap: restrPermMap Hlt' = m1)
             (Hstore: Mem.store Mint32 m1 b (Ptrofs.intval ofs) (Vint Int.one) = Some m')
-            (His_locked: lockRes tp (b, Ptrofs.intval ofs) = SNone )
+            (His_locked: lockRes tp (b, Ptrofs.intval ofs) = Some (R, None) )
             (Hsat_lock_inv: R (age_by 1 d_phi))
             (Hrem_lock_res: join d_phi phi' phi)
             (Htp': tp' = updThread cnt0 (Kresume c Vundef) phi')
             (Htp'': tp'' =
-                    updLockSet tp' (b, Ptrofs.intval ofs) (Some d_phi))
+                    updLockSet tp' (b, Ptrofs.intval ofs) (R, Some d_phi))
             (Htp''': tp''' = age_tp_to (level phi - 1)%coq_nat tp''),
-            syncStep' cnt0 Hcompat tp''' m' (release (b, Ptrofs.intval ofs) None)
+            syncStep' cnt0 Hcompat tp''' m' (release (b, Ptrofs.intval ofs) (Some (juice2Perm d_phi m, juice2Perm_locks d_phi m)))
     | step_create :
         forall  (tp_upd tp':thread_pool) c vf arg jm (d_phi phi': rmap) b ofs (* P Q *),
           forall
@@ -1256,7 +1242,7 @@ Qed.
             (Hrmap : rmap_makelock phi phi' (b, Ptrofs.unsigned ofs) R LKSIZE)
             (Htp': tp' = updThread cnt0 (Kresume c Vundef) phi')
             (Htp'': tp'' = age_tp_to (level phi - 1)%coq_nat
-                    (updLockSet tp' (b, Ptrofs.intval ofs) None )),
+                    (updLockSet tp' (b, Ptrofs.intval ofs) (R, None) )),
             syncStep' cnt0 Hcompat tp'' m' (mklock (b, Ptrofs.intval ofs))
     | step_freelock :
         forall  (tp' tp'': thread_pool) c b ofs phi R phi',
@@ -1268,7 +1254,7 @@ Qed.
             (Hcompatible: mem_compatible tp m)
             (Hpersonal_juice: getThreadR cnt0 = phi)
             (*First check the lock is acquired:*)
-            (His_acq: lockRes tp (b, (Ptrofs.intval ofs)) = SNone)
+            (His_acq: lockRes tp (b, (Ptrofs.intval ofs)) = Some (R, None))
             (*Relation between rmaps:*)
             (Hrmap : rmap_freelock phi phi' m (b, Ptrofs.unsigned ofs) R LKSIZE)
             (Htp': tp' = updThread cnt0 (Kresume c Vundef) phi')
@@ -1311,7 +1297,7 @@ Qed.
         inversion H; subst.
         assert (cntj':=cntj).
         eapply cnt_age' in cntj'.
-        eapply (cntUpdate(resources := LocksAndResources) (Krun c') (m_phi jm') (cnt_age' cntj)) in cntj'.
+        eapply (cntUpdate(resources := LockInvsAndResources) (Krun c') (m_phi jm') (cnt_age' cntj)) in cntj'.
         exists cntj'.
         destruct (NatTID.eq_tid_dec i j).
         + subst j; exists c'.
@@ -1370,19 +1356,19 @@ Qed.
           erewrite <- age_getThreadCode.
           rewrite gLockSetCode.
           rewrite gsoThreadCode; assumption.
-        * exists (cnt_age' (cntUpdateL _ _ (cntUpdate(resources:=LocksAndResources) (Kresume c Vundef) phi' _ cntj))), q.
+        * exists (cnt_age' (cntUpdateL _ _ (cntUpdate(resources:=LockInvsAndResources) (Kresume c Vundef) phi' _ cntj))), q.
           erewrite <- age_getThreadCode.
           rewrite gLockSetCode.
           rewrite gsoThreadCode; assumption.
-        * exists (cnt_age' (cntAdd _ _ _ (cntUpdate(resources:=LocksAndResources) (Kresume c Vundef) phi' _ cntj))), q.
+        * exists (cnt_age' (cntAdd _ _ _ (cntUpdate(resources:=LockInvsAndResources) (Kresume c Vundef) phi' _ cntj))), q.
           erewrite <- age_getThreadCode.
           erewrite gsoAddCode . (*i? *)
           rewrite gsoThreadCode; assumption.
-        * exists (cnt_age' (cntUpdateL _ _ (cntUpdate(resources:=LocksAndResources) (Kresume c Vundef) phi' _ cntj))), q.
+        * exists (cnt_age' (cntUpdateL _ _ (cntUpdate(resources:=LockInvsAndResources) (Kresume c Vundef) phi' _ cntj))), q.
           erewrite <- age_getThreadCode.
           rewrite gLockSetCode.
           rewrite gsoThreadCode; assumption.
-        * exists (cnt_age' (cntRemoveL _ (cntUpdate(resources:=LocksAndResources) (Kresume c Vundef) phi' _ cntj))), q.
+        * exists (cnt_age' (cntRemoveL _ (cntUpdate(resources:=LockInvsAndResources) (Kresume c Vundef) phi' _ cntj))), q.
           erewrite <- age_getThreadCode.
           rewrite gRemLockSetCode.
           rewrite gsoThreadCode; assumption.
@@ -1455,7 +1441,7 @@ Qed.
   Qed.
 
   Inductive threadHalted': forall {tid0 ms},
-      containsThread(resources:=LocksAndResources) ms tid0 -> Prop:=
+      containsThread(resources:=LockInvsAndResources) ms tid0 -> Prop:=
   | thread_halted':
       forall tp c tid0 i
         (cnt: containsThread tp tid0),
@@ -1583,20 +1569,20 @@ Qed.
         (mkPos (le_n 1))
         (fun _ => (Krun c))
         (fun _ => rmap)
-        (AMap.empty (option res)).
+        (AMap.empty _).
 
-    Definition init_mach rmap (m:mem) (tp:thread_pool) (m':mem) (v:val) (args:list val) : Prop :=
-      exists c, initial_core the_sem 0 m c m' v args /\
+    Definition init_mach rmap (m: mem) (tp:thread_pool) (v:val) (args:list val) : Prop :=
+      exists c, initial_core the_sem 0 m c v args /\
         match rmap with Some rmap => tp = initial_machine rmap c | None => False end.
 
 
-    Section JuicyMachineLemmas.
+    Section InvMachineLemmas.
 
 
       Lemma compat_lockLT': forall js m,
         mem_compatible js m ->
-        forall l r,
-          ThreadPool.lockRes js l = Some (Some r) ->
+        forall l R r,
+          ThreadPool.lockRes js l = Some (R, Some r) ->
           forall b ofs,
             Mem.perm_order'' ((getMaxPerm m) !! b ofs) (perm_of_res' (r @ (b, ofs))).
       Proof.
@@ -1615,8 +1601,8 @@ Qed.
 
       Lemma compat_lockLT: forall js m,
              mem_compatible js m ->
-             forall l r,
-             ThreadPool.lockRes js l = Some (Some r) ->
+             forall l R r,
+             ThreadPool.lockRes js l = Some (R, Some r) ->
              forall b ofs,
                Mem.perm_order'' ((getMaxPerm m) !! b ofs) (perm_of_res (r @ (b, ofs))).
     Proof.
@@ -1741,8 +1727,8 @@ Qed.
       Lemma compatible_threadRes_lockRes_join:
         forall js m,
           mem_compatible js m ->
-          forall i (cnti: containsThread js i) l phi,
-            ThreadPool.lockRes js l = Some (Some phi) ->
+          forall i (cnti: containsThread js i) l R phi,
+            ThreadPool.lockRes js l = Some (R, Some phi) ->
             sepalg.joins (getThreadR cnti) phi.
       Proof.
        intros.
@@ -1756,7 +1742,7 @@ Qed.
 
        unfold join_threads, join_list, getThreadsR in H.
        replace (enums_equality.enum (num_threads js)) with (ord_enum (num_threads js)) in H by apply ord_enum_enum.
-       simpl in *; forget  (AMap.elements (elt:=option rmap) (lset js)) as el.
+       simpl in *; forget  (AMap.elements (elt:=mpred * option rmap) (lset js)) as el.
        match goal with |- joins ?A ?B => assert (H3: joins (Some A) (Some B)) end.
       Focus 2. destruct H3; inv H3; eexists; eauto.
        eapply join_sub_joins'. 2: instantiate (1:=r1). instantiate (1:= Some r0).
@@ -1788,15 +1774,16 @@ Qed.
          }
        { clear - H0 H1.
            revert r1 H1 H0; induction el; intros. inv H0.
+           destruct a as [? []].
            destruct H1 as [? [? ?]].
-           inv H0. inv H3. destruct a; simpl in *; subst. eexists; eauto.
+           inv H0. inv H3. simpl in *; inv H2. eexists; eauto.
            apply IHel in H1; auto. apply join_sub_trans with x; auto.
            eexists; eauto.
          }
     Qed.
 
-      Lemma compatible_lockRes_cohere: forall js m l phi,
-          lockRes js l = Some (Some phi) ->
+      Lemma compatible_lockRes_cohere: forall js m l R phi,
+          lockRes js l = Some (R, Some phi) ->
           mem_compatible js m ->
           mem_cohere' m phi .
       Proof.
@@ -1853,36 +1840,37 @@ Qed.
       Proof.
         destruct js.
         intros; simpl. unfold OrdinalPool.lockRes; simpl.
-        destruct (AMap.find (elt:=option rmap) a
-                            (AMap.map (option_map (age_to age)) lset0)) eqn:AA;
-          destruct (AMap.find (elt:=option rmap) a lset0) eqn:BB;
+        destruct (AMap.find _ _) eqn:AA;
+          destruct (AMap.find (elt:=mpred * option rmap) a lset0) eqn:BB;
           try (reflexivity).
         - apply AMap_find_map_inv in AA. destruct AA as [x [BB' rest]].
           rewrite BB' in BB; inversion BB.
-        - apply AMap_find_map with (f:=(option_map (age_to age))) in BB.
+        - apply AMap_find_map with (f:=(fun '(R, r) => (R, option_map (age_to age) r))) in BB.
           rewrite BB in AA; inversion AA.
       Qed.
 
-      Lemma LockRes_age_content1: forall js age a,
-          lockRes (age_tp_to age js) a = Some None ->
-          lockRes js a = Some None.
-        intros js age a. simpl; unfold OrdinalPool.lockRes; destruct js.
+      Lemma LockRes_age_content1: forall js age a R,
+          lockRes (age_tp_to age js) a = Some (R, None) ->
+          lockRes js a = Some (R, None).
+        intros js age a R. simpl; unfold OrdinalPool.lockRes; destruct js.
         simpl.
         intros AA.
-            apply AMap_find_map_inv in AA. destruct AA as [x [map rest]].
-            rewrite map. f_equal.
-            destruct x; inversion rest; try reflexivity.
+        apply AMap_find_map_inv in AA. destruct AA as [[? x] [map rest]].
+        inv rest.
+        rewrite map. f_equal; f_equal.
+        destruct x; inversion H1; reflexivity.
       Qed.
 
-      Lemma LockRes_age_content2: forall js age a rm,
-          lockRes (age_tp_to age js) a = Some (Some rm) ->
-          exists r, lockRes js a = Some (Some r) /\ rm = age_to age r.
+      Lemma LockRes_age_content2: forall js age a R rm,
+          lockRes (age_tp_to age js) a = Some (R, Some rm) ->
+          exists r, lockRes js a = Some (R, Some r) /\ rm = age_to age r.
       Proof.
-        intros js age a rm. simpl; unfold OrdinalPool.lockRes; destruct js.
+        intros js age a R rm. simpl; unfold OrdinalPool.lockRes; destruct js.
         simpl.
         intros AA.
-        apply AMap_find_map_inv in AA. destruct AA as [x [map rest]].
-        destruct x; inversion rest.
+        apply AMap_find_map_inv in AA. destruct AA as [[? x] [map rest]].
+        inv rest.
+        destruct x; inversion H1.
         exists r; rewrite map; auto.
       Qed.
 
@@ -1943,24 +1931,19 @@ Qed.
         intros x y A. apply mem_cohere'_unage, A.
       Qed.
 
-    End JuicyMachineLemmas.
+    End InvMachineLemmas.
 
     Definition install_perm {tp m tid} (Hcompat : mem_compatible tp m) (cnt : containsThread tp tid) :=
       juicyRestrict (max_acc_coh_acc_coh (max_coh (thread_mem_compatible Hcompat cnt))).
 
-    (* Allocating a block of size 0 doesn't actually change the rmap. *)
-    Definition add_block {tp m tid} (Hcompat : mem_compatible tp m) (cnt : containsThread tp tid) (m' : mem) :=
-      getThreadR cnt.
-
-    Instance JuicyMachineShell : HybridMachineSig.MachineSig :=
+    Instance InvMachineShell : HybridMachineSig.MachineSig :=
       HybridMachineSig.Build_MachineSig richMem dryMem mem_compatible invariant
-        (fun _ _ _ compat cnt m => m = install_perm compat cnt) (fun _ _ _ => add_block)
+        (fun _ _ _ compat cnt m => m = install_perm compat cnt)
         (@threadStep)
         threadStep_equal_run syncStep syncstep_equal_run syncstep_not_running
         (@threadHalted) threadHalt_update syncstep_equal_halted (*threadStep_not_unhalts*)
         init_mach.
 
-  End JuicyMachineShell.
+  End InvMachineShell.
 
-End Concur.
-
+End InvMachine.

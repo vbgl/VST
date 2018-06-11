@@ -23,11 +23,11 @@ Module X86Context.
   
   Section X86Context.
 
-    Variable initU: seq.seq nat.
-    Variable the_program: Asm.program.
+    Context {initU: seq.seq nat}
+            {the_program: Asm.program}.
 
     Definition the_ge := Globalenvs.Genv.globalenv the_program.
-    Hypothesis Hsafe : safe_genv the_ge.
+    Context {Hsafe : safe_genv the_ge}.
 
     Instance X86Sem: Semantics:=
       { semG:= Asm.genv;
@@ -66,12 +66,13 @@ Module X86SEMAxioms.
 
   Section X86Context.
 
-    Variable initU: seq.seq nat.
-    Variable the_program: Asm.program.
-    Notation the_ge := (the_ge the_program).
-    Hypothesis Hsafe : safe_genv the_ge.
+    Context {initU: seq.seq nat}
+            {the_program: Asm.program}.
+    Notation the_ge := (@the_ge the_program).
+    Context {Hsafe : safe_genv the_ge}.
 
-    Instance X86Sem: Semantics := X86Sem the_program Hsafe.
+
+    Instance X86Sem: Semantics := @X86Sem the_program Hsafe.
 
     Lemma corestep_det: corestep_fun semSem.
    Proof.

@@ -282,8 +282,9 @@ Proof.
 
   pose proof mem_compatible_with_age _ compat'' (n := n) as compat'.
 
+  replace (level (getThreadR i tp cnti) - 1)%nat with n by omega.
   assert (level (getThreadR i tp cnti) - 1 = n)%nat as El by omega.
-  setoid_rewrite El; left; apply state_invariant_c with (mcompat := compat').
+  replace (level (getThreadR i tp cnti) - 1)%nat with n; left; apply state_invariant_c with (mcompat := compat').
   + (* level *)
     apply level_age_to. cleanup. omega.
 

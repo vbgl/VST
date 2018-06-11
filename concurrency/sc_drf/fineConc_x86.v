@@ -16,33 +16,41 @@ Require Import compcert.lib.Integers.
 Require Import Coq.ZArith.ZArith.
 Require Import VST.concurrency.common.permissions.
 Require Import VST.concurrency.common.HybridMachineSig.
+Require Import VST.concurrency.common.x86_context.
 Require Import VST.concurrency.sc_drf.mem_obs_eq.
 Require Import VST.concurrency.sc_drf.x86_inj.
-Require Import VST.concurrency.sc_drf.x86_context.
 Require Import VST.concurrency.sc_drf.fineConc_safe.
 Require Import Coqlib.
 Require Import VST.msl.Coqlib2.
 
 From mathcomp.ssreflect Require Import ssreflect ssrbool ssrnat ssrfun eqtype seq fintype finfun.
 
-Module X86Initial : FineConcInitial X86SEM X86Machines X86Context X86Inj.
-  Import Renamings MemObsEq ValObsEq ValueWD MemoryWD
+Module X86FineSafe.
+  Import FineConcSafe Renamings MemObsEq FineConcInitial
+         ValObsEq ValueWD MemoryWD
          X86Inj X86Context event_semantics.
+  Section FineConcSafe.
+    Context {the_program : Asm.program}
+            {Hsafe: Asm_core.safe_genv (@the_ge the_program)}.
 
-  (** The initial memory is well-defined*)
-  Parameter init_mem_wd:
-    forall m, init_mem = Some m -> valid_mem m.
+    Instance X86Sem : Semantics := @X86Sem the_program Hsafe.
+    Instance X86Inj : CoreInjections.CoreInj := X86Inj the_program Hsafe.
 
-  Lemma init_core_wd:
-    forall v args m (ARGS:valid_val_list (id_ren m) args),
-      init_mem = Some m ->
-      match initial_core X86SEM.Sem 0 the_ge v args with
-      | Some c => core_wd (id_ren m) c
-      | None => True
-      end.
+    (** The initial memory is well-defined*)
+    Context {init_mem : option Memory.mem}
+            {init_mem_wd: forall m, init_mem = Some m -> valid_mem m}.
+
+    Lemma init_core_wd:
+      forall (c : semC) (v : Values.val) (args : seq Values.val)
+        (m : Memory.mem),
+        valid_val_list (id_ren m) args ->
+        init_mem = Some m ->
+        initial_core semSem 0 m c v args -> CoreInjections.core_wd (id_ren m) c.
   Proof.
     intros.
-    unfold initial_core. unfold X86SEM.Sem. simpl. unfold Asm_coop.Asm_initial_core.
+    unfold initial_core in *.
+    simpl in *.
+    inv H1.
     destruct v; trivial.
     destruct (Int.eq_dec i Int.zero); trivial.
     remember (Genv.find_funct_ptr the_ge b ) as d.

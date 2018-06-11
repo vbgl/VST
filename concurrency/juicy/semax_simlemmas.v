@@ -105,6 +105,17 @@ Proof.
   - apply lockSet_in_juicyLocks_age. easy.
 Qed.
 
+Lemma after_alloc_0 : forall b phi H, after_alloc 0 0 b phi H = phi.
+Proof.
+  intros; apply rmap_ext; unfold after_alloc.
+  - rewrite level_make_rmap; auto.
+  - intro; rewrite resource_at_make_rmap.
+    unfold after_alloc'.
+    if_tac; auto.
+    destruct l, H0; omega.
+  - rewrite ghost_of_make_rmap; auto.
+Qed.
+
 Lemma PURE_SomeP_inj1 k A1 A2 pp1 pp2 : PURE k (SomeP A1 pp1) = PURE k (SomeP A2 pp2) -> A1 = A2.
 Proof.
   intros.
@@ -773,6 +784,15 @@ Proof.
   + simpl in E. inversion E. reflexivity.
   + inversion E. f_equal.
     inversion L.
+Qed.
+
+Lemma join_all_res : forall ge i (tp : jstate ge) (cnti : containsThread tp i) c Phi,
+  join_all (updThread cnti (Krun c) (getThreadR cnti)) Phi <->
+  join_all tp Phi.
+Proof.
+  intros.
+  rewrite !join_all_joinlist, maps_updthread, <- maps_updthread; simpl.
+  rewrite updThread_same; reflexivity.
 Qed.
 
 Definition thread_safety {Z} (Jspec : juicy_ext_spec Z) m ge (tp : jstate ge) PHI (mcompat : mem_compatible_with tp m PHI) n

@@ -460,6 +460,22 @@ Section Safety.
     exists n; split; auto. apply initial_invariant.
   Qed.
 
+(*  Goal Smallstep.initial_state (semantics2 prog) (initial_corestate).*)
+  Lemma initial_corestate_initial :
+    exists b, Genv.find_symbol (globalenv prog) (prog_main prog) = Some b /\
+    exists m', forall n,
+    initial_core (Clight_new.cl_core_sem (globalenv prog)) n (proj1_sig init_mem)
+      initial_corestate m' (Vptr b Ptrofs.zero) nil.
+  Proof.
+    unfold initial_corestate.
+    destruct spr as (b & ? & [? Hinit] & s).
+    destruct (s O tt) as (jm & ? & _).
+    exists b; split; auto; simpl in *; clear s.
+    specialize (Hinit _ H) as (? & Hinit); hnf in Hinit.
+    destruct Hinit as [_ Hinit]; simpl in Hinit.
+    destruct Hinit; eauto.
+  Qed.
+
   Lemma jmsafe_csafe n m tr sch s : jmsafe (globalenv prog) n (m, (tr, sch, s)) -> jm_csafe (sch, tr, s) m n.
   Proof.
     clear.

@@ -10,9 +10,9 @@ Record t M TM := mk {
   ; step  : forall C sem c m c' m',
             @corestep _ _ (F C sem) c m c' m' =
            (@corestep _ _ sem c (E m) c' (E m') /\ P m m')
-  ; init : forall C sem n m v vl q,
-     initial_core (F C sem) n m q v vl <->
-     initial_core sem n (E m) q v vl
+(*  ; init : forall C sem n m m' v vl q,
+     initial_core (F C sem) n m q m' v vl <->
+     initial_core sem n (E m) q (E m') v vl*) (* Should this really be true? *)
   ; atext  : forall C sem c m,
       at_external (F C sem) c m = at_external sem c (E m)
   ; aftext : forall C sem ret c m,
@@ -23,16 +23,16 @@ End FSem.
 
 Module IdFSem.
 Program Definition t M : FSem.t M M :=
-  FSem.mk M M (fun C sem => sem) id (fun _ _ => True) _ _ _ _ _.
+  FSem.mk M M (fun C sem => sem) id (fun _ _ => True) _ _ _ _.
 Next Obligation.
 apply prop_ext.
 split; intros H.
 split; auto.
 destruct H; auto.
 Qed.
-Next Obligation.
+(*Next Obligation.
 intuition.
-Qed.
+Qed.*)
 End IdFSem.
 
 Require Import VST.veric.juicy_mem.
@@ -52,9 +52,12 @@ Program Definition t : FSem.t mem juicy_mem :=
     (fun jm jm' => resource_decay (Mem.nextblock (m_dry jm)) (m_phi jm) (m_phi jm') /\
        ageable.level jm = S (ageable.level jm') /\
        ghost_of (m_phi jm') = ghost_approx jm' (ghost_of (m_phi jm)))
-    _ _ _ _ _.
-Next Obligation.
+    _ _ _ _.
+(*Next Obligation.
+unfold j_initial_core; split.
+- intros []; auto.
+- intro.
 reflexivity.
-Qed.
+Qed.*)
 End JuicyFSem.
 

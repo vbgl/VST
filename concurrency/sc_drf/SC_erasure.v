@@ -1612,10 +1612,10 @@ Module MemErasure.
   Qed.
 
   Lemma alloc_erasure':
-    forall m m' sz m2 m2' b b'
+    forall m m' lo hi m2 m2' b b'
       (Herased: mem_erasure m m')
-      (Halloc: Mem.alloc m 0 sz = (m2, b))
-      (Halloc': Mem.alloc m' 0 sz = (m2', b')),
+      (Halloc: Mem.alloc m lo hi = (m2, b))
+      (Halloc': Mem.alloc m' lo hi = (m2', b')),
       mem_erasure' m2 m2' /\ b = b'.
   Proof.
     intros.
@@ -1630,10 +1630,10 @@ Module MemErasure.
     - intros.
       destruct (Pos.eq_dec b b').
       + subst.
-        destruct (Z_le_dec 0 ofs);
-          destruct (Z_lt_dec ofs sz).
+        destruct (Z_le_dec lo ofs);
+          destruct (Z_lt_dec ofs hi).
         * assert (Heq:=
-                    MemoryLemmas.permission_at_alloc_2 _ _ _ _ _ _ Halloc' ltac:(eauto)).
+                    memory_lemmas.MemoryLemmas.permission_at_alloc_2 _ _ _ _ _ _ Halloc' ltac:(eauto)).
           unfold permission_at in Heq.
           specialize (Heq k).
           rewrite Heq.
@@ -1647,7 +1647,7 @@ Module MemErasure.
           specialize (H1 k). specialize (H2 k).
           rewrite H1 H2.
           simpl. auto.
-        * assert (ofs < 0)
+        * assert (ofs < lo)
             by omega.
           assert (H1:= MemoryLemmas.permission_at_alloc_3 _ _ _ _ _ ofs Halloc'
                                                           ltac:(eauto)).
@@ -1656,7 +1656,7 @@ Module MemErasure.
           specialize (H1 k). specialize (H2 k).
           rewrite H1 H2.
           simpl. auto.
-        * assert (ofs < 0)
+        * assert (ofs < lo)
             by omega.
           assert (H1:= MemoryLemmas.permission_at_alloc_3 _ _ _ _ _ ofs Halloc'
                                                           ltac:(eauto)).
@@ -1669,7 +1669,7 @@ Module MemErasure.
         destruct H; try by exfalso.
         unfold Mem.valid_block in H.
         rewrite erased_nb0 in H.
-        assert (H2:= MemoryLemmas.permission_at_alloc_1 _ _  0%Z sz _ b ofs
+        assert (H2:= MemoryLemmas.permission_at_alloc_1 _ _  lo hi _ b ofs
                                                         Halloc' ltac:(eauto)).
         unfold permission_at in H2.
         specialize (H2 k).
@@ -2735,42 +2735,49 @@ Module SCErasure.
 
     (** Safety of the SC machine*)
     Lemma fsafe_implies_scsafe:
-      forall sched tpsc tpf mf msc
-        (Hsafe: fsafe tpf mf sched (size sched).+1)
+      forall n sched tpsc tpf mf msc
+        (Hsafe: fsafe tpf mf sched n)
         (HerasedPool: threadPool_erasure tpf tpsc)
         (Hmem_erasure: mem_erasure mf msc),
-        sc_safe tpsc msc sched (size sched).+1.
+        sc_safe tpsc msc sched n.
     Proof.
-      intro sched.
-      induction sched as [|i sched]; intros.
-      - simpl in *. inversion Hsafe;
-                      eapply @HybridFineMachine.HaltedSafe with (tr := tr);
-                      simpl; now auto.
-      - simpl in Hsafe.
+      intro n.
+      induction n; intros.
+      - simpl in *.
         inversion Hsafe; subst.
-        simpl in H; by exfalso.
-        simpl in *.
-        eapply step_trace_irr with (tr'' := [::]) in H0.
-        destruct H0 as [ev Hstep]. simpl in Hstep.
-        eapply sc_sim with (tr1' := [::]) in Hstep; eauto.
-        destruct Hstep as (tpsc2' & msc2' & ? & Hstep & HerasedPool'
-                           & Hmem_erasure' & ?).
-        econstructor 3; simpl in *; now eauto.
+        econstructor.
+        eapply @HybridFineMachine.HaltedSafe with (tr := tr);
+          simpl; now auto.
+      - destruct sched.
+        + inv Hsafe.
+          eapply @HybridFineMachine.HaltedSafe with (tr := tr);
+            simpl; now auto.
+          simpl in H0.
+          inv H0; simpl in *; discriminate.
+        + inv Hsafe.
+          simpl in H; by exfalso.
+          simpl in *.
+          eapply step_trace_irr with (tr'' := [::]) in H0.
+          destruct H0 as [ev Hstep]. simpl in Hstep.
+          eapply sc_sim with (tr1' := [::]) in Hstep; eauto.
+          destruct Hstep as (tpsc2' & msc2' & ? & Hstep & HerasedPool'
+                             & Hmem_erasure' & ?).
+          econstructor 3; simpl in *; now eauto.
     Qed.
 
     (** Final erasure theorem from FineConc to SC*)
     Theorem sc_erasure:
-      forall sched f arg U tpsc tpf m
+      forall n f arg tpsc tpf m
         (Hmem: init_mem = Some m)
-        (HinitSC: bare_init initU m (U, [::], tpsc) f arg)
-        (HinitF: tpf_init initU init_mem m (U, [::], tpf) f arg)
-        (HsafeF: fsafe tpf (@diluteMem FineDilMem m) sched (size sched).+1),
-        sc_safe tpsc (@diluteMem BareDilMem m) sched (size sched).+1 /\
+        (HinitSC: bare_init initU m (initU, [::], tpsc) f arg)
+        (HinitF: tpf_init initU init_mem m (initU, [::], tpf) f arg)
+        (HsafeF: fsafe tpf (@diluteMem FineDilMem m) initU n),
+        sc_safe tpsc (@diluteMem BareDilMem m) initU n /\
         (forall tpf' mf' tr,
-            fexecution (sched, [::], tpf) (@diluteMem FineDilMem m)
+            fexecution (initU, [::], tpf) (@diluteMem FineDilMem m)
                            ([::], tr, tpf') mf' ->
             exists tpsc' msc' tr',
-              sc_execution (sched, [::], tpsc) (@diluteMem BareDilMem m)
+              sc_execution (initU, [::], tpsc) (@diluteMem BareDilMem m)
                            ([::], tr', tpsc') msc' /\
               threadPool_erasure tpf' tpsc' /\ mem_erasure mf' msc' /\
               trace_erasure tr tr').
@@ -2796,6 +2803,20 @@ Module SCErasure.
       destruct H as (? & ? & ? & ?& ?& ? & Htrace_erasure).
       specialize (Htrace_erasure ltac:(by constructor)).
       do 3 eexists; split...
+    Qed.
+
+    Corollary init_fsafe_implies_scsafe:
+      forall n f arg tpsc tpf m
+        (Hmem: init_mem = Some m)
+        (HinitSC: bare_init initU m (initU, [::], tpsc) f arg)
+        (HinitF: tpf_init initU init_mem m (initU, [::], tpf) f arg)
+        (HsafeF: fsafe tpf (@diluteMem FineDilMem m) initU n),
+        sc_safe tpsc (@diluteMem BareDilMem m) initU n.
+    Proof.
+      intros.
+      exploit sc_erasure; eauto.
+      intros (? & ?).
+      assumption.
     Qed.
 
   End SCErasure.

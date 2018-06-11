@@ -332,6 +332,65 @@ Module Parching <: ErasureSig.
       inversion H0; eapply mtch_locksRes0; eauto.
   Qed.
 
+  Lemma MTCH_updt':
+    forall js ds tid c m
+      (H0:match_st js ds)
+      (cnt: containsThread js tid)
+      (cnt': containsThread ds tid)
+      (Hcmpt : mem_compatible js m)
+      (Hcmpt' : HybridMachineSig.mem_compatible ds m),
+      match_st (updThread cnt c (add_block Hcmpt cnt (Mem.alloc (Concur.install_perm Hcmpt cnt) 0 0).1))
+               (updThread cnt' c (HybridMachineSig.add_block Hcmpt' cnt' (Mem.alloc (Concur.install_perm Hcmpt cnt) 0 0).1)).
+  Proof.
+    intros. constructor; intros.
+    - apply cntUpdate.
+      inversion H0; subst.
+      apply mtch_cnt.
+      eapply cntUpdate'; apply H.
+    - apply cntUpdate.
+      inversion H0; subst.
+      apply mtch_cnt'.
+        eapply cntUpdate'; apply H.
+    - destruct (eq_dec tid tid0) as [e|ine].
+      + subst.
+          rewrite gssThreadCode;
+          rewrite gssThreadCode.
+          reflexivity.
+      + assert (cnt2:= cntUpdate' _ _ _ Htid).
+        rewrite (gsoThreadCode ine _ cnt2).
+        inversion H0; subst.
+          (* pose (cnt':=(@MTCH_cnt js tid ds H0 cnt)). *)
+          assert (cnt2':= cntUpdate' _ _ _ Htid').
+          (*fold cnt';*)
+          rewrite (gsoThreadCode ine _ cnt2').
+          apply mtch_gtc; assumption.
+    - inversion H0.
+      destruct (eq_dec tid tid0); [|rewrite !gsoThreadRes; auto].
+      subst.
+      rewrite !gssThreadRes.
+      simpl.
+      unfold Concur.add_block, Concur.install_perm.
+      rewrite getCurPerm_correct.
+      unfold permission_at.
+      destruct (Mem.alloc _ _ _) eqn: Halloc.
+      pose proof alloc_access_other _ _ _ _ _ Halloc as Haccess.
+      unfold access_at in Haccess; simpl fst in *; simpl snd in *; rewrite <- Haccess by (right; omega).
+      pose proof Concur.juicyRestrictCurEq (Concur.max_acc_coh_acc_coh (Concur.max_coh (Concur.thread_mem_compatible Hcmpt cnt)))
+        (b, ofs); auto.
+    - inversion H0.
+      destruct (eq_dec tid tid0); [|rewrite !gsoThreadRes; auto].
+      subst.
+      rewrite !gssThreadRes.
+      apply mtch_perm2.
+    - inversion H0; apply mtch_locks.
+    - rewrite gsoThreadLPool in H; rewrite gsoThreadLPool in H1.
+      inversion H0; eapply mtch_locksEmpty; eauto.
+    - rewrite gsoThreadLPool in H; rewrite gsoThreadLPool in H1.
+      inversion H0; eapply mtch_locksRes; eauto.
+    - rewrite gsoThreadLPool in H; rewrite gsoThreadLPool in H1.
+      inversion H0; eapply mtch_locksRes0; eauto.
+  Qed.
+
     Lemma MTCH_restrict_personal:
       forall ds js m i
         (MTCH: match_st js ds)
@@ -931,13 +990,13 @@ Module Parching <: ErasureSig.
     Set Printing Implicit.
     Lemma init_diagram:
       forall (j : Values.Val.meminj) (U:schedule) (js : jstate)
-        (vals : list Values.val) (m : Mem.mem) rmap pmap main h,
+        (vals : list Values.val) (m m' : Mem.mem) rmap pmap main h,
         init_inj_ok j m ->
         match_rmap_perm rmap pmap ->
         no_locks_perm rmap ->
-        initial_core (JMachineSem U (Some rmap)) h m (U, nil, js) main vals ->
+        initial_core (JMachineSem U (Some rmap)) h m (U, nil, js) m' main vals ->
         exists (ds : dstate),
-          initial_core (ClightMachineSem U (Some pmap)) h m (U, nil, ds) main vals /\
+          initial_core (ClightMachineSem U (Some pmap)) h m (U, nil, ds) m' main vals /\
           invariant ds /\
           match_st js ds.
     Proof.
@@ -4519,12 +4578,11 @@ Here be dragons
   *)
   Lemma step_decay_invariant:
     forall (tp : dstate)  (m : Mem.mem) i
-      (Hi : containsThread tp i) c m1 m1' c'
+      (Hi : containsThread tp i) m1 m1' c'
       (Hinv: invariant tp)
       (Hcompatible: DryHybridMachine.mem_compatible tp m)
       (Hrestrict_pmap :restrPermMap ((DryHybridMachine.compat_th _ _ Hcompatible) Hi).1 = m1)
-      (Hdecay: decay m1 m1')
-      (Hcode: getThreadC Hi = Krun c),
+      (Hdecay: decay m1 m1'),
       invariant
         (updThread Hi (Krun c')
                    (getCurPerm m1', (getThreadR Hi).2)).
@@ -4652,10 +4710,44 @@ Here be dragons
 
     *         (* start_step *)
       { inversion Htstep; subst.
-        pose (ds':= (updThreadC (MTCH_cnt MATCH ctn) (Krun c_new))).
-        exists ds'. split; [|split].
-        - apply updThreadC_invariant. assumption.
-        - apply MTCH_updt; assumption.
+        pose proof MTCH_updt' _ _ _ (Krun c_new) _ MATCH ctn (MTCH_cnt MATCH ctn) Hcmpt (MTCH_compat js ds m MATCH Hcmpt) as MATCH'.
+        pose (ds':= (updThread (MTCH_cnt MATCH ctn) (Krun c_new)
+          (HybridMachineSig.add_block (MTCH_compat js ds m MATCH Hcmpt) (MTCH_cnt MATCH ctn) m'))).
+        exists ds'.
+        assert (DryHybridMachine.invariant ds').
+        { eapply step_decay_invariant with (Hcompatible := MTCH_compat _ _ _ MATCH Hcmpt); auto.
+          destruct Hinitial; subst.
+          destruct (Mem.alloc _ _ _) eqn: Halloc.
+          pose proof alloc_access_other _ _ _ _ _ Halloc as Haccess.
+          unfold access_at in Haccess; simpl in Haccess.
+          hnf in Hperm; subst.
+          split; intros.
+          + right; intro; simpl; rewrite <- Haccess by (right; omega).
+            destruct (eq_dec b0 (Mem.nextblock m)).
+            subst; apply Mem.nextblock_noaccess; apply Plt_strict.
+            { contradiction H0.
+              apply restrPermMap_valid.
+              unfold Mem.valid_block in *.
+              erewrite Mem.nextblock_alloc in H1 by eauto.
+              apply Plt_succ_inv in H1 as []; auto; contradiction. }
+          + apply restrPermMap_valid in H0.
+            right; intro; rewrite <- Haccess by (right; omega).
+            unfold Concur.install_perm; destruct k.
+            * pose proof restrPermMap_max ((MTCH_compat js ds m MATCH Hcmpt) tid (MTCH_cnt MATCH ctn)).1
+                as Hmax1.
+              apply equal_f with (b0, ofs) in Hmax1.
+              pose proof Concur.juicyRestrictMax (Concur.max_acc_coh_acc_coh (Concur.max_coh (Concur.thread_mem_compatible Hcmpt ctn)))
+                (b0, ofs) as Hmax2.
+              unfold max_access_at, access_at in Hmax1, Hmax2; rewrite Hmax1 -Hmax2; auto.
+            * destruct (restrPermMap_correct ((MTCH_compat js ds m MATCH Hcmpt) tid (MTCH_cnt MATCH ctn)).1 b0 ofs) as [_ Hcur1].
+              unfold permission_at in Hcur1; rewrite Hcur1.
+              pose proof Concur.juicyRestrictCurEq (Concur.max_acc_coh_acc_coh (Concur.max_coh (Concur.thread_mem_compatible Hcmpt ctn)))
+                (b0, ofs) as Hcur2.
+              unfold access_at in Hcur2; rewrite Hcur2.
+              inversion MATCH.
+              symmetry; apply mtch_perm1. }
+        split; auto; split.
+        - hnf in Hperm; destruct Hinitial; subst; auto.
         - exists nil; rewrite <- app_nil_end.
           eapply (HybridMachineSig.start_step tid) with (Htid0 := @MTCH_cnt js tid ds MATCH Htid).
           + assumption.
@@ -4663,9 +4755,18 @@ Here be dragons
               econstructor.
               - eapply MTCH_getThreadC. eassumption. eassumption.
               - reflexivity.
-              - simpl in *; eassumption.
+              - simpl in *.
+                destruct Hinitial; split; eauto.
+                replace Htid with ctn by apply proof_irr.
+                remember (Concur.install_perm _ _) as m1.
+                apply mtch_install_perm with (ds := ds)(MATCH := MATCH) in Heqm1; hnf in Heqm1.
+                rewrite Heqm1 in e0; rewrite e0; simpl.
+                replace Htid with ctn by apply proof_irr; reflexivity.
               - eassumption.
-              - reflexivity.
+              - replace Htid with ctn by apply proof_irr; reflexivity.
+              - eapply MTCH_compat; eauto.
+                destruct Hinitial; subst; auto.
+              - auto.
             }
       }
 
@@ -4714,7 +4815,6 @@ Here be dragons
               with (Hcompatible:= MTCH_compat _ _ _ MATCH Hcmpt); try eapply H; eauto. *)
   eapply MTCH_restrict_personal.
   auto.
-  inversion MATCH. erewrite <- mtch_gtc0; eassumption.
   }
 {
   apply MTCH_update.
@@ -4840,7 +4940,6 @@ inversion MATCH; subst.
   - assumption.
   - assumption.
   - assumption.
-  - eapply MTCH_compat; eauto.
   Qed.
 
   Lemma core_diagram:

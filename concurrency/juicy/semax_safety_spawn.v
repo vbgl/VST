@@ -367,12 +367,9 @@ clear - Initcore.
     { reflexivity. }
 
     eapply step_create with
-    (c_new := q_new)
       (Hcompatible := mem_compatible_forget compat)
       (phi' := phi1)
       (d_phi := phi0); try reflexivity; try eassumption; simpl; auto.
-    { simpl.
-      apply (Initcore (jm_ cnti compat)). }
   }
   (* "progress" part finished. *)
 
@@ -434,7 +431,7 @@ clear - Initcore.
       rewrite gssAddCode. 2:reflexivity.
       exists q_new.
       split.
-      apply (Initcore (jm_ cnti compat)).
+      destruct (Initcore (jm_ cnti compat)) as [? H]; apply H.
 
       intros jm. REWR. rewrite gssAddRes. 2:reflexivity.
       specialize (Safety jm ts).
