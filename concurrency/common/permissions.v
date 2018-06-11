@@ -2160,6 +2160,27 @@ Lemma restrPermMap_irr:
        (forall k, Maps.PMap.get b (Mem.mem_access m_before) ofs k =
              Maps.PMap.get b (Mem.mem_access m_after) ofs k)).
 
+   Definition strong_decay m_before m_after := forall b ofs,
+       (~Mem.valid_block m_before b ->
+       Mem.valid_block m_after b ->
+       (forall k, Maps.PMap.get b (Mem.mem_access m_after) ofs k = Some Freeable)
+       \/ (forall k, Maps.PMap.get b (Mem.mem_access m_after) ofs k = None)) /\
+      (Mem.valid_block m_before b ->
+       (forall k, Maps.PMap.get b (Mem.mem_access m_before) ofs k =
+             Maps.PMap.get b (Mem.mem_access m_after) ofs k)).
+
+   Lemma strong_decay_implies_decay:
+     forall m m',
+       strong_decay m m' ->
+       decay m m'.
+   Proof.
+     intros.
+     intros b ofs.
+     destruct (H b ofs);
+       intros;
+       now auto.
+   Qed.
+
   Lemma decay_refl:
     forall m,
       decay m m.

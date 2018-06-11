@@ -917,7 +917,26 @@ Module CoreLanguage.
             forall i m v args c c' m' m'',
               initial_core semSem i m c m' v args ->
               initial_core semSem i m c' m'' v args ->
-              c = c' /\ m' = m''
+              c = c' /\ m' = m'';
+          (** If the [Cur] permission is below [Writable] on some location then
+              [initial_core] cannot change the contents at this location *)
+          initial_core_unchanged_on:
+            forall  i v args c m m' b ofs
+               (Hstep: initial_core semSem i m c m' v args)
+               (Hvalid: Mem.valid_block m b)
+               (Hstable: ~ Mem.perm m b ofs Cur Writable),
+              Maps.ZMap.get ofs (Maps.PMap.get b (Mem.mem_contents m)) =
+              Maps.ZMap.get ofs (Maps.PMap.get b (Mem.mem_contents m'));
+          (** Memories after [initial_core] are related by [decay] of permissions*)
+          initial_core_decay:
+            forall i v args c m m',
+              initial_core semSem i m c m' v args ->
+              strong_decay m m';
+          (** [Mem.nextblock] is monotonic with respect to [initial_core]*)
+          initial_core_nextblock:
+            forall i v args c m m',
+              initial_core semSem i m c m' v args ->
+              (Mem.nextblock m <= Mem.nextblock m')%positive;
         }.
           
       Context {SemAx : SemAxioms}.
@@ -930,6 +949,19 @@ Module CoreLanguage.
       Proof.
         intros.
         eapply corestep_nextblock in H.
+        unfold Mem.valid_block, Coqlib.Plt in *.
+        zify;
+          by omega.
+      Qed.
+
+      Lemma initial_core_validblock:
+        forall i c m m' v args,
+          initial_core semSem i m c m' v args ->
+          forall b, Mem.valid_block m b ->
+               Mem.valid_block m' b.
+      Proof.
+        intros.
+        eapply initial_core_nextblock in H.
         unfold Mem.valid_block, Coqlib.Plt in *.
         zify;
           by omega.
@@ -1618,5 +1650,133 @@ Module CoreLanguageDry.
         [left; eapply no_race0; eauto| right; eapply (proj1 (locks_data_lock_coh0 addr _ Hlock)); eauto].
   Qed.
 
+  Lemma initial_core_stable_val:
+    forall  n c m m' pmap1 pmap2 v arg
+      (Hlt1: permMapLt pmap1 (getMaxPerm m))
+      (Hlt2: permMapLt pmap2 (getMaxPerm m))
+      (Hdisjoint: permMapsDisjoint pmap1 pmap2 \/ permMapCoherence pmap1 pmap2)
+      (Hstep: initial_core semSem n (restrPermMap Hlt1) c m' v arg),
+    forall b ofs (Hreadable: Mem.perm (restrPermMap Hlt2) b ofs Cur Readable),
+      Maps.ZMap.get ofs (Mem.mem_contents m) # b =
+      Maps.ZMap.get ofs (Mem.mem_contents m') # b.
+  Proof.
+    intros.
+    (** By disjoitness/coherence it must be that pmap1 has at most [Readable]
+      permission on [(b,ofs)]*)
+    assert (Hstable: ~ Mem.perm (restrPermMap Hlt1) b ofs Cur Writable).
+    { intros Hcontra.
+      assert (Hperm1 := restrPermMap_Cur Hlt1 b ofs).
+      assert (Hperm2 := restrPermMap_Cur Hlt2 b ofs).
+      unfold permission_at, Mem.perm in *.
+      rewrite Hperm1 in Hcontra.
+      rewrite Hperm2 in Hreadable.
+      unfold Mem.perm_order' in *.
+      (** Either [pmap1] is disjoint from [pmap2] or there is
+        [permMapCoherence] relation between them*)
+      destruct Hdisjoint as [Hdisjoint | Hdisjoint];
+        specialize (Hdisjoint b ofs);
+        destruct (pmap1 # b ofs) as [p1 |];
+        destruct (pmap2 # b ofs) as [p2 |]; try (by exfalso);
+          destruct p1; (try by inversion Hcontra); destruct p2;
+            try (by inversion Hreadable);
+            simpl in Hdisjoint; destruct Hdisjoint as [? ?];
+              by discriminate.
+    }
+    apply @initial_core_unchanged_on with (b := b) (ofs := ofs) in Hstep; auto.
+    erewrite restrPermMap_valid.
+    destruct (valid_block_dec m b); auto.
+    apply invalid_block_empty with (pmap := pmap2) (ofs := ofs) in n0; auto.
+    unfold Mem.perm in Hreadable.
+    pose proof (restrPermMap_Cur Hlt2 b ofs) as Heq.
+    unfold permission_at in Heq.
+    rewrite Heq in Hreadable.
+    rewrite n0 in Hreadable.
+    simpl; by exfalso.
+  Qed.
+
+    Corollary initial_core_disjoint_val:
+    forall (tp : t)  (m m' : mem) i j (Hneq: i <> j) n v arg
+      (c c' : semC)
+      (pfi : containsThread tp i) (pfj : containsThread tp j)
+      (Hcomp : mem_compatible tp m) (b : block) (ofs : Z)
+      (Hreadable: Mem.perm (restrPermMap (DryHybridMachine.compat_th _ _ Hcomp pfj).1) b ofs Cur Readable \/
+                  Mem.perm (restrPermMap (DryHybridMachine.compat_th _ _ Hcomp pfj).2) b ofs Cur Readable)
+      (Hcorestep: initial_core semSem n (restrPermMap (DryHybridMachine.compat_th _ _ Hcomp pfi).1) c m' v arg)
+      (Hinv: invariant tp),
+      Maps.ZMap.get ofs (Mem.mem_contents m) # b =
+      Maps.ZMap.get ofs (Mem.mem_contents m') # b.
+  Proof.
+    intros.
+    destruct Hinv as [no_race_thr0 no_race_lr0 no_race0 thread_data_lock_coh0 locks_data_lock_coh0 lockRes_valid0].
+    destruct Hreadable;
+      eapply initial_core_stable_val; eauto;
+        [left; eapply no_race_thr0; eauto| right; eapply (proj1 (thread_data_lock_coh0 j pfj)); eauto].
+  Qed.
+
+  Corollary initial_core_disjoint_locks:
+    forall (tp : t) (m m' : mem) i j (c : semC) n v arg
+      (pfi : containsThread tp i) (pfj : containsThread tp j)
+      (Hcomp : mem_compatible tp m) (b : block) (ofs : Z)
+      (Hreadable: Mem.perm (restrPermMap (DryHybridMachine.compat_th _ _ Hcomp pfj).2) b ofs Cur Readable)
+      (Hcorestep: initial_core semSem n (restrPermMap (DryHybridMachine.compat_th _ _ Hcomp pfi).1) c m' v arg)
+      (Hinv: invariant tp),
+      Maps.ZMap.get ofs (Mem.mem_contents m) # b =
+      Maps.ZMap.get ofs (Mem.mem_contents m') # b.
+  Proof.
+  Proof.
+    intros.
+    destruct Hinv as [no_race_thr0 no_race_lr0 no_race0 thread_data_lock_coh0 locks_data_lock_coh0 lockRes_valid0].
+    eapply initial_core_stable_val; eauto.
+    right; eapply (proj1 (thread_data_lock_coh0 j pfj));
+      by eauto.
+  Qed.
+
+  (** If some lock has permission above [Readable] on some address then
+    stepping a thread cannot change the value of that location*)
+  Lemma initial_core_disjoint_val_lockpool :
+    forall (tp : t)  (m m' : mem) i (c c' : semC) n v arg
+      (pfi : containsThread tp i) (Hcomp : mem_compatible tp m) addr pmap
+      (Hlock: lockRes tp addr = Some pmap)
+      (b : block) (ofs : Z)
+      (Hreadable: Mem.perm (restrPermMap (DryHybridMachine.compat_lp _ _ Hcomp _ _ Hlock).1)
+                           b ofs Cur Readable \/
+                  Mem.perm (restrPermMap (DryHybridMachine.compat_lp _ _ Hcomp _ _ Hlock).2)
+                           b ofs Cur Readable)
+      (Hcorestep: initial_core semSem n (restrPermMap (DryHybridMachine.compat_th _ _ Hcomp pfi).1) c m' v arg)
+      (Hinv: invariant tp),
+      Maps.ZMap.get ofs (Mem.mem_contents m) # b =
+      Maps.ZMap.get ofs (Mem.mem_contents m') # b.
+  Proof.
+    intros.
+    destruct Hinv as [no_race_thr0 no_race_lr0 no_race0 thread_data_lock_coh0 locks_data_lock_coh0 lockRes_valid0].
+    destruct Hreadable;
+      eapply initial_core_stable_val; eauto;
+        [left; eapply no_race0; eauto| right; eapply (proj1 (locks_data_lock_coh0 addr _ Hlock)); eauto].
+  Qed.
+
+  Lemma permMapLt_decay:
+    forall pmap m m'
+      (Hdecay: strong_decay m m')
+      (Hlt: permMapLt pmap (getMaxPerm m)),
+      permMapLt pmap (getMaxPerm m').
+  Proof.
+    intros.
+    intros b ofs.
+    destruct (Hdecay b ofs) as [Hfresh Hold].
+    specialize (Hlt b ofs).
+    erewrite getMaxPerm_correct in *.
+    unfold permission_at in *. 
+    destruct (valid_block_dec m b).
+    - specialize (Hold v).
+      erewrite <- Hold.
+      assumption.
+    - eapply Mem.nextblock_noaccess with (k := Max) (b:= b) (ofs := ofs) in n.
+      rewrite n in Hlt.
+      simpl in Hlt.
+      destruct (pmap # b ofs); [now exfalso|].
+      destruct ((Mem.mem_access m') # b ofs Max); simpl;
+        now auto.
+  Qed.
+    
   End CoreLanguageDry.
 End CoreLanguageDry.
