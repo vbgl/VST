@@ -1078,14 +1078,14 @@ Module CoreLanguageDry.
 
   (** *** Lemmas about invariants preserved by coresteps*)
 
-  (** [mem_compatible] is preserved by coresteps*)
-  Lemma corestep_compatible:
-    forall (tp : t)  (m m' : mem) i ev
+   (** [mem_compatible] is preserved by coresteps*)
+  Lemma decay_compatible:
+    forall (tp : t)  (m m' : mem) i
       (pf : containsThread tp i) (c c': semC)
       (Hinv: invariant tp)
-      (Hcode: getThreadC pf = Krun c)
       (Hcompatible : mem_compatible tp m)
-      (Hcorestep: ev_step semSem c (restrPermMap (DryHybridMachine.compat_th _ _ Hcompatible pf).1) ev c' m'),
+      (Hdecay: decay (restrPermMap (DryHybridMachine.compat_th _ _ Hcompatible pf).1) m')
+      (Hvalid_blocks: forall b, Mem.valid_block m b -> Mem.valid_block m' b), 
       mem_compatible (updThread pf (Krun c') (getCurPerm m', (getThreadR pf).2)) m'.
   Proof.
     intros.
@@ -1096,8 +1096,6 @@ Module CoreLanguageDry.
         by (eapply cntUpdate' in cnt; auto).
       (* and it's resources are below the maximum permissions on the memory*)
       destruct (DryHybridMachine.compat_th _ _ Hcompatible cnt0) as [Hlt1 Hlt2].
-      (* by decay of permissions*)
-      assert (Hdecay := ev_step_decay _ _ _ _ _ Hcorestep).
       (* let's prove a slightly different statement that will reduce proof duplication*)
       assert (Hhelper: forall b ofs, Mem.perm_order'' ((getMaxPerm m') !! b ofs) ((getThreadR cnt).1 !! b ofs)  /\
                                 Mem.perm_order''  ((getMaxPerm m') !! b ofs) ((getThreadR cnt).2 !! b ofs)).
@@ -1220,8 +1218,6 @@ Module CoreLanguageDry.
       {
         (* the resources on the lp are below the maximum permissions on the memory*)
         destruct (DryHybridMachine.compat_lp _ _ Hcompatible l _ Hres) as [Hlt1 Hlt2].
-        (* by decay of permissions*)
-        assert (Hdecay := ev_step_decay _ _ _ _ _ Hcorestep).
         intros b ofs.
         (* by cases analysis on whether b was a valid block*)
         destruct (valid_block_dec (restrPermMap (DryHybridMachine.compat_th _ _ Hcompatible pf).1) b)
@@ -1290,12 +1286,47 @@ Module CoreLanguageDry.
     { simpl.
       intros.
       rewrite OrdinalPool.gsoThreadLPool in H.
-      eapply corestep_validblock; eauto using ev_step_ax1.
+      eapply Hvalid_blocks.
       eapply (DryHybridMachine.lockRes_blocks _ _ Hcompatible);
         by eauto.
     }
   Qed.
 
+  (** [mem_compatible] is preserved by coresteps*)
+  Lemma corestep_compatible:
+    forall (tp : t)  (m m' : mem) i ev
+      (pf : containsThread tp i) (c c': semC)
+      (Hinv: invariant tp)
+      (Hcode: getThreadC pf = Krun c)
+      (Hcompatible : mem_compatible tp m)
+      (Hcorestep: ev_step semSem c (restrPermMap (DryHybridMachine.compat_th _ _ Hcompatible pf).1) ev c' m'),
+      mem_compatible (updThread pf (Krun c') (getCurPerm m', (getThreadR pf).2)) m'.
+  Proof.
+    intros.
+    assert (Hdecay := ev_step_decay _ _ _ _ _ Hcorestep).
+    eapply decay_compatible; eauto.
+    intros.
+    eapply ev_step_validblock;
+      now eauto.
+  Qed.
+
+  (** [mem_compatible] is preserved by [initial_core]*)
+  Lemma initial_core_compatible:
+    forall (tp : t)  (m m' : mem) i n vf arg
+      (pf : containsThread tp i) (c: semC)
+      (Hinv: invariant tp)
+      (Hcompatible : mem_compatible tp m)
+      (Hinitial: initial_core semSem n (restrPermMap (DryHybridMachine.compat_th _ _ Hcompatible pf).1) c m' vf arg),
+      mem_compatible (updThread pf (Krun c) (getCurPerm m', (getThreadR pf).2)) m'.
+  Proof.
+    intros.
+    assert (Hdecay := initial_core_decay _ _ _ _ _ _ Hinitial).
+    eapply strong_decay_implies_decay in Hdecay; eauto.
+    eapply decay_compatible; eauto.
+    intros.
+    eapply initial_core_validblock;
+      now eauto.
+  Qed.
 
   (** Permission [decay] preserves disjointness*)
   Lemma decay_disjoint:
@@ -1378,19 +1409,14 @@ Module CoreLanguageDry.
         destruct p; auto.
   Qed.
 
-  (** [invariant] is preserved by a corestep *)
-  Lemma corestep_invariant:
-    forall (tp : t)  (m : mem) (i : nat)
-      (pf : containsThread tp i) c m1 m1' c'
-      (Hinv: invariant tp)
-      (Hcompatible: mem_compatible tp m)
-      (Hrestrict_pmap: restrPermMap (DryHybridMachine.compat_th _ _ Hcompatible pf).1 = m1)
-      (Hcorestep: corestep semSem c m1 c' m1')
-      (Hcore: getThreadC pf = Krun c),
-      invariant (updThread pf (Krun c') (getCurPerm m1', (getThreadR pf).2)).
+  Lemma decay_invariant:
+    forall tp m m1 m1' i (pf: containsThread tp i) c
+      (Hinv : invariant tp)
+      (Hcompatible : mem_compatible tp m)
+      (Hrestrict_pmap : restrPermMap (Hcompatible i pf)#1 = m1)
+      (Hdecay: decay m1 m1'),
+      invariant (updThread pf (Krun c) (getCurPerm m1', (getThreadR pf)#2)).
   Proof.
-    intros.
-    apply corestep_decay in Hcorestep.
     constructor.
     { (* non-interference between threads *)
       pose proof (DryHybridMachine.no_race_thr _ Hinv) as Hno_race; clear Hinv.
@@ -1398,11 +1424,11 @@ Module CoreLanguageDry.
       Opaque getThreadR.
       destruct (i == j) eqn:Heqj, (i == k) eqn:Heqk;
         move/eqP:Heqj=>Heqj;
-                                                                     move/eqP:Heqk=>Heqk; intros cntj' cntk' Hneq;
-                                                                                     assert (cntk: containsThread tp k)
-                                                                                     by (eapply cntUpdate'; eauto);
-                                                                                     assert (cntj: containsThread tp j)
-                                                                                       by (eapply cntUpdate'; eauto).
+                        move/eqP:Heqk=>Heqk; intros cntj' cntk' Hneq;
+                                        assert (cntk: containsThread tp k)
+                                        by (eapply cntUpdate'; eauto);
+                                        assert (cntj: containsThread tp j)
+                                          by (eapply cntUpdate'; eauto).
       - (* case i = j = k *)
         subst j k; exfalso; now auto.
       - (* case i = j but i <> k*)
@@ -1542,6 +1568,41 @@ Module CoreLanguageDry.
       eapply updThread_lr_valid;
         apply (DryHybridMachine.lockRes_valid _ Hinv).
     }
+  Qed.
+  
+ (** [invariant] is preserved by a corestep *)
+  Lemma initial_core_invariant:
+    forall (tp : t)  (m : mem) (i : nat) n
+      (pf : containsThread tp i) c m1 m' vf arg
+      (Hinv: invariant tp)
+      (Hcompatible: mem_compatible tp m)
+      (Hrestrict_pmap: restrPermMap (DryHybridMachine.compat_th _ _ Hcompatible pf).1 = m1)
+      (Hcorestep: initial_core semSem n m1 c m' vf arg),
+      invariant (updThread pf (Krun c) (getCurPerm m', (getThreadR pf).2)).
+  Proof.
+    intros.
+    subst.
+    apply initial_core_decay in Hcorestep.
+    apply strong_decay_implies_decay in Hcorestep.
+    eapply decay_invariant;
+      eauto.
+  Qed.
+  
+  (** [invariant] is preserved by a corestep *)
+  Lemma corestep_invariant:
+    forall (tp : t)  (m : mem) (i : nat)
+      (pf : containsThread tp i) c m1 m1' c'
+      (Hinv: invariant tp)
+      (Hcompatible: mem_compatible tp m)
+      (Hrestrict_pmap: restrPermMap (DryHybridMachine.compat_th _ _ Hcompatible pf).1 = m1)
+      (Hcorestep: corestep semSem c m1 c' m1')
+      (Hcore: getThreadC pf = Krun c),
+      invariant (updThread pf (Krun c') (getCurPerm m1', (getThreadR pf).2)).
+  Proof.
+    intros.
+    apply corestep_decay in Hcorestep.
+    eapply decay_invariant;
+      eauto.
   Qed.
 
   (** A corestep cannot change the contents of memory locations where permission is not above [Readable]*)

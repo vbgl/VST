@@ -580,10 +580,12 @@ Module StepLemmas.
     Proof.
       intros.
       inversion Hstart; subst.
-      assumption.
+      simpl (add_block).
+      unfold HybridMachine.DryHybridMachine.add_block.
+      inversion Hperm; subst.
+      eapply CoreLanguageDry.initial_core_compatible;
+        now eauto.
     Qed.
-      
-      (* apply initial_core_nomem in Hinitial. subst. eauto. *)
 
     (** [mem_compatible] is preserved by [internal_step]*)
     Corollary internal_step_compatible :
@@ -618,7 +620,11 @@ Module StepLemmas.
           inversion H2; subst.        
             by apply ThreadPoolWF.updThreadC_invariant.
         + inversion H1; subst.
-          now auto.
+          inversion Hperm; subst.
+          simpl (add_block).
+          unfold HybridMachine.DryHybridMachine.add_block.
+          eapply CoreLanguageDry.initial_core_invariant;
+            now eauto.
     Qed.
 
     Lemma internal_execution_compatible :
@@ -1458,246 +1464,246 @@ Module StepLemmas.
           rewrite OrdinalPool.updThread_comm; eauto.
           erewrite @OrdinalPool.gsoThreadRes with (cntj' := cntj') by eauto.
           reflexivity.
-          inversion Hperm; subst.
-          clear - SemAx Hcomp' Hcmpt' Hinitial.
-          destruct Hcmpt'.
-          destruct Hcomp'.
-          econstructor; eauto.
-          intros tid cnt.
-          destruct (i == tid) eqn:Hitid; move/eqP:Hitid=>Hitid; subst.
-          *  Tactics.pf_cleanup.
-             pose proof (cntUpdate c pmap cnti cnti) as cnti''.
-             specialize (compat_th1 _ cnti'').
-             erewrite gssThreadRes.
-             erewrite gssThreadRes in compat_th1.
-             eapply initial_core_decay in Hinitial.
-             destruct compat_th1.
-             split;
-             eapply CoreLanguageDry.permMapLt_decay; eauto;
-             intros b ofs;
-             rewrite getMax_restr;
-             auto.
-          * pose proof (cntUpdate' _ _ cnti' cnt) as cnt'.
-            specialize (compat_th0 _ cnt').
-            erewrite gsoThreadRes with (cntj := cnt') by eauto.
-            eapply compat_th0.
-        + econstructor; eauto.
-          { intros k l cntk cntl Hneqkl.
-            pose proof (cntUpdate c pmap cnti cnti) as cnti1.
-            destruct (k == i) eqn:Hki, (l == i) eqn:Hli;
-              move/eqP:Hki=>Hki;move/eqP:Hli=>Hli; subst.
-            - exfalso; auto.
-            - erewrite gssThreadRes.
-              pose proof (cntUpdate' _ _ cnti' cntl) as cntl0.
-              erewrite @gsoThreadRes with (cntj := cntl0) by eauto.
-              destruct (l == j) eqn:Hlj;
-                move/eqP:Hlj=>Hlj; subst.
-              + erewrite gssThreadRes.
-                simpl (add_block) in *.
-                unfold HybridMachine.DryHybridMachine.add_block in *.
-                split.
-                * simpl.
-                  eapply initial_core_decay in Hinitial.
-                  eapply strong_decay_implies_decay in Hinitial.
-                  inversion Hperm; subst.
-                  apply permMapsDisjoint_comm.
-                  eapply CoreLanguageDry.decay_disjoint; eauto.
-                  intros b ofs.
-                  rewrite getMax_restr.
-                  pose proof (compat_th _ _ Hcomp' cnti1) as [Hlt _].
-                  rewrite gssThreadRes in Hlt.
-                  now eauto.
-                  pose proof (no_race_thr _ Hinv' _ _ cnti1 cntj' Hneqkl) as [Hdisjoint _].
-                  rewrite gssThreadRes in Hdisjoint.
-                  intros b ofs.
-                  erewrite getCurPerm_correct.
-                  rewrite restrPermMap_Cur.
-                  erewrite @gsoThreadRes with (cntj:= ctn) in Hdisjoint by eauto.
-                  apply permMapsDisjoint_comm.
-                  now eauto.
-                * pose proof (no_race_thr _ Hinv' _ _ cnti1 cntj' Hneqkl) as [_ Hdisjoint].
-                  rewrite gssThreadRes in Hdisjoint.
-                  erewrite @gsoThreadRes with (cntj:= ctn) in Hdisjoint by eauto.
-                  now eauto.
-              + pose proof (cntUpdate' _ _ ctn cntl0) as cntl00.
-                erewrite @gsoThreadRes with (cntj := cntl00) by eauto.
-                pose proof (cntUpdate c pmap cnti cntl00) as cntli.
-                erewrite <- @gsoThreadRes with (cntj' := cntli) by eauto.
-                pose proof (no_race_thr _ Hinv' _ _ cnti1 cntli Hneqkl) as Hdis.
-                rewrite gssThreadRes in Hdis.
-                assumption.
-            - erewrite gssThreadRes.
-              pose proof (cntUpdate' _ _ cnti' cntk) as cntk0.
-              erewrite @gsoThreadRes with (cntj := cntk0) by eauto.
-              destruct (k == j) eqn:Hkj;
-                move/eqP:Hkj=>Hkj; subst.
-              + erewrite gssThreadRes.
-                simpl (add_block) in *.
-                unfold HybridMachine.DryHybridMachine.add_block in *.
-                split.
-                * simpl.
-                  eapply initial_core_decay in Hinitial.
-                  eapply strong_decay_implies_decay in Hinitial.
-                  inversion Hperm; subst.
-                  eapply CoreLanguageDry.decay_disjoint; eauto.
-                  intros b ofs.
-                  rewrite getMax_restr.
-                  pose proof (compat_th _ _ Hcomp' cnti1) as [Hlt _].
-                  rewrite gssThreadRes in Hlt.
-                  now eauto.
-                  pose proof (no_race_thr _ Hinv' _ _ cnti1 cntj' Hneq) as [Hdisjoint _].
-                  rewrite gssThreadRes in Hdisjoint.
-                  intros b ofs.
-                  erewrite getCurPerm_correct.
-                  rewrite restrPermMap_Cur.
-                  erewrite @gsoThreadRes with (cntj:= ctn) in Hdisjoint by eauto.
-                  apply permMapsDisjoint_comm.
-                  now eauto.
-                * pose proof (no_race_thr _ Hinv' _ _ cnti1 cntj' Hneq) as [_ Hdisjoint].
-                  rewrite gssThreadRes in Hdisjoint.
-                  erewrite @gsoThreadRes with (cntj:= ctn) in Hdisjoint by eauto.
-                  now eauto using permMapsDisjoint_comm.
-              + pose proof (cntUpdate' _ _ ctn cntk0) as cntk00.
-                erewrite @gsoThreadRes with (cntj := cntk00) by eauto.
-                pose proof (cntUpdate c pmap cnti cntk00) as cntki.
-                erewrite <- @gsoThreadRes with (cntj' := cntki) by eauto.
-                pose proof (no_race_thr _ Hinv' _ _ cntki cnti1 ltac:(eauto)) as Hdis.
-                rewrite gssThreadRes in Hdis.
-                assumption.
-            - pose proof (cntUpdate' _ _ cnti' cntk) as cntk0.
-              pose proof (cntUpdate' _ _ ctn cntk0) as cntk00.
-              pose proof (cntUpdate' _ _ cnti' cntl) as cntl0.
-              pose proof (cntUpdate' _ _ ctn cntl0) as cntl00.
-              erewrite @gsoThreadRes with (cntj := cntk0) by eauto.
-              erewrite @gsoThreadRes with (cntj := cntl0) by eauto.
-              eapply Hinv'0;
-                now eauto.
-          }
-          { intros.
-            erewrite! gsoThreadLPool in Hres1, Hres2.
-            eapply Hinv;
-              now eauto.
-          }
-          { intros.
-            erewrite! gsoThreadLPool in Hres.
-            destruct (i0 == i) eqn:Hii0; move/eqP:Hii0=>Hii0; subst.
-            - rewrite gssThreadRes.
-              pose proof (no_race _ Hinv' _ _ cnti0 _ Hres) as Hdis.
-              rewrite gssThreadRes in Hdis.
-              assumption.
-            - pose proof (cntUpdate' _ _ cnti' cnti0) as cnti00.
-              pose proof (no_race _ Hinv'0 _ _ cnti00 _ Hres).
-              erewrite @gsoThreadRes with (cntj := cnti00) by eauto.
-              assumption.
-          }
-          { intros.
-            pose proof (cntUpdate c pmap cnti cnti) as cnti1.
-            destruct (i0 == i) eqn:Hii0; move/eqP:Hii0=>Hii0; subst.
-            - rewrite gssThreadRes.
-              split.
-              + intros j0 cntj0.
-                destruct (j0 == i) eqn:Hij0; move/eqP:Hij0=>Hij0; subst.
-                * rewrite gssThreadRes.
-                  pose proof ((thread_data_lock_coh _ Hinv' _ cnti0).1 _ cnti0) as Hcoh.
-                  rewrite gssThreadRes in Hcoh.
-                  assumption.
-                * pose proof (cntUpdate' _ _ cnti' cntj0) as cntj00.
-                  pose proof (cntUpdate' _ _ ctn cntj00) as cntj000.
-                  pose proof (cntUpdate c pmap cnti cntj000) as cntj0'.
-                  erewrite @gsoThreadRes with (cntj := cntj00) by eauto.
-                  destruct (j == j0) eqn:Hjj0; move/eqP:Hjj0=>Hjj0; subst.
-                  ** rewrite gssThreadRes.
-                     inversion Hperm; subst.
-                     eapply initial_core_decay in Hinitial.
-                     eapply strong_decay_implies_decay in Hinitial.
-                     eapply CoreLanguageDry.decay_coherence in Hinitial; eauto.
-                     intros b ofs.
-                     rewrite getMax_restr.
-                     pose proof (compat_th _ _ Hcomp' cnti1) as [_ Hlt].
-                     rewrite gssThreadRes in Hlt.
-                     now eauto.
-                     pose proof ((thread_data_lock_coh _ Hinv' _ cnti1).1 _ cntj') as Hcoh.
-                     rewrite gssThreadRes in Hcoh.
-                     intros b ofs.
-                     erewrite getCurPerm_correct.
-                     rewrite restrPermMap_Cur.
-                     erewrite @gsoThreadRes with (cntj:= ctn) in Hcoh by eauto.
-                     specialize (Hcoh b ofs).
-                     now auto.
-                  ** pose proof ((thread_data_lock_coh _ Hinv' _ cnti1).1 _ cntj0') as Hcoh.
-                     erewrite @gsoThreadRes with (cntj := cntj000) in * by eauto.
-                     erewrite <- @gsoThreadRes with (cntj' := cntj0') in * by eauto.
-                     rewrite gssThreadRes in Hcoh.
-                     assumption.
-              + intros laddr rmap Hres.
-                erewrite! gsoThreadLPool in Hres.
-                erewrite <- @gsoThreadLPool with (c := c) (p := pmap) (cnti := cnti) in Hres.
-                pose proof ((thread_data_lock_coh _ Hinv' _ cnti1).2 _ _ Hres) as Hcoh.
-                rewrite gssThreadRes in Hcoh.
-                assumption.
-            - split.
-              + intros j0 cntj0.
-                destruct (j0 == i) eqn:Hij0; move/eqP:Hij0=>Hij0; subst.
-                * rewrite gssThreadRes.
-                  pose proof (cntUpdate' _ _ cnti' cnti0) as cnti00.
-                  pose proof (cntUpdate' _ _ ctn cnti00) as cnti000.
-                  pose proof (cntUpdate c pmap cnti cnti000) as cnti0'.
-                  erewrite @gsoThreadRes with (cntj := cnti00) by eauto.
-                  destruct (j == i0) eqn:Hji0; move/eqP:Hji0=>Hji0; subst.
-                  ** rewrite gssThreadRes.
-                     inversion Hperm; subst.
-                     simpl (add_block) in *.
-                     unfold HybridMachine.DryHybridMachine.add_block in *.
-                     pose proof ((thread_data_lock_coh _ Hinv' _ cntj').1 _ cnti1) as Hcoh.
-                     rewrite gssThreadRes in Hcoh.
-                     erewrite @gsoThreadRes with (cntj := ctn) in Hcoh by eauto.
-                     now eauto.
-                  ** erewrite @gsoThreadRes with (cntj := cnti000) by eauto.
-                     erewrite <- @gsoThreadRes with (cntj' := cnti0') by eauto.
-                     pose proof ((thread_data_lock_coh _ Hinv' _ cnti0').1 _ cnti1) as Hcoh.
-                     rewrite gssThreadRes in Hcoh.
-                     now auto.
-                * pose proof (cntUpdate' _ _ cnti' cnti0) as cnti00.
-                  pose proof (cntUpdate' _ _ cnti' cntj0) as cntj00.
-                  erewrite @gsoThreadRes with (cntj := cntj00) by eauto.
-                  erewrite @gsoThreadRes with (cntj := cnti00) by eauto.
-                  now apply ((thread_data_lock_coh _ Hinv'0 _ cnti00).1 _ cntj00).
-              + intros laddr rmap Hres.
-                pose proof (cntUpdate' _ _ cnti' cnti0) as cnti00.
-                erewrite @gsoThreadRes with (cntj := cnti00) by eauto.
-                rewrite gsoThreadLPool in Hres.
-                now apply ((thread_data_lock_coh _ Hinv'0 _ cnti00).2 _ _ Hres).
-          }
-          { intros.
-            rewrite gsoThreadLPool in Hres.
-            pose proof (cntUpdate c pmap cnti cnti) as cnti1.
-            split.
-            - intros j0 cntj0.
-              destruct (j0 == i) eqn:Hij0; move/eqP:Hij0=>Hij0; subst.
-              * rewrite gssThreadRes.
-                rewrite gsoThreadLPool in Hres.
-                erewrite <- @gsoThreadLPool with (c := c) (p := pmap) (cnti := cnti) in Hres.
-                pose proof ((locks_data_lock_coh _ Hinv' _ _ Hres).1 _ cnti1) as Hcoh.
-                rewrite gssThreadRes in Hcoh.
-                assumption.
-              * pose proof (cntUpdate' _ _ cnti' cntj0) as cntj00.
-                pose proof ((locks_data_lock_coh _ Hinv'0 _ _ Hres).1 _ cntj00) as Hcoh.
-                erewrite @gsoThreadRes with (cntj := cntj00) by eauto.
-                assumption.
-            - intros laddr' rmap' Hres'.
-              rewrite gsoThreadLPool in Hres'.
-              now eapply ((locks_data_lock_coh _ Hinv'0 _ _ Hres).2 _ _ Hres').
-          }
-          { simpl.
-            unfold OrdinalPool.lr_valid.
-            intros.
-            rewrite! OrdinalPool.gsoThreadLPool.
-            destruct Hinv.
-            specialize (lockRes_valid0 b ofs).
-            simpl in lockRes_valid0.
-            destruct (OrdinalPool.lockRes tp (b,ofs));
-              now auto.
-          }
+          (* inversion Hperm; subst. *)
+        (*   clear - SemAx Hcomp' Hcmpt' Hinitial. *)
+        (*   destruct Hcmpt'. *)
+        (*   destruct Hcomp'. *)
+        (*   econstructor; eauto. *)
+        (*   intros tid cnt. *)
+        (*   destruct (i == tid) eqn:Hitid; move/eqP:Hitid=>Hitid; subst. *)
+        (*   *  Tactics.pf_cleanup. *)
+        (*      pose proof (cntUpdate c pmap cnti cnti) as cnti''. *)
+        (*      specialize (compat_th1 _ cnti''). *)
+        (*      erewrite gssThreadRes. *)
+        (*      erewrite gssThreadRes in compat_th1. *)
+        (*      eapply initial_core_decay in Hinitial. *)
+        (*      destruct compat_th1. *)
+        (*      split; *)
+        (*      eapply CoreLanguageDry.permMapLt_decay; eauto; *)
+        (*      intros b ofs; *)
+        (*      rewrite getMax_restr; *)
+        (*      auto. *)
+        (*   * pose proof (cntUpdate' _ _ cnti' cnt) as cnt'. *)
+        (*     specialize (compat_th0 _ cnt'). *)
+        (*     erewrite gsoThreadRes with (cntj := cnt') by eauto. *)
+        (*     eapply compat_th0. *)
+        (* + econstructor; eauto. *)
+        (*   { intros k l cntk cntl Hneqkl. *)
+        (*     pose proof (cntUpdate c pmap cnti cnti) as cnti1. *)
+        (*     destruct (k == i) eqn:Hki, (l == i) eqn:Hli; *)
+        (*       move/eqP:Hki=>Hki;move/eqP:Hli=>Hli; subst. *)
+        (*     - exfalso; auto. *)
+        (*     - erewrite gssThreadRes. *)
+        (*       pose proof (cntUpdate' _ _ cnti' cntl) as cntl0. *)
+        (*       erewrite @gsoThreadRes with (cntj := cntl0) by eauto. *)
+        (*       destruct (l == j) eqn:Hlj; *)
+        (*         move/eqP:Hlj=>Hlj; subst. *)
+        (*       + erewrite gssThreadRes. *)
+        (*         simpl (add_block) in *. *)
+        (*         unfold HybridMachine.DryHybridMachine.add_block in *. *)
+        (*         split. *)
+        (*         * simpl. *)
+        (*           eapply initial_core_decay in Hinitial. *)
+        (*           eapply strong_decay_implies_decay in Hinitial. *)
+        (*           inversion Hperm; subst. *)
+        (*           apply permMapsDisjoint_comm. *)
+        (*           eapply CoreLanguageDry.decay_disjoint; eauto. *)
+        (*           intros b ofs. *)
+        (*           rewrite getMax_restr. *)
+        (*           pose proof (compat_th _ _ Hcomp' cnti1) as [Hlt _]. *)
+        (*           rewrite gssThreadRes in Hlt. *)
+        (*           now eauto. *)
+        (*           pose proof (no_race_thr _ Hinv' _ _ cnti1 cntj' Hneqkl) as [Hdisjoint _]. *)
+        (*           rewrite gssThreadRes in Hdisjoint. *)
+        (*           intros b ofs. *)
+        (*           erewrite getCurPerm_correct. *)
+        (*           rewrite restrPermMap_Cur. *)
+        (*           erewrite @gsoThreadRes with (cntj:= ctn) in Hdisjoint by eauto. *)
+        (*           apply permMapsDisjoint_comm. *)
+        (*           now eauto. *)
+        (*         * pose proof (no_race_thr _ Hinv' _ _ cnti1 cntj' Hneqkl) as [_ Hdisjoint]. *)
+        (*           rewrite gssThreadRes in Hdisjoint. *)
+        (*           erewrite @gsoThreadRes with (cntj:= ctn) in Hdisjoint by eauto. *)
+        (*           now eauto. *)
+        (*       + pose proof (cntUpdate' _ _ ctn cntl0) as cntl00. *)
+        (*         erewrite @gsoThreadRes with (cntj := cntl00) by eauto. *)
+        (*         pose proof (cntUpdate c pmap cnti cntl00) as cntli. *)
+        (*         erewrite <- @gsoThreadRes with (cntj' := cntli) by eauto. *)
+        (*         pose proof (no_race_thr _ Hinv' _ _ cnti1 cntli Hneqkl) as Hdis. *)
+        (*         rewrite gssThreadRes in Hdis. *)
+        (*         assumption. *)
+        (*     - erewrite gssThreadRes. *)
+        (*       pose proof (cntUpdate' _ _ cnti' cntk) as cntk0. *)
+        (*       erewrite @gsoThreadRes with (cntj := cntk0) by eauto. *)
+        (*       destruct (k == j) eqn:Hkj; *)
+        (*         move/eqP:Hkj=>Hkj; subst. *)
+        (*       + erewrite gssThreadRes. *)
+        (*         simpl (add_block) in *. *)
+        (*         unfold HybridMachine.DryHybridMachine.add_block in *. *)
+        (*         split. *)
+        (*         * simpl. *)
+        (*           eapply initial_core_decay in Hinitial. *)
+        (*           eapply strong_decay_implies_decay in Hinitial. *)
+        (*           inversion Hperm; subst. *)
+        (*           eapply CoreLanguageDry.decay_disjoint; eauto. *)
+        (*           intros b ofs. *)
+        (*           rewrite getMax_restr. *)
+        (*           pose proof (compat_th _ _ Hcomp' cnti1) as [Hlt _]. *)
+        (*           rewrite gssThreadRes in Hlt. *)
+        (*           now eauto. *)
+        (*           pose proof (no_race_thr _ Hinv' _ _ cnti1 cntj' Hneq) as [Hdisjoint _]. *)
+        (*           rewrite gssThreadRes in Hdisjoint. *)
+        (*           intros b ofs. *)
+        (*           erewrite getCurPerm_correct. *)
+        (*           rewrite restrPermMap_Cur. *)
+        (*           erewrite @gsoThreadRes with (cntj:= ctn) in Hdisjoint by eauto. *)
+        (*           apply permMapsDisjoint_comm. *)
+        (*           now eauto. *)
+        (*         * pose proof (no_race_thr _ Hinv' _ _ cnti1 cntj' Hneq) as [_ Hdisjoint]. *)
+        (*           rewrite gssThreadRes in Hdisjoint. *)
+        (*           erewrite @gsoThreadRes with (cntj:= ctn) in Hdisjoint by eauto. *)
+        (*           now eauto using permMapsDisjoint_comm. *)
+        (*       + pose proof (cntUpdate' _ _ ctn cntk0) as cntk00. *)
+        (*         erewrite @gsoThreadRes with (cntj := cntk00) by eauto. *)
+        (*         pose proof (cntUpdate c pmap cnti cntk00) as cntki. *)
+        (*         erewrite <- @gsoThreadRes with (cntj' := cntki) by eauto. *)
+        (*         pose proof (no_race_thr _ Hinv' _ _ cntki cnti1 ltac:(eauto)) as Hdis. *)
+        (*         rewrite gssThreadRes in Hdis. *)
+        (*         assumption. *)
+        (*     - pose proof (cntUpdate' _ _ cnti' cntk) as cntk0. *)
+        (*       pose proof (cntUpdate' _ _ ctn cntk0) as cntk00. *)
+        (*       pose proof (cntUpdate' _ _ cnti' cntl) as cntl0. *)
+        (*       pose proof (cntUpdate' _ _ ctn cntl0) as cntl00. *)
+        (*       erewrite @gsoThreadRes with (cntj := cntk0) by eauto. *)
+        (*       erewrite @gsoThreadRes with (cntj := cntl0) by eauto. *)
+        (*       eapply Hinv'0; *)
+        (*         now eauto. *)
+        (*   } *)
+        (*   { intros. *)
+        (*     erewrite! gsoThreadLPool in Hres1, Hres2. *)
+        (*     eapply Hinv; *)
+        (*        now eauto. *)
+        (*   } *)
+        (*   { intros. *)
+        (*     erewrite! gsoThreadLPool in Hres. *)
+        (*     destruct (i0 == i) eqn:Hii0; move/eqP:Hii0=>Hii0; subst. *)
+        (*     - rewrite gssThreadRes. *)
+        (*       pose proof (no_race _ Hinv' _ _ cnti0 _ Hres) as Hdis. *)
+        (*       rewrite gssThreadRes in Hdis. *)
+        (*       assumption. *)
+        (*     - pose proof (cntUpdate' _ _ cnti' cnti0) as cnti00. *)
+        (*       pose proof (no_race _ Hinv'0 _ _ cnti00 _ Hres). *)
+        (*       erewrite @gsoThreadRes with (cntj := cnti00) by eauto. *)
+        (*       assumption. *)
+        (*   } *)
+        (*   { intros. *)
+        (*     pose proof (cntUpdate c pmap cnti cnti) as cnti1. *)
+        (*     destruct (i0 == i) eqn:Hii0; move/eqP:Hii0=>Hii0; subst. *)
+        (*     - rewrite gssThreadRes. *)
+        (*       split. *)
+        (*       + intros j0 cntj0. *)
+        (*         destruct (j0 == i) eqn:Hij0; move/eqP:Hij0=>Hij0; subst. *)
+        (*         * rewrite gssThreadRes. *)
+        (*           pose proof ((thread_data_lock_coh _ Hinv' _ cnti0).1 _ cnti0) as Hcoh. *)
+        (*           rewrite gssThreadRes in Hcoh. *)
+        (*           assumption. *)
+        (*         * pose proof (cntUpdate' _ _ cnti' cntj0) as cntj00. *)
+        (*           pose proof (cntUpdate' _ _ ctn cntj00) as cntj000. *)
+        (*           pose proof (cntUpdate c pmap cnti cntj000) as cntj0'. *)
+        (*           erewrite @gsoThreadRes with (cntj := cntj00) by eauto. *)
+        (*           destruct (j == j0) eqn:Hjj0; move/eqP:Hjj0=>Hjj0; subst. *)
+        (*           ** rewrite gssThreadRes. *)
+        (*              inversion Hperm; subst. *)
+        (*              eapply initial_core_decay in Hinitial. *)
+        (*              eapply strong_decay_implies_decay in Hinitial. *)
+        (*              eapply CoreLanguageDry.decay_coherence in Hinitial; eauto. *)
+        (*              intros b ofs. *)
+        (*              rewrite getMax_restr. *)
+        (*              pose proof (compat_th _ _ Hcomp' cnti1) as [_ Hlt]. *)
+        (*              rewrite gssThreadRes in Hlt. *)
+        (*              now eauto. *)
+        (*              pose proof ((thread_data_lock_coh _ Hinv' _ cnti1).1 _ cntj') as Hcoh. *)
+        (*              rewrite gssThreadRes in Hcoh. *)
+        (*              intros b ofs. *)
+        (*              erewrite getCurPerm_correct. *)
+        (*              rewrite restrPermMap_Cur. *)
+        (*              erewrite @gsoThreadRes with (cntj:= ctn) in Hcoh by eauto. *)
+        (*              specialize (Hcoh b ofs). *)
+        (*              now auto. *)
+        (*           ** pose proof ((thread_data_lock_coh _ Hinv' _ cnti1).1 _ cntj0') as Hcoh. *)
+        (*              erewrite @gsoThreadRes with (cntj := cntj000) in * by eauto. *)
+        (*              erewrite <- @gsoThreadRes with (cntj' := cntj0') in * by eauto. *)
+        (*              rewrite gssThreadRes in Hcoh. *)
+        (*              assumption. *)
+        (*       + intros laddr rmap Hres. *)
+        (*         erewrite! gsoThreadLPool in Hres. *)
+        (*         erewrite <- @gsoThreadLPool with (c := c) (p := pmap) (cnti := cnti) in Hres. *)
+        (*         pose proof ((thread_data_lock_coh _ Hinv' _ cnti1).2 _ _ Hres) as Hcoh. *)
+        (*         rewrite gssThreadRes in Hcoh. *)
+        (*         assumption. *)
+        (*     - split. *)
+        (*       + intros j0 cntj0. *)
+        (*         destruct (j0 == i) eqn:Hij0; move/eqP:Hij0=>Hij0; subst. *)
+        (*         * rewrite gssThreadRes. *)
+        (*           pose proof (cntUpdate' _ _ cnti' cnti0) as cnti00. *)
+        (*           pose proof (cntUpdate' _ _ ctn cnti00) as cnti000. *)
+        (*           pose proof (cntUpdate c pmap cnti cnti000) as cnti0'. *)
+        (*           erewrite @gsoThreadRes with (cntj := cnti00) by eauto. *)
+        (*           destruct (j == i0) eqn:Hji0; move/eqP:Hji0=>Hji0; subst. *)
+        (*           ** rewrite gssThreadRes. *)
+        (*              inversion Hperm; subst. *)
+        (*              simpl (add_block) in *. *)
+        (*              unfold HybridMachine.DryHybridMachine.add_block in *. *)
+        (*              pose proof ((thread_data_lock_coh _ Hinv' _ cntj').1 _ cnti1) as Hcoh. *)
+        (*              rewrite gssThreadRes in Hcoh. *)
+        (*              erewrite @gsoThreadRes with (cntj := ctn) in Hcoh by eauto. *)
+        (*              now eauto. *)
+        (*           ** erewrite @gsoThreadRes with (cntj := cnti000) by eauto. *)
+        (*              erewrite <- @gsoThreadRes with (cntj' := cnti0') by eauto. *)
+        (*              pose proof ((thread_data_lock_coh _ Hinv' _ cnti0').1 _ cnti1) as Hcoh. *)
+        (*              rewrite gssThreadRes in Hcoh. *)
+        (*              now auto. *)
+        (*         * pose proof (cntUpdate' _ _ cnti' cnti0) as cnti00. *)
+        (*           pose proof (cntUpdate' _ _ cnti' cntj0) as cntj00. *)
+        (*           erewrite @gsoThreadRes with (cntj := cntj00) by eauto. *)
+        (*           erewrite @gsoThreadRes with (cntj := cnti00) by eauto. *)
+        (*           now apply ((thread_data_lock_coh _ Hinv'0 _ cnti00).1 _ cntj00). *)
+        (*       + intros laddr rmap Hres. *)
+        (*         pose proof (cntUpdate' _ _ cnti' cnti0) as cnti00. *)
+        (*         erewrite @gsoThreadRes with (cntj := cnti00) by eauto. *)
+        (*         rewrite gsoThreadLPool in Hres. *)
+        (*         now apply ((thread_data_lock_coh _ Hinv'0 _ cnti00).2 _ _ Hres). *)
+        (*   } *)
+        (*   { intros. *)
+        (*     rewrite gsoThreadLPool in Hres. *)
+        (*     pose proof (cntUpdate c pmap cnti cnti) as cnti1. *)
+        (*     split. *)
+        (*     - intros j0 cntj0. *)
+        (*       destruct (j0 == i) eqn:Hij0; move/eqP:Hij0=>Hij0; subst. *)
+        (*       * rewrite gssThreadRes. *)
+        (*         rewrite gsoThreadLPool in Hres. *)
+        (*         erewrite <- @gsoThreadLPool with (c := c) (p := pmap) (cnti := cnti) in Hres. *)
+        (*         pose proof ((locks_data_lock_coh _ Hinv' _ _ Hres).1 _ cnti1) as Hcoh. *)
+        (*         rewrite gssThreadRes in Hcoh. *)
+        (*         assumption. *)
+        (*       * pose proof (cntUpdate' _ _ cnti' cntj0) as cntj00. *)
+        (*         pose proof ((locks_data_lock_coh _ Hinv'0 _ _ Hres).1 _ cntj00) as Hcoh. *)
+        (*         erewrite @gsoThreadRes with (cntj := cntj00) by eauto. *)
+        (*         assumption. *)
+        (*     - intros laddr' rmap' Hres'. *)
+        (*       rewrite gsoThreadLPool in Hres'. *)
+        (*       now eapply ((locks_data_lock_coh _ Hinv'0 _ _ Hres).2 _ _ Hres'). *)
+        (*   } *)
+        (*   { simpl. *)
+        (*     unfold OrdinalPool.lr_valid. *)
+        (*     intros. *)
+        (*     rewrite! OrdinalPool.gsoThreadLPool. *)
+        (*     destruct Hinv. *)
+        (*     specialize (lockRes_valid0 b ofs). *)
+        (*     simpl in lockRes_valid0. *)
+        (*     destruct (OrdinalPool.lockRes tp (b,ofs)); *)
+        (*       now auto. *)
+        (*   } *)
           Unshelve. auto.
     Qed.
 
@@ -1796,34 +1802,34 @@ Module StepLemmas.
         reflexivity.
 
 
-        Lemma mem_compatible_addThread:
-          forall tp pmap vf arg m
-            (Hcomp_pmap: permMapLt pmap.1 (getMaxPerm m) /\ permMapLt pmap.2 (getMaxPerm m))
-            (Hcomp: mem_compatible tp m),
-            mem_compatible (addThread tp vf arg pmap) m.
-        Proof.
-          intros.
-          destruct Hcomp.
-          econstructor; intros; eauto.
-          - destruct (cntAdd' _ _ _ cnt) as[[cnt0 ?] | cntLatest].
-            + erewrite @gsoAddRes with (cntj := cnt0) by eauto.
-              now eauto.
-            + subst.
-              erewrite gssAddRes by eauto.
-              now eauto.
-          - rewrite gsoAddLPool in H.
-            now eauto.
-        Qed.
-        (** new state is [mem_compatible] *)
-        eapply mem_compatible_addThread;
-          eauto.
-        eapply initial_core_decay in Hinitial.
-        eapply mem_compatible
-               admit.
-        admit.
+        (* Lemma mem_compatible_addThread: *)
+        (*   forall tp pmap vf arg m *)
+        (*     (Hcomp_pmap: permMapLt pmap.1 (getMaxPerm m) /\ permMapLt pmap.2 (getMaxPerm m)) *)
+        (*     (Hcomp: mem_compatible tp m), *)
+        (*     mem_compatible (addThread tp vf arg pmap) m. *)
+        (* Proof. *)
+        (*   intros. *)
+        (*   destruct Hcomp. *)
+        (*   econstructor; intros; eauto. *)
+        (*   - destruct (cntAdd' _ _ _ cnt) as[[cnt0 ?] | cntLatest]. *)
+        (*     + erewrite @gsoAddRes with (cntj := cnt0) by eauto. *)
+        (*       now eauto. *)
+        (*     + subst. *)
+        (*       erewrite gssAddRes by eauto. *)
+        (*       now eauto. *)
+        (*   - rewrite gsoAddLPool in H. *)
+        (*     now eauto. *)
+        (* Qed. *)
+        (* (** new state is [mem_compatible] *) *)
+        (* eapply mem_compatible_addThread; *)
+        (*   eauto. *)
+        (* eapply initial_core_decay in Hinitial. *)
+        (* eapply mem_compatible *)
+        (*        admit. *)
+        (* admit. *)
         Unshelve.
         assumption.
-    Admitted.
+    Qed.
 
 
     Lemma addThread_internal_execution:
@@ -1900,7 +1906,7 @@ Module StepLemmas.
       - subst.
         inversion H; subst.
         do 2 right.
-        econstructor; eauto.
+        eapply @StartThread with (Hcmpt := Hcomp'); eauto.
         rewrite gRemLockSetCode; auto.
         simpl in *.
         unfold HybridMachine.DryHybridMachine.install_perm in *. subst.
@@ -1908,9 +1914,12 @@ Module StepLemmas.
         simpl.
         erewrite @OrdinalPool.gRemLockSetRes; now eauto.
         eapply ThreadPoolWF.remLock_inv; eauto.
-
+        erewrite @remLock_updThread_comm with (cnti' := cntj').
+        simpl (add_block). unfold HybridMachine.DryHybridMachine.add_block.
+        erewrite <- @gRemLockSetRes with (cnti' := cntj') (cnti := ctn).
+        reflexivity.
         Unshelve.
-        all:assumption.
+        assumption.
     Qed.
 
     Lemma remLock_internal_execution:
@@ -1958,7 +1967,9 @@ Module StepLemmas.
         by rewrite restrPermMap_nextblock in Hcorestep.
       apply Pos.le_refl.
       inversion H. subst.
-      reflexivity.
+      inversion Hperm; subst.
+      eapply initial_core_nextblock in Hinitial;
+        eauto.
     Qed.
 
     Lemma internal_execution_nextblock:
@@ -2174,7 +2185,10 @@ Module StepType.
   Proof.
     intros.
     absurd_internal Hstep.
-    - apply updThreadC_invariant; auto.
+    - inversion Hperm; subst.
+      unfold DryHybridMachine.add_block.
+      eapply initial_core_invariant; simpl; eauto.
+      eapply Hinitial.
     - apply updThreadC_invariant; auto.
     - eapply ev_step_ax1 in Hcorestep.
       eapply corestep_invariant; simpl; eauto.
@@ -2192,9 +2206,10 @@ Module StepType.
   Proof.
     intros.
     absurd_internal Hstep; auto;
-      (* try (apply initial_core_nomem in Hinitial; subst om; simpl machine_semantics.option_proj); *)
       try (eapply StepLemmas.updThreadC_compatible;
-             by eauto).    
+             by eauto).
+    inversion Hperm; subst.
+    eapply start_compatible in Htstep; eauto.
     eapply StepLemmas.mem_compatible_setMaxPerm.
     destruct (at_external semSem c mrestr) eqn:?; try discriminate.
     destruct Hinternal as [[? Hhalted]|[_ ?]]; try discriminate.
@@ -2280,6 +2295,9 @@ Module StepType.
     intros.
     absurd_internal Hstep;
       try reflexivity.
+    inversion Hperm; subst.
+    eapply initial_core_disjoint_val; eauto.
+    eapply Hreadable.
     apply ev_step_ax1 in Hcorestep;
       eapply corestep_disjoint_val;
         by (simpl; eauto).
@@ -2295,6 +2313,10 @@ Module StepType.
     inversion Hstep; clear Hstep; subst; auto.
     inversion Htstep; clear Htstep; subst.
     eauto.
+    eapply CoreLanguage.initial_core_validblock; eauto.
+    inversion Hperm; subst.
+    erewrite restrPermMap_valid;
+      now eauto.
     erewrite diluteMem_valid.
     inversion Htstep; subst; eauto.
     eapply CoreLanguage.ev_step_validblock; eauto.
