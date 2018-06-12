@@ -276,9 +276,9 @@ Module HybridMachineSig.
                     (Hinitial: initial_core semSem tid0
                                             m' c_new m_new vf (arg::nil))
                     (Hinv: invariant ms)
-                    (Hms': updThread ctn (Krun c_new) (add_block Hcmpt ctn m_new) = ms')
-                    (Hcmpt': mem_compatible ms' m_new)
-                    (Hinv': invariant ms'),
+                    (Hms': updThread ctn (Krun c_new) (add_block Hcmpt ctn m_new) = ms'),
+                    (* (Hcmpt': mem_compatible ms' m_new) *)
+                    (* (Hinv': invariant ms')*)
       start_thread m ctn ms' m_new.
 
    (** Resume and Suspend: threads running must be preceded by a Resume
