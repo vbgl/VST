@@ -1794,7 +1794,32 @@ Module StepLemmas.
         unfold HybridMachine.DryHybridMachine.add_block.
         erewrite <- @gsoAddRes with (cntj' := cnti') (cntj := ctn).
         reflexivity.
-        admit.
+
+
+        Lemma mem_compatible_addThread:
+          forall tp pmap vf arg m
+            (Hcomp_pmap: permMapLt pmap.1 (getMaxPerm m) /\ permMapLt pmap.2 (getMaxPerm m))
+            (Hcomp: mem_compatible tp m),
+            mem_compatible (addThread tp vf arg pmap) m.
+        Proof.
+          intros.
+          destruct Hcomp.
+          econstructor; intros; eauto.
+          - destruct (cntAdd' _ _ _ cnt) as[[cnt0 ?] | cntLatest].
+            + erewrite @gsoAddRes with (cntj := cnt0) by eauto.
+              now eauto.
+            + subst.
+              erewrite gssAddRes by eauto.
+              now eauto.
+          - rewrite gsoAddLPool in H.
+            now eauto.
+        Qed.
+        (** new state is [mem_compatible] *)
+        eapply mem_compatible_addThread;
+          eauto.
+        eapply initial_core_decay in Hinitial.
+        eapply mem_compatible
+               admit.
         admit.
         Unshelve.
         assumption.
@@ -1883,6 +1908,7 @@ Module StepLemmas.
         simpl.
         erewrite @OrdinalPool.gRemLockSetRes; now eauto.
         eapply ThreadPoolWF.remLock_inv; eauto.
+
         Unshelve.
         all:assumption.
     Qed.
