@@ -1,3 +1,4 @@
+
 (** * Instantiating the dry and bare machine for X86*)
 
 Require Import VST.concurrency.common.HybridMachine.
@@ -286,7 +287,6 @@ Module X86SEMAxioms.
         eapply IHH1_1; auto. eapply IHH1_2; eauto.
         apply mem_step_nextblock in H1_1.
         unfold Memory.Mem.valid_block in *.
-        eapply Plt_le_trans; eauto.
     Qed.
 
     Lemma corestep_unchanged_on:
@@ -345,23 +345,259 @@ Module X86SEMAxioms.
     Qed.
 
     Lemma initial_core_det:
-      forall i m v args c c',
-        initial_core semSem i m c v args ->
-        initial_core semSem i m c' v args ->
-        c = c'.
+      forall i m m' m'' v args c c',
+        initial_core semSem i m c m' v args ->
+        initial_core semSem i m c' m'' v args ->
+        c = c' /\ m' = m''.
+    Proof.
+    Admitted.
+
+
+    Lemma make_arg_unchanged_on:
+      forall rs m l arg rs' m'
+        (Hmake_args: make_arg rs m l arg = Some (rs', m')),
+        (forall b ofs, ~ Mem.perm m b ofs Cur Writable -> ZMap.get ofs (Mem.mem_contents m) !! b = ZMap.get ofs (Mem.mem_contents m') !! b) /\
+        (forall b ofs k, permission_at m b ofs k = permission_at m' b ofs k) /\
+        (forall b, Mem.valid_block m' b -> Mem.valid_block m b).
     Proof.
       intros.
-      simpl in *.
-      inv H. inv H0.
-      rewrite H1 in H3.
-      inv H3.
-      assert (rs0 = rs2)
-        by reflexivity.
-      erewrite H in *.
-      rewrite H2 in H6.
-      inv H6.
+      unfold make_arg in *.
+      destruct l.
+      inv Hmake_args.
+      repeat split; intros; auto.
+      destruct (Mem.storev (AST.chunk_of_type ty) m (Values.Val.offset_ptr (rs RSP) (Integers.Ptrofs.repr (Stacklayout.fe_ofs_arg + 4 * pos))) arg) eqn:Hstorev;
+        try discriminate.
+      inv Hmake_args.
+      eapply MemoryLemmas.mem_storev_store in Hstorev.
+      destruct Hstorev as [b' [ofs' [? Hstore]]].
+      split.
+      - intros.
+        symmetry.
+          eapply MemoryLemmas.store_contents_other;
+            now eauto.
+      - split.
+        + intros.
+          unfold permission_at.
+          erewrite <- Mem.store_access;
+            now eauto.
+        +  eapply Mem.store_valid_block_2;
+              now eauto.
+    Qed.
+
+    Lemma make_arguments_unchanged_on:
+      forall rs m args ls rs' m'
+        (Hmake_args: make_arguments rs m ls args = Some (rs', m')),
+        (forall b ofs, ~ Mem.perm m b ofs Cur Writable -> ZMap.get ofs (Mem.mem_contents m) !! b = ZMap.get ofs (Mem.mem_contents m') !! b) /\
+        (forall b ofs k, permission_at m b ofs k = permission_at m' b ofs k) /\
+        (forall b, Mem.valid_block m' b -> Mem.valid_block m b).
+    Proof.
+      induction args as [|arg args]; intros.
+      - destruct ls; simpl in Hmake_args; inv Hmake_args.
+        split;
+          [split; reflexivity| auto].
+      - destruct ls; simpl in Hmake_args; [inv Hmake_args|].
+        destruct (make_arguments rs m ls args) eqn:Hmake_args0; try discriminate.
+        destruct p as [rs0 m0].
+        destruct (IHargs _ _ _ Hmake_args0) as [Hvaleq [Hpermeq Hblock_eq]].
+        destruct r.
+        + eapply make_arg_unchanged_on in Hmake_args.
+          destruct Hmake_args as [Hvaleq0 [Hpermeq0 Hblockeq0]].
+          split.
+          * intros.
+            specialize (Hvaleq b ofs ltac:(eauto)).
+            specialize (Hpermeq b ofs).
+            specialize (Hvaleq0 b ofs).
+            specialize (Hpermeq0 b ofs).
+            erewrite Hvaleq by assumption.
+            erewrite Hvaleq0.
+            split; auto.
+            intros.
+            unfold Mem.perm, permission_at in *.
+            erewrite <- Hpermeq; eauto.
+          * split. 
+            intros.
+            erewrite <- Hpermeq0.
+            erewrite <- Hpermeq.
+            auto.
+            intros b' Hvalid'.
+            now eauto.
+        + destruct (make_arg rs0 m0 rhi (Values.Val.hiword arg)) eqn:Hmake_arg; try discriminate.
+          destruct p as [rs1 m1].
+          eapply make_arg_unchanged_on in Hmake_arg; eauto.
+          eapply make_arg_unchanged_on in Hmake_args; eauto.
+          destruct Hmake_arg as [Hvaleq0 [Hpermeq0 Hblockeq0]].
+          destruct Hmake_args as [Hvaleq1 [Hpermeq1 Hblockeq1]].
+          split.
+          * intros.
+            specialize (Hvaleq b ofs ltac:(eauto)).
+            specialize (Hpermeq b ofs).
+            specialize (Hvaleq0 b ofs).
+            specialize (Hpermeq0 b ofs).
+            specialize (Hvaleq1 b ofs).
+            specialize (Hpermeq1 b ofs).
+            erewrite Hvaleq by assumption.
+            erewrite Hvaleq0
+              by (unfold Mem.perm, permission_at in *; erewrite <- Hpermeq; eauto).
+            erewrite Hvaleq1.
+            reflexivity.
+            unfold Mem.perm, permission_at in *.
+            erewrite <- Hpermeq0, <- Hpermeq.
+            eauto.
+          * unfold Mem.perm, permission_at in *.
+            split.
+            intros b ofs k.
+            erewrite Hpermeq;
+                 erewrite Hpermeq0.
+            now eauto.
+            now eauto.
+    Qed.
+
+    Lemma initial_core_unchanged_on :
+      forall (i : nat) (v : Values.val) (args : list Values.val) (c : semC) (m m' : mem) (b : Values.block) (ofs : Z),
+        initial_core semSem i m c m' v args ->
+        Mem.valid_block m b -> ~ Mem.perm m b ofs Cur Writable -> ZMap.get ofs (Mem.mem_contents m) !! b = ZMap.get ofs (Mem.mem_contents m') !! b /\
+                                                                forall k, permission_at m b ofs k = permission_at m' b ofs k.
+    Proof.
+      intros.
+      unfold initial_core in H. simpl in H.
+      destruct H.
+      inv H.
+      simpl.
+      eapply MemoryLemmas.mem_storev_store in H6.
+      destruct H6 as [? [? [? Hstore6]]].
+      eapply MemoryLemmas.mem_storev_store in H5.
+      destruct H5 as [? [? [? Hstore5]]].
+      assert ( ~ Mem.perm m1 b ofs Cur Writable).
+      { intros Hcontra.
+        eapply H1.
+        eapply Mem.perm_alloc_4; eauto.
+        apply Mem.fresh_block_alloc in H4.
+        intros ?; subst;
+          now auto.
+      }
+      assert ( ~ Mem.perm m2 b ofs Cur Writable).
+      { unfold Mem.perm in *.
+        erewrite Mem.store_access with (m2:= m2) (m1 := m1) by eauto.
+        assumption.
+      }
+      assert ( ~ Mem.perm m3 b ofs Cur Writable).
+      { unfold Mem.perm in *.
+        erewrite Mem.store_access with (m2:= m3) (m1 := m2) by eauto.
+        assumption.
+      } 
+      eapply make_arguments_unchanged_on in H7; eauto.
+      destruct H7 as [Hvaleq34 [Hpermeq34 _]].
+      specialize (Hvaleq34 b ofs ltac:(eauto)).
+      specialize (Hpermeq34 b ofs).
+      erewrite <- Hvaleq34.
+      erewrite MemoryLemmas.store_contents_other with (m' := m3); eauto. 
+      erewrite MemoryLemmas.store_contents_other with (m' := m2); eauto.
+      erewrite MemoryLemmas.val_at_alloc_1; eauto.
+      split; [reflexivity|].
+      intros k.
+      erewrite MemoryLemmas.permission_at_alloc_1 with (m' := m1) by eauto.
+      erewrite <- Hpermeq34.
+      unfold permission_at in *.
+      erewrite Mem.store_access with (m2:= m3) (m1 := m2) by eauto.
+      erewrite Mem.store_access with (m2:= m2) (m1 := m1) by eauto.
       reflexivity.
     Qed.
+    
+    Lemma initial_core_decay :
+      forall (i : nat) (v : Values.val) (args : list Values.val) (c : semC) (m m' : mem),
+        initial_core semSem i m c m' v args ->
+        strong_decay m m'.
+    Proof.
+      intros.
+      simpl in H.
+      destruct H as [Hinit ?].
+      subst.
+      inv Hinit.
+      simpl.
+      split.
+      - intros.
+        eapply make_arguments_unchanged_on in H3; eauto.
+        destruct H3 as [Hval3 [Hperm3 Hblock3]].
+        unfold permission_at in Hperm3.
+        eapply MemoryLemmas.mem_storev_store in H1.
+        destruct H1 as [? [? [? Hstore1]]].
+        eapply MemoryLemmas.mem_storev_store in H2.
+        destruct H2 as [? [? [? Hstore2]]].
+        assert (b0 = stk).
+          { eapply Hblock3 in H5.
+            eapply Mem.store_valid_block_2 in H5; eauto.
+            eapply Mem.store_valid_block_2 in H5; eauto.
+            eapply Mem.valid_block_alloc_inv in H0; eauto.
+            destruct H0; [assumption | exfalso; now auto].
+          }
+          subst.
+          destruct (Intv.In_dec ofs (0%Z,(3*size_chunk AST.Mptr))).
+        + left.
+          intros k.
+          erewrite <- Hperm3.
+          erewrite Mem.store_access with (m2 := m3) by eauto.
+          erewrite Mem.store_access with (m2 := m2) by eauto.
+          eapply MemoryLemmas.permission_at_alloc_2 in H0;
+            now eauto.
+        + right.
+          intros k.
+          erewrite <- Hperm3.
+          erewrite Mem.store_access with (m2 := m3) by eauto.
+          erewrite Mem.store_access with (m2 := m2) by eauto.
+          eapply MemoryLemmas.permission_at_alloc_3 in H0;
+            eauto.
+          eapply Intv.range_notin in n; eauto.
+          simpl.
+          unfold AST.Mptr. destruct Archi.ptr64; simpl; omega.
+      - intros Hvalid.
+        eapply make_arguments_unchanged_on in H3; eauto.
+        destruct H3 as [_ [Hperm3 Hblock3]].
+        unfold permission_at in Hperm3.
+        eapply MemoryLemmas.mem_storev_store in H1.
+        destruct H1 as [? [? [? Hstore1]]].
+        eapply MemoryLemmas.mem_storev_store in H2.
+        destruct H2 as [? [? [? Hstore2]]].
+        intros k.
+        erewrite <- Hperm3.
+        erewrite Mem.store_access with (m2 := m3) by eauto.
+        erewrite Mem.store_access with (m2 := m2) by eauto.
+        pose proof (MemoryLemmas.permission_at_alloc_1 _ _ _ _ _ _ ofs H0 Hvalid k) as Heq_perm.
+        unfold permission_at in Heq_perm.
+        assumption.
+    Qed.
+
+    Lemma initial_core_nextblock :
+      forall (i : nat) (v : Values.val) (args : list Values.val) (c : semC) (m m' : mem),
+        initial_core semSem i m c m' v args ->
+        (Mem.nextblock m <= Mem.nextblock m')%positive.
+    Proof.
+      intros.
+      inv H.
+      simpl.
+      inv H0.
+      simpl.
+      eapply make_arguments_unchanged_on in H4.
+      destruct H4 as [_ [_ Hvalid4]].
+      unfold Mem.valid_block, Plt in Hvalid4.
+      eapply Mem.nextblock_alloc in H1.
+      eapply Mem.nextblock_store in H2.
+      eapply Mem.nextblock_store in H3.
+      assert ((Mem.nextblock m4 <= Mem.nextblock m3)%positive).
+      { destruct (Pos.lt_total (Mem.nextblock m4) (Mem.nextblock m3)); auto.
+        eapply Pos.lt_le_incl; eauto.
+        destruct H0. rewrite H0. zify. omega.
+        specialize (Hvalid4 _ H0).
+        exfalso.
+        zify; omega.
+      }
+      clear - H1 H2 H3 H0.
+      rewrite H2 in H3.
+      rewrite H3 in H0.
+      assert (Mem.nextblock m4 = Mem.nextblock m3) by admit.
+      rewrite H.
+      rewrite H3.
+      clear H2 H3 H0.
+    Admitted.
 
     Instance X86Axioms : CoreLanguage.SemAxioms :=
       { corestep_det := corestep_det;

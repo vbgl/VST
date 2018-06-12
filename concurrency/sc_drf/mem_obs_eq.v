@@ -4262,15 +4262,16 @@ Module CoreInjections.
       valid_val f arg -> ge_wd f the_ge -> core_wd f c_new.*)
 
         initial_core_wd :
-          forall m (f : memren) (vf arg : val) (c_new:semC) h,
+          forall m m' (f : memren) (vf arg : val) (c_new:semC) h,
             valid_mem m ->
             domain_memren f m ->
-            initial_core semSem h m c_new vf [:: arg] ->
+            initial_core semSem h m c_new m' vf [:: arg] ->
             valid_val f arg ->
             ge_wd f the_ge ->
-            core_wd f c_new;
-        (* exists f', core_wd f' c_new /\ ren_domain_incr f f' /\  *)
-        (*    (forall b1 b2, f b1 = None -> f' b1 = Some b2 -> ~Mem.valid_block m b1). *)
+            valid_mem m' /\
+            (exists f', ren_domain_incr f f' /\ domain_memren f' m') /\
+            forall f', domain_memren f' m' ->
+                  core_wd f' c_new;
 
         (** Renamings on cores *)
         core_inj: memren -> semC -> semC -> Prop;
@@ -4340,23 +4341,35 @@ Module CoreInjections.
         (* end. *)
 
         core_inj_init:
-          forall m m' vf vf' arg arg' c_new f fg h
+          forall m1 m1' m2 vf vf' arg arg' c_new f fg h
             (Hge_wd: ge_wd fg the_ge)
             (Hfg: (forall b1 b2, fg b1 = Some b2 -> b1 = b2))
             (Hincr: ren_incr fg f)
             (Harg: val_obs_list f arg arg')
             (Hvf: val_obs f vf vf')
-            (Hmem: mem_obs_eq f m m')
-            (Hinit: initial_core semSem h m c_new vf arg),
+            (Hmem: mem_obs_eq f m1 m1')
+            (Hinit: initial_core semSem h m1 c_new m2 vf arg),
           (* (Hf: forall b b', f b = Some b' -> Mem.valid_block m b), *)
-          exists c_new' : semC,
-            initial_core semSem h m' c_new' vf' arg' /\ core_inj f c_new c_new';
-        (* exists f',  *)
-        (*   core_inj f' c_new c_new' /\ *)
-        (* match om with *)
-        (* | None => f'=f /\ om' = None *)
-        (* | Some mm => exists mm', ren_domain_incr f f' /\ ren_separated f f' m m'/\ om'=Some mm'  *)
-        (* end. *)
+          exists c_new' m2' f',
+            initial_core semSem h m1' c_new' m2' vf' arg'
+            /\ core_inj f' c_new c_new'
+            /\ mem_obs_eq f' m2 m2'
+            /\ ren_incr f f'
+            /\ ren_separated f f' m1 m1'
+            /\ ((exists p, ((Mem.nextblock m1' = Mem.nextblock m1 + p)%positive /\
+                      (Mem.nextblock m2' = Mem.nextblock m2 + p)%positive)))
+            /\ (forall b,
+                  Mem.valid_block m2' b ->
+                  ~ Mem.valid_block m2 b ->
+                  let bz := ((Zpos b) - ((Zpos (Mem.nextblock m1')) -
+                                         (Zpos (Mem.nextblock m1))))%Z in
+                  f' (Z.to_pos bz) = Some b /\
+                  f (Z.to_pos bz) = None)
+            /\ (Mem.nextblock m1 = Mem.nextblock m1' ->
+               (forall b1 b2, f b1 = Some b2 -> b1 = b2) ->
+               forall b1 b2, f' b1 = Some b2 -> b1 = b2)
+            /\ (forall b2, (~exists b1, f' b1 = Some b2) ->
+                     forall ofs, permission_at m1' b2 ofs Cur = permission_at m2' b2 ofs Cur);
 
         core_inj_id: forall c f,
             core_wd f c ->
