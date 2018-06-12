@@ -956,34 +956,49 @@ Definition coresem_extract_cenv {M} {core} (CS: @CoreSemantics core M)
 
 Require Import VST.sepcomp.step_lemmas.
 
+(* stub for the "function" that provides main's arguments on the stack *)
+Definition main_handler : Clight.function :=
+  {| Clight.fn_return := Ctypes.Tvoid; Clight.fn_callconv := AST.cc_default; Clight.fn_params := nil;
+     Clight.fn_vars := nil; Clight.fn_temps := nil; Clight.fn_body := Clight.Sskip |}.
+
  Lemma sim_dry_safeN:
-  forall dryspec (prog: Clight.program) b q m h,
-  initial_core (Clight_new.cl_core_sem (globalenv prog)) h m q
+  forall dryspec (prog: Clight.program) b q m m' h,
+  initial_core (Clight_new.cl_core_sem (globalenv prog)) h m q m'
           (Vptr b Ptrofs.zero) nil ->
   (forall n, 
     @dry_safeN _ _ _ _ (@Genv.genv_symb _ _)
-   (coresem_extract_cenv Clight_new.cl_core_sem 
+   (coresem_extract_cenv (Clight_new.cl_core_sem (globalenv prog))
    (prog_comp_env prog)) dryspec 
-   (Build_genv (Genv.globalenv prog) (prog_comp_env prog)) n tt (fst q) m) ->
+   (Build_genv (Genv.globalenv prog) (prog_comp_env prog)) n tt q m) ->
   exists q', 
-  initial_core Clight_core.cl_core_sem h
-           (Build_genv (Genv.globalenv prog) (prog_comp_env prog)) m
-          (Vptr b Ptrofs.zero) nil = Some q' /\
+  initial_core (Clight_core.cl_core_sem (Build_genv (Genv.globalenv prog) (prog_comp_env prog)))
+          h m q' m' (Vptr b Ptrofs.zero) nil /\
   (forall n, 
     @dry_safeN _ _ _ _ (@Genv.genv_symb _ _)
-   (coresem_extract_cenv Clight_core.cl_core_sem 
+   (coresem_extract_cenv (Clight_core.cl_core_sem (Build_genv (Genv.globalenv prog) (prog_comp_env prog)))
    (prog_comp_env prog)) dryspec 
-   (Build_genv (Genv.globalenv prog) (prog_comp_env prog)) n tt (fst q') m).
+   (Build_genv (Genv.globalenv prog) (prog_comp_env prog)) n tt q' m).
 Proof.
 intros.
 simpl in H.
 rewrite if_true in H by auto.
+destruct H as [H ?]; subst.
 destruct (@Genv.find_funct_ptr fundef type (@Genv.globalenv (Ctypes.fundef function) type prog) b) eqn:?; inv H.
 unfold initial_core; simpl.
-rewrite if_true by auto.
-rewrite Heqo.
-eexists; split; [reflexivity|].
+destruct (Mem.alloc m 0 0) as (m', b') eqn: Halloc.
+exists (Callstate f nil (Clight.Kcall None main_handler empty_env (PTree.empty _) Kstop) m'); split.
+{ split; auto; econstructor; eauto.
+  { admit. }
+  { simpl.
+    admit. }
+  { admit. }
+  { constructor. }
+  { constructor. }
+  { constructor. }
+  { admit. }
+  { contradiction. } }
 intro.
+(*specialize (H0 n).
 remember (State empty_env
           (PTree.Node PTree.Leaf (Some (Vptr b Ptrofs.zero)) PTree.Leaf)
           (Kseq
@@ -1074,5 +1089,6 @@ inv H0.
 destruct ret, lid; inv H6; apply H4.
 *
  inv H1.
-Qed.
+Qed.*)
+Admitted.
 
