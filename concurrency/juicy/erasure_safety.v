@@ -245,11 +245,10 @@ Section DrySafety.
                                        (permissions.getCurPerm init_mem)
                                        (initial_Clight_state CPROOF)) init_mem n.
   Proof.
-    rewrite <- initial_Clight_state_correct.
     eapply Clight_new_Clight_safety.
     eapply dry_safety_initial_state.
   Qed.
-    
+
 End DrySafety.
 
 (*  Existing Instance HybridMachineSig.HybridCoarseMachine.DilMem.

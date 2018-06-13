@@ -1,10 +1,9 @@
 Require Import VST.sepcomp.mem_lemmas.
 Require Import VST.concurrency.common.core_semantics.
 Require Import VST.concurrency.memsem_lemmas.
-Require Import VST.sepcomp.simulations.
-Require Import VST.sepcomp.simulations_lemmas.
+(*Require Import VST.sepcomp.simulations.*)
+(*Require Import VST.sepcomp.simulations_lemmas.*)
 (*Require Import VST.sepcomp.compiler_correctness.*)
-
 Require Import VST.veric.base.
 Require Import VST.veric.Clight_lemmas.
 Require Import VST.veric.Clight_new.

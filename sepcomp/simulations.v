@@ -11,7 +11,6 @@ Require Import compcert.common.Globalenvs.
 Require Import compcert.lib.Axioms.
 
 Require Import VST.sepcomp.mem_lemmas.
-Require Import VST.sepcomp.semantics.
 Require Import VST.sepcomp.effect_semantics.
 Require Import VST.sepcomp.structured_injections.
 Require Import VST.sepcomp.reach.
