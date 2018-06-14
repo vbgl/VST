@@ -4764,9 +4764,6 @@ Here be dragons
                 replace Htid with ctn by apply proof_irr; reflexivity.
               - eassumption.
               - replace Htid with ctn by apply proof_irr; reflexivity.
-              - eapply MTCH_compat; eauto.
-                destruct Hinitial; subst; auto.
-              - auto.
             }
       }
 
