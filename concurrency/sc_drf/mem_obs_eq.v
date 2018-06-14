@@ -4262,12 +4262,13 @@ Module CoreInjections.
       valid_val f arg -> ge_wd f the_ge -> core_wd f c_new.*)
 
         initial_core_wd :
-          forall m m' (f : memren) (vf arg : val) (c_new:semC) h,
+          forall m m' (f fg : memren) (vf arg : val) (c_new:semC) h,
             valid_mem m ->
             domain_memren f m ->
             initial_core semSem h m c_new m' vf [:: arg] ->
             valid_val f arg ->
-            ge_wd f the_ge ->
+            ge_wd fg the_ge ->
+            ren_domain_incr fg f ->
             valid_mem m' /\
             (exists f', ren_domain_incr f f' /\ domain_memren f' m') /\
             forall f', domain_memren f' m' ->
@@ -4356,11 +4357,11 @@ Module CoreInjections.
             /\ mem_obs_eq f' m2 m2'
             /\ ren_incr f f'
             /\ ren_separated f f' m1 m1'
-            /\ ((exists p, ((Mem.nextblock m1' = Mem.nextblock m1 + p)%positive /\
-                      (Mem.nextblock m2' = Mem.nextblock m2 + p)%positive)))
+            /\ ((exists p, ((Mem.nextblock m2 = Mem.nextblock m1 + p)%positive /\
+                      (Mem.nextblock m2' = Mem.nextblock m1' + p)%positive)))
             /\ (forall b,
                   Mem.valid_block m2' b ->
-                  ~ Mem.valid_block m2 b ->
+                  ~ Mem.valid_block m1' b ->
                   let bz := ((Zpos b) - ((Zpos (Mem.nextblock m1')) -
                                          (Zpos (Mem.nextblock m1))))%Z in
                   f' (Z.to_pos bz) = Some b /\

@@ -331,7 +331,7 @@ Module HybridMachineSig.
           (HschedN: schedPeek U = Some tid)
           (Htid: containsThread ms tid)
           (Htstep: start_thread m Htid ms' m'),
-          machine_step U tr ms m (yield U) tr ms' m'
+          machine_step U tr ms m (yield U) tr ms' (diluteMem m')
     | resume_step:
         forall tid U ms ms' m tr
           (HschedN: schedPeek U = Some tid)
@@ -461,7 +461,7 @@ Module HybridMachineSig.
                         (HschedN: schedPeek U = Some tid)
                         (Htid: containsThread ms tid)
                         (Htstep: start_thread m Htid ms' m'),
-          external_step U tr ms m (yield U) tr ms' m'
+          external_step U tr ms m (yield U) tr ms' (diluteMem m')
       | resume_step':
           forall tid U ms ms' m tr
             (HschedN: schedPeek U = Some tid)

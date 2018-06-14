@@ -2210,10 +2210,12 @@ Module StepType.
              by eauto).
     inversion Hperm; subst.
     eapply start_compatible in Htstep; eauto.
-    eapply StepLemmas.mem_compatible_setMaxPerm.
+    eapply StepLemmas.mem_compatible_setMaxPerm; eauto.
     destruct (at_external semSem c mrestr) eqn:?; try discriminate.
     destruct Hinternal as [[? Hhalted]|[_ ?]]; try discriminate.
-    eapply corestep_compatible; simpl; eauto.
+    eapply StepLemmas.mem_compatible_setMaxPerm; eauto.
+    eapply corestep_compatible;simpl;
+      now eauto.
   Qed.
   
   Lemma gsoThreadC_fstepI:
@@ -2313,6 +2315,7 @@ Module StepType.
     inversion Hstep; clear Hstep; subst; auto.
     inversion Htstep; clear Htstep; subst.
     eauto.
+    erewrite diluteMem_valid.
     eapply CoreLanguage.initial_core_validblock; eauto.
     inversion Hperm; subst.
     erewrite restrPermMap_valid;

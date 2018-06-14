@@ -286,7 +286,8 @@ Module X86SEMAxioms.
         destruct H; auto.
         eapply IHH1_1; auto. eapply IHH1_2; eauto.
         apply mem_step_nextblock in H1_1.
-        unfold Memory.Mem.valid_block in *.
+        unfold Memory.Mem.valid_block, Plt in *.
+        zify; omega.
     Qed.
 
     Lemma corestep_unchanged_on:
@@ -345,7 +346,7 @@ Module X86SEMAxioms.
     Qed.
 
     Lemma initial_core_det:
-      forall i m m' m'' v args c c',
+      forall i m v args c c' m' m'',
         initial_core semSem i m c m' v args ->
         initial_core semSem i m c' m'' v args ->
         c = c' /\ m' = m''.
@@ -358,7 +359,7 @@ Module X86SEMAxioms.
         (Hmake_args: make_arg rs m l arg = Some (rs', m')),
         (forall b ofs, ~ Mem.perm m b ofs Cur Writable -> ZMap.get ofs (Mem.mem_contents m) !! b = ZMap.get ofs (Mem.mem_contents m') !! b) /\
         (forall b ofs k, permission_at m b ofs k = permission_at m' b ofs k) /\
-        (forall b, Mem.valid_block m' b -> Mem.valid_block m b).
+        (forall b, Mem.valid_block m' b <-> Mem.valid_block m b).
     Proof.
       intros.
       unfold make_arg in *.
@@ -380,7 +381,9 @@ Module X86SEMAxioms.
           unfold permission_at.
           erewrite <- Mem.store_access;
             now eauto.
-        +  eapply Mem.store_valid_block_2;
+        + split;
+            [eapply Mem.store_valid_block_2 |
+             eapply Mem.store_valid_block_1 ];
               now eauto.
     Qed.
 
@@ -389,12 +392,13 @@ Module X86SEMAxioms.
         (Hmake_args: make_arguments rs m ls args = Some (rs', m')),
         (forall b ofs, ~ Mem.perm m b ofs Cur Writable -> ZMap.get ofs (Mem.mem_contents m) !! b = ZMap.get ofs (Mem.mem_contents m') !! b) /\
         (forall b ofs k, permission_at m b ofs k = permission_at m' b ofs k) /\
-        (forall b, Mem.valid_block m' b -> Mem.valid_block m b).
+        (forall b, Mem.valid_block m' b <-> Mem.valid_block m b).
     Proof.
       induction args as [|arg args]; intros.
       - destruct ls; simpl in Hmake_args; inv Hmake_args.
         split;
-          [split; reflexivity| auto].
+          [split; reflexivity| split; auto].
+        tauto.
       - destruct ls; simpl in Hmake_args; [inv Hmake_args|].
         destruct (make_arguments rs m ls args) eqn:Hmake_args0; try discriminate.
         destruct p as [rs0 m0].
@@ -419,8 +423,12 @@ Module X86SEMAxioms.
             erewrite <- Hpermeq0.
             erewrite <- Hpermeq.
             auto.
-            intros b' Hvalid'.
-            now eauto.
+            split;
+            intros Hvalid'.
+            eapply Hblock_eq; eapply Hblockeq0;
+              now eauto.
+            erewrite Hblockeq0; erewrite Hblock_eq;
+              now eauto.
         + destruct (make_arg rs0 m0 rhi (Values.Val.hiword arg)) eqn:Hmake_arg; try discriminate.
           destruct p as [rs1 m1].
           eapply make_arg_unchanged_on in Hmake_arg; eauto.
@@ -449,6 +457,10 @@ Module X86SEMAxioms.
             erewrite Hpermeq;
                  erewrite Hpermeq0.
             now eauto.
+            intros b.
+            split; intros;
+              [erewrite <- Hblock_eq, <- Hblockeq0, <- Hblockeq1 |
+               erewrite Hblockeq1, Hblockeq0, Hblock_eq];
             now eauto.
     Qed.
 
@@ -501,6 +513,16 @@ Module X86SEMAxioms.
       erewrite Mem.store_access with (m2:= m3) (m1 := m2) by eauto.
       erewrite Mem.store_access with (m2:= m2) (m1 := m1) by eauto.
       reflexivity.
+    Qed.
+
+    Corollary initial_core_unchanged_on' :
+      forall (i : nat) (v : Values.val) (args : list Values.val) (c : semC) (m m' : mem) (b : Values.block) (ofs : Z),
+        initial_core semSem i m c m' v args ->
+        Mem.valid_block m b -> ~ Mem.perm m b ofs Cur Writable -> ZMap.get ofs (Mem.mem_contents m) !! b = ZMap.get ofs (Mem.mem_contents m') !! b.
+    Proof.
+      intros.
+      eapply initial_core_unchanged_on;
+        eauto.
     Qed.
     
     Lemma initial_core_decay :
@@ -582,22 +604,21 @@ Module X86SEMAxioms.
       eapply Mem.nextblock_alloc in H1.
       eapply Mem.nextblock_store in H2.
       eapply Mem.nextblock_store in H3.
-      assert ((Mem.nextblock m4 <= Mem.nextblock m3)%positive).
+      assert ((Mem.nextblock m4 = Mem.nextblock m3)%positive).
       { destruct (Pos.lt_total (Mem.nextblock m4) (Mem.nextblock m3)); auto.
-        eapply Pos.lt_le_incl; eauto.
-        destruct H0. rewrite H0. zify. omega.
-        specialize (Hvalid4 _ H0).
         exfalso.
+        pose proof (proj2 (Hvalid4 (Mem.nextblock m4)) H0).
+        zify; omega.
+        destruct H0; auto.
+        exfalso.
+        pose proof (proj1 (Hvalid4 (Mem.nextblock m3)) H0).
         zify; omega.
       }
       clear - H1 H2 H3 H0.
-      rewrite H2 in H3.
-      rewrite H3 in H0.
-      assert (Mem.nextblock m4 = Mem.nextblock m3) by admit.
-      rewrite H.
-      rewrite H3.
-      clear H2 H3 H0.
-    Admitted.
+      rewrite H0, H3, H2, H1.
+      clear.
+      zify; omega.
+    Qed.
 
     Instance X86Axioms : CoreLanguage.SemAxioms :=
       { corestep_det := corestep_det;
@@ -605,7 +626,10 @@ Module X86SEMAxioms.
         corestep_decay := corestep_decay;
         corestep_nextblock := corestep_nextblock;
         at_external_halted_excl := at_external_halted_excl;
-        initial_core_det := initial_core_det
+        initial_core_det := initial_core_det;
+        initial_core_unchanged_on := initial_core_unchanged_on';
+        initial_core_decay := initial_core_decay;
+        initial_core_nextblock := initial_core_nextblock
       }.
                                                     
   End X86Context.

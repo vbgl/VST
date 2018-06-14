@@ -858,32 +858,43 @@ Module X86Inj.
     intros.
     destruct loc.
     - now inversion Hmake_args.
-    - destruct loc. Focus 2.
-      inversion Hmake_args.
+    - destruct loc.
+      2:{ inversion Hmake_args. }
       simpl in Hmake_args.
       destruct r.
       eapply make_arg_wd in Hmake_args; now eauto.
-      destruct arg; try discriminate.
-      destruct (make_arg rs m rhi (Vint (Int64.hiword i))) eqn:Hmake_hi; try discriminate.
+      (* destruct arg; try discriminate.  *)
+      destruct (make_arg rs m rhi (Val.hiword arg)) eqn:Hmake_hi; try discriminate.
       destruct p as [r0 m0].
-      eapply make_arg_wd in Hmake_hi; eauto.
+      eapply make_arg_wd in Hmake_hi; eauto with wd.
       destruct Hmake_hi as [? [? ?]].
       eapply make_arg_wd in Hmake_args;
-        now eauto.
+        now eauto with wd.
   Qed.
   
   Lemma initial_core_wd :
-    forall the_ge m (f : memren) (vf arg : val) (c_new : state) h,
+    forall the_ge m m' (f : memren) (vf arg : val) (c_new : state) h,
       valid_mem m ->
       domain_memren f m ->
-      initial_core (Asm_core_sem the_ge) h m c_new vf [:: arg] ->
-      valid_val f arg -> ge_wd f the_ge -> core_wd f c_new.
+      initial_core (Asm_core_sem the_ge) h m c_new m' vf [:: arg] ->
+      valid_val f arg -> ge_wd f the_ge ->
+      valid_mem m' /\
+      (exists f', ren_domain_incr f f' /\ domain_memren f' m') /\
+      forall f', domain_memren f' m' ->
+            core_wd f' c_new.
   Proof.
     intros.
     simpl in *.
+    destruct H1 as [H1 ?].
+    subst; simpl.
     inv H1.
     simpl.
-    eapply make_arguments_wd in H5; eauto.
+    pose (fun b => if Pos.eq_dec b stk
+    split.
+    - unfold valid_mem.
+      intros b0 Hvalid0 ofs mv.
+
+    eapply make_arguments_wd in H8; eauto.
     destruct H5; eauto.
     unfold rs0.
     apply regset_wd_set; auto with wd.
