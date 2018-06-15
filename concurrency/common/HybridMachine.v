@@ -22,7 +22,7 @@ Require Import Coq.Program.Program.
 (*Require Import VST.concurrency.common.safety.
 Require Import VST.concurrency.common.coinductive_safety.*)
 
-Require Import VST.veric.res_predicates.
+(* Require Import VST.veric.res_predicates. *)
 (* Require Import VST.veric.Clight_new. *)
 
 Require Import VST.concurrency.common.HybridMachineSig.
@@ -645,7 +645,7 @@ Module DryHybridMachine.
               replace cnt with cnt' in H by apply cnt_irr;
                 rewrite H' in H; inversion H
             end.
-        + inv H; 
+        + inversion H; subst; 
 (*        try erewrite <- age_getThreadCode;*)
              try rewrite gLockSetCode;
              try rewrite gRemLockSetCode;
@@ -657,7 +657,7 @@ Module DryHybridMachine.
              exact Hcode.
       - destruct (NatTID.eq_tid_dec i j).
         + subst j.
-          inv H;
+          inversion H; subst;
             match goal with
             | [ H: getThreadC ?cnt = Krun ?c,
                    H': getThreadC ?cnt' = Kblocked ?c' |- _ ] =>
@@ -671,7 +671,7 @@ Module DryHybridMachine.
           (*AQCUIRE*)
           replace cnt with cnt0 by apply cnt_irr;
             exact Hcode.
-        + inv H;
+        + inversion H; subst;
             match goal with
             | [ H: getThreadC ?cnt = Krun ?c,
                    H': getThreadC ?cnt' = Kblocked ?c' |- _ ] =>

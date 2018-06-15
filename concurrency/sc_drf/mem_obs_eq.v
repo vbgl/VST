@@ -4027,6 +4027,232 @@ Lemma setPermBlock_var_eq:
   Qed.
   Opaque Mem.free.
 
+  Lemma alloc_obs_eq:
+    forall f m m' lo hi m2 m2' b b'
+      (Hobs_eq: mem_obs_eq f m m')
+      (Halloc: Mem.alloc m lo hi = (m2, b))
+      (Halloc': Mem.alloc m' lo hi = (m2', b')),
+    exists f',
+      f' b = Some b' /\
+      mem_obs_eq f' m2 m2' /\
+      ren_incr f f' /\
+      ren_separated f f' m m' /\
+      (exists p : positive,
+           Mem.nextblock m2 = (Mem.nextblock m + p)%positive /\
+           Mem.nextblock m2' = (Mem.nextblock m' + p)%positive) /\
+      (forall b0 : block,
+          Mem.valid_block m2' b0 ->
+          ~ Mem.valid_block m' b0 ->
+          f'
+            (Z.to_pos
+               match - Z.pos_sub (Mem.nextblock m') (Mem.nextblock m) with
+               | 0 => Z.pos b0
+               | Z.pos y' => Z.pos (b0 + y')
+               | Z.neg y' => Z.pos_sub b0 y'
+               end) = Some b0 /\
+          f
+            (Z.to_pos
+               match - Z.pos_sub (Mem.nextblock m') (Mem.nextblock m) with
+               | 0 => Z.pos b0
+               | Z.pos y' => Z.pos (b0 + y')
+               | Z.neg y' => Z.pos_sub b0 y'
+               end) = None) /\
+      (Mem.nextblock m = Mem.nextblock m' ->
+       (forall b1 b3 : block, f b1 = Some b3 -> b1 = b3) ->
+       forall b1 b0 : block, f' b1 = Some b0 -> b1 = b0).
+  Proof.
+    intros.
+    exists (fun b => if valid_block_dec m b then f b else
+               if valid_block_dec m2 b then Some b' else None).
+    split.
+    { destruct (valid_block_dec m b); simpl.
+      apply Mem.alloc_result in Halloc.
+      unfold Mem.valid_block in *.
+      subst.
+      exfalso;
+        by apply Pos.lt_irrefl in v.
+      destruct (valid_block_dec m2 b); first by reflexivity.
+      apply Mem.valid_new_block in Halloc;
+        by exfalso.
+    } split.
+    { constructor.
+      - (*weak_mem_obs_eq*)
+        constructor.
+        + (*domain_invalid*)
+          intros b1 Hinvalid.
+          assert (Hinvalid0: ~ Mem.valid_block m b1)
+            by (intro; eapply Mem.valid_block_alloc in H; eauto).
+          destruct (valid_block_dec m b1); try by exfalso.
+          destruct (valid_block_dec m2 b1); try by exfalso.
+          reflexivity.
+        + (*domain_valid*)
+          intros b1 Hvalid.
+          (* by case analysis on whether this is the fresh block or an older one*)
+          pose proof (Mem.valid_block_alloc_inv _ _ _ _ _ Halloc _ Hvalid) as H.
+          destruct H as [Heq | Hvalid0].
+          * subst.
+            assert (Hinvalid := Mem.fresh_block_alloc _ _ _ _ _ Halloc).
+            destruct (valid_block_dec m b); try by exfalso.
+            destruct (valid_block_dec m2 b); try by exfalso.
+            simpl; eexists; reflexivity.
+          * destruct (valid_block_dec m b1); try by exfalso.
+            simpl;
+              by apply (domain_valid (weak_obs_eq Hobs_eq)).
+        + (*Codomain valid*)
+          intros b1 b2 Hmapped.
+          destruct (valid_block_dec m b1); simpl in *.
+          * apply (codomain_valid (weak_obs_eq Hobs_eq)) in Hmapped.
+            eapply Mem.valid_block_alloc; eauto.
+          * destruct (valid_block_dec m2 b1); simpl in *; try discriminate.
+            inv Hmapped.
+            eapply Mem.valid_new_block;
+              by eauto.
+        + (* injective *)
+          intros b1 b1' b2 Hf1 Hf1'.
+          destruct (valid_block_dec m b1); simpl in *.
+          * destruct (valid_block_dec m b1'); simpl in *;
+              first by (eapply (injective (weak_obs_eq Hobs_eq)); eauto).
+            exfalso.
+            destruct (valid_block_dec m2 b1'); simpl in *; try discriminate.
+            inv Hf1'.
+            apply (codomain_valid (weak_obs_eq Hobs_eq)) in Hf1.
+            apply Mem.fresh_block_alloc in Halloc'.
+            auto.
+          * destruct (valid_block_dec m b1'); simpl in *.
+            destruct (valid_block_dec m2 b1); simpl in *; try discriminate.
+            inv Hf1.
+            apply (codomain_valid (weak_obs_eq Hobs_eq)) in Hf1'.
+            apply Mem.fresh_block_alloc in Halloc';
+              by auto.
+            destruct (valid_block_dec m2 b1); simpl in *; try discriminate.
+            destruct (valid_block_dec m2 b1'); simpl in *; try discriminate.
+            inv Hf1; inv Hf1'.
+            eapply Mem.valid_block_alloc_inv in v0; eauto.
+            eapply Mem.valid_block_alloc_inv in v; eauto.
+            destruct v, v0; subst; eauto; try by exfalso.
+        + (* m permissions are higher than m' permissions *)
+          intros. erewrite alloc_perm_eq by eauto.
+          apply permissions.po_refl.
+      - constructor;
+          first by (intros; erewrite <- alloc_perm_eq; eauto).
+        intros.
+        destruct (valid_block_dec m b1); simpl in *.
+        + erewrite <- val_at_alloc_1; eauto.
+          erewrite <- val_at_alloc_1 with (m' := m2')
+            by (eauto; eapply (codomain_valid (weak_obs_eq Hobs_eq)); eauto).
+          assert (Heq := permission_at_alloc_1 _ _ _ _ _ _ ofs Halloc v Cur).
+          unfold permissions.permission_at in Heq.
+          pose proof (val_obs_eq (strong_obs_eq Hobs_eq) _ ofs Hrenaming).
+          unfold Mem.perm in *.
+          rewrite Heq in H.
+          specialize (H Hperm).
+          eapply memval_obs_eq_incr; eauto.
+          destruct (valid_block_dec m b1); try by exfalso.
+          simpl; auto.
+          intros b1' b2' Hf'.
+          destruct (valid_block_dec m b1'); simpl. auto.
+          apply (domain_invalid (weak_obs_eq Hobs_eq)) in n; by congruence.
+        + destruct (valid_block_dec m2 b1); simpl in *; try discriminate.
+          inv Hrenaming.
+          eapply Mem.valid_block_alloc_inv in v; eauto.
+          destruct v as [? | ?]; try by exfalso.
+          subst.
+          erewrite val_at_alloc_2; eauto.
+          erewrite val_at_alloc_2; eauto.
+          constructor.
+    } split.
+    { intros ? ? ?.
+      destruct (valid_block_dec m b0); simpl; auto.
+      apply (domain_invalid (weak_obs_eq Hobs_eq)) in n; by congruence.
+    } split.
+    { intros ? ? Hf Hf'.
+      destruct (valid_block_dec m b1); simpl in *; try congruence.
+      destruct (valid_block_dec m2 b1); simpl in *; try congruence.
+      inv Hf'.
+      split; auto.
+      intro Hcontra.
+      apply Mem.fresh_block_alloc in Halloc';
+        auto.
+    } split.
+    { exists 1%positive.
+      erewrite Mem.nextblock_alloc; eauto.
+      erewrite Mem.nextblock_alloc with (m2 := m2'); eauto.
+      do 2 rewrite Pplus_one_succ_r; split; reflexivity.
+    } split.
+    { intros b1 Hvalid2' Hinvalid'.
+      eapply Mem.valid_block_alloc_inv in Hvalid2'; eauto.
+      destruct Hvalid2'; subst; try by exfalso.
+      assert (Hle: (Mem.nextblock m <= Mem.nextblock m')%positive)
+        by (eapply weak_mem_obs_eq_nextblock; destruct Hobs_eq; eauto).
+      (* We either need to keep this as an extra invariant or make a
+      pigeon hole argument. Since f maps every valid block of memory m
+      to a valid block of memory m', it has to be that memory m' is at
+      least as big as memory m', because f is injective so no two
+      blocks can be mapped to the same location*)
+      match goal with
+      | [|- context[match proj_sumbool (valid_block_dec ?M ?Expr) with _ => _ end]] =>
+        destruct (valid_block_dec M Expr)
+      end.
+      - exfalso.
+        apply Pos.lt_eq_cases in Hle.
+        destruct Hle as [Hlt | Heq].
+        +  rewrite Z.pos_sub_gt in v; auto.
+           simpl in v.
+           unfold Mem.valid_block, Plt in *.
+           rewrite <- Pos.le_nlt in Hinvalid'.
+           assert (H := threads_lemmas.le_sub Hlt Hinvalid').
+           erewrite Pos.le_nlt in H.
+           auto.
+        + rewrite Heq in v.
+          rewrite Z.pos_sub_diag in v. simpl in v.
+          unfold Mem.valid_block in *.
+          rewrite Heq in v.
+          auto.
+      - simpl.
+        match goal with
+        | [|- context[match proj_sumbool (valid_block_dec ?M ?Expr) with _ => _ end]] =>
+          destruct (valid_block_dec M Expr)
+        end; simpl.
+        + split; auto.
+          apply (domain_invalid (weak_obs_eq Hobs_eq)); auto.
+        + exfalso.
+          apply Mem.alloc_result in Halloc'. subst b'.
+          apply Pos.lt_eq_cases in Hle.
+          destruct Hle as [Hlt | Heq].
+          * rewrite Z.pos_sub_gt in n0; auto.
+            simpl in n0.
+            unfold Mem.valid_block, Plt in *.
+            rewrite <- Pos.le_nlt in n0.
+            erewrite Mem.nextblock_alloc in n0 by eauto.
+            clear - Hlt n0.
+            assert (Hcontra := threads_lemmas.lt_sub_bound Hlt).
+            erewrite Pos.le_nlt in n0. auto.
+          * rewrite Heq in n0.
+            rewrite Z.pos_sub_diag in n0. simpl in n0.
+            unfold Mem.valid_block, Plt in *.
+            rewrite <- Heq in n0.
+            erewrite Mem.nextblock_alloc with (m2 := m2) in n0 by eauto.
+            zify; omega.
+    }
+    { intros Hnext Hid b1 b2.
+      destruct (valid_block_dec m b1); simpl; auto.
+      destruct (valid_block_dec m2 b1); simpl; intros; try discriminate.
+      inv H.
+      assert (b1 = b).
+      { clear - Halloc n v.
+        unfold Mem.valid_block, Plt in *.
+        erewrite Mem.nextblock_alloc in v; eauto.
+        rewrite <- Pos.le_nlt in n.
+        apply Pos.lt_eq_cases in n; destruct n.
+        exfalso. zify. omega.
+        rewrite H in v.
+        apply Mem.alloc_result in Halloc; subst; auto.
+      } subst b1.
+      apply Mem.alloc_result in Halloc'. subst.
+      apply Mem.alloc_result in Halloc; subst; auto.
+    }
+  Qed.
+  
   Lemma valid_pointer_ren:
     forall f m m' b1 b2 ofs
       (Hmem_obs_eq: mem_obs_eq f m m')
@@ -4335,11 +4561,6 @@ Module CoreInjections.
         core_inj_halted:
           forall c c' f (Hinj: core_inj f c c') v,
             halted semSem c v <-> halted semSem c' v;
-        (* match halted semSem c, halted semSem c' with *)
-        (* | Some v, Some v' => val_obs f v v' *)
-        (* | None, None => True *)
-        (* | _, _ => False *)
-        (* end. *)
 
         core_inj_init:
           forall m1 m1' m2 vf vf' arg arg' c_new f fg h
