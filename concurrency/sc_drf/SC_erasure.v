@@ -1531,6 +1531,64 @@ Module MemErasure.
     auto.
   Qed.
 
+
+  Lemma memval_erasure_list_length:
+    forall mv mv',
+      memval_erasure_list mv mv' ->
+      length mv = length mv'.
+  Proof.
+    intros.
+    induction H; simpl;
+      now eauto.
+  Qed.
+  
+   Lemma storebytes_erasure:
+    forall m m' b ofs mv mv' m2
+      (Hstore: Mem.storebytes m b ofs mv = Some m2)
+      (Herased: mem_erasure m m')
+      (Hval_erasure: memval_erasure_list mv mv') ,
+    exists m2', Mem.storebytes m' b ofs mv' = Some m2'
+           /\ mem_erasure m2 m2'.
+  Proof.
+    intros.
+    destruct Herased.
+    Transparent Mem.storebytes.
+    unfold Mem.storebytes in *.
+    destruct (Mem.range_perm_dec m b ofs (ofs + Z.of_nat (length mv)) Cur Writable);
+      try discriminate.
+    inv Hstore.
+    erewrite <- memval_erasure_list_length by eauto.
+    eexists.
+    split.
+    - apply pred_dec_true.
+      intros ofs' Hrange.
+      specialize (r _ Hrange).
+      assert (Mem.valid_block m' b).
+      { destruct (valid_block_dec m' b); auto.
+        unfold Mem.valid_block in *.
+        rewrite <- erased_nb0 in n.
+        apply Mem.nextblock_noaccess with (ofs := ofs') (k := Cur) in n.
+        unfold Mem.perm in r.
+        rewrite n in r. simpl in r; by exfalso.
+      }
+      apply perm_le0 with (ofs := ofs') (k := Cur) in H.
+      unfold Mem.perm. rewrite H. simpl; constructor.
+    - econstructor.
+      + intros.
+        unfold Mem.valid_block, Plt in *.
+        simpl in *.
+        eauto.
+      + intros.
+        simpl.
+      rewrite ! PMap.gsspec.
+      destruct (peq b0 b). subst b0.
+      apply setN_erasure;
+        now auto.
+      now eauto.
+      + simpl.
+        assumption.
+  Qed.
+  
   Lemma loadbytes_erasure:
     forall m m' b ofs sz bytes
       (Hmem_erasure: mem_erasure m m')
@@ -1896,12 +1954,14 @@ Module CoreErasure.
             core_erasure c2 c2';
 
         erasure_initial_core:
-          forall h v arg v' arg' c m m'
+          forall h v arg v' arg' c m m' m2
             (Hv: val_erasure v v')
             (Harg: val_erasure arg arg')
             (Hmem_erase: mem_erasure m m')
-            (Hinit: initial_core semSem h m c v [:: arg]),
-            initial_core semSem h m' c v' [:: arg']; (*strange that this is not c'*)
+            (Hinit: initial_core semSem h m c m2 v [:: arg]),
+            exists m2',
+              initial_core semSem h m' c m2' v' [:: arg'] /\
+              mem_erasure m2 (erasePerm m2');
 
         halted_erase:
           forall c c' n
@@ -2062,6 +2122,23 @@ Module ThreadPoolErasure.
     now eauto.
   Qed.
 
+  Lemma erased_updThread':
+    forall tp tp' i (cnti: containsThread tp i)
+      (cnti': containsThread tp' i) c c' pmap pmap',
+      threadPool_erasure tp tp' ->
+      ctl_erasure c c' ->
+      threadPool_erasure (updThread cnti c pmap)
+                         (updThread cnti' c' pmap').
+  Proof.
+    intros.
+    inversion H.
+    constructor; auto.
+    intros.
+    destruct (i0 == i) eqn:Heq; move/eqP:Heq=>Heq.
+    subst. rewrite! gssThreadCode; now auto.
+    rewrite! gsoThreadCode; now eauto.
+  Qed.
+
   Lemma erased_updThreadC:
     forall tp tp' i (cnti: containsThread tp i)
       (cnti': containsThread tp' i) c c',
@@ -2151,8 +2228,7 @@ Module SCErasure.
     Context {Sem: Semantics}
             {SemAxioms: SemAxioms}
             {CE: CoreErasure}
-            {initU: seq.seq nat}
-            {init_mem: option mem}.
+            {initU: seq.seq nat}.
     
 
     Existing Instance OrdinalPool.OrdinalThreadPool.
@@ -2198,7 +2274,7 @@ Module SCErasure.
     Notation threadHaltedE := (@threadHalted BareMachine.resources _ OrdinalPool.OrdinalThreadPool
                                              BareMachine.BareMachineSig).
     
-    Notation fstep := (corestep (@fine_semantics _ initU init_mem)).
+    Notation fstep := (corestep (@fine_semantics _ initU)).
     Notation scstep := (corestep (@bare_semantics _ initU)).
     Notation fsafe := (@HybridFineMachine.fsafe DryHybridMachine.dryResources _ OrdinalPool.OrdinalThreadPool
                                                   DryHybridMachine.DryHybridMachineSig FineDilMem).
@@ -2357,16 +2433,17 @@ Module SCErasure.
              end.
 
     Lemma startStep_erasure:
-      forall tp1 tp1' tp2 m1 m1' i
+      forall tp1 tp1' tp2 m1 m1' m2 i
         (HerasePool: threadPool_erasure tp1 tp1')
         (Herase_mem: mem_erasure m1 m1')
         (cnti: containsThread tp1 i)
         (cnti': ThreadPool.containsThread tp1' i)
         (Hcomp1': mem_compatible tp1' m1')
-        (Hstep: start_threadF m1 cnti tp2 m1),
-      exists tp2',
-        start_threadE m1' cnti' tp2' m1' /\
-        threadPool_erasure tp2 tp2'.
+        (Hstep: start_threadF m1 cnti tp2 m2),
+      exists tp2' m2',
+        start_threadE m1' cnti' tp2' m2' /\
+        threadPool_erasure tp2 tp2' /\
+        mem_erasure m2 (erasePerm m2').
     Proof.
       intros.
       inversion HerasePool as [Hnum Hthreads].
@@ -2386,17 +2463,19 @@ Module SCErasure.
              | [H: val_erasure (Vptr _ _) _ |- _] => inv H
              end; subst.
       eapply @erasure_initial_core with (m' := m1') in Hinitial; eauto.
-      exists (updThreadC cnti' (Krun c_new)).
-      split.
+      destruct Hinitial as [m2' [Hinitial2' Hmem_erasure2]].
+      exists (updThread cnti' (Krun c_new) (add_block Hcomp1' cnti' m2')), m2'.
+      split; [|split].
       - eapply @StartThread with (Hcmpt := Hcomp1'); eauto.
         unfold install_perm.
         simpl.
         unfold BareMachine.install_perm.
         reflexivity.
-      -  eapply erased_updThreadC; eauto.
+      - eapply erased_updThread'; eauto.
          simpl.
          now apply core_erasure_refl.
-      - inversion Hperm.
+      - assumption.
+      - inversion Hperm; subst.
         eapply mem_erasure_restr;
           now eauto.
     Qed.
@@ -2569,15 +2648,13 @@ Module SCErasure.
             end;
         assert (Hcomp1' : mem_compatible tp1' m1')
           by (simpl; unfold BareMachine.mem_compatible; auto).
-      - assert (m1 = m2)
-          by (inversion Htstep; auto); subst m2.
+      - (* start thread case *)
         assert (Hstep' := startStep_erasure HerasePool Hmem_erasure H Hcomp1' Htstep).
-        destruct Hstep' as [tp2' [Hstart' HerasePool']].
-        exists tp2', m1', tr1'.
+        destruct Hstep' as [tp2' [m2' [Hstart' [HerasePool' Herasemem']]]].
+        exists tp2', (@diluteMem BareDilMem m2'), tr1'.
         split. econstructor 1; simpl; eauto.
         simpl in *; subst.
-        split;
-          now eauto.
+        split; eauto...
       - assert (Hstep' := resumeStep_erasure HerasePool Hmem_erasure H Hcomp1' Htstep).
         destruct Hstep' as [tp2' [Hstart' HerasePool']].
         exists tp2', m1', tr1'.
@@ -2589,7 +2666,8 @@ Module SCErasure.
                              & Hmem_erasure' & Htr_erasure').
         exists tp2', (@diluteMem BareDilMem m2'), (tr1' ++ map [eta Events.internal tid] ev').
         split.
-        replace U with (yield (tid :: U)) at 2.
+        assert (Hsched: U = @yield HybridFineMachine.scheduler (tid :: U)) by reflexivity.
+        rewrite Hsched.
         eapply thread_step; eauto.
         split...
         simpl in *; subst.
@@ -2662,9 +2740,9 @@ Module SCErasure.
     (** The initial state of the SC machine is an erasure of the initial
   state of the FineConc machine*)
     Lemma init_erasure:
-      forall f arg U tpsc tpf m
-        (HinitSC: bare_init initU m (U, [::], tpsc) f arg)
-        (HinitF: tpf_init initU init_mem m (U, [::], tpf) f arg),
+      forall f arg U tpsc tpf m m'
+        (HinitSC: bare_init initU m (U, [::], tpsc) m' f arg)
+        (HinitF: tpf_init initU m (U, [::], tpf) m' f arg),
         threadPool_erasure tpf tpsc.
     Proof.
       intros.
@@ -2672,7 +2750,6 @@ Module SCErasure.
       simpl in *. unfold BareMachine.init_mach, DryHybridMachine.init_mach in *.
       destruct HinitSC as [? [csc [HinitSC Htpsc]]].
       destruct HinitF as [? [csf [HinitF Htpf]]].
-      destruct (init_perm init_mem); try by exfalso.
       simpl in *. unfold OrdinalPool.mkPool in *.
       simpl in *.
       econstructor; subst; simpl;
@@ -2767,28 +2844,27 @@ Module SCErasure.
 
     (** Final erasure theorem from FineConc to SC*)
     Theorem sc_erasure:
-      forall n f arg tpsc tpf m
-        (Hmem: init_mem = Some m)
-        (HinitSC: bare_init initU m (initU, [::], tpsc) f arg)
-        (HinitF: tpf_init initU init_mem m (initU, [::], tpf) f arg)
-        (HsafeF: fsafe tpf (@diluteMem FineDilMem m) initU n),
-        sc_safe tpsc (@diluteMem BareDilMem m) initU n /\
+      forall n f arg tpsc tpf m m'
+        (HinitSC: bare_init initU m (initU, [::], tpsc) m' f arg)
+        (HinitF: tpf_init initU m (initU, [::], tpf) m' f arg)
+        (HsafeF: fsafe tpf (@diluteMem FineDilMem m') initU n),
+        sc_safe tpsc (@diluteMem BareDilMem m') initU n /\
         (forall tpf' mf' tr,
-            fexecution (initU, [::], tpf) (@diluteMem FineDilMem m)
+            fexecution (initU, [::], tpf) (@diluteMem FineDilMem m')
                            ([::], tr, tpf') mf' ->
             exists tpsc' msc' tr',
-              sc_execution (initU, [::], tpsc) (@diluteMem BareDilMem m)
+              sc_execution (initU, [::], tpsc) (@diluteMem BareDilMem m')
                            ([::], tr', tpsc') msc' /\
               threadPool_erasure tpf' tpsc' /\ mem_erasure mf' msc' /\
               trace_erasure tr tr').
     Proof with eauto.
       intros.
       assert (HpoolErase := init_erasure HinitSC HinitF).
-      assert (HmemErase : mem_erasure (@diluteMem FineDilMem m) (@diluteMem BareDilMem m)).
+      assert (HmemErase : mem_erasure (@diluteMem FineDilMem m') (@diluteMem BareDilMem m')).
       { eapply mem_erasure_dilute_1.
         econstructor; eauto.
         intros.
-        assert (Hvalid: Mem.valid_block m b)
+        assert (Hvalid: Mem.valid_block m' b)
           by (unfold Mem.valid_block, diluteMem, erasePerm in *;
               simpl in *; auto).
         assert (Hperm:= erasePerm_V ofs k Hvalid).
@@ -2806,12 +2882,11 @@ Module SCErasure.
     Qed.
 
     Corollary init_fsafe_implies_scsafe:
-      forall n f arg tpsc tpf m
-        (Hmem: init_mem = Some m)
-        (HinitSC: bare_init initU m (initU, [::], tpsc) f arg)
-        (HinitF: tpf_init initU init_mem m (initU, [::], tpf) f arg)
-        (HsafeF: fsafe tpf (@diluteMem FineDilMem m) initU n),
-        sc_safe tpsc (@diluteMem BareDilMem m) initU n.
+      forall n f arg tpsc tpf m m'
+        (HinitSC: bare_init initU m (initU, [::], tpsc) m' f arg)
+        (HinitF: tpf_init initU m (initU, [::], tpf) m' f arg)
+        (HsafeF: fsafe tpf (@diluteMem FineDilMem m') initU n),
+        sc_safe tpsc (@diluteMem BareDilMem m') initU n.
     Proof.
       intros.
       exploit sc_erasure; eauto.

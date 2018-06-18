@@ -25,8 +25,8 @@ Require Import Coq.ZArith.ZArith.
 Require Import VST.concurrency.common.threads_lemmas.
 Require Import VST.concurrency.common.permissions.
 Require Import VST.concurrency.common.HybridMachineSig.
+Require Import VST.concurrency.common.x86_context.
 Require Import VST.concurrency.sc_drf.SC_erasure.
-Require Import VST.concurrency.sc_drf.x86_context.
 Require Import Coqlib.
 Require Import VST.msl.Coqlib2.
 
@@ -39,8 +39,8 @@ Module X86CoreErasure.
   Section X86Context.
 
     Variable the_program: Asm.program.
-    Variable Hsafe : Asm_core.safe_genv (the_ge the_program).
-    Instance X86Sem : Semantics := X86Context.X86Sem the_program Hsafe.
+    Variable Hsafe : Asm_core.safe_genv (@the_ge the_program).
+    Instance X86Sem : Semantics := @X86Context.X86Sem the_program Hsafe.
     Definition reg_erasure (r:PregEq.t) (rs rs' : regset) : Prop :=
       val_erasure (Pregmap.get r rs) (Pregmap.get r rs').
     
@@ -106,7 +106,7 @@ Module X86CoreErasure.
 
     Hint Resolve regs_erasure_get regs_erasure_refl regs_erasure_set : regs_erasure.
 
-    Notation the_ge := (the_ge the_program).
+    Notation the_ge := (@the_ge the_program).
     (** ** Result about at_external, after_external and initial_core *)
 
     Lemma get_extcall_arg_erase:
@@ -252,12 +252,12 @@ Module X86CoreErasure.
     Lemma make_arguments_nil_erasure:
       forall rs rs2 rs' m m2 m' locs
         (Hregs: regs_erasure rs rs')
-        (Hmem: mem_erasure m m')
+        (Hmem: mem_erasure' m m')
         (Hmake: make_arguments rs m locs [::] = Some (rs2, m2)),        
       exists rs2' m2',
         make_arguments rs' m' locs [:: ] = Some (rs2', m2') /\
         regs_erasure rs2 rs2' /\
-        mem_erasure m2 m2'.
+        mem_erasure' m2 m2'.
     Proof.
       destruct locs; intros.
       - simpl in *.
@@ -270,7 +270,7 @@ Module X86CoreErasure.
     Lemma make_arguments_nil_locs:
       forall rs rs2 rs' m m2 m' locs
         (Hregs: regs_erasure rs rs')
-        (Hmem: mem_erasure m m')
+        (Hmem: mem_erasure' m m')
         (Hmake: make_arguments rs m locs [::] = Some (rs2, m2)),
         locs = [::].
     Proof.
@@ -281,13 +281,13 @@ Module X86CoreErasure.
     Lemma make_arg_erasure:
       forall rs rs' m m' r arg arg' rs2 m2
         (Hregs: regs_erasure rs rs')
-        (Hmem: mem_erasure m m')
+        (Hmem: mem_erasure' m m')
         (Hargs: val_erasure arg arg')
         (Hmake: make_arg rs m r arg = Some (rs2, m2)),
       exists rs2' m2',
         make_arg rs' m' r arg' = Some (rs2', m2') /\
         regs_erasure rs2 rs2' /\
-        mem_erasure m2 m2'.
+        mem_erasure' m2 m2'.
     Proof.
       intros.
       unfold make_arg in *.
@@ -309,7 +309,7 @@ Module X86CoreErasure.
           rewrite Hrsp in Hregs. inv Hregs.
           reflexivity.
         }
-        eapply mem_storev_erased in Hstore; eauto.
+        eapply mem_storev_erased' in Hstore; eauto.
         destruct Hstore as [m2' [Hstore' Hmem']].
         exists rs', m2'.
         rewrite H.
@@ -320,13 +320,13 @@ Module X86CoreErasure.
     Lemma make_arguments_erasure:
       forall rs rs2 rs' m m2 m' locs arg arg'
         (Hregs: regs_erasure rs rs')
-        (Hmem: mem_erasure m m')
+        (Hmem: mem_erasure' m m')
         (Hargs: val_erasure arg arg')
         (Hmake: make_arguments rs m locs [:: arg] = Some (rs2, m2)),
       exists rs2' m2',
         make_arguments rs' m' locs [:: arg'] = Some (rs2', m2')/\
         regs_erasure rs2 rs2' /\
-        mem_erasure m2 m2'.
+        mem_erasure' m2 m2'.
     Proof.
       intros. destruct locs.
       - simpl in *.
@@ -340,39 +340,49 @@ Module X86CoreErasure.
         simpl.
         simpl in Hmake_args'; inv Hmake_args'.
         destruct r.
-        eapply make_arg_erasure in Hmake; eauto.
-        destruct arg; try discriminate;
-          simpl in Hargs; subst.
-        destruct (make_arg r0 m0 rhi (Vint (Int64.hiword i))) as [[? ?]|] eqn:Hmake_arg1; try discriminate.
-        eapply make_arg_erasure with (arg' := Vint (Int64.hiword i)) in Hmake_arg1; eauto with val_erasure.
-        destruct Hmake_arg1 as [? [? [? [? ?]]]].
-        eapply make_arg_erasure in Hmake; eauto with val_erasure.
-        destruct Hmake as [? [? [? [? ?]]]].
-        exists x1,x2.
+        eapply make_arg_erasure in Hmake; now eauto.
+        destruct (make_arg r0 m0 rhi (Val.hiword arg)) as [[? ?]|] eqn:Hmake_arg1; try discriminate.
+        eapply make_arg_erasure with (arg' := Val.hiword arg') in Hmake_arg1; eauto with val_erasure.
+        destruct Hmake_arg1 as [rs2'0 [m2'0 [? [? ?]]]].
+        eapply make_arg_erasure with (arg' := Val.loword arg') in Hmake; eauto with val_erasure.
+        destruct Hmake as [rs2'1 [m2'1 [? [? ?]]]].
+        exists rs2'1, m2'1.
         rewrite H.
         now eauto.
     Qed.
         
   Lemma erasure_initial_core:
-    forall h v arg v' arg' c m m'
+    forall h v arg v' arg' c m m' m2
       (Hv: val_erasure v v')
       (Harg: val_erasure arg arg')
       (Hmem: mem_erasure m m')
-      (Hinit: initial_core semSem h m c v [:: arg]),
-      exists c',
-        initial_core semSem h m' c' v' [:: arg'] /\
-        core_erasure c c'.
+      (Hinit: initial_core semSem h m c m2 v [:: arg]),
+      exists c' m2',
+        initial_core semSem h m' c' m2' v' [:: arg'] /\
+        core_erasure c c' /\
+        mem_erasure m2 (erasePerm m2').
   Proof.
     intros.
     unfold initial_core in *; simpl in *.
+    destruct Hinit as [Hinit ?].
     inversion Hinit; subst.
     simpl in Hv; subst.
-    eapply make_arguments_erasure in H0; eauto with regs_erasure.
-    destruct H0 as [? [? [? [? ?]]]].
-    exists (State x x0).
-    split;
-      [econstructor|];
-      now eauto.
+    remember (Mem.alloc m' 0 (3 * size_chunk Mptr)) eqn:Halloc'.
+    destruct p.
+    symmetry in Halloc'.
+    eapply alloc_erasure' with (m := m) (m' := m') in H1; eauto.
+    destruct H1 as [Hmem' ?]; subst.
+    eapply mem_storev_erased' in H2; eauto with val_erasure.
+    destruct H2 as [m2' [Hstore2' Hmem2']].
+    eapply mem_storev_erased' in H3; eauto with val_erasure.
+    destruct H3 as [m4' [Hstore4' Hmem4']].
+    eapply @make_arguments_erasure with (m' := m4') in H4; eauto with regs_erasure.
+    destruct H4 as [? [? [? [? ?]]]].
+    exists (State x x0), x0.
+    split; simpl; split; eauto.
+    econstructor; eauto.
+    eapply mem_erasure'_erase;
+      eauto.
   Qed.    
         
   Lemma halted_erase:
@@ -965,6 +975,185 @@ Module X86CoreErasure.
   (*     eapply mem_event_list_erasure_cat; eauto. *)
   (* Qed. *)
 
+  Lemma mem_free_erasure':
+    forall m m' lo hi m2 b
+      (Herased: mem_erasure m m')
+      (Hfree: Mem.free m b lo hi = Some m2),
+    exists m2',
+      Mem.free m' b lo hi = Some m2' /\
+      mem_erasure' m2 m2'.
+  Admitted.
+  
+  Lemma eval_builtin_arg_ev_erasure:
+    forall rs rs' sp sp' m m' ba v T
+      (Hrs: regs_erasure rs rs')
+      (Hsp: val_erasure sp sp')
+      (Hmem: mem_erasure m m')
+      (Hbuiltin: Asm_event.eval_builtin_arg_ev _ the_ge rs sp m ba v T),
+    exists v' T',
+      Asm_event.eval_builtin_arg_ev _ the_ge rs' sp' m' ba v' T' /\
+      val_erasure v v' /\
+      mem_event_list_erasure T T'.
+  Proof.
+    intros.
+    induction Hbuiltin.
+    - exists (rs' x), [::].
+      split;
+        [now econstructor |split; eauto with val_erasure regs_erasure; now econstructor].
+    - exists (Vint n), [::].
+      split;
+        [now econstructor |split; eauto with val_erasure regs_erasure; now econstructor].
+    - exists (Vlong n), [::].
+      split;
+        [now econstructor |split; eauto with val_erasure regs_erasure; now econstructor].
+    - exists (Vfloat n), [::].
+      split;
+        [now econstructor |split; eauto with val_erasure regs_erasure; now econstructor].
+    - exists (Vsingle n), [::].
+      split;
+        [now econstructor |split; eauto with val_erasure regs_erasure; now econstructor].
+    - eapply mem_loadv_erased in H; eauto.
+      destruct H as [v' [Hloadv' Hval]].
+      eapply loadbytes_erasure in H1; eauto.
+      destruct H1 as [bytes' [Hloadbytes' Hmemval]].
+      assert (Val.offset_ptr sp' ofs = Val.offset_ptr sp ofs)
+        by (unfold Val.offset_ptr in H3;
+            destruct sp; try discriminate;
+            simpl in Hsp; subst; reflexivity).
+      exists v', [:: Read b (Ptrofs.unsigned z) (size_chunk chunk) bytes'].
+      split; [econstructor; eauto | split; eauto with val_erasure regs_erasure].
+      rewrite H. assumption.
+      rewrite H3 in Hloadv'.
+      simpl in Hloadv'.
+      eapply Mem.load_loadbytes in Hloadv'.
+      destruct Hloadv' as [? [Hloadbytes'' Hval_eq]].
+      subst.
+      rewrite Hloadbytes' in Hloadbytes''.
+      inv Hloadbytes''.
+      reflexivity.
+      rewrite H; assumption.
+      do 2 econstructor;
+        now eauto.
+    - exists (Val.offset_ptr sp' ofs), [::].
+      split;
+        [now econstructor |split; eauto with val_erasure regs_erasure; now econstructor].
+    - eapply mem_loadv_erased in H; eauto.
+      destruct H as [v' [Hloadv' Hval]].
+      eapply loadbytes_erasure in H1; eauto.
+      destruct H1 as [bytes' [Hloadbytes' Hmemval]].
+      exists v', [:: Read b (Ptrofs.unsigned z) (size_chunk chunk) bytes'].
+      split; [econstructor; eauto | split; eauto with val_erasure regs_erasure].
+      rewrite H3 in Hloadv'.
+      simpl in Hloadv'.
+      eapply Mem.load_loadbytes in Hloadv'.
+      destruct Hloadv' as [? [Hloadbytes'' Hval_eq]].
+      subst.
+      rewrite Hloadbytes' in Hloadbytes''.
+      inv Hloadbytes''.
+      reflexivity.
+      do 2 econstructor;
+        now eauto.
+    - do 2 eexists.
+      split;
+        [now econstructor |split; eauto with val_erasure regs_erasure; now econstructor].
+    - destruct IHHbuiltin1 as [v1' [T1' [? [? ?]]]], IHHbuiltin2 as [v2' [T2' [? [? ?]]]].
+      exists (Val.longofwords v1' v2'), (T1' ++ T2').
+      split;
+        [econstructor; now eauto |].
+      split; eauto with val_erasure regs_erasure.
+      eapply mem_event_list_erasure_cat; now eauto.
+    - destruct IHHbuiltin1 as [v1' [T1' [? [? ?]]]], IHHbuiltin2 as [v2' [T2' [? [? ?]]]].
+      exists (if Archi.ptr64 then Val.addl v1' v2' else Val.add v1' v2'), (T1' ++ T2').
+      split;
+        [econstructor; now eauto |].
+      split;
+        [destruct Archi.ptr64; now eauto with val_erasure regs_erasure |
+         eapply mem_event_list_erasure_cat; now eauto].
+  Qed.
+
+  Lemma eval_builtin_args_ev_erasure:
+    forall rs rs' sp sp' m m' ba vs T
+      (Hrs: regs_erasure rs rs')
+      (Hsp: val_erasure sp sp')
+      (Hmem: mem_erasure m m')
+      (Hbuiltin_ev: Asm_event.eval_builtin_args_ev _ the_ge rs sp m ba vs T),
+    exists vs' T',
+      Asm_event.eval_builtin_args_ev _ the_ge rs' sp' m' ba vs' T' /\
+      val_erasure_list vs vs' /\
+      mem_event_list_erasure T T'.
+  Proof.
+    induction ba; intros.
+    - inversion Hbuiltin_ev; subst.
+      exists [::], [::].
+      repeat split; now econstructor.
+    - inversion Hbuiltin_ev; subst.
+      eapply eval_builtin_arg_ev_erasure in H1; eauto.
+      destruct H1 as [v' [T1' [Hbuiltin' [Hv HT1]]]].
+      destruct (IHba vl T2 Hrs Hsp Hmem H4) as [vs' [T2' [Hbuiltins [Hvs HT2']]]].
+      exists (v' :: vs'), (T1' ++ T2').
+      repeat (split; econstructor; eauto with val_erasure).
+      eapply mem_event_list_erasure_cat; assumption.
+  Qed.
+
+  Lemma builtin_event_erasure:
+    forall ef m1 m1' vs1 vs1' T1
+      (Hmem: mem_erasure m1 m1')
+      (Hval_erasure: val_erasure_list vs1 vs1')
+      (Hbuiltin: Asm_event.builtin_event ef m1 vs1 T1),
+    exists T1',
+      Asm_event.builtin_event ef m1' vs1' T1' /\
+      mem_event_list_erasure T1 T1'.
+  Proof.
+    intros.
+    inv Hbuiltin.
+    remember (Mem.alloc m1' (-size_chunk Mptr) (Ptrofs.unsigned n)) eqn:ALLOC'.
+    destruct p as [m2'' b2'].
+    symmetry in ALLOC'.
+    - pose proof ALLOC' as Hmem''.
+      eapply alloc_erasure' in Hmem''; eauto.
+      destruct Hmem'' as [Hmem'' ?]; subst.
+      eapply Mem.storebytes_store in ST; eauto.
+      eapply  mem_store_erased' in ST; eauto with val_erasure.
+      destruct ST as [m2' [Hstore' Hm']].
+      eapply Mem.store_storebytes in Hstore'.
+      exists [:: Alloc b2' (- size_chunk Mptr) (Ptrofs.unsigned n);
+         Write b2' (- size_chunk Mptr) (encode_val Mptr (Vptrofs n))].
+      inv Hval_erasure. inv H3. inv H1.
+      now repeat (econstructor; eauto with val_erasure).
+    - eapply loadbytes_erasure in LB; eauto.
+      destruct LB as [bytes' [Hload' Hbytes']].
+      eapply mem_free_erasure' in FR; eauto.
+      destruct FR as [m2' [Hfree Hmem']].
+      exists
+      [:: Read b (Ptrofs.unsigned lo - size_chunk Mptr) (size_chunk Mptr) bytes';
+       Free
+         [:: (b, Ptrofs.unsigned lo - size_chunk Mptr,
+              Ptrofs.unsigned lo + Ptrofs.unsigned sz)]].
+      inv Hval_erasure.
+      inv H1. inv H3.
+      split;
+        repeat (econstructor; eauto with val_erasure).
+      unfold Vptrofs in *.
+      destruct Archi.ptr64; simpl in SZ;
+        apply decode_val_erasure with (chunk := Mptr) in Hbytes';
+        rewrite <- SZ in Hbytes';
+        simpl in Hbytes';
+        now auto.
+    -  eapply loadbytes_erasure with (m' := m1') in LB; eauto.
+       destruct LB as [bytes' [LB' Hbytes]].
+       eapply storebytes_erasure in ST; eauto.
+       destruct ST as [m2' [ST' Hmem']].
+       exists
+       [:: Read bsrc (Ptrofs.unsigned osrc) sz bytes';
+        Write bdst (Ptrofs.unsigned odst) bytes'].
+       inv Hval_erasure.
+       inv H1. inv H3. inv H4. inv H1.
+       split; repeat (econstructor; eauto with val_erasure).
+    - destruct ef; try (now exfalso);
+        try (eexists; split; econstructor; eauto with val_erasure);
+        try econstructor.
+  Qed.
+  
   Lemma evstep_erase:
     forall c1 c1' c2 ev m1 m1' m2
       (HeraseCores: core_erasure c1 c1')
@@ -996,173 +1185,31 @@ Module X86CoreErasure.
           by (erewrite get_reg_erasure in H1; eauto;
               rewrite H1; discriminate).
 
-      Lemma eval_builtin_arg_ev_erasure:
-        forall rs rs' sp sp' m m' ba v T
-          (Hrs: regs_erasure rs rs')
-          (Hsp: val_erasure sp sp')
-          (Hmem: mem_erasure m m')
-          (Hbuiltin: Asm_event.eval_builtin_arg_ev _ the_ge rs sp m ba v T),
-        exists v' T',
-          Asm_event.eval_builtin_arg_ev _ the_ge rs' sp' m' ba v' T' /\
-          val_erasure v v' /\
-          mem_event_list_erasure T T'.
-      Proof.
-        intros.
-        induction Hbuiltin.
-        - exists (rs' x), [::].
-          split;
-            [now econstructor |split; eauto with val_erasure regs_erasure; now econstructor].
-        - exists (Vint n), [::].
-          split;
-            [now econstructor |split; eauto with val_erasure regs_erasure; now econstructor].
-        - exists (Vlong n), [::].
-          split;
-            [now econstructor |split; eauto with val_erasure regs_erasure; now econstructor].
-        - exists (Vfloat n), [::].
-          split;
-            [now econstructor |split; eauto with val_erasure regs_erasure; now econstructor].
-        - exists (Vsingle n), [::].
-          split;
-            [now econstructor |split; eauto with val_erasure regs_erasure; now econstructor].
-        - eapply mem_loadv_erased in H; eauto.
-          destruct H as [v' [Hloadv' Hval]].
-          eapply loadbytes_erasure in H1; eauto.
-          destruct H1 as [bytes' [Hloadbytes' Hmemval]].
-          assert (Val.offset_ptr sp' ofs = Val.offset_ptr sp ofs)
-            by (unfold Val.offset_ptr in H3;
-                destruct sp; try discriminate;
-                simpl in Hsp; subst; reflexivity).
-          exists v', [:: Read b (Ptrofs.unsigned z) (size_chunk chunk) bytes'].
-          split; [econstructor; eauto | split; eauto with val_erasure regs_erasure].
-          rewrite H. assumption.
-          rewrite H3 in Hloadv'.
-          simpl in Hloadv'.
-          eapply Mem.load_loadbytes in Hloadv'.
-          destruct Hloadv' as [? [Hloadbytes'' Hval_eq]].
-          subst.
-          rewrite Hloadbytes' in Hloadbytes''.
-          inv Hloadbytes''.
-          reflexivity.
-          rewrite H; assumption.
-          do 2 econstructor;
-            now eauto.
-        - exists (Val.offset_ptr sp' ofs), [::].
-          split;
-            [now econstructor |split; eauto with val_erasure regs_erasure; now econstructor].
-        - eapply mem_loadv_erased in H; eauto.
-          destruct H as [v' [Hloadv' Hval]].
-          eapply loadbytes_erasure in H1; eauto.
-          destruct H1 as [bytes' [Hloadbytes' Hmemval]].
-          exists v', [:: Read b (Ptrofs.unsigned z) (size_chunk chunk) bytes'].
-          split; [econstructor; eauto | split; eauto with val_erasure regs_erasure].
-          rewrite H3 in Hloadv'.
-          simpl in Hloadv'.
-          eapply Mem.load_loadbytes in Hloadv'.
-          destruct Hloadv' as [? [Hloadbytes'' Hval_eq]].
-          subst.
-          rewrite Hloadbytes' in Hloadbytes''.
-          inv Hloadbytes''.
-          reflexivity.
-          do 2 econstructor;
-            now eauto.
-        - do 2 eexists.
-          split;
-            [now econstructor |split; eauto with val_erasure regs_erasure; now econstructor].
-        - destruct IHHbuiltin1 as [v1' [T1' [? [? ?]]]], IHHbuiltin2 as [v2' [T2' [? [? ?]]]].
-          exists (Val.longofwords v1' v2'), (T1' ++ T2').
-          split;
-            [econstructor; now eauto |].
-          split; eauto with val_erasure regs_erasure.
-          eapply mem_event_list_erasure_cat; now eauto.
-        - destruct IHHbuiltin1 as [v1' [T1' [? [? ?]]]], IHHbuiltin2 as [v2' [T2' [? [? ?]]]].
-          exists (if Archi.ptr64 then Val.addl v1' v2' else Val.add v1' v2'), (T1' ++ T2').
-          split;
-            [econstructor; now eauto |].
-          split;
-            [destruct Archi.ptr64; now eauto with val_erasure regs_erasure |
-             eapply mem_event_list_erasure_cat; now eauto].
-      Qed.
-
-      Lemma eval_builtin_args_ev_erasure:
-        forall rs rs' sp sp' m m' ba vs T
-          (Hrs: regs_erasure rs rs')
-          (Hsp: val_erasure sp sp')
-          (Hmem: mem_erasure m m')
-          (Hbuiltin: Asm_event.eval_builtin_args_ev _ the_ge rs sp m ba vs T),
-        exists vs' T',
-          Asm_event.eval_builtin_args_ev _ the_ge rs' sp' m' ba vs' T' /\
-          val_erasure_list vs vs' /\
-          mem_event_list_erasure T T'.
-      Proof.
-        induction ba; intros.
-        - inversion Hbuiltin; subst.
-          exists [::], [::].
-          repeat split; now econstructor.
-        - inversion Hbuiltin; subst.
-          eapply eval_builtin_arg_ev_erasure in H1; eauto.
-          destruct H1 as [v' [T1' [Hbuiltin' [Hv HT1]]]].
-          destruct (IHba vl T2 Hrs Hsp Hmem H4) as [vs' [T2' [Hbuiltins [Hvs HT2']]]].
-          exists (v' :: vs'), (T1' ++ T2').
-          repeat (split; econstructor; eauto with val_erasure).
-          eapply mem_event_list_erasure_cat; assumption.
-      Qed.
-
-      Lemma builtin_event_erasure:
-        forall ef m1 m1' vs1 T1
+      Lemma external_call_erasure:
+        forall ef m1 m1' vs1 vs1' t m2 vres
           (Hmem: mem_erasure m1 m1')
-          (Hbuiltin: Asm_event.builtin_event ef m1 vs1 T1),
-        exists vs1' T1',
-          Asm_event.builtin_event ef m1' vs1' T1' /\
-          val_erasure_list vs1 vs1' /\
-          mem_event_list_erasure T1 T1'.
+          (Hval_erasure: val_erasure_list vs1 vs1')
+          (Hextcall: external_call ef the_ge vs1 m1 t vres m2),
+        exists vres' m2',
+          external_call ef the_ge vs1' m1' t vres' m2' /\
+          val_erasure vres vres' /\
+          mem_erasure m2 m2'.
       Proof.
         intros.
-        inv Hbuiltin.
-        remember (Mem.alloc m1' (-size_chunk Mptr) (Ptrofs.unsigned n)) eqn:ALLOC'.
-        destruct p as [m2'' b2'].
-        symmetry in ALLOC'.
-
+        destruct ef; simpl in *.
+        (* need an assumption on erasing external calls *)
+      
+      eapply eval_builtin_args_ev_erasure in H4...
+      destruct H4 as [vargs' [T1' [Hargs_ev [Hargs_erasure Htrace_erasure]]]].
+      eapply builtin_event_erasure in H5...
+      destruct H5 as [T2' [Hbuiltin  Htrace_erasure2]].
+      exists (State
+           (nextinstr_nf
+              (set_res res vres
+                       (undef_regs (map preg_of (Machregs.destroyed_by_builtin ef)) rs1))) m1'0)
         
-        - pose proof ALLOC' as Hmem''.
-          eapply alloc_erasure' in Hmem''; eauto.
-          destruct Hmem'' as [Hmem'' ?]; subst.
-          eapply Mem.storebytes_store in ST; eauto.
-          eapply  mem_store_erased' in ST; eauto with val_erasure.
-          destruct ST as [m2' [Hstore' Hm']].
-          eapply Mem.store_storebytes in Hstore'.
-          exists [:: Vptrofs n], [:: Alloc b2' (- size_chunk Mptr) (Ptrofs.unsigned n);
-                             Write b2' (- size_chunk Mptr) (encode_val Mptr (Vptrofs n))].
-          now repeat (econstructor; eauto with val_erasure).
-        - eapply loadbytes_erasure in LB; eauto.
-          destruct LB as [bytes' [Hload' Hbytes']].
-          Lemma mem_free_erasure':
-            forall m m' lo hi m2 b
-              (Herased: mem_erasure m m')
-              (Hfree: Mem.free m b lo hi = Some m2),
-            exists m2',
-              Mem.free m' b lo hi = Some m2' /\
-              mem_erasure' m2 m2'.
-          Admitted.
-          eapply mem_free_erasure' in FR; eauto.
-          destruct FR as [m2' [Hfree Hmem']].
-          exists [:: Vptr b lo],
-          [:: Read b (Ptrofs.unsigned lo - size_chunk Mptr) (size_chunk Mptr) bytes';
-           Free
-             [:: (b, Ptrofs.unsigned lo - size_chunk Mptr,
-                  Ptrofs.unsigned lo + Ptrofs.unsigned sz)]].
-          split;
-            repeat (econstructor; eauto with val_erasure).
-          unfold Vptrofs in *.
-          destruct Archi.ptr64; simpl in SZ;
-          apply decode_val_erasure with (chunk := Mptr) in Hbytes';
-          rewrite <- SZ in Hbytes';
-          simpl in Hbytes';
-          now auto.
-        - 
-          
-          
+      
 
-          eapply mem_store_erased in ST; eauto.
           
 
           
