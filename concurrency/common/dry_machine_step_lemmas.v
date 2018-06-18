@@ -2128,11 +2128,10 @@ Module StepType.
 
   Section FineMachineInternal.
     Context {initU : seq nat}
-            {init_mem : option Memory.Mem.mem}
             {semAx: CoreLanguage.SemAxioms}
             {dilMem: DiluteMem}.
     
-  Notation fmachine_step := ((corestep (AsmContext.fine_semantics initU init_mem))).
+  Notation fmachine_step := ((corestep (AsmContext.fine_semantics initU))).
 
   (*TODO: maybe move to tactics *)
   (** Solves absurd cases from fine-grained internal steps *)

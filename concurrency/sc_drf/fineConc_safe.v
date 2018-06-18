@@ -49,18 +49,17 @@ Module FineConcInitial.
             {CI: CoreInj}.
 
     Class FineInit :=
-      { init_mem : option Memory.Mem.mem; (** some initial memory *)
+      { init_mem : Memory.Mem.mem; (** some initial memory *)
         init_mem_wd: (** The initial memory is well-defined*)
-          forall m, init_mem = Some m -> valid_mem m;
-        init_core_wd:   (** The initial core is well-defined*)
-          forall c v args m (ARGS:valid_val_list (id_ren m) args),
-            init_mem = Some m ->
-            initial_core semSem 0 m c v args ->
-            core_wd (id_ren m) c;
+          valid_mem init_mem;
         the_ge_wd:   (** The initial global env is well-defined*)
-          forall m,
-            init_mem = Some m ->
-            ge_wd (id_ren m) the_ge }.
+            ge_wd (id_ren init_mem) the_ge
+      }.
+        (* init_core_wd:   (** The initial core is well-defined*) *)
+        (*   forall c v args m m' (ARGS:valid_val_list (id_ren m) args), *)
+        (*     init_mem = Some m -> *)
+        (*     initial_core semSem 0 m c m' v args -> *)
+        (*     core_wd (id_ren m) c /\ valid_mem m'; *)
 
   End FineConcInitial.
   
@@ -97,25 +96,31 @@ Module FineConcSafe.
     Existing Instance HybridCoarseMachine.DilMem.
 
     Lemma init_tp_wd:
-      forall v args m tp (ARGS:valid_val_list (id_ren m) args),
-        init_mem = Some m ->
-        @init_mach DryHybridMachine.dryResources _ _ _ (init_perm init_mem) m tp v args ->
-        tp_wd (id_ren m) tp.
+      forall pmap v args m' tp (ARGS:valid_val_list (id_ren init_mem) args),
+        @init_mach DryHybridMachine.dryResources _ _ _ pmap init_mem tp m' v args ->
+        tp_wd (id_ren m') tp /\ valid_mem m'.
     Proof.
       intros.
+      simpl in H.
+      unfold DryHybridMachine.init_mach in H.
+      destruct H as [c [Hinit_core Hinit_perm]].
+      subst.
+      eapply initial_core_wd with (f := id_ren init_mem) (fg := id_ren init_mem) in Hinit_core; eauto.
+      destruct Hinit_core as [Hvalid' Hf'].
+      destruct Hf' as [[f' [? ?]] Hcore_wd].
+      split; auto.
+      simpl.
       intros i cnti.
-      simpl in H0.
-      unfold DryHybridMachine.init_mach in H0.
-      destruct H0 as [c [Hinit_core Hinit_perm]].
-      unfold init_perm in Hinit_perm.
-      rewrite H in Hinit_perm; subst.
       unfold ctl_wd.
       assert (Hget: getThreadC cnti = Krun c)
         by (unfold getThreadC, OrdinalPool.getThreadC;
             reflexivity).
       rewrite Hget.
-      eapply init_core_wd;
-        now eauto.
+      eapply Hcore_wd; eauto using id_ren_domain.
+      eapply init_mem_wd; eauto.
+      now apply id_ren_domain.
+      now apply the_ge_wd.
+      now apply ren_domain_incr_refl.
     Qed.
 
     (** Assuming safety of cooperative VST.concurrency*)
@@ -124,75 +129,59 @@ Module FineConcSafe.
       Variables (f : val) (arg : list val) (initU : seq.seq nat).
 
       Variable init_coarse_safe:
-        forall sched tpc mem n,
-          init_mem = Some mem ->
-          tpc_init initU init_mem mem (initU, [::], tpc) f arg ->
-          HybridCoarseMachine.csafe (sched,[::],tpc) mem n.
-
-      (** If the initial state is defined then the initial memory was also defined*)
-      Lemma tpc_init_mem_defined:
-        forall tpc m,
-          tpc_init initU init_mem m (initU, [::], tpc) f arg ->
-          exists m, init_mem = Some m.
-      Proof.
-        unfold tpc_init. simpl.
-        unfold HybridMachine.DryHybridMachine.init_mach. intros.
-        destruct H as [? [Hinit Hinit_perm]].
-        destruct init_perm eqn:?.
-        unfold init_perm in *.
-        destruct init_mem; try discriminate.
-        eexists; reflexivity.
-        destruct Hinit_perm;
-          now exfalso.
-      Qed.
+        forall sched tpc mem' n,
+          tpc_init initU init_mem (initU, [::], tpc) mem' f arg ->
+          HybridCoarseMachine.csafe (sched,[::],tpc) mem' n.
 
       (** [init_mach] and [init_mem] are related by [mem_compatible]*)
-      Lemma init_compatible:
-        forall tp m,
-          init_mem = Some m ->
-          @init_mach DryHybridMachine.dryResources _ _ _ (init_perm init_mem) m tp f arg ->
-          mem_compatible tp m.
-      Proof.
-        intros.
-        destruct init_perm as [pmap|] eqn:Hinit_perm;
-          [| eapply init_mach_none in H0; now exfalso].
-        unfold init_perm in Hinit_perm.
-        rewrite H in Hinit_perm.
-        inversion Hinit_perm; subst.
-        constructor.
-        - intros j cntj.
-          pose proof (init_thread H0 cntj); subst.
-          erewrite getThreadR_init by eauto.
-          simpl.
-          split; [intros ? ?; now apply getCur_Max |now apply empty_LT].
-        - intros.
-          erewrite init_lockRes_empty in H1 by eauto.
-          discriminate.
-        - intros.
-          erewrite init_lockRes_empty in H1 by eauto.
-          discriminate.
-      Qed.
+      (* Lemma init_compatible: *)
+      (*   forall pmap tp m m', *)
+      (*     @init_mach DryHybridMachine.dryResources _ _ _ pmap m tp m' f arg -> *)
+      (*     mem_compatible tp m'. *)
+      (* Proof. *)
+      (*   intros. *)
+      (*   destruct init_perm as [pmap|] eqn:Hinit_perm; *)
+      (*     [| eapply init_mach_none in H0; now exfalso]. *)
+      (*   unfold init_perm in Hinit_perm. *)
+      (*   rewrite H in Hinit_perm. *)
+      (*   inversion Hinit_perm; subst. *)
+      (*   constructor. *)
+      (*   - intros j cntj. *)
+      (*     pose proof (init_thread H0 cntj); subst. *)
+      (*     erewrite getThreadR_init by eauto. *)
+      (*     simpl. *)
+      (*     split; [intros ? ?; now apply getCur_Max |now apply empty_LT]. *)
+      (*   - intros. *)
+      (*     erewrite init_lockRes_empty in H1 by eauto. *)
+      (*     discriminate. *)
+      (*   - intros. *)
+      (*     erewrite init_lockRes_empty in H1 by eauto. *)
+      (*     discriminate. *)
+      (* Qed. *)
 
       (** Simulation relation with id renaming for initial memory*)
       Lemma init_mem_obs_eq :
-        forall m tp i (cnti : containsThread tp i)
-          (Hcomp: mem_compatible tp m)
-          (HcompF: mem_compatible tp (@diluteMem FineDilMem m)),
-          init_mem = Some m ->
-          @init_mach DryHybridMachine.dryResources _ _ _ (init_perm init_mem) m tp f arg ->
-          mem_obs_eq (id_ren m) (restrPermMap (compat_th _ _ Hcomp cnti).1)
+        forall pmap m' tp i (cnti : containsThread tp i)
+          (Hcomp: mem_compatible tp m')
+          (HcompF: mem_compatible tp (@diluteMem FineDilMem m'))
+          (ARGS:valid_val_list (id_ren init_mem) arg),
+          @init_mach DryHybridMachine.dryResources _ _ _ pmap init_mem tp m' f arg ->
+          mem_obs_eq (id_ren m') (restrPermMap (compat_th _ _ Hcomp cnti).1)
                      (restrPermMap (HcompF _ cnti).1) /\
-          mem_obs_eq (id_ren m) (restrPermMap (Hcomp _ cnti).2)
+          mem_obs_eq (id_ren m') (restrPermMap (Hcomp _ cnti).2)
                      (restrPermMap (HcompF _ cnti).2).
       Proof.
         intros.
-        pose proof (mem_obs_eq_id (init_mem_wd H)) as Hobs_eq_id.
-        unfold init_mach in H0. simpl in H0.
-        unfold DryHybridMachine.init_mach in H0.
-        destruct H0 as [c [Hinit Hinit_perm]].
-        unfold init_perm in Hinit_perm.
-        rewrite H in Hinit_perm.
+        unfold init_mach in H. simpl in H.
+        unfold DryHybridMachine.init_mach in H.
+        destruct H as [c [Hinit Htp]].
         subst tp.
+        pose proof init_mem_wd as Hinit_mem_wd.
+        pose proof the_ge_wd as Hge_wd.
+        eapply @initial_core_wd with (f := id_ren init_mem) (fg := id_ren init_mem) in Hinit;
+          eauto using id_ren_domain, ren_domain_incr_refl.
+        destruct Hinit as [Hvalid_mem' [Hf' Hcore_wd']].
+        pose proof (mem_obs_eq_id Hvalid_mem') as Hobs_eq_id.
         destruct Hobs_eq_id.
         split.
         - constructor.
@@ -214,9 +203,11 @@ Module FineConcSafe.
             eapply memval_obs_eq_id.
             apply Mem.perm_valid_block in Hperm.
             simpl.
-            pose proof (init_mem_wd H Hperm ofs ltac:(reflexivity)).
-            destruct (ZMap.get ofs (Mem.mem_contents m) # b1); simpl; auto.
-            rewrite <- wd_val_valid; eauto.
+            unfold valid_mem in Hvalid_mem'.
+            unfold valid_memval.
+            destruct (ZMap.get ofs (Mem.mem_contents m') !! b1) eqn:Hget; auto.
+            pose proof (Hvalid_mem' _ Hperm ofs _ Hget).
+            rewrite <- wd_val_valid with (m := m'); eauto.
             apply id_ren_domain.
             apply id_ren_correct.
         - constructor.
@@ -236,8 +227,8 @@ Module FineConcSafe.
             intros.
             unfold Mem.perm in Hperm.
             pose proof (restrPermMap_Cur (Hcomp i cnti).2 b1 ofs).
-            unfold permission_at in H0.
-            rewrite H0 in Hperm.
+            unfold permission_at in H.
+            rewrite H in Hperm.
             simpl in Hperm.
             rewrite empty_map_spec in Hperm.
             simpl in Hperm.
@@ -246,19 +237,20 @@ Module FineConcSafe.
 
       (** The [strong_tsim] relation is reflexive under the identity renaming*)
       Lemma strong_tsim_refl:
-        forall tp m i (cnti: containsThread tp i)
-          (Hcomp: mem_compatible tp m)
-          (HcompF: mem_compatible tp (@diluteMem FineDilMem m))
-          (ARGS:valid_val_list (id_ren m) arg),
-          init_mem = Some m ->
-          @init_mach DryHybridMachine.dryResources _ _ _ (init_perm init_mem) m tp f arg ->
-          SimDefs.strong_tsim (id_ren m) cnti cnti Hcomp HcompF.
+        forall pmap tp m' i (cnti: containsThread tp i)
+          (Hcomp: mem_compatible tp m')
+          (HcompF: mem_compatible tp (@diluteMem FineDilMem m'))
+          (ARGS:valid_val_list (id_ren init_mem) arg),
+          @init_mach DryHybridMachine.dryResources _ _ _ pmap init_mem tp m' f arg ->
+          SimDefs.strong_tsim (id_ren m') cnti cnti Hcomp HcompF.
       Proof.
         intros.
-        destruct (init_mem_obs_eq cnti Hcomp HcompF H H0).
+        destruct (init_mem_obs_eq cnti Hcomp HcompF ARGS H).
         constructor; eauto.
         eapply ctl_inj_id; eauto.
-        apply (init_tp_wd ARGS H H0).
+        destruct (init_tp_wd ARGS H).
+        specialize (H2 _ cnti).
+        assumption.
         now apply id_ren_correct.
       Qed.
 
@@ -277,44 +269,52 @@ Module FineConcSafe.
 
       (** Establishing the simulation relation for the initial state*)
       Lemma init_sim:
-        forall tpc tpf m n (ARG:valid_val_list (id_ren m) arg),
-          tpc_init initU init_mem m (initU, [::], tpc) f arg ->
-          tpc_init initU init_mem m (initU, [::], tpf) f arg ->
-          init_mem = Some m ->
-          SimDefs.sim tpc [::] m tpf [::] (@diluteMem FineDilMem m) nil (id_ren m) (id_ren m) (fun i cnti => id_ren m) n.
+        forall tpc tpf m' n (ARG:valid_val_list (id_ren init_mem) arg),
+          tpc_init initU init_mem (initU, [::], tpc) m' f arg ->
+          tpf_init initU init_mem (initU, [::], tpf) m' f arg ->
+          SimDefs.sim tpc [::] m' tpf [::] (@diluteMem FineDilMem m') nil (id_ren m')
+                      (id_ren init_mem) (fun i cnti => id_ren m') n.
       Proof.
         intros.    
         unfold tpc_init, tpf_init in *. simpl in *.
         destruct H as [? HinitC].
         destruct H0 as [? HinitF].
-        assert (HmemComp := init_compatible H1 HinitC).
-        assert (HmemCompF0 := init_compatible H1 HinitF).
+        assert (HmemComp: mem_compatible tpc m')
+          by (eapply @safeC_compatible with (n:=1%nat); eauto).
+        assert (tpf = tpc).
+        { unfold DryHybridMachine.init_mach in *.
+          destruct HinitC as [cc [Hinit_cc Htpc]]. 
+          destruct HinitF as [cf [Hinit_cf Htpf]].
+          subst.
+          apply f_equal2; auto.
+          apply f_equal.
+          eapply CoreLanguage.initial_core_det; eauto.
+        }
+        subst.
         pose proof HinitC as HinitC'.
-        unfold DryHybridMachine.init_mach in HinitC, HinitF.
+        unfold DryHybridMachine.init_mach in HinitC.
         destruct HinitC as [cc [HinitC Hinit_permC]].
-        destruct HinitF as [cf [HinitF Hinit_permF]].
-        unfold init_perm in *.
-        rewrite H1 in Hinit_permF Hinit_permC.
-        assert (HmemCompF: mem_compatible tpf (@diluteMem FineDilMem m))
+        assert (HmemCompF: mem_compatible tpc (@diluteMem FineDilMem m'))
           by (eapply mem_compatible_setMaxPerm; eauto).
-        subst tpf tpc.
-        assert (cc = cf)
-          by (eapply CoreLanguage.initial_core_det; now eauto).
-        subst cf.
+        subst tpc.
+        pose proof HinitC as HinitC2.
+        eapply initial_core_wd with (fg := id_ren init_mem) in HinitC;
+          eauto using id_ren_domain, init_mem_wd, the_ge_wd, ren_domain_incr_refl.
+        destruct HinitC as [Hvalid_mem' [Hf' Hcore_wd']].
         eapply SimDefs.Build_sim with (mem_compc := HmemComp) (mem_compf := HmemCompF).
         - intros; split; auto.
         - simpl. rewrite addn0.
           intros.
           eapply init_coarse_safe with (n := n); eauto.
         - intros i cnti cnti'.
-          pose proof (strong_tsim_refl cnti HmemComp HmemCompF ARG H1 HinitC').
+          pose proof (strong_tsim_refl cnti HmemComp HmemCompF ARG HinitC').
           Tactics.pf_cleanup.
-          destruct H2. destruct obs_eq_data, obs_eq_locks.
+          destruct H1. destruct obs_eq_data, obs_eq_locks.
           constructor;
             now eauto.
         - intros; by congruence.
         - intros.
-          exists (@mkPool dryResources _ _  (Krun cc) ((getCurPerm m, empty_map)#1, empty_map)), m.
+          exists (@mkPool dryResources _ _  (Krun cc) ((getCurPerm m', empty_map)#1, empty_map)), m'.
           split; eauto with renamings.
           split; eauto.
           split; first by constructor.
@@ -323,33 +323,28 @@ Module FineConcSafe.
           eapply strong_tsim_refl; eauto.
           pose proof (init_thread HinitC' pff); subst tid.
           repeat (split; intros); try congruence.
-          + rewrite H1 in HinitC'.
-            erewrite getThreadR_init by eauto.
+          + erewrite getThreadR_init by eauto.
             simpl.
-            pose proof (strong_tsim_refl pfc HmemComp HmemCompF ARG  H1) as Hstrong_sim.
-            rewrite H1 in Hstrong_sim. simpl in Hstrong_sim.
+            pose proof (@strong_tsim_refl None _ _ _ pfc HmemComp HmemCompF ARG) as Hstrong_sim.
+            simpl in Hstrong_sim.
             specialize (Hstrong_sim HinitC').
             Tactics.pf_cleanup.
             destruct Hstrong_sim. destruct obs_eq_data.
             destruct weak_obs_eq0.
-            destruct (valid_block_dec m b2).
+            destruct (valid_block_dec m' b2).
             * pose proof (domain_valid0 _ v) as Hmapped.
               destruct Hmapped as [b' Hid].
               pose proof (id_ren_correct _ _ Hid); subst.
-              exfalso. apply H2.
+              exfalso. apply H1.
               eexists; eauto.
             * apply Mem.nextblock_noaccess with (k := Cur) (ofs := ofs) in n0.
               rewrite getCurPerm_correct.
               unfold permission_at.
               assumption.
-          + erewrite getThreadR_init
-              by ( unfold init_perm in HinitC';
-                   rewrite H1 in HinitC';
-                   eauto).
+          + erewrite getThreadR_init by eauto.
             simpl.
             now apply empty_map_spec.
         - unfold DryHybridMachine.init_mach in *.
-          rewrite H1 in HinitC'.
           destruct HinitC' as [c' [HinitC' Heq]].
           split.
           + intros.
@@ -366,27 +361,38 @@ Module FineConcSafe.
               simpl in H.
               now exfalso.
             * intros.
-              apply id_ren_correct in H2; subst.
+              apply id_ren_correct in H1; subst.
               split;
                 now auto.
         - intros.
           unfold DryHybridMachine.init_mach in HinitC'.
-          rewrite H1 in HinitC'.
           destruct HinitC' as [c' [HinitC' Heq]].
           unfold initial_machine, lockRes in *. simpl in *.
           unfold OrdinalPool.mkPool, OrdinalPool.lockRes in *.
           simpl in H.
-          erewrite OrdinalPool.find_empty in H2.
+          erewrite OrdinalPool.find_empty in H1.
           discriminate.
         - eapply ThreadPoolWF.initial_invariant;
             now eauto.
         - apply setMaxPerm_inv; auto.
-        - apply (init_mem_wd H1); eauto.
+        - assumption.
         - eapply init_tp_wd; eauto.
         - eapply the_ge_wd; eauto.
         - split; eauto with renamings.
-          apply id_ren_correct.
+          destruct Hf' as [f' [Hincrf' Hdomainf']].
+          intros b1 b2 Hid.
+          unfold id_ren in *.
+          destruct (valid_block_dec init_mem b1); simpl in Hid; try discriminate.
+          inversion Hid; subst.
+          destruct (valid_block_dec m' b2); simpl; auto.
+          exfalso.
+          apply n0.
+          unfold Mem.valid_block, Plt in *.
+          apply CoreLanguage.initial_core_nextblock in HinitC2.
+          zify; omega.
+          now apply id_ren_correct.
         - simpl. tauto.
+        Unshelve. apply None.
       Qed.
 
       (** Proof of safety of the FineConc machine*)
@@ -452,9 +458,65 @@ Module FineConcSafe.
       (** Simulation between the two machines implies safety*)
       Lemma fine_safe:
         forall n tpf trf tpc trc mf mc (g fg : memren) fp xs sched
-          (Hsim: SimDefs.sim tpc trc mc tpf trf mf xs g fg fp n),
-          @fsafe tpf mf sched n.
+          (Hsim: SimDefs.sim tpc trc mc tpf trf mf xs g fg fp (S (S n))),
+          @fsafe tpf mf sched (S (S n)).
       Proof.
+        induction n; intros.
+        - destruct sched as [|i sched].
+          + eapply @HybridFineMachine.HaltedSafe with (tr := trf) (dilMem := FineDilMem);
+              now eauto.
+          +   destruct (OrdinalPool.containsThread_dec i tpf) as [cnti | invalid].
+              pose proof (getStepType_cases (restrPermMap (compat_th _ _ (SimDefs.mem_compf Hsim)
+                                                                 cnti).1) cnti) as Htype.
+              destruct Htype as [Htype | [Htype | [Htype | Htype]]].
+              * assert (~ List.In i xs)
+                  by (eapply at_external_not_in_xs; eauto).
+                pose proof (@SimProofs.sim_external _ _ _ initU em _ _ _ _ _ _ _ _ _ _
+                                                    _ _ cnti H Hsim Htype) as Hsim'.
+                destruct Hsim' as (tpc' & trc' & mc' & tpf' & mf' & f' & fp' & tr' & Hstep & Hsim'').
+                eapply @HybridFineMachine.StepSafe with (dilMem := FineDilMem).
+                specialize (Hstep sched).
+              unfold corestep in Hstep.
+              simpl in Hstep.
+              now eauto.
+              now econstructor.
+            * specialize (Hsim'' ltac:(auto)).
+              specialize (IHn _ _ _ _ _ _ _ _ _ _ sched Hsim'').
+              specialize (Hstep sched).
+              unfold corestep in Hstep.
+              simpl in Hstep.
+              eapply @HybridFineMachine.StepSafe with (dilMem := FineDilMem);
+                now eauto.
+          + pose proof (@SimProofs.sim_internal _ _ _ initU init_mem _ _ _ _ _ _ _ _ _ _ _ _ cnti Hsim Htype) as
+                (tpf' & m' & fp' & tr' & Hstep & Hsim').
+            specialize (Hstep sched).
+            specialize (IHn _ _ _ _ _ _ _ _ _ _ sched Hsim').
+            unfold corestep in Hstep.
+            simpl in Hstep.
+            econstructor 3; simpl; eauto.
+          + pose proof (@SimProofs.sim_halted _ _ initU init_mem _ _ _ _ _  _ _ _  _ _  _  _ cnti Hsim Htype) as Hsim'.
+            destruct Hsim' as (tr' & Hstep & Hsim'').
+            specialize (IHn _ _ _ _ _ _ _ _ _ _ sched Hsim'').
+            specialize (Hstep sched).
+            unfold corestep in Hstep.
+            simpl in Hstep.
+            econstructor 3;
+              eauto.
+          + pose proof (@SimProofs.sim_suspend _ _ _ initU init_mem em _ _ _ _ _ _ _  _ _ _ _ _ cnti Hsim Htype) as
+                (tpc' & trc' & mc' & tpf' & mf' & f' & fp' & tr' & Hstep & Hsim').
+            specialize (IHn _ _ _ _ _ _ _ _ _ _ sched Hsim').
+            specialize (Hstep sched).
+            unfold corestep in Hstep.
+            simpl in Hstep.
+            econstructor 3; simpl;
+              now eauto.
+        -  pose proof (@SimProofs.sim_fail _ _  initU init_mem _ _ _ _  _  _ _  _ _ _ _ _ invalid Hsim) as
+              (tr' & Hstep & Hsim').
+           specialize (IHn _ _ _ _ _ _ _ _ _ _ sched Hsim').
+           specialize (Hstep sched).
+           unfold corestep in Hstep.
+           simpl in Hstep.
+           econstructor 3; eauto.
         induction n; intros; [now eapply HybridFineMachine.Safe_0|].
         destruct sched as [|i sched].
         eapply @HybridFineMachine.HaltedSafe with (tr := trf) (dilMem := FineDilMem);

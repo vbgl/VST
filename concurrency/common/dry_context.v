@@ -53,18 +53,12 @@ Module AsmContext.
       @HybridFineMachine.HybridFineMachine BareMachine.resources _ _ BareMachine.BareMachineSig BareDilMem.
 
     Variable initU : seq nat.
-    Variable init_mem : option Memory.Mem.mem.
-    Definition init_perm  :=
-      match init_mem with
-      | Some m => Some (getCurPerm m, empty_map)
-      | None => None
-      end.
 
     Definition coarse_semantics:=
-      MachineSemantics(HybridMachine := dryCoarseMach) initU init_perm.
+      MachineSemantics(HybridMachine := dryCoarseMach) initU None.
 
     Definition fine_semantics:=
-      MachineSemantics(HybridMachine := dryFineMach) initU init_perm.
+      MachineSemantics(HybridMachine := dryFineMach) initU None.
 
     Definition bare_semantics :=
       MachineSemantics(HybridMachine := bareMach) initU None.

@@ -21,7 +21,6 @@ Require Import VST.concurrency.common.addressFiniteMap.
 Require Import compcert.lib.Integers.
 
 Require Import Coq.ZArith.ZArith.
-(* Require Import VST.concurrency.sc_drf.common.threads_lemmas. *)
 Require Import VST.concurrency.sc_drf.mem_obs_eq.
 Require Import VST.concurrency.memory_lemmas.
 Require Import compcert.x86.Asm.
@@ -847,30 +846,38 @@ Module X86Inj.
   Qed.
   
   Lemma make_arguments_wd:
-    forall f rs rs' m m' loc arg
+    forall f rs rs' m m' loc args
       (Hrs_wd: regset_wd f rs)
       (Hmem_wd: valid_mem m)
       (Hdomain: domain_memren f m)
-      (Hvalid_val: valid_val f arg)
-      (Hmake_args: make_arguments rs m loc [::arg] = Some (rs', m')),
+      (Hvalid_val: valid_val_list f args)
+      (Hmake_args: make_arguments rs m loc args = Some (rs', m')),
       regset_wd f rs' /\ valid_mem m' /\ domain_memren f m'.
   Proof.
-    intros.
-    destruct loc.
-    - now inversion Hmake_args.
-    - destruct loc.
-      simpl in Hmake_args.
-      destruct r.
-      eapply make_arg_wd in Hmake_args; now eauto.
-      (* destruct arg; try discriminate.  *)
-      destruct (make_arg rs m rhi (Val.hiword arg)) eqn:Hmake_hi; try discriminate.
-      destruct p as [r0 m0].
-      eapply make_arg_wd in Hmake_hi; eauto with wd.
-      destruct Hmake_hi as [? [? ?]].
-      eapply make_arg_wd in Hmake_args;
-        now eauto with wd.
-      simpl in Hmake_args.
+    intros f rs rs' m m' loc.
+    generalize dependent m'.
+    generalize dependent rs'.
+    induction loc; intros.
+    - destruct args; simpl in Hmake_args.
+      inversion Hmake_args; subst; auto.
       discriminate.
+    - destruct args;
+        simpl in Hmake_args.
+      discriminate.
+      destruct (make_arguments rs m loc args) eqn:Hmake_args0; try discriminate.
+      destruct p as [rs0 m0].
+      inversion Hvalid_val; subst.
+      specialize (IHloc _ _ _ Hrs_wd Hmem_wd Hdomain H2 Hmake_args0).
+      destruct IHloc as [Hrs_wd0 [Hmem_wd0 Hdomain0]].
+      destruct a. 
+      + eapply make_arg_wd in Hmake_args;
+          now eauto.
+      + destruct (make_arg rs0 m0 rhi (Val.hiword v)) eqn:Hmake_hi; try discriminate.
+        destruct p as [r1 m1].
+        eapply make_arg_wd in Hmake_hi; eauto with wd.
+        destruct Hmake_hi as [? [? ?]].
+        eapply make_arg_wd in Hmake_args;
+          now eauto with wd.
   Qed.
 
   Lemma mem_valid_alloc:
@@ -926,11 +933,12 @@ Module X86Inj.
   Qed.
 
   Lemma initial_core_wd :
-    forall the_ge m m' (f : memren) (vf arg : val) (c_new : state) h,
+    forall the_ge m m' (f fg : memren) (vf : val) args (c_new : state) h,
       valid_mem m ->
       domain_memren f m ->
-      initial_core (Asm_core_sem the_ge) h m c_new m' vf [:: arg] ->
-      valid_val f arg -> ge_wd f the_ge ->
+      initial_core (Asm_core_sem the_ge) h m c_new m' vf args ->
+      valid_val_list f args -> ge_wd fg the_ge ->
+      ren_domain_incr fg f ->
       valid_mem m' /\
       (exists f', ren_domain_incr f f' /\ domain_memren f' m') /\
       forall f', domain_memren f' m' ->
@@ -944,15 +952,15 @@ Module X86Inj.
     simpl.
     assert (Hstk: Mem.valid_block m1 stk)
       by (eapply Mem.valid_new_block; eauto).
-    eapply mem_valid_alloc in H5; eauto.
-    destruct H5 as [Hvalid_m1 Hf'].
+    eapply mem_valid_alloc in H6; eauto.
+    destruct H6 as [Hvalid_m1 Hf'].
     destruct Hf' as [f' [Hincr' Hren']].
-    eapply storev_wd_domain in H6; eauto.
-    destruct H6 as [Hvalid_m2 Hmemren2].
     eapply storev_wd_domain in H7; eauto.
-    destruct H7 as [Hvalid_m3 Hmemren3].
-    eapply make_arguments_wd in H8; eauto.
-    destruct H8 as [? [? ?]].
+    destruct H7 as [Hvalid_m2 Hmemren2].
+    eapply storev_wd_domain in H8; eauto.
+    destruct H8 as [Hvalid_m3 Hmemren3].
+    eapply make_arguments_wd in H9; eauto.
+    destruct H9 as [? [? ?]].
     split; auto.
     split.
     eexists; eauto.
@@ -968,18 +976,19 @@ Module X86Inj.
     unfold Vnullptr.
     destruct Archi.ptr64; simpl; auto.
     apply regset_wd_set.
-    unfold find_funct_ptr in H4.
-    unfold find_def in H4.
+    unfold find_funct_ptr in H5.
+    unfold find_def in H5.
     destruct (Maps.PTree.get b (genv_defs the_ge)) eqn:Hget; try discriminate.
     destruct g; try discriminate.
     destruct H3 as [Hge_wd _].
     specialize (Hge_wd b ltac:(rewrite Hget; auto)).
     simpl.
+    eapply H4 in Hge_wd.
     eapply Hincr' in Hge_wd.
     destruct (f' b); [eexists; eauto| by exfalso].
     unfold Pregmap.init.
     intros r; simpl; auto.
-    eapply valid_val_incr; eauto.
+    eapply valid_val_list_incr; eauto.
     all:unfold Vnullptr; destruct (Archi.ptr64); simpl;
       now auto.
   Qed.

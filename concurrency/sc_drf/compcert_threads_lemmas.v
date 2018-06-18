@@ -57,8 +57,7 @@ Module SimDefs.
   Context {asmSem : Semantics}
           {semAxioms : SemAxioms}
           {CI: CoreInj}
-          {initU : seq nat}
-          {init_mem : option Memory.Mem.mem}.
+          {initU : seq nat}.
 
   Existing Instance OrdinalPool.OrdinalThreadPool.
   Existing Instance DryHybridMachine.DryHybridMachineSig.
@@ -75,8 +74,8 @@ Module SimDefs.
 
 
   Notation threadStep := (HybridMachineSig.threadStep the_ge).
-  Notation cmachine_step := ((corestep (AsmContext.coarse_semantics initU init_mem))).
-  Notation fmachine_step := ((corestep (AsmContext.fine_semantics initU init_mem))).
+  Notation cmachine_step := ((corestep (AsmContext.coarse_semantics initU))).
+  Notation fmachine_step := ((corestep (AsmContext.fine_semantics initU))).
 
   (** *** Simulations between individual threads. *)
 
@@ -328,8 +327,7 @@ Module SimProofs.
     Context {asmSem : Semantics}
             {semAxioms : SemAxioms}
             {CI: CoreInj}
-            {initU : seq nat}
-            {init_mem : option Memory.Mem.mem}.
+            {initU : seq nat}.
 
     Existing Instance OrdinalPool.OrdinalThreadPool.
     Existing Instance DryHybridMachine.DryHybridMachineSig.
@@ -345,11 +343,11 @@ Module SimProofs.
     Import event_semantics Events.
 
   Notation csafe := (HybridCoarseMachine.csafe).
-  Notation sim_halted_def := (@sim_halted_def _ _ initU init_mem).
-  Notation sim_fail_def := (@sim_fail_def _ _ initU init_mem).
+  Notation sim_halted_def := (@sim_halted_def _ _ initU).
+  Notation sim_fail_def := (@sim_fail_def _ _ initU).
   Notation threadStep := (HybridMachineSig.threadStep).
-  Notation cmachine_step := ((corestep (AsmContext.coarse_semantics initU init_mem))).
-  Notation fmachine_step := ((corestep (AsmContext.fine_semantics initU init_mem))).
+  Notation cmachine_step := ((corestep (AsmContext.coarse_semantics initU))).
+  Notation fmachine_step := ((corestep (AsmContext.fine_semantics initU))).
   Notation "cnt '$' m '@'  'I'" := (getStepType cnt m Internal) (at level 80).
   Notation "cnt '$' m '@'  'E'" := (getStepType cnt m Concurrent) (at level 80).
   Notation "cnt '$' m '@'  'S'" := (getStepType cnt m Suspend) (at level 80).
@@ -360,9 +358,9 @@ Module SimProofs.
   Notation fyield := (@yield HybridFineMachine.scheduler).
   Notation fdiluteMem := (@diluteMem FineDilMem).
 
-  Notation sim_internal_def := (@sim_internal_def _ _ initU init_mem).
-  Notation sim_suspend_def := (@sim_suspend_def _ _ initU init_mem).
-  Notation sim_external_def := (@sim_external_def _ _ initU init_mem).
+  Notation sim_internal_def := (@sim_internal_def _ _ initU).
+  Notation sim_suspend_def := (@sim_suspend_def _ _ initU).
+  Notation sim_external_def := (@sim_external_def _ _ initU).
   
   Lemma ctlType_inj :
     forall st c c' m m' (f fg: memren)
@@ -597,7 +595,7 @@ Module SimProofs.
           now auto.
   Qed.
 
-  Notation corestepN := (corestepN (AsmContext.coarse_semantics initU init_mem)).
+  Notation corestepN := (corestepN (AsmContext.coarse_semantics initU)).
   Lemma safety_det_corestepN_internal:
     forall xs i U tpc trc mc tpc' mc' fuelF
       (Hsafe : csafe ((i :: U),trc,tpc) mc
@@ -818,7 +816,9 @@ Module SimProofs.
       specialize (Htp_wd _ cnti).
       rewrite Hcode in Htp_wd;
         simpl in Htp_wd.
+      econstructor.
       destruct Htp_wd; now auto.
+      now econstructor.
   Qed.
 
   Lemma internal_execution_wd:

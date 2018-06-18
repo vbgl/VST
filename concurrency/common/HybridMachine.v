@@ -575,10 +575,7 @@ Module DryHybridMachine.
     Definition init_mach (pmap : option res) (m: mem)
                (ms:thread_pool) (m' : mem) (v:val) (args:list val) : Prop :=
       exists c, core_semantics.initial_core semSem 0 m c m' v args /\
-        match pmap with
-        | Some pmap => ms = mkPool (Krun c) (pmap.1, empty_map)
-        | None => False
-        end.
+           ms = mkPool (Krun c) (getCurPerm m', empty_map).
 
     Section HybDryMachineLemmas.
 

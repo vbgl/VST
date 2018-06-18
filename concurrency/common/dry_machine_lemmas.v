@@ -778,7 +778,7 @@ Module ThreadPoolWF.
     simpl in Hinit.
     unfold DryHybridMachine.init_mach in *.
     destruct Hinit as (? & Hinit & Hpmap).
-    destruct pmap; inversion Hpmap; subst.
+    subst.
     simpl in H.
     unfold OrdinalPool.mkPool in *. simpl in *.
     unfold OrdinalPool.containsThread in *. simpl in *.
@@ -789,29 +789,18 @@ Module ThreadPoolWF.
   Qed.
 
   (** [getThreadR] on the initial thread returns the [access_map] that was used
-  in [init_mach] and the [empty_map]*)
-  Lemma getThreadR_init:
+  in [init_mach] and the [empty_map] -- No longer true*)
+ Lemma getThreadR_init:
     forall pmap m m' f arg tp
-      (Hinit: init_mach (Some pmap) m tp m' f arg)
+      (Hinit: init_mach pmap m tp m' f arg)
       (cnt: containsThread tp 0),
-      getThreadR cnt = (pmap.1, empty_map).
+      getThreadR cnt = (getCurPerm m', empty_map).
   Proof.
     intros.
     simpl in *.
     unfold DryHybridMachine.init_mach in *.
     destruct Hinit as (? & Hinit & ?); subst.
     reflexivity.
-  Qed.
-
-  (** If there was no [access_map] provided [init_mach] is not defined*)
-  Lemma init_mach_none:
-    forall m tp m' f arg,
-      ~init_mach None m tp m' f arg.
-  Proof.
-    intros.
-    simpl in *.
-    unfold DryHybridMachine.init_mach.
-    intros (? & ? & ?); contradiction.
   Qed.
 
   (** There are no locks in the initial machine *)
@@ -824,7 +813,7 @@ Module ThreadPoolWF.
     simpl in *.
     unfold DryHybridMachine.init_mach in Hinit.
     destruct Hinit as (? & Hinit & ?).
-    destruct pmap; try contradiction; subst.
+    subst.
     simpl.
     unfold OrdinalPool.mkPool.
     unfold OrdinalPool.lockRes.
@@ -853,8 +842,6 @@ Module ThreadPoolWF.
     - intros.
       split.
       + intros.
-        destruct pmap as [pmap |];
-          [|apply init_mach_none in Hinit; contradiction].
         pose proof (init_thread Hinit cnti); subst.
         pose proof (init_thread Hinit cntj); subst.
         Tactics.pf_cleanup.

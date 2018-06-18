@@ -4488,11 +4488,11 @@ Module CoreInjections.
       valid_val f arg -> ge_wd f the_ge -> core_wd f c_new.*)
 
         initial_core_wd :
-          forall m m' (f fg : memren) (vf arg : val) (c_new:semC) h,
+          forall m m' (f fg : memren) (vf : val) args (c_new:semC) h,
             valid_mem m ->
             domain_memren f m ->
-            initial_core semSem h m c_new m' vf [:: arg] ->
-            valid_val f arg ->
+            initial_core semSem h m c_new m' vf args ->
+            valid_val_list f args ->
             ge_wd fg the_ge ->
             ren_domain_incr fg f ->
             valid_mem m' /\
