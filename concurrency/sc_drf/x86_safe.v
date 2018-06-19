@@ -65,20 +65,20 @@ Module X86Safe.
 
 
     Lemma x86SC_safe:
-      forall Main_ptr init_mem_target init_thread_target
-        (Hinit_mem_defined: init_mem = Some init_mem_target),
-        let init_perm_target := permissions.getCurPerm init_mem_target in
-        let init_tpc_target := DryHybridMachine.initial_machine init_perm_target init_thread_target in
-        let init_MachState_target := (U, nil, init_tpc_target) in
+      forall Main_ptr init_thread_target new_mem_target,
+        initial_core (event_semantics.msem semSem) 0 init_mem init_thread_target new_mem_target Main_ptr nil ->
+        let init_perm_target := permissions.getCurPerm init_mem in
+        let new_perm_target := permissions.getCurPerm new_mem_target in
+        let init_tpc_target := DryHybridMachine.initial_machine new_perm_target init_thread_target in
         forall
-          (Hinit_state: tpc_init U init_mem init_mem_target init_MachState_target Main_ptr nil)
+          (* (Hinit_state: tpc_init U init_mem init_mem_target init_MachState_target Main_ptr nil) *)
           (Hcsafe: forall n sched,
               csafe
                 (ThreadPool:= threadPool.OrdinalPool.OrdinalThreadPool)
                 (resources:= DryHybridMachine.dryResources)
                 (Sem:= _)
                 (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig)
-                (sched, nil, init_tpc_target) (@diluteMem HybridCoarseMachine.DilMem init_mem_target) n),
+                (sched, nil, init_tpc_target) (@diluteMem HybridCoarseMachine.DilMem new_mem_target) n),
           let init_tp_bare := ThreadPool.mkPool
                                 (resources:=BareMachine.resources)
                                 (Krun init_thread_target) tt  in
@@ -89,78 +89,49 @@ Module X86Safe.
                              (resources:=erased_machine.BareMachine.resources)
                              (Sem:=_))
               (machineSig:= BareMachine.BareMachineSig)
-              init_tp_bare (@diluteMem BareDilMem init_mem_target) U n.
+              init_tp_bare (@diluteMem BareDilMem new_mem_target) U n.
     Proof.
       intros.
       (** Fine to Erased safety *)
-      eapply init_fsafe_implies_scsafe; eauto.
+      eapply init_fsafe_implies_scsafe with (m := init_mem) (f := Main_ptr) (arg := nil) (tpf := init_tpc_target); eauto.
       econstructor; eauto.
       simpl.
       unfold BareMachine.init_mach.
-      inv Hinit_state.
-      simpl in H0.
-      unfold DryHybridMachine.init_mach in H0.
-      destruct H0 as [c [Hinit_core ?]].
-      exists c.
-      split; eauto.
-      assert (c = init_thread_target).
-      { unfold initial_machine in init_tpc_target.
-        unfold init_perm in H0.
-        rewrite Hinit_mem_defined in H0.
-        unfold init_tpc_target in H0.
-        simpl in H0.
-        unfold OrdinalPool.mkPool in H0.
-        inv H0.
-        eapply Eqdep.EqdepTheory.inj_pair2 in H2.
-        clear -H2.
-        assert (cnt: (0<1)%nat) by auto.
-        pose proof (Ordinal cnt) as I1.
-        assert (Heq: Krun init_thread_target = Krun c)
-          by (eapply equal_f in H2; eauto).
-        inv Heq.
-        reflexivity.
-      }
-      subst.
-      unfold init_tp_bare.
-      reflexivity.
+      exists init_thread_target.
+      split;
+        now eauto.
+      unfold tpf_init.
+      simpl.
+      split; auto.
+      unfold DryHybridMachine.init_mach.
+      eexists; split;
+        now eauto.
       (** Coarse to Fine safety *)
-      eapply init_fine_safe; eauto.
-      intros sched  tpc mem n0 Hinit_mem Htpc.
-      rewrite Hinit_mem_defined in Hinit_mem. inv Hinit_mem.
-      inversion Htpc; subst.
+      eapply init_fine_safe with (f := Main_ptr) (arg := nil); eauto.
+      intros sched tpc mem' n0 Htpc.
+      destruct Htpc as [_ Hinit_tpc].
+      simpl in Hinit_tpc.
+      unfold DryHybridMachine.init_mach in Hinit_tpc.
+      destruct Hinit_tpc as [c_new [Hinit_core_new ?]].
       simpl in Hcsafe.
-      specialize (Hcsafe n0).
-      unfold init_MachState_target, init_tpc_target in Hcsafe.
+      specialize (Hcsafe n0 sched).
+      unfold init_tpc_target in Hcsafe.
       simpl in Hcsafe.
-      assert (tpc = OrdinalPool.mkPool (Krun init_thread_target) (init_perm_target, empty_map)).
-      { simpl in H0.
-        destruct H0 as [c0 [Hinit_core0 Hinit_pool0]].
-        unfold init_perm in Hinit_pool0.
-        rewrite Hinit_mem_defined in Hinit_pool0.
-        subst.
+      assert (Heq: c_new = init_thread_target /\ mem' = new_mem_target)
+        by (eapply initial_core_det with (args := nil); eauto). 
+      destruct Heq; subst c_new mem'.
+      assert (tpc = OrdinalPool.mkPool (Krun init_thread_target) (new_perm_target, empty_map)).
+      { subst.
         simpl.
-        unfold init_perm_target.
+        unfold new_perm_target.
         eapply f_equal2; try reflexivity.
-        inv Hinit_state.
-        inv H1.
-        destruct H2 as [Hinit_core Hinit_tp].
-        unfold init_perm in Hinit_tp.
-        rewrite Hinit_mem_defined in Hinit_tp.
-        unfold init_tpc_target in Hinit_tp. simpl in Hinit_tp.
-        unfold OrdinalPool.mkPool in Hinit_tp.
-        inv Hinit_tp.
-        eapply Eqdep.EqdepTheory.inj_pair2 in H2.
-        assert (cnt: (0<1)%nat) by auto.
-        pose proof (Ordinal cnt) as I1.
-        assert (Heq: Krun init_thread_target = Krun x)
-          by (eapply equal_f in H2; eauto).
-        inv Heq.
-        apply f_equal.
-        eapply initial_core_det;
-          now eauto.
       }
       subst; now eauto.
-      econstructor.
+      econstructor; eauto.
+      simpl.
+      eexists; now eauto.
+      now econstructor.
+      Unshelve. now auto.
     Qed.
 
   End X86Safe.

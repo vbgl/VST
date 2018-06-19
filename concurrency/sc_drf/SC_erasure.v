@@ -1748,17 +1748,17 @@ Module MemErasure.
   Qed.
 
   Lemma mem_free_erasure':
-    forall m m' sz m2 b
+    forall m m' lo hi m2 b
       (Herased: mem_erasure m m')
-      (Hfree: Mem.free m b 0 sz = Some m2),
+      (Hfree: Mem.free m b lo hi = Some m2),
     exists m2',
-      Mem.free m' b 0 sz = Some m2' /\
+      Mem.free m' b lo hi = Some m2' /\
       mem_erasure' m2 m2'.
   Proof.
     intros.
     destruct Herased.
     pose proof (Mem.free_range_perm _ _ _ _ _ Hfree) as Hperm.
-    assert (Hfree': Mem.range_perm m' b 0 sz Cur Freeable).
+    assert (Hfree': Mem.range_perm m' b lo hi Cur Freeable).
     { intros ofs Hrange.
       specialize (Hperm _ Hrange).
       unfold Mem.perm.
@@ -1959,8 +1959,9 @@ Module CoreErasure.
             (Harg: val_erasure arg arg')
             (Hmem_erase: mem_erasure m m')
             (Hinit: initial_core semSem h m c m2 v [:: arg]),
-            exists m2',
-              initial_core semSem h m' c m2' v' [:: arg'] /\
+            exists c' m2',
+              initial_core semSem h m' c' m2' v' [:: arg'] /\
+              core_erasure c c' /\
               mem_erasure m2 (erasePerm m2');
 
         halted_erase:
@@ -2463,8 +2464,8 @@ Module SCErasure.
              | [H: val_erasure (Vptr _ _) _ |- _] => inv H
              end; subst.
       eapply @erasure_initial_core with (m' := m1') in Hinitial; eauto.
-      destruct Hinitial as [m2' [Hinitial2' Hmem_erasure2]].
-      exists (updThread cnti' (Krun c_new) (add_block Hcomp1' cnti' m2')), m2'.
+      destruct Hinitial as [c2' [m2' [Hinitial2' [Hcore_erasure2 Hmem_erasure2]]]].
+      exists (updThread cnti' (Krun c2') (add_block Hcomp1' cnti' m2')), m2'.
       split; [|split].
       - eapply @StartThread with (Hcmpt := Hcomp1'); eauto.
         unfold install_perm.
@@ -2472,8 +2473,6 @@ Module SCErasure.
         unfold BareMachine.install_perm.
         reflexivity.
       - eapply erased_updThread'; eauto.
-         simpl.
-         now apply core_erasure_refl.
       - assumption.
       - inversion Hperm; subst.
         eapply mem_erasure_restr;

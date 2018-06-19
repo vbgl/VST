@@ -778,19 +778,16 @@ Module ThreadPoolWF.
     simpl in Hinit.
     unfold DryHybridMachine.init_mach in *.
     destruct Hinit as (? & Hinit & Hpmap).
-    subst.
-    simpl in H.
+    simpl in H. subst.
     unfold OrdinalPool.mkPool in *. simpl in *.
     unfold OrdinalPool.containsThread in *. simpl in *.
     clear - H.
-    destruct i.
-    reflexivity.
     ssromega.
   Qed.
 
   (** [getThreadR] on the initial thread returns the [access_map] that was used
-  in [init_mach] and the [empty_map] -- No longer true*)
- Lemma getThreadR_init:
+  in [init_mach] and the [empty_map]*)
+  Lemma getThreadR_init:
     forall pmap m m' f arg tp
       (Hinit: init_mach pmap m tp m' f arg)
       (cnt: containsThread tp 0),
