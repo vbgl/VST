@@ -7,6 +7,7 @@
 Require Import VST.concurrency.common.HybridMachineSig.
 Require Import VST.concurrency.compiler.HybridMachine_simulation.
 Require Import VST.concurrency.compiler.concurrent_compiler_simulation.
+Require Import VST.concurrency.compiler.safety_equivalence.
 
 Set Implicit Arguments.
 

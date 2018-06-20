@@ -23,10 +23,10 @@ Section ConcurrentCopmpilerSpecification.
   Context (Clight_g : Clight.genv).
   Context (Asm_g : Clight.genv).
   Context (Asm_program: Asm.program).
-  Context (Asm_genv_safe: Asm_core.safe_genv (the_ge Asm_program)).
+  Context (Asm_genv_safe: Asm_core.safe_genv (@the_ge Asm_program)).
 
   Definition ConcurrentCompilerCorrectness_specification: Type:=
     forall U,
-      HybridMachine_simulation (ClightConcurSem(ge:=Clight_g) U) (AsmConcurSem Asm_program Asm_genv_safe U).
+      HybridMachine_simulation (ClightConcurSem(ge:=Clight_g) U) (@AsmConcurSem Asm_program Asm_genv_safe U).
 
 End ConcurrentCopmpilerSpecification.
