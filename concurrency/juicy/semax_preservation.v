@@ -1057,7 +1057,7 @@ Section Preservation.
       simpl JuicyMachine.add_block in *.
       unfold add_block in *.
       assert (mem_compatible_with (updThread i tp cnti (Krun c_new) (getThreadR i tp cnti))
-        (fst (alloc m'0 0 0)) Phi) as Hcmpt'.
+        (fst (alloc m' 0 0)) Phi) as Hcmpt'.
       { hnf in Hperm; subst.
         inversion compat; constructor; auto.
          - rewrite join_all_res; auto.

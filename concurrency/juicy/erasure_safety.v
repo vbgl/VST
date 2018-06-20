@@ -176,7 +176,7 @@ Lemma juice2Perm_match : forall m r, access_cohere' m r ->
   Parching.match_rmap_perm r (juice2Perm r m, empty_map).
 Proof.
   split; auto; simpl.
-  apply juic2Perm_correct; auto.
+  intros; apply juic2Perm_correct; auto.
 Qed.
 
 Section DrySafety.
@@ -197,7 +197,7 @@ Section DrySafety.
     unfold init_rmap, initial_jm, spr.
     destruct (semax_prog.semax_prog_rule' _ _ _ _ _ _ _ _) as (? & ? & ? & s); simpl.
     destruct (s n tt) as (jm & ? & ? & ? & ? & ? & ?); simpl.
-    destruct jm; simpl in *; subst.
+    destruct jm; simpl in *; subst; intros.
     rewrite <- (JMaccess (b, ofs)).
     unfold access_at, PMap.get; simpl.
     rewrite PTree.gmap1.

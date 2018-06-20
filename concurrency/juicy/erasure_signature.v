@@ -88,7 +88,7 @@ Module Type ErasureSig.
 
   (*Variable genv: G.
   Variable main: Values.val.*)
-  Variable match_rmap_perm: jres -> dres -> Prop.
+(*  Variable match_rmap_perm: jres -> dres -> Prop.
   Variable no_locks_perm: jres ->  Prop.
 
 
@@ -103,7 +103,9 @@ Module Type ErasureSig.
       exists (ds : dstate ge),
         initial_core (DMachineSem ge U (Some pmap)) h m (U, nil, ds) m' main vals /\
         invariant ds /\
-        match_st ge js ds.
+        match_st ge js ds.*)
+(* There's no good generic way to describe the actual initial state, since it depends on the
+   relationship between initial rmap/pmap and memory. *)
 
   Axiom core_diagram:
     forall ge (m : mem)  (U0 U U': _) rmap pmap

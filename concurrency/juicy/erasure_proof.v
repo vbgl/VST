@@ -716,7 +716,7 @@ Module Parching <: ErasureSig.
     Qed.
 
     Definition match_rmap_perm (rmap : rmap) (pmap: access_map * access_map): Prop:=
-      forall b ofs, perm_of_res (rmap @ (b, ofs)) = pmap.1 !! b ofs /\
+      (forall b ofs, perm_of_res (rmap @ (b, ofs)) = pmap.1 !! b ofs) /\
                pmap.2 = empty_map.
 
      Definition no_locks_perm (rmap : rmap): Prop:=
@@ -984,10 +984,9 @@ Module Parching <: ErasureSig.
 
 
 
-    (** *Inital state simulation*)
+(*    (** *Inital state simulation*)
     (* Erasure of the juicy initial_state is the dry initial_state AND
        the two are related by a Match relation. *)
-    Set Printing Implicit.
     Lemma init_diagram:
       forall (j : Values.Val.meminj) (U:schedule) (js : jstate)
         (vals : list Values.val) (m m' : Mem.mem) rmap pmap main h,
@@ -1009,19 +1008,22 @@ Module Parching <: ErasureSig.
       simpl in H2.
       unfold Concur.init_mach in H2; simpl in *.
       destruct H2 as (_ & s & ? & ?); subst.
-      exists (DryHybridMachine.initial_machine(Sem := Sem) pmap.1 s).
+      exists (DryHybridMachine.initial_machine(Sem := Sem) (getCurPerm m') s).
+      destruct H0 as [Hperm ?]; destruct pmap; simpl in *; subst.
 
       split; [|split].
 
       (*Proofs*)
       - split; auto.
-        simpl.
+        split; auto.
+        SearchAbout perm_of_
         unfold DryHybridMachine.init_mach.
         eexists; split; simpl; eauto.
       - eapply initial_invariant0.
 
-      - apply MTCH_initial; assumption.
-    Qed.
+      - eapply MTCH_initial with (pmap := (getCurPerm m', _)); auto; split; simpl; auto.
+        destruct (H0 b ofs) as [-> _].
+    Qed.*)
 
   Lemma perm_of_readable' : forall sh, shares.readable_share sh ->
     Mem.perm_order' (perm_of_sh (Share.glb Share.Rsh sh)) Readable.
@@ -4712,7 +4714,7 @@ Here be dragons
       { inversion Htstep; subst.
         pose proof MTCH_updt' _ _ _ (Krun c_new) _ MATCH ctn (MTCH_cnt MATCH ctn) Hcmpt (MTCH_compat js ds m MATCH Hcmpt) as MATCH'.
         pose (ds':= (updThread (MTCH_cnt MATCH ctn) (Krun c_new)
-          (HybridMachineSig.add_block (MTCH_compat js ds m MATCH Hcmpt) (MTCH_cnt MATCH ctn) m'))).
+          (HybridMachineSig.add_block (MTCH_compat js ds m MATCH Hcmpt) (MTCH_cnt MATCH ctn) m'0))).
         exists ds'.
         assert (DryHybridMachine.invariant ds').
         { eapply step_decay_invariant with (Hcompatible := MTCH_compat _ _ _ MATCH Hcmpt); auto.
