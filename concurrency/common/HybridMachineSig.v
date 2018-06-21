@@ -427,9 +427,15 @@ Module HybridMachineSig.
                             if op_r is Some r then 
                               init_mach op_r m (make_init_machine c r) m' f args
                             else False.
+    Definition init_machine'' (op_r : option res) (m: mem)
+               (tp : thread_pool) (m': mem) (f : val) (args : list val)
+      : Prop :=
+      if op_r is Some r then 
+        init_mach op_r m tp m' f args
+      else False.
     
     Definition unique_Krun tp i :=
-      forall j cnti q,
+      forall j cnti q, 
         @getThreadC _ _ _ j tp cnti = Krun q ->
         ~ @threadHalted _ j tp cnti  ->
         eq_nat_dec i j.
@@ -538,9 +544,9 @@ Module HybridMachineSig.
 
       Set Printing Implicit.
       Program Definition new_MachineSemantics (U:schedule):
-        @ConcurSemantics G nat schedule event_trace machine_state mem res (@semC Sem).
-      apply (@Build_ConcurSemantics _ nat schedule event_trace  machine_state _ _ _
-                                    (init_machine')
+        @ConcurSemantics G nat schedule event_trace machine_state mem res (*@semC Sem*).
+      apply (@Build_ConcurSemantics _ nat schedule event_trace machine_state _ _ (*_*)
+                                    (init_machine'')
                                     (fun U st => halted_machine (U, nil, st))
                                     (fun ge U st m st' m' =>
                                        @internal_step U st m
@@ -565,7 +571,7 @@ Module HybridMachineSig.
         MachineSemantics: schedule -> option res ->
                           CoreSemantics MachState mem
         ; ConcurMachineSemantics: schedule ->
-                                  @ConcurSemantics G nat (seq.seq nat) event_trace t mem res (@semC Sem)
+                                  @ConcurSemantics G nat (seq.seq nat) event_trace t mem res (*@semC Sem*)
         ; initial_schedule: forall m m' main vals U p st n,
             initial_core (MachineCoreSemantics U p) n m st m' main vals ->
             exists c, st = (U, nil, c) (*XXX:this seems wrong *)

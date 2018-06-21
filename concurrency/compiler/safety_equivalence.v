@@ -219,7 +219,7 @@ Section Csafe_KSafe.
          auto. Qed.
 
   
-  Lemma csafe_ksafe_equiv':
+  Lemma csafe_ksafe_equiv:
     forall st_ m tr,
       (forall n U, valid (tr, st_, m) U -> csafe (U, tr, st_) m n) ->
       (forall n U, valid (tr, st_, m) U -> ksafe_kstep (U, tr, st_) m n).
@@ -384,6 +384,7 @@ Section Csafe_KSafe.
             assert (HH: ~ threadHalted cnti).
             { clear. unfold threadHalted. destruct Machine; simpl; clear.
               admit. (*threads don't halt... for now*)
+              
             }
             
             specialize (H1 _ _ _ H4 HH).
@@ -421,14 +422,14 @@ Section Csafe_KSafe.
           eauto.
   Admitted.
 
-  Lemma csafe_ksafe_equiv:
+  Lemma csafe_ksafe_equiv_trick:
     forall st_ m tr,
       (forall U, valid (tr, st_, m) U) ->
       (forall n U, csafe (U, tr, st_) m n) ->
       (forall n U, ksafe_kstep (U, tr, st_) m n).
   Proof.
     intros ? ? ? ? VALID H ?;
-    apply csafe_ksafe_equiv'; try apply VALID; auto.
+    apply csafe_ksafe_equiv; try apply VALID; auto.
   Qed.    
 
     
@@ -662,10 +663,7 @@ Context (finit_branch_kstep:(forall x : kstate,
              (fun (x0 : kstate) (y : schedule) (x' : kstate) =>
               exists y' : schedule, kstep x0 y x' y') valid x))).
   
-Definition BLAH:= ksafe_safe _ _ kstep valid classic I finit_branch_kstep.
-
-
-Lemma csafe_safety:
+Lemma csafe_safety_trick:
   forall tr tp m,
        (forall U : schedule, valid (tr, tp,m) U) ->
        (forall (n : nat) U, csafe (U, tr, tp) m n) ->
@@ -674,10 +672,21 @@ Proof.
   intros ??????.
   eapply ksafe_safe; eauto.
   - exact classic.
+  - eapply csafe_ksafe_equiv_trick; eauto.
+Qed.
+
+Lemma csafe_safety:
+  forall tr tp m,
+       (forall (n : nat) U, valid (tr, tp,m) U -> csafe (U, tr, tp) m n) ->
+       forall U : schedule, valid (tr, tp,m) U -> safe kstate schedule kstep valid (tr,tp,m) U.
+Proof.
+  intros ??????.
+  eapply ksafe_safe'; eauto.
+  - exact classic.
   - eapply csafe_ksafe_equiv; eauto.
 Qed.
 
-Lemma safety_csafe:
+Lemma safety_csafe_trick:
   forall tr tp m,
     (forall U : schedule, valid (tr, tp,m) U) ->
     (forall U : schedule, safe kstate schedule kstep valid (tr,tp,m) U) ->
@@ -692,7 +701,48 @@ Proof.
 Qed.
 
 
+Lemma safety_csafe:
+  forall tr tp m,
+    (forall U : schedule, valid (tr, tp,m) U -> safe kstate schedule kstep valid (tr,tp,m) U) ->
+    (forall (n : nat) U, valid (tr, tp,m) U -> csafe (U, tr, tp) m n).
+Proof.
+  unfold kstate2cstate; simpl.
+  intros ???????.
+  eapply ksafe_csafe_equiv'; eauto.
+  unfold ksafe_kstep.
+  simpl_state.
+  intros.
+  eapply safe_ksafe'; eauto.
+Qed.
+
+
 Lemma csafe_explicit_safety:
+  forall tr tp m,
+       forall U : schedule, valid (tr, tp,m) U ->
+       (forall (n : nat), csafe (U, tr, tp) m n) ->
+       explicit_safety U tr tp m.
+Proof.
+  intros ??????.
+  eapply safety_equivalence2; eauto.
+  intros.
+  eapply csafe_safety_trick; eauto; simpl.
+  
+Qed.
+
+Lemma explicit_safety_csafe:
+  forall tr tp m,
+    forall U : schedule, valid (tr, tp,m) U ->
+    (forall U : schedule, explicit_safety U tr tp m) ->
+    (forall (n : nat) U, csafe (U, tr, tp) m n).
+Proof.
+  intros.
+  eapply safety_csafe; eauto.
+  intros.
+  eapply safety_equivalence22; eauto.
+Qed.
+
+
+Lemma csafe_explicit_safety':
   forall tr tp m,
        (forall U : schedule, valid (tr, tp,m) U) ->
        (forall (n : nat) U, csafe (U, tr, tp) m n) ->
@@ -704,9 +754,9 @@ Proof.
   eapply csafe_safety; eauto.
 Qed.
 
-Lemma explicit_safety_csafe:
+Lemma explicit_safety_csafe':
   forall tr tp m,
-    (forall U : schedule, valid (tr, tp,m) U) ->
+    forall U : schedule, valid (tr, tp,m) U ->
     (forall U : schedule, explicit_safety U tr tp m) ->
     (forall (n : nat) U, csafe (U, tr, tp) m n).
 Proof.

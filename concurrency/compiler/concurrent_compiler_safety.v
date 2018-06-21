@@ -28,6 +28,33 @@ Section ConcurrentCopmpilerSafety.
   
   Definition TargetHybridMachine:=
     @HybridCoarseMachine resources SemTarget TargetThreadPool TargetMachineSig.
+
+  Notation SHM U:= (ConcurMachineSemantics(HybridMachine:=SourceHybridMachine) U).
+  Notation THM U:= (ConcurMachineSemantics(HybridMachine:=TargetHybridMachine) U).
+  Definition concurrent_simulation_safety_preservation:=
+    forall init_U,
+    forall U init_mem_source init_mem_source' init_thread main args,
+      let res1:= permissions.getCurPerm init_mem_source in
+      let res := (res1,permissions.empty_map) in
+      let init_tp_source:= ThreadPool.mkPool(ThreadPool:=SourceThreadPool) (Krun init_thread) res in
+      let init_MachState_source U:= (U, nil, init_tp_source) in
+      machine_semantics.initial_machine (SHM init_U) (Some res) init_mem_source init_tp_source init_mem_source' main args ->
+      (forall n U, HybridCoarseMachine.csafe (init_MachState_source U) init_mem_source' n) ->
+      exists init_mem_target init_mem_target' init_thread_target,
+        (*initial_target_thread SIM init_mem_target init_thread_target main args /\*)
+        let res_target:= permissions.getCurPerm init_mem_target' in
+        let init_tp_target:= ThreadPool.mkPool (Krun init_thread_target) (res_target,permissions.empty_map) in
+        let init_MachState_target:= (U, nil, init_tp_target) in
+        machine_semantics.initial_machine (THM init_U) (Some res) init_mem_target init_tp_target init_mem_target' main args /\
+        (forall n, HybridCoarseMachine.csafe init_MachState_target init_mem_target' n).
+
+
+
+
+
+(*
+
+  
   
   Definition concurrent_simulation_safety_preservation 
     init_U
@@ -47,7 +74,7 @@ Section ConcurrentCopmpilerSafety.
         let init_MachState_target:= (U, nil, init_tp_target) in
         (forall n, HybridCoarseMachine.csafe init_MachState_target init_mem_target n).
 
-
+  
   (* We define a simpler version that doesn't depend on SIM,
      then we reduce it to the previous version by showing:
      match_initial_thread SIM -> source_init_state
@@ -108,7 +135,7 @@ Section ConcurrentCopmpilerSafety.
     intros ?????? H ?; intros.
     eapply forall_exists_commute; [ intros H4 |eapply H; eauto].
     eapply forall_exists_commute; intros ? (?&?); auto.
-  Qed.
+  Qed.*)
     
 End ConcurrentCopmpilerSafety.
 

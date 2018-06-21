@@ -64,9 +64,9 @@ Section HybridSimulation.
   Variable ge2:G2.
   Variable (ge_inv: G1 -> G2 -> Prop). *)
 
-  Context (SG TG TID SCH TR SC TC R1 R2 s_thread_type t_thread_type: Type).
-  Variable SourceHybridMachine: @ConcurSemantics SG TID SCH TR SC mem R1 s_thread_type.
-  Variable TargetHybridMachine: @ConcurSemantics TG TID SCH TR TC mem R2 t_thread_type.
+  Context (SG TG TID SCH TR SC TC R1 R2 (*s_thread_type t_thread_type*): Type).
+  Variable SourceHybridMachine: @ConcurSemantics SG TID SCH TR SC mem R1.
+  Variable TargetHybridMachine: @ConcurSemantics TG TID SCH TR TC mem R2.
   
   Record HybridMachine_simulation:=
     { index : Type
@@ -76,16 +76,16 @@ Section HybridSimulation.
 
       (* This is the match relation for initial state of the initial core:*)
       (* That is property given by sequential theorem about inital_states *)
-      ; initial_source_thread:
+      (*; initial_source_thread:
           mem -> s_thread_type -> val -> seq.seq val -> Prop
       ; initial_target_thread:
-          mem -> t_thread_type -> val -> seq.seq val -> Prop
+          mem -> t_thread_type -> val -> seq.seq val -> Prop *)
       ; initial_setup :
-          forall tge sge s_init_thread s_mem s_mem' main main_args s_mach_state r1,
-            initial_source_thread s_mem s_init_thread main main_args ->
-            machine_semantics.initial_machine SourceHybridMachine sge s_mem s_init_thread s_mem' main main_args r1 ->
-            exists j cd tc t_mach_state t_mem t_mem' r2,
-              machine_semantics.initial_machine TargetHybridMachine tge t_mem tc t_mem' main main_args r2
+          forall (*s_init_thread*) s_mem s_mem' main main_args s_mach_state r1,
+            (*initial_source_thread s_mem s_init_thread main main_args -> *)
+            machine_semantics.initial_machine SourceHybridMachine r1 s_mem s_mach_state s_mem' main main_args ->
+            exists j cd t_mach_state t_mem t_mem' r2,
+              machine_semantics.initial_machine TargetHybridMachine r2 t_mem t_mach_state t_mem' main main_args
            /\ match_state cd j s_mach_state s_mem' t_mach_state t_mem'
       ; thread_diagram :
           forall sge tge U st1 m1 st1' m1',
