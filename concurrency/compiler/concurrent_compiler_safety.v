@@ -7,7 +7,6 @@
 Require Import VST.concurrency.common.HybridMachineSig.
 Require Import VST.concurrency.compiler.HybridMachine_simulation.
 Require Import VST.concurrency.compiler.concurrent_compiler_simulation.
-Require Import VST.concurrency.compiler.safety_equivalence.
 
 Set Implicit Arguments.
 
@@ -19,8 +18,8 @@ Section ConcurrentCopmpilerSafety.
    *)
   Notation resources:= HybridMachine.DryHybridMachine.dryResources.
   Context {SemSource SemTarget: Semantics}
-          {SourceThreadPool : @ThreadPool.ThreadPool _ SemSource}
-          {TargetThreadPool : @ThreadPool.ThreadPool _ SemTarget}
+          {SourceThreadPool : @ThreadPool.ThreadPool resources SemSource}
+          {TargetThreadPool : @ThreadPool.ThreadPool resources SemTarget}
           {SourceMachineSig: @MachineSig _ _ SourceThreadPool}
           {TargetMachineSig: @MachineSig _ _ TargetThreadPool}.
   
@@ -113,19 +112,4 @@ Section ConcurrentCopmpilerSafety.
     
 End ConcurrentCopmpilerSafety.
 
-
-(** We derive safety preservation from simulation in two steps:
-    - Show csafe implies safe (the coinductive safety)
-    - Show a simulation preserves safety.
-*)
-Section SimulationSafety.
-
-  (** * finite safety implies infinite safety*)
-  (** Csafe implies safe in languages with 
-      "finite branching"
-   *)
-  Lemma csafe
-  
-
-End SimulationSafety.
   

@@ -61,6 +61,24 @@ Section SafetyEquivalence.
   Existing Instance DilMem.
   Existing Instance scheduler.
 
+  
+(* Ltac definition:
+   yield and diluteMem are always identity for the Corase machines. 
+   this tactic allows to fold the definitions, to use constructors and lemmas. *)
+Ltac fold_ids:=
+  repeat match goal with
+         | [ U: schedule |-  _ ] =>
+           match goal with
+           | [  |- context[yield U] ] => fail 1
+           | [  |- context[U] ] => replace U with (yield U) by auto 
+           end 
+         | [ m: mem |-  _ ] =>
+           match goal with
+           | [  |- context[diluteMem m] ] => fail 1
+           | [  |- context[m] ] => replace m with (diluteMem m) by auto 
+           end 
+         end.
+  
   (** *Setup *)
   (** We must reorganize the types of the machine to match those 
       from konig/safety. So we change the types of MachState and MachStep
@@ -303,29 +321,27 @@ Section Csafe_KSafe.
                 csafe (U, tr, tp) m n ->
                 schedPeek U = schedPeek U' -> 
                 csafe (U', tr, tp) m n.
-          Proof.
-            induction n; subst.
-            - constructor 1.
-            - intros. inversion H; subst.
-              + econstructor 2; eauto.
-                unfold halted_machine in *; simpl in *.
-                destruct (schedPeek U); try solve [inversion H1].
-                rewrite <- H0; eauto.
-              + econstructor 3; eauto; simpl in *.
-                inversion Hstep; simpl in *; subst;
-                try match goal with
-                      | [ H: schedPeek ?U = Some _, H0: schedSkip U = U |- _ ] =>
-                        apply schedPeek_Skip in H; eauto; inversion H
-                      end.
-                * rewrite <- H6. econstructor 1; simpl; eauto.
+            Proof.
+              induction n; subst.
+              - constructor 1.
+              - intros. inversion H; subst.
+                + econstructor 2; eauto.
+                  unfold halted_machine in *; simpl in *.
+                  destruct (schedPeek U); try solve [inversion H1].
                   rewrite <- H0; eauto.
-                * rewrite <- H6. econstructor 2; simpl; eauto.
-                  rewrite <- H0; eauto.
-                * unfold MachStep; simpl.
-                  match goal with
-                  | [  |- machine_step ?U ?tr ?tp ?m ?U ?tr' ?tp' ?m' ] =>
-                    cut (machine_step U tr tp m (yield U) tr' tp' (diluteMem m')); eauto
-                  end.
+                + econstructor 3; eauto; simpl in *.
+                  inversion Hstep; simpl in *; subst;
+                    try match goal with
+                        | [ H: schedPeek ?U = Some _, H0: schedSkip U = U |- _ ] =>
+                          apply schedPeek_Skip in H; eauto; inversion H
+                        end.
+                  * rewrite <- H6. fold_ids.
+                    econstructor 1; simpl; eauto.
+                    rewrite <- H0; eauto.
+                  * rewrite <- H6. fold_ids. 
+                    econstructor 2; simpl; eauto.
+                    rewrite <- H0; eauto.
+                  * unfold MachStep; simpl. fold_ids.
                   econstructor 3; simpl; eauto.
                   rewrite <- H0; eauto.
               + econstructor 4; eauto; simpl in *.
@@ -448,16 +464,15 @@ Section Safety_Explicity_Safety.
           - unfold kstate2cstate in *; simpl in *.
             inversion H0; simpl in *; subst;
               try solve[exists tr2; econstructor 2; econstructor; eauto].
+            + exists tr2; econstructor 2. simpl_state; eauto. fold_ids.
+              econstructor; eauto.
             + exists (seq.cat tr2
                         (List.map
                            (fun mev : event_semantics.mem_event =>
                               HybridMachineSig.Events.internal tid mev) ev)).
               simpl. econstructor. unfold kstate2cstate; simpl.
               unfold MachStep in *; simpl in *.
-              cut (machine_step U' tr2 tp m (yield U')
-                                (seq.cat tr2
-                                         (List.map (fun mev : event_semantics.mem_event => HybridMachineSig.Events.internal tid mev) ev))
-                                tp' (diluteMem m')).
+              fold_ids.
               auto.
               econstructor; eauto.
             + exists (seq.cat tr2 (HybridMachineSig.Events.external tid ev :: nil)).
@@ -484,7 +499,8 @@ Section Safety_Explicity_Safety.
             external_step U tr1 tp m U' tr1' tp' m' -> exists tr2', external_step U tr2 tp m U' tr2' tp' m'.
         Proof.
           intros. inversion H; simpl in *; subst.
-          - exists tr2. econstructor; eauto.
+          - exists tr2. fold_ids.
+            econstructor; eauto.
           - exists tr2. econstructor 2; eauto.
           - exists tr2. econstructor 3; eauto.
           - exists (seq.cat tr2
@@ -531,7 +547,7 @@ Section Safety_Explicity_Safety.
     intros. inversion H;
     destruct st' as ((?&?)&?);
     simpl in *; subst.
-    - constructor 2. econstructor; eauto.
+    - constructor 2. fold_ids. econstructor; eauto.
     - constructor 2. econstructor 2; eauto.
     - constructor 1. 
       destruct st as ((?&?)&?); simpl in *.

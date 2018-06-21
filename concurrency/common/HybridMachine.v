@@ -576,7 +576,7 @@ Module DryHybridMachine.
                (ms:thread_pool) (m' : mem) (v:val) (args:list val) : Prop :=
       exists c, core_semantics.initial_core semSem 0 m c m' v args /\
            ms = mkPool (Krun c) (getCurPerm m', empty_map).
-
+    Set Printing All.
     Section HybDryMachineLemmas.
 
 

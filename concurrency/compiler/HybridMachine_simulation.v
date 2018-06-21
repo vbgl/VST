@@ -1,4 +1,3 @@
-From mathcomp.ssreflect Require Import ssreflect seq ssrbool ssrfun.
 Require Import compcert.common.Memory.
 Require Import compcert.common.AST.     (*for typ*)
 Require Import compcert.common.Values. (*for val*)
@@ -84,9 +83,9 @@ Section HybridSimulation.
       ; initial_setup :
           forall tge sge s_init_thread s_mem s_mem' main main_args s_mach_state r1,
             initial_source_thread s_mem s_init_thread main main_args ->
-            machine_semantics.initial_machine SourceHybridMachine sge s_mem s_init_thread s_mem' main main_args r1= Some s_mach_state ->
+            machine_semantics.initial_machine SourceHybridMachine sge s_mem s_init_thread s_mem' main main_args r1 ->
             exists j cd tc t_mach_state t_mem t_mem' r2,
-              machine_semantics.initial_machine TargetHybridMachine tge t_mem tc t_mem' main main_args r2 = Some t_mach_state
+              machine_semantics.initial_machine TargetHybridMachine tge t_mem tc t_mem' main main_args r2
            /\ match_state cd j s_mach_state s_mem' t_mach_state t_mem'
       ; thread_diagram :
           forall sge tge U st1 m1 st1' m1',
@@ -116,5 +115,5 @@ Section HybridSimulation.
             match_state cd mu c1 m1 c2 m2 ->
             forall i, running_thread SourceHybridMachine c1 i <-> running_thread TargetHybridMachine c2 i
  }.
-                                      
+
 End HybridSimulation.
