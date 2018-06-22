@@ -28,9 +28,9 @@ Module Main (CC_correct: CompCert_correctness).
   Definition Clight_prog:= semax_to_juicy_machine.CSL_prog CPROOF.
   Definition Main_ptr:=Values.Vptr (Ctypes.prog_main Clight_prog) Integers.Ptrofs.zero.
   Context (Asm_prog: Asm.program).
-  Context (asm_genv_safe: Asm_core.safe_genv (x86_context.X86Context.the_ge Asm_prog)).
+  Context (asm_genv_safe: Asm_core.safe_genv (@x86_context.X86Context.the_ge Asm_prog)).
   Context (compilation : CC_correct.CompCert_compiler Clight_prog = Some Asm_prog).
-  Definition AsmSem:= x86_context.X86Context.X86Sem Asm_prog asm_genv_safe.
+  Definition AsmSem:= @x86_context.X86Context.X86Sem Asm_prog asm_genv_safe.
   
   (* This should be instantiated:
      it says initial_Clight_state taken from CPROOF, is an initial state of CompCert.

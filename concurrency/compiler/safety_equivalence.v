@@ -718,22 +718,19 @@ Qed.
 
 Lemma csafe_explicit_safety:
   forall tr tp m,
-       forall U : schedule, valid (tr, tp,m) U ->
-       (forall (n : nat), csafe (U, tr, tp) m n) ->
-       explicit_safety U tr tp m.
+       (forall (n : nat) U, valid (tr, tp,m) U -> csafe (U, tr, tp) m n) ->
+       forall U, valid (tr, tp,m) U -> explicit_safety U tr tp m.
 Proof.
   intros ??????.
   eapply safety_equivalence2; eauto.
   intros.
-  eapply csafe_safety_trick; eauto; simpl.
-  
+  eapply csafe_safety; eauto; simpl.
 Qed.
 
 Lemma explicit_safety_csafe:
   forall tr tp m,
-    forall U : schedule, valid (tr, tp,m) U ->
-    (forall U : schedule, explicit_safety U tr tp m) ->
-    (forall (n : nat) U, csafe (U, tr, tp) m n).
+    (forall U : schedule, valid (tr, tp,m) U -> explicit_safety U tr tp m) ->
+    (forall (n : nat) U, valid (tr, tp,m) U -> csafe (U, tr, tp) m n).
 Proof.
   intros.
   eapply safety_csafe; eauto.
@@ -756,12 +753,12 @@ Qed.
 
 Lemma explicit_safety_csafe':
   forall tr tp m,
-    forall U : schedule, valid (tr, tp,m) U ->
+    (forall U : schedule, valid (tr, tp,m) U) ->
     (forall U : schedule, explicit_safety U tr tp m) ->
     (forall (n : nat) U, csafe (U, tr, tp) m n).
 Proof.
   intros.
-  eapply safety_csafe; eauto.
+  eapply safety_csafe_trick; eauto.
   intros.
   eapply safety_equivalence22; eauto.
 Qed.

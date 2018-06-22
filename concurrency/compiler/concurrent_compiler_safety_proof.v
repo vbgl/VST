@@ -1,7 +1,8 @@
 
 Require Import VST.concurrency.common.HybridMachineSig.
 Import HybridMachineSig.
-
+Set Bullet Behavior "Strict Subproofs".
+  
 Require Import VST.concurrency.compiler.concurrent_compiler_simulation.
 Require Import VST.concurrency.compiler.concurrent_compiler_simulation_proof.
 Require Import VST.concurrency.compiler.sequential_compiler_correct.
@@ -9,7 +10,9 @@ Require Import VST.concurrency.compiler.concurrent_compiler_safety.
 Require Import VST.concurrency.compiler.concurrent_compiler_simulation_proof.
 Require Import VST.concurrency.compiler.safety_equivalence.
 Require Import VST.concurrency.compiler.HybridMachine_simulation.
-
+Require Import VST.concurrency.common.HybridMachine.
+Require Import Omega.
+            
 
 (*Clight Machine *)
 Require Import VST.concurrency.common.ClightMachine.
@@ -34,6 +37,11 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
   
     Search semantics.Semantics.
 
+    
+
+    Notation valid Sem:=
+      (valid dryResources Sem OrdinalPool.OrdinalThreadPool DryHybridMachineSig).
+
 
     
     Lemma explicit_safety_step:
@@ -49,6 +57,7 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
            match_state SIM cd j C_source m_s C_target
                     m_t ->
         (forall U,
+          (valid SemSource) (tr, C_source, m_s) U ->
             explicit_safety
               HybridMachine.DryHybridMachine.dryResources
               SemSource
@@ -56,6 +65,7 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
               HybridMachine.DryHybridMachine.DryHybridMachineSig
               U tr C_source m_s) ->
         forall U,
+          (valid SemTarget) (tr, C_target, Asm.get_mem c) U ->
             explicit_safety
               HybridMachine.DryHybridMachine.dryResources
               SemTarget
@@ -65,8 +75,22 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
     Proof.
     Admitted.
 
-
-
+    Lemma Clight_finite_branching:
+      let ClightSem:= ClightSemantincsForMachines.ClightSem in 
+            forall (p : Clight.program)
+                   (x : kstate dryResources (ClightSem (Clight.globalenv p)) OrdinalPool.OrdinalThreadPool),
+              safety.finite_on_x
+                (safety.possible_image
+                   (fun
+                       (x0 : kstate dryResources (ClightSem (Clight.globalenv p))
+                                    OrdinalPool.OrdinalThreadPool) (y : schedule)
+                       (x' : kstate dryResources (ClightSem (Clight.globalenv p))
+                                    OrdinalPool.OrdinalThreadPool) =>
+                       exists y' : schedule,
+                         kstep dryResources (ClightSem (Clight.globalenv p)) OrdinalPool.OrdinalThreadPool
+                               DryHybridMachineSig x0 y x' y') (valid (ClightSem (Clight.globalenv p))) x).
+          Proof.
+          Admitted.
     Lemma csafety_step:
       forall (p : Clight.program) (tp : Asm.program) (asm_genv_safety : Asm_core.safe_genv the_ge),
         let SemSource:= (ClightSemantincsForMachines.ClightSem (Clight.globalenv p)) in
@@ -79,14 +103,16 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
                                              (AsmConcurSem U)) (cd : index SIM),
         match_state SIM cd j C_source init_mem_source' C_target
                     (Asm.get_mem c) ->
-        (forall n : nat,
+        (forall (n : nat) U,
+            (valid SemSource) (tr, C_source, init_mem_source') U ->
             HybridCoarseMachine.csafe(Sem:=SemSource)
                                      (resources:=HybridMachine.DryHybridMachine.dryResources)
                                      (ThreadPool:= threadPool.OrdinalPool.OrdinalThreadPool(Sem:=SemSource))
       (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig)
                                      (U, tr, C_source)
-                                      init_mem_source' n) ->
-        forall n : nat,
+                                     init_mem_source' n) ->
+        forall (n : nat) U ,
+          (valid SemTarget) (tr, C_target, Asm.get_mem c) U ->
           HybridCoarseMachine.csafe (Sem:=SemTarget)
                                      (resources:=HybridMachine.DryHybridMachine.dryResources)
                                      (ThreadPool:= threadPool.OrdinalPool.OrdinalThreadPool(Sem:=SemTarget))
@@ -94,15 +120,73 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
                                      (U, tr, C_target)
                                      (Asm.get_mem c) n.
     Proof.
-      intros.
-      eapply explicit_safety_csafe; eauto; intros.
-      - admit. (*Initial scheudle is valid. *)
-      - eapply explicit_safety_step in H; eauto.
-        eapply csafe_explicit_safety; simpl.
-        
-        
-    Admitted.
+      intros until n.
+      eapply explicit_safety_csafe; eauto.      
+      eapply explicit_safety_step; eauto.
+      eapply csafe_explicit_safety.
+      + eapply Clight_finite_branching.
+      + eapply H0. 
+    Qed.
 
+
+
+    (** for the initial state, it's enough to prove csafety for the valid schedules,
+        we can derive safety for all others. *)
+    Lemma initial_csafe_all_schedule:
+      forall  prog asm_genv_safety tr c m r,
+        let SemTarget:= @X86Sem prog asm_genv_safety in
+        let tp:=OrdinalPool.mkPool (Krun c) r in
+        (forall U (n : nat),
+            (valid SemTarget) (tr, tp, m) U ->
+            HybridCoarseMachine.csafe
+              (ThreadPool:=threadPool.OrdinalPool.OrdinalThreadPool(Sem:=SemTarget))
+              (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig)
+              (U, nil,
+               OrdinalPool.mkPool
+                 (Krun c) r) m n)  ->
+        forall U (n : nat),
+          HybridCoarseMachine.csafe
+            (ThreadPool:=threadPool.OrdinalPool.OrdinalThreadPool(Sem:=SemTarget))
+            (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig)
+            (U, nil,
+             OrdinalPool.mkPool (Krun c) r) m n.
+    Proof.
+      intros.
+      revert U.
+      induction n; try solve[econstructor].
+      intros U.
+      destruct U as [|i U]; [|destruct i].
+      - econstructor; eauto.
+      - eapply H.
+        unfold safety_equivalence.valid, correct_schedule; simpl.
+        intros ?????.
+        simpl in cnti.
+        unfold OrdinalPool.containsThread in cnti; simpl in cnti.
+        clear - cnti.
+        eapply semax_invariant.ssr_leP_inv in cnti.
+        destruct j; simpl; [auto| omega].
+      - intros.
+        eapply HybridCoarseMachine.AngelSafe; simpl.
+        eapply schedfail; simpl.
+        * reflexivity.
+        * unfold OrdinalPool.containsThread; simpl.
+          intros LEQ; eapply semax_invariant.ssr_leP_inv in LEQ.
+          omega.
+        * assert ((valid SemTarget) (tr, tp, m) (cons 0 nil) ).
+          { subst tp; auto.
+          unfold safety_equivalence.valid, correct_schedule; simpl.
+          intros ?????.
+          simpl in cnti.
+          unfold OrdinalPool.containsThread in cnti; simpl in cnti.
+          clear - cnti.
+          eapply semax_invariant.ssr_leP_inv in cnti.
+          destruct j; simpl; [auto| omega]. }
+          apply (H _ 1) in H0.
+          admit. (*Should be able to pull the invariant from H0*)
+        * admit. (*Should be able to pull the invariant from H0*)
+        * reflexivity.
+        * intros U''; eapply IHn.
+    Admitted.
 
     
     Lemma ConcurrentCompilerSafety:
@@ -134,8 +218,10 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
       destruct H2 as (H21 & H22); subst.
       clear INIT H21.
 
-      (* Step preserves safety*)
-      eapply safety_step; try eapply H0; eauto.
+      (* Now, we strip out the scheudle, until it starts with 1*)
+      eapply initial_csafe_all_schedule.
+      intros; eapply csafety_step; eauto.
+      eapply H0.
     Qed.
-      
+    
 End Concurrent_Safety.
