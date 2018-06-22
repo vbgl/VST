@@ -79,6 +79,10 @@ es (filter i) *)
                containsThread tp j ->
                containsThread (addThread tp vf arg p) j
 
+        ;  cntAddLatest:
+             forall {tp} vf arg p,
+               containsThread (addThread tp vf arg p) (latestThread tp)
+
         ;  cntAdd':
              forall {j tp} vf arg p,
                containsThread (addThread tp vf arg p) j ->
@@ -785,6 +789,16 @@ Module OrdinalPool.
     Proof.
       intros;
         unfold addThread, containsThread in *;
+        simpl;
+          by auto.
+    Qed.
+
+    Lemma cntAddLatest:
+      forall {tp} vf arg p,
+        containsThread (addThread tp vf arg p) (latestThread tp).
+    Proof.
+      intros;
+        unfold addThread, containsThread, latestThread;
         simpl;
           by auto.
     Qed.
@@ -1643,6 +1657,19 @@ Module OrdinalPool.
         destruct (eqP eq); auto.
     Qed.
 
+    Lemma updThread_twice :
+      forall tp i (cnti : containsThread tp i) c c' r r'
+        (cnti' : containsThread (updThread cnti c r) i),
+      updThread cnti' c' r' = updThread cnti c' r'.
+    Proof.
+      intros; destruct tp; simpl.
+      unfold updThread; simpl; f_equal.
+      - extensionality.
+        destruct (_ == _) eqn: eq; auto.
+      - extensionality.
+        destruct (_ == _) eqn: eq; auto.
+    Qed.
+
     Lemma updThreadRC : forall tp i (cnti : containsThread tp i) c,
       updThread cnti c (getThreadR cnti) = updThreadC cnti c.
     Proof.
@@ -2029,6 +2056,7 @@ Module OrdinalPool.
                                     (*Proof Irrelevance of contains*)
                                     cnt_irr
                                     (@cntAdd)
+                                    (@cntAddLatest)
                                     (@cntAdd')
                                     (@cntUpdateC)
                                     (@cntUpdateC')

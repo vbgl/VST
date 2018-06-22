@@ -666,6 +666,43 @@ Module HybridMachineSig.
         specialize (IHU H2); discriminate.
       Qed.
 
+      Lemma csafe_trace: forall n U tr tp m,
+        csafe (U, tr, tp) m n ->
+        forall tr', csafe (U, tr', tp) m n.
+      Proof.
+        induction n0; intros; [constructor|].
+        inversion H; subst; [constructor; auto | inversion Hstep; subst; simpl in *; try inversion Htstep; subst; try (apply schedSkip_id in HschedS; subst);
+          try discriminate | inversion Hstep; simpl in *; try inversion Htstep; try match goal with H : U = schedSkip U |- _ =>
+          symmetry in H; apply schedSkip_id in H; subst end; try discriminate].
+        - eapply CoreSafe; eauto.
+          erewrite cats0.
+          change U with (yield U) at 2.
+          change m'0 with (diluteMem m'0) at 2.
+          eapply start_step; eauto.
+        - eapply CoreSafe, IHn0; eauto.
+          erewrite cats0.
+          change U with (yield U) at 2.
+          change m' with (diluteMem m') at 2.
+          eapply resume_step; eauto.
+        - eapply CoreSafe; eauto.
+          change U with (yield U) at 2.
+          change m'0 with (diluteMem m'0) at 2.
+          eapply thread_step; eauto.
+        - eapply AngelSafe; [|intro; eapply IHn0; eauto].
+          erewrite cats0.
+          eapply suspend_step; eauto.
+        - eapply AngelSafe; eauto.
+          eapply sync_step; eauto.
+        - subst.
+          eapply AngelSafe; [|intro; eapply IHn0; eauto].
+          erewrite cats0.
+          eapply halted_step; eauto.
+        - subst.
+          eapply AngelSafe; [|intro; eapply IHn0; eauto].
+          erewrite cats0.
+          eapply schedfail; eauto.
+      Qed.
+
       Lemma csafe_concur_safe: forall U tr tp m n, csafe (U, tr, tp) m n -> concur_safe U tp m n.
       Proof.
         intros.

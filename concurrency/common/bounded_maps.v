@@ -1148,3 +1148,40 @@ Proof.
             rewrite - H0.
             apply NPeano.Nat.mod_small; auto.
 Qed.
+
+Lemma fun_leq_trans: forall {A B C} f1 f2 f3, @fun_leq A B f1 f2 -> @fun_leq B C f2 f3 ->
+  @fun_leq A C f1 f3.
+Proof.
+  unfold fun_leq, fun_leq'; destruct f1, f2, f3; auto.
+Qed.
+
+Lemma sub_map_trans: forall {A B C} m1 m2 m3, @sub_map A B m1 m2 -> @sub_map B C m2 m3 ->
+  @sub_map A C m1 m3.
+Proof.
+  unfold sub_map; induction m1; destruct m2; intros; inversion H; destruct m3; inversion H0;
+    auto; simpl in *.
+  repeat split.
+  - eapply fun_leq_trans; eauto.
+  - apply (IHm1_1 m2_1); tauto.
+  - apply (IHm1_2 m2_2); tauto.
+Qed.
+
+Lemma same_shape_map:
+  forall {A B} m f,
+    @same_shape A B (PTree.map f m) m.
+Proof.
+  intros until m.
+  unfold PTree.map.
+  pose (i:=1%positive); fold i.
+  generalize i; clear i.
+  induction m.
+  - intros;
+      unfold same_shape;
+      simpl; auto.
+  - intros;
+      unfold same_shape;
+      split; [| split].
+    + destruct o; simpl; auto.
+    + eapply IHm1.
+    + eapply IHm2.
+Qed.

@@ -9,6 +9,7 @@ Require Import compcert.common.Values.
 Require Import compcert.common.Globalenvs.
 Require Import compcert.common.Memory.
 Require Import VST.concurrency.common.core_semantics.
+Require Import VST.concurrency.common.bounded_maps.
 Require Import VST.concurrency.common.threadPool.
 Require Import VST.concurrency.common.permissions.
 Require Import VST.concurrency.common.HybridMachineSig.
@@ -105,13 +106,17 @@ Inductive match_ctl : ctl -> ctl -> Prop :=
 (* This should essentially reproduce Clight_sim at the hybrid machine level. *)
 Inductive match_st (tp : ThreadPool.t(resources := dryResources)(ThreadPool:= threadPool.OrdinalPool.OrdinalThreadPool(Sem:=Clight_newSem ge)))
   (tp' : ThreadPool.t(resources := dryResources)(ThreadPool:= threadPool.OrdinalPool.OrdinalThreadPool(Sem:=ClightSem ge))) : Prop :=
-    MATCH_ST: forall (mtch_cnt: forall {tid},  containsThread tp tid -> containsThread tp' tid )
-                (mtch_cnt': forall {tid}, containsThread tp' tid -> containsThread tp tid )
+    MATCH_ST: forall (mtch_cnt: forall {tid},  containsThread tp tid -> containsThread tp' tid)
+                (mtch_cnt': forall {tid}, containsThread tp' tid -> containsThread tp tid)
                 (mtch_gtc: forall {tid} (Htid:containsThread tp tid)(Htid':containsThread tp' tid),
-                    match_ctl (getThreadC Htid) (getThreadC Htid') )
-                (mtch_gtr: forall {tid} (Htid:containsThread tp tid)(Htid':containsThread tp' tid),
-                    getThreadR Htid = getThreadR Htid' )
-                (mtch_locks: forall a, lockRes tp a = lockRes tp' a),
+                    match_ctl (getThreadC Htid) (getThreadC Htid'))
+                (mtch_gtr1: forall {tid} (Htid:containsThread tp tid)(Htid':containsThread tp' tid)
+                    b ofs,
+                    (fst (getThreadR Htid)) !! b ofs = (fst (getThreadR Htid')) !! b ofs)
+                (mtch_gtr2: forall {tid} (Htid:containsThread tp tid)(Htid':containsThread tp' tid),
+                    snd (getThreadR Htid) = snd (getThreadR Htid'))
+                (mtch_locks: forall a, lockRes tp a = lockRes tp' a)
+                (mtch_latest: latestThread tp = latestThread tp'),
       match_st tp tp'.
 
 Lemma MTCH_compat: forall js ds m,
@@ -120,9 +125,10 @@ Lemma MTCH_compat: forall js ds m,
     mem_compatible ds m.
 Proof.
   intros ? ? ? MTCH mc.
-  inv MTCH; inv mc; constructor; intros.
-  - specialize (compat_th0 _ (mtch_cnt' _ cnt)).
-    rewrite mtch_gtr with (Htid' := cnt) in compat_th0; auto.
+  inversion MTCH; inv mc; constructor; intros.
+  - specialize (compat_th0 _ (mtch_cnt' _ cnt)) as [Hlt ?].
+    rewrite mtch_gtr2 with (Htid' := cnt) in *; split; auto.
+    intros ??; erewrite <- mtch_gtr1; eauto.
   - rewrite <- mtch_locks in H; eauto.
   - rewrite <- mtch_locks in H; eauto.
 Qed.
@@ -137,39 +143,432 @@ Proof.
   hnf in *; subst.
   apply restrPermMap_ext; intro.
   inv MATCH.
-  rewrite mtch_gtr with (Htid' := Htid'); auto.
+  extensionality ofs.
+  rewrite mtch_gtr1 with (Htid' := Htid'); auto.
 Qed.
 
 Lemma MTCH_invariant:
   forall js ds (MATCH : match_st js ds) (Hinv : invariant js), invariant ds.
 Proof.
-  intros; inv MATCH; inv Hinv; constructor; intros.
-  - rewrite <- mtch_gtr with (Htid := mtch_cnt' _ cnti),
-            <- mtch_gtr with (Htid := mtch_cnt' _ cntj); auto.
+  intros; inversion MATCH; inv Hinv; constructor; intros.
+  - split.
+    + intros ??; erewrite <- !mtch_gtr1; apply no_race_thr0; auto.
+    + erewrite <- !mtch_gtr2; apply no_race_thr0; auto.
   - rewrite <- mtch_locks in *; eauto.
-  - rewrite <- mtch_locks in *.
-    rewrite <- mtch_gtr with (Htid := mtch_cnt' _ cnti); eauto.
+  - rewrite <- mtch_locks in *; split.
+    + intros ??; erewrite <- mtch_gtr1; eapply no_race0; eauto.
+    + erewrite <- mtch_gtr2; eapply no_race0; eauto.
   - specialize (thread_data_lock_coh0 _ (mtch_cnt' _ cnti)) as [].
     split; intros.
-    + rewrite <- mtch_gtr with (Htid := mtch_cnt' _ cnti),
-              <- mtch_gtr with (Htid := mtch_cnt' _ cntj); auto.
-    + rewrite <- mtch_locks in *.
-      rewrite <- mtch_gtr with (Htid := mtch_cnt' _ cnti); eauto.
+    + erewrite <- mtch_gtr2.
+      intros ??; erewrite <- mtch_gtr1; apply H.
+    + erewrite <- mtch_gtr2.
+      rewrite <- mtch_locks in *; eauto.
   - rewrite <- mtch_locks in *.
     specialize (locks_data_lock_coh0 _ _ Hres) as [].
     split; intros.
-    + rewrite <- mtch_gtr with (Htid := mtch_cnt' _ cntj); auto.
+    + intros ??; erewrite <- mtch_gtr1; apply H.
     + rewrite <- mtch_locks in *; eauto.
   - hnf in *.
-    intros; specialize (lockRes_valid0 b ofs).
-    rewrite mtch_locks in lockRes_valid0; destruct (lockRes _ _); auto.
-    intro; rewrite <- mtch_locks; auto.
+    intros; rewrite <- mtch_locks.
+    specialize (lockRes_valid0 b ofs).
+    destruct (lockRes(ThreadPool := OrdinalPool.OrdinalThreadPool) js (b, ofs)) eqn: Hl; auto.
+    intros; rewrite <- mtch_locks; auto.
+  Unshelve.
+  all: auto.
+Qed.
+
+Lemma MTCH_updThread:
+  forall tp tp' tid c c' r r' (MATCH : match_st tp tp')
+    (Htid : containsThread tp tid) (Htid' : containsThread tp' tid) (Hctl : match_ctl c c')
+    (Hr1: forall b ofs, (fst r) !! b ofs = (fst r') !! b ofs) (Hr2: snd r = snd r'),
+  match_st (updThread Htid c r) (updThread Htid' c' r').
+Proof.
+  inversion 1; intros; constructor; auto; intros.
+  - destruct (eq_dec tid0 tid).
+    + subst; rewrite !gssThreadCode; auto.
+    + unshelve erewrite !gsoThreadCode; auto.
+  - destruct (eq_dec tid0 tid).
+    + subst; rewrite !gssThreadRes; auto.
+    + unshelve erewrite !gsoThreadRes; auto.
+  - destruct (eq_dec tid0 tid).
+    + subst; rewrite !gssThreadRes; auto.
+    + unshelve erewrite !gsoThreadRes; auto.
+Qed.
+
+Lemma MTCH_updThreadC:
+  forall tp tp' tid c c' (MATCH : match_st tp tp')
+    (Htid : containsThread tp tid) (Htid' : containsThread tp' tid) (Hctl : match_ctl c c'),
+  match_st (updThreadC Htid c) (updThreadC Htid' c').
+Proof.
+  inversion 1; intros; constructor; auto; intros.
+  destruct (eq_dec tid0 tid).
+  + subst; rewrite !gssThreadCC; auto.
+  + unshelve erewrite <- !gsoThreadCC; auto.
+Qed.
+
+Lemma MTCH_updLockSet:
+  forall tp tp' a l (MATCH : match_st tp tp'),
+  match_st (updLockSet tp a l) (updLockSet tp' a l).
+Proof.
+  inversion 1; intros; constructor; auto; intros.
+  destruct (eq_dec a0 a).
+  - subst; rewrite !gssLockRes; auto.
+  - rewrite !gsoLockRes; auto.
+Qed.
+
+Lemma MTCH_remLockSet:
+  forall tp tp' a (MATCH : match_st tp tp'),
+  match_st (remLockSet tp a) (remLockSet tp' a).
+Proof.
+  inversion 1; intros; constructor; auto; intros.
+  destruct (eq_dec a0 a).
+  - subst; rewrite !gsslockResRemLock; auto.
+  - rewrite !gsolockResRemLock; auto.
+Qed.
+
+Lemma MTCH_addThread:
+  forall tp tp' vf arg r (MATCH : match_st tp tp'),
+  match_st (addThread tp vf arg r) (addThread tp' vf arg r).
+Proof.
+  inversion 1; intros; constructor; auto; intros.
+  - apply cntAdd' in H as [[]|].
+    + apply cntAdd; auto.
+    + subst; rewrite mtch_latest.
+      apply cntAddLatest.
+  - apply cntAdd' in H as [[]|].
+    + apply cntAdd; auto.
+    + subst; rewrite <- mtch_latest.
+      apply cntAddLatest.
+  - destruct (cntAdd' _ _ _ Htid) as [[]|], (cntAdd' _ _ _ Htid') as [[]|]; try congruence.
+    + unshelve erewrite !gsoAddCode; eauto.
+    + subst; rewrite !gssAddCode; auto.
+      constructor.
+  - destruct (cntAdd' _ _ _ Htid) as [[]|], (cntAdd' _ _ _ Htid') as [[]|]; try congruence.
+    + unshelve erewrite !gsoAddRes; eauto.
+    + subst; rewrite !gssAddRes; auto.
+  - destruct (cntAdd' _ _ _ Htid) as [[]|], (cntAdd' _ _ _ Htid') as [[]|]; try congruence.
+    + unshelve erewrite !gsoAddRes; eauto.
+    + subst; rewrite !gssAddRes; auto.
+  - simpl in *.
+    unfold OrdinalPool.latestThread, OrdinalPool.addThread in *; simpl.
+    congruence.
 Qed.
 
 Existing Instance scheduler.
 Existing Instance DilMem.
 
-Opaque updThread updThreadC containsThread getThreadC getThreadR.
+Lemma updThread_twice : forall {res sem} (tp : @OrdinalPool.t res sem) i
+  (cnti : containsThread(ThreadPool := OrdinalPool.OrdinalThreadPool) tp i) c c' r r'
+  (cnti' : containsThread (updThread cnti c r) i),
+  updThread cnti' c' r' = updThread cnti c' r'.
+Proof.
+  intros; apply OrdinalPool.updThread_twice.
+Qed.
+
+Lemma mem_ext: forall m1 m2,
+  Mem.mem_contents m1 = Mem.mem_contents m2 ->
+  Mem.mem_access m1 = Mem.mem_access m2 ->
+  Mem.nextblock m1 = Mem.nextblock m2 ->
+  m1 = m2.
+Proof.
+  destruct m1, m2; simpl; intros; subst.
+  f_equal; apply Axioms.proof_irr.
+Qed.
+
+Lemma restrPermMap_twice: forall p1 p2 m Hlt1 Hlt2 Hlt',
+  @restrPermMap p2 (@restrPermMap p1 m Hlt1) Hlt2 = @restrPermMap p2 m Hlt'.
+Proof.
+  intros; apply mem_ext; try reflexivity.
+  simpl.
+  f_equal.
+  + repeat (apply Axioms.functional_extensionality; intro).
+    destruct x0; auto.
+  + remember (snd (Mem.mem_access m)) as t.
+    unfold PTree.map.
+    remember 1%positive as n.
+    clear.
+    revert n; induction t; auto; intro; simpl; f_equal; eauto.
+    destruct o; reflexivity.
+Qed.
+
+Lemma restrPermMap_compat: forall (tp : t(ThreadPool:= OrdinalPool.OrdinalThreadPool(Sem:=ClightSem ge)))
+  m p Hlt, mem_compatible tp (@restrPermMap p m Hlt) -> mem_compatible tp m.
+Proof.
+  destruct 1; constructor.
+  + split; repeat intro; eapply juicy_mem.perm_order''_trans; try apply compat_th0;
+      rewrite getMax_restr; apply po_refl.
+  + split; repeat intro; eapply juicy_mem.perm_order''_trans; try eapply compat_lp0; eauto;
+      rewrite getMax_restr; apply po_refl.
+  + intros; rewrite <- restrPermMap_valid; eauto.
+Qed.
+
+Lemma restrPerm_sub_map: forall m p Hlt,
+  sub_map (snd (getMaxPerm (@restrPermMap p m Hlt))) (snd (getMaxPerm m)).
+Proof.
+  intros; simpl; apply sub_map_and_shape.
+  { unfold PTree.map.
+    remember (snd (Mem.mem_access m)) as t; remember 1%positive as i; clear.
+    revert i; unfold same_shape; induction t; simpl; auto; intros.
+    repeat split; auto.
+    destruct o; simpl; auto. }
+  intros ??.
+  rewrite !PTree.gmap1, PTree.gmap.
+  intro H; destruct ((snd (Mem.mem_access m)) ! _); inv H.
+  simpl; do 2 eexists; eauto.
+  intro; auto.
+Qed.
+
+Lemma csafe_restr: forall n st m p' Hlt,
+  csafe(ThreadPool:= OrdinalPool.OrdinalThreadPool(Sem:=ClightSem ge))
+    (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig) st (@restrPermMap p' m Hlt) n ->
+  csafe(ThreadPool:= OrdinalPool.OrdinalThreadPool(Sem:=ClightSem ge))
+    (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig) st m n.
+Proof.
+  induction n; intros; [constructor|].
+  destruct st as ((U, tr), tp).
+  inv H; [constructor; auto | inv Hstep; simpl in *; try inv Htstep; try (apply schedSkip_id in HschedS; subst);
+      try discriminate | inv Hstep; simpl in *; try inv Htstep; try match goal with H : U = schedSkip U |- _ =>
+      symmetry in H; apply schedSkip_id in H; subst end; try discriminate];
+      pose proof (restrPermMap_compat _ _ _ _ Hcmpt) as Hcmpt'.
+  - hnf in Hperm; subst.
+    erewrite restrPermMap_twice in *.
+    eapply CoreSafe; eauto.
+    hnf; simpl.
+    change U with (yield U) at 2.
+    change m'0 with (diluteMem m'0) at 2.
+    rewrite <- H4.
+    eapply start_step; eauto.
+    econstructor; eauto.
+    instantiate (2 := Hcmpt').
+    hnf; eauto.
+  - hnf in Hperm; subst.
+    erewrite restrPermMap_twice in *.
+    eapply CoreSafe, IHn; eauto.
+    hnf; simpl.
+    change U with (yield U) at 2.
+    change m with (diluteMem m) at 2.
+    rewrite <- H4.
+    eapply resume_step; eauto.
+    econstructor; eauto.
+    instantiate (2 := Hcmpt').
+    hnf; eauto.
+  - erewrite restrPermMap_twice in *.
+    eapply CoreSafe; eauto.
+    hnf; simpl.
+    change U with (yield U) at 2.
+    change m'0 with (diluteMem m'0) at 2.
+    rewrite <- H5.
+    eapply thread_step; eauto.
+    instantiate (1 := Hcmpt').
+    econstructor; eauto.
+  - hnf in Hperm; subst.
+    erewrite restrPermMap_twice in *.
+    eapply AngelSafe; [|intro; eapply IHn; eauto].
+    hnf; simpl.
+    rewrite <- H4.
+    eapply suspend_step; eauto.
+    econstructor; eauto.
+    instantiate (2 := Hcmpt').
+    hnf; eauto.
+  - destruct c; try discriminate; simpl in Hat_external.
+    destruct fd; inv Hat_external.
+    assert (permMapLt (setPermBlock (Some Writable) b (Ptrofs.intval ofs)
+      (snd (getThreadR(ThreadPool := OrdinalPool.OrdinalThreadPool) Htid)) LKSIZE_nat)
+      (getMaxPerm m)) as H.
+    { repeat intro; eapply juicy_mem.perm_order''_trans, Hlt'; rewrite getMax_restr; apply po_refl. }
+    erewrite restrPermMap_twice in *.
+    instantiate (1 := H) in Hstore.
+    eapply AngelSafe; eauto.
+    hnf; simpl.
+    rewrite <- H5.
+    eapply sync_step; auto.
+    instantiate (1 := Hcmpt').
+    pose proof (restrPerm_sub_map _ _ Hlt).
+    eapply step_acquire; eauto.
+    destruct Hbounded; split; eapply sub_map_trans; eauto.
+  - destruct c; try discriminate; simpl in Hat_external.
+    destruct fd; inv Hat_external.
+    assert (permMapLt (setPermBlock (Some Writable) b (Ptrofs.intval ofs)
+      (snd (getThreadR(ThreadPool := OrdinalPool.OrdinalThreadPool) Htid)) LKSIZE_nat)
+      (getMaxPerm m)) as H.
+    { repeat intro; eapply juicy_mem.perm_order''_trans, Hlt'; rewrite getMax_restr; apply po_refl. }
+    erewrite restrPermMap_twice in *.
+    instantiate (1 := H) in Hstore.
+    eapply AngelSafe; eauto.
+    hnf; simpl.
+    rewrite <- H5.
+    eapply sync_step; auto.
+    instantiate (1 := Hcmpt').
+    pose proof (restrPerm_sub_map _ _ Hlt).
+    destruct Hbounded, HboundedLP as (? & ? & ? & ?).
+    eapply step_release; eauto; repeat split; auto; eapply sub_map_trans; eauto.
+  - destruct c; try discriminate; simpl in Hat_external.
+    destruct fd; inv Hat_external.
+    eapply AngelSafe; [|intro; eapply IHn; eauto].
+    hnf; simpl.
+    rewrite <- H5.
+    eapply sync_step; auto.
+    instantiate (1 := Hcmpt').
+    pose proof (restrPerm_sub_map _ _ Hlt).
+    destruct Hbounded, Hbounded_new.
+    eapply step_create; eauto; simpl; auto; split; eapply sub_map_trans; eauto.
+  - destruct c; try discriminate; simpl in Hat_external.
+    destruct fd; inv Hat_external.
+    erewrite restrPermMap_twice in *.
+    eapply AngelSafe; eauto.
+    hnf; simpl.
+    rewrite <- H5.
+    eapply sync_step; auto.
+    instantiate (1 := Hcmpt').
+    eapply step_mklock; eauto.
+  - destruct c; try discriminate; simpl in Hat_external.
+    destruct fd; inv Hat_external.
+    erewrite restrPermMap_twice in *.
+    eapply AngelSafe; [|intro; eapply IHn; eauto].
+    hnf; simpl.
+    rewrite <- H5.
+    eapply sync_step; auto.
+    instantiate (1 := Hcmpt').
+    eapply step_freelock; eauto; simpl; auto.
+  - destruct c; try discriminate; simpl in Hat_external.
+    destruct fd; inv Hat_external.
+    erewrite restrPermMap_twice in *.
+    eapply AngelSafe; [|intro; eapply IHn; eauto].
+    hnf; simpl.
+    rewrite <- H5.
+    eapply sync_step; auto.
+    instantiate (1 := Hcmpt').
+    eapply step_acqfail; eauto.
+  - eapply AngelSafe; [|intro; eapply IHn; eauto].
+    hnf; simpl.
+    subst; rewrite <- H4.
+    eapply halted_step; eauto.
+  - eapply AngelSafe; [|intro; eapply IHn; eauto].
+    hnf; simpl.
+    subst; rewrite <- H4.
+    eapply schedfail; eauto.
+Qed.
+
+Lemma restr_Cur: forall p m Hlt, p = getCurPerm m -> @restrPermMap p m Hlt = m.
+Proof.
+  intros; subst; apply mem_ext; auto; simpl.
+  pose proof Clight_bounds.Mem_canonical_useful m.
+  destruct (Mem.mem_access m) eqn: Hm; simpl in *; f_equal.
+  - extensionality ofs; extensionality k; rewrite H.
+    destruct k; auto.
+  - apply sync_preds.PTree_map_self; intros.
+    extensionality ofs; extensionality k.
+    destruct k; auto.
+    rewrite getCurPerm_correct; unfold permission_at.
+    rewrite Hm; simpl.
+    unfold PMap.get; simpl.
+    rewrite H0; auto.
+Qed.
+
+Corollary csafe_restr': forall n st m p' Hlt,
+  csafe(ThreadPool:= OrdinalPool.OrdinalThreadPool(Sem:=ClightSem ge))
+    (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig) st m n ->
+  csafe(ThreadPool:= OrdinalPool.OrdinalThreadPool(Sem:=ClightSem ge))
+    (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig) st (@restrPermMap p' m Hlt) n.
+Proof.
+  intros.
+  unshelve eapply csafe_restr; [| |unshelve erewrite restrPermMap_twice, restr_Cur; auto].
+  - intros ??; rewrite getMax_restr.
+    apply getCur_Max.
+  - intros ??; apply getCur_Max.
+Qed.
+
+Lemma CoreSafe_star: forall n U tr tp m tid (c : @semC (ClightSem ge)) c' tp' m' ev
+  (HschedN: schedPeek U = Some tid)
+  (Htid: containsThread tp tid)
+  (Hm: fst (getThreadR(resources:=dryResources) Htid) = getCurPerm m)
+  (Hcmpt: mem_compatible tp m)
+  (Hinv: invariant tp)
+  (Hcode: getThreadC Htid = Krun c)
+  (Hcoresteps: ev_star ge c m ev c' m')
+  (Htp': tp' = updThread Htid (Krun c') (getCurPerm m', snd (getThreadR Htid)))
+  (Hsafe: csafe(ThreadPool:= OrdinalPool.OrdinalThreadPool(Sem:=ClightSem ge))
+    (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig)
+    (yield U, seq.cat tr (map (fun mev => Events.internal tid mev) ev), tp') (diluteMem m') n),
+  csafe(ThreadPool:= OrdinalPool.OrdinalThreadPool(Sem:=ClightSem ge))
+    (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig)
+    (U, tr, tp) m n.
+Proof.
+  intros.
+  revert dependent tp'.
+  revert dependent tp.
+  revert n tr.
+  induction Hcoresteps; intros.
+  - subst.
+    rewrite app_nil_r in Hsafe.
+    rewrite <- Hm in Hsafe.
+    destruct (getThreadR Htid) eqn: Hget; simpl in *.
+    rewrite <- Hcode, <- Hget, OrdinalPool.updThread_same in Hsafe; auto.
+  - rewrite map_app, app_assoc in Hsafe.
+    eapply IHHcoresteps in Hsafe.
+    + eapply csafe_reduce; [eapply CoreSafe; eauto | auto].
+      hnf; simpl.
+      change U with (yield U) at 2.
+      change m2 with (diluteMem m2) at 2.
+      eapply thread_step with (Hcmpt0 := Hcmpt); auto; simpl.
+      econstructor; try apply H; eauto.
+      apply restr_Cur; auto.
+    + rewrite gssThreadRes; auto.
+    + admit. (* need to know that step preserved mem_compatible *)
+    + admit. (* ditto invariant *)
+    + apply gssThreadCode.
+    + rewrite updThread_twice, gssThreadRes; auto.
+  Unshelve.
+  apply cntUpdate; auto.
+Admitted.
+
+Lemma CoreSafe_plus : forall n U tr tp m tid (c : @semC (ClightSem ge)) c' tp' m' ev m1
+  (HschedN: schedPeek U = Some tid)
+  (Htid: containsThread tp tid)
+  (Hcmpt: mem_compatible tp m)
+  (Hrestrict_pmap: restrPermMap (proj1 (compat_th _ _ Hcmpt Htid)) = m1)
+  (Hinv: invariant tp)
+  (Hcode: getThreadC Htid = Krun c)
+  (Hcoresteps: ev_plus ge c m1 ev c' m')
+  (Htp': tp' = updThread Htid (Krun c') (getCurPerm m', snd (getThreadR Htid)))
+  (Hsafe: csafe(ThreadPool:= OrdinalPool.OrdinalThreadPool(Sem:=ClightSem ge))
+    (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig)
+    (yield U, seq.cat tr (map (fun mev => Events.internal tid mev) ev), tp') (diluteMem m') n),
+  csafe(ThreadPool:= OrdinalPool.OrdinalThreadPool(Sem:=ClightSem ge))
+    (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig)
+    (U, tr, tp) m (S n).
+Proof.
+  intros.
+  inv Hcoresteps.
+  rewrite map_app, app_assoc in Hsafe.
+  eapply CoreSafe_star in Hsafe; try apply H0.
+  - eapply CoreSafe; eauto.
+    hnf; simpl.
+    change U with (yield U) at 2.
+    change m2 with (diluteMem m2) at 2.
+    eapply thread_step; auto.
+    econstructor; eauto.
+    simpl; eauto.
+  - auto.
+  - rewrite gssThreadRes; auto.
+  - admit.
+  - admit.
+  - apply gssThreadCode.
+  - rewrite updThread_twice, gssThreadRes; auto.
+  Unshelve.
+  apply cntUpdate; auto.
+Admitted.
+
+Opaque updThread updThreadC containsThread getThreadC getThreadR lockRes.
+
+Lemma computeMap_ext: forall pmap pmap' dmap, (forall b ofs, pmap !! b ofs = pmap' !! b ofs) ->
+  forall b ofs, (computeMap pmap dmap) !! b ofs = (computeMap pmap' dmap) !! b ofs.
+Proof.
+  intros.
+  destruct (dmap ! b) eqn: Hb; [|rewrite !computeMap_3; auto].
+  destruct (o ofs) eqn: Hofs; [erewrite !computeMap_1 by eauto | erewrite !computeMap_2 by eauto]; auto.
+Qed.
 
 Lemma Clight_new_Clight_safety_gen:
   forall n sch tr tp m tp',
@@ -247,15 +646,17 @@ Proof.
         econstructor; auto.
         hnf; simpl.
         instantiate (1 := Clight.State _ _ _ _ _ _).
-        unfold Clight.set_mem.
         apply Clight.step_internal_function.
         apply list_norepet_app in H18 as (? & ? & ?).
         constructor; eauto.
         { admit. }
         { admit. }
-      - constructor; auto; intros.
-        admit.
-        admit. }
+      - rewrite !updThread_twice.
+        apply MTCH_updThread; auto.
+        + constructor; constructor; [simpl; auto|].
+          admit.
+        + rewrite !gssThreadRes; simpl.
+          erewrite mtch_gtr2; eauto. }
     { (* external call *)
       inv H14; [|inv H1].
       inv H6; simpl in *.
@@ -268,28 +669,25 @@ Proof.
       { (* restrPermMap doesn't affect safety *)
         replace m0 with (restrPermMap (proj1 (Hcmpt0 tid0 Htid0))) at 1 by admit.
         apply Hsafe0. }
-      { constructor; auto; intros.
-        - destruct (eq_dec tid0 tid).
-          + subst; rewrite !gssThreadCode.
-            constructor; simpl.
-            admit. (* Clight_new puts the arguments in the temp environment in the wrapper,
-              so that they can be passed to the function, but this is fairly arbitrary. *)
-          + (*pose proof (cntUpdate' _ _ ctn Htid0) as cntj.
-            erewrite (gsoThreadCode _ ctn cntj) by auto.
-            instantiate (1 := mtch_cnt _ Htid) in Htid'.
-            pose proof (cntUpdate' _ _ _ Htid') as cntj'.
-            unshelve erewrite (gsoThreadCode _ _ _ _ _ Htid'); auto.
-            unshelve erewrite (gsoThreadCode _ _ _ _ _ cntj'); auto.*)
-            admit.
-        - admit. } }
+      { rewrite updThread_twice.
+        apply MTCH_updThread; auto.
+        + constructor.
+(*          apply match_states_ext.*)
+          admit. (* Clight_new puts the arguments in the temp environment in the wrapper,
+                    so that they can be passed to the function, but this is fairly arbitrary. *)
+        + intros; simpl.
+          rewrite !getCurPerm_correct, restrPermMap_Cur.
+          rewrite gssThreadRes; simpl.
+          apply getCurPerm_correct.
+        + simpl.
+          rewrite gssThreadRes; simpl.
+          erewrite mtch_gtr2; eauto. } }
     { inv Hstep; simpl in *; rewrite HschedN in HschedN0; inv HschedN0;
         try (inv Htstep; rewrite gssThreadCode in Hcode0; inv Hcode0);
         try match goal with H : sch = schedSkip sch |- _ =>
         symmetry in H; apply schedSkip_id in H; subst end; try discriminate; try contradiction.
       inv Hhalted; contradiction. }
-  - (* In all other steps, the two semantics should trivially coincide...
-       but of course they don't. *)
-    inv Htstep.
+  - inv Htstep.
     inversion H0.
     pose proof (mtch_gtc _ ctn (mtch_cnt _ ctn)) as Hc; rewrite Hcode in Hc; inv Hc.
     simpl in *.
@@ -303,8 +701,63 @@ Proof.
       - eapply MTCH_install_perm, Hperm.
       - eapply MTCH_invariant; eauto. }
     (* In resume, Clight takes another step to process the Returnstate. *)
-    admit.
-  - admit. (* should be able to reuse something from Clight_sem *)
+    destruct n; [constructor|].
+    pose proof cntUpdateC(Sem := ClightSem ge) (Krun (Clight.Returnstate Vundef (CC.Kcall lid f ve te k') m))
+      (mtch_cnt tid ctn) (mtch_cnt tid ctn) as Htid'.
+    eapply CoreSafe.
+    { hnf; simpl.
+      rewrite <- H5.
+      change sch with (yield sch) at 2.
+      eapply thread_step with (Htid0 := Htid'); eauto; econstructor; eauto.
+      - admit.
+      - rewrite gssThreadCC; auto.
+      - edestruct (event_semantics.ev_step_ax2 (CLC_evsem ge)) as [ev Hstep];
+          [|assert (ev = nil); [|subst; apply Hstep]].
+        econstructor; auto.
+        hnf; simpl.
+        instantiate (2 := Clight.State _ _ _ _ _ _).
+        apply Clight.step_returnstate.
+        { admit. } }
+    simpl.
+    rewrite app_nil_r.
+    apply csafe_restr'.
+    eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool));
+      [eapply IHn; [eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto|] | auto].
+    constructor; auto; intros.
+    + destruct (eq_dec tid0 tid).
+      * subst; rewrite gssThreadCode, gssThreadCC.
+        constructor.
+        destruct lid; inv Hafter_external; constructor; auto.
+      * unshelve erewrite gsoThreadCode, <- !gsoThreadCC; auto.
+    + destruct (eq_dec tid0 tid).
+      * subst; rewrite gssThreadRes.
+        unshelve erewrite gThreadCR; auto; simpl.
+        rewrite getCurPerm_correct, restrPermMap_Cur.
+        unshelve erewrite gThreadCR; auto.
+      * rewrite (gThreadCR ctn (cntUpdateC' _ _ Htid0)).
+        rewrite (gsoThreadRes Htid' (cntUpdate' _ _ _ Htid'0)); auto.
+        unshelve erewrite gThreadCR; auto.
+    + destruct (eq_dec tid0 tid).
+      * subst; rewrite gssThreadRes.
+        unshelve erewrite gThreadCR; auto; simpl.
+        unshelve erewrite gThreadCR; auto.
+      * rewrite (gThreadCR ctn (cntUpdateC' _ _ Htid0)).
+        rewrite (gsoThreadRes Htid' (cntUpdate' _ _ _ Htid'0)); auto.
+        unshelve erewrite gThreadCR; auto.
+  - inv Htstep.
+    inversion H0.
+    pose proof (mtch_gtc _ Htid (mtch_cnt _ Htid)) as Hc; rewrite Hcode in Hc; inv Hc.
+    eapply Clight_new_ev_sim in Hcorestep as (c2' & Hstep & Hmatch); eauto.
+    eapply CoreSafe_plus with (Hcmpt := MTCH_compat _ _ _ H0 Hcmpt); try apply Hstep; eauto.
+    + apply restrPermMap_ext.
+      intro; extensionality ofs; auto.
+    + eapply MTCH_invariant; eauto.
+    + rewrite <- H6 in Hsafe.
+      eapply IHn.
+      { eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
+      apply MTCH_updThread; auto.
+      * constructor; auto.
+      * erewrite <- mtch_gtr2; eauto.
   - inv Htstep.
     inversion H0.
     pose proof (mtch_gtc _ ctn (mtch_cnt _ ctn)) as Hc; rewrite Hcode in Hc; inv Hc.
@@ -320,19 +773,124 @@ Proof.
     { rewrite app_nil_r; rewrite <- H5 in Hsafe.
       intro; eapply IHn.
       { eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
-      constructor; auto; intros.
-      destruct (eq_dec tid0 tid).
-      - subst; rewrite !gssThreadCC.
-        constructor.
-        constructor; auto.
-      - unshelve erewrite <- !gsoThreadCC; auto. }
-  - inv Htstep.
-    + admit.
-    + admit.
-    + admit.
-    + admit.
-    + admit.
-    + admit.
+      apply MTCH_updThreadC; auto.
+      constructor; constructor; auto. }
+  - inv Htstep; inversion H0; pose proof (mtch_gtc _ Htid (mtch_cnt _ Htid)) as Hc;
+      rewrite Hcode in Hc; inv Hc; destruct c; inv Hat_external; destruct c'; inv H2.
+    + eapply AngelSafe.
+      { eapply sync_step with (Hcmpt0 := MTCH_compat _ _ _ H0 Hcmpt); eauto.
+        eapply step_acquire; simpl; eauto; simpl; eauto.
+        * eapply MTCH_invariant; eauto.
+        * erewrite restrPermMap_irr; eauto.
+        * erewrite restrPermMap_irr; eauto.
+        * erewrite restrPermMap_irr; eauto.
+          erewrite mtch_gtr2; eauto.
+        * rewrite <- mtch_locks; eauto.
+        * clear - Hangel1 mtch_gtr1.
+          repeat intro.
+          erewrite <- mtch_gtr1, <- computeMap_ext by eauto; apply Hangel1.
+        * erewrite <- mtch_gtr2; apply Hangel2. }
+      { rewrite <- H6 in Hsafe.
+        intro; eapply IHn.
+        { eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
+        apply MTCH_updLockSet, MTCH_updThread; auto.
+        - constructor; constructor; auto.
+        - apply computeMap_ext; auto.
+        - subst newThreadPerm; intros; simpl.
+          erewrite mtch_gtr2; eauto. }
+    + eapply AngelSafe.
+      { eapply sync_step with (Hcmpt0 := MTCH_compat _ _ _ H0 Hcmpt); eauto.
+        eapply step_release; simpl; eauto; simpl; eauto.
+        * eapply MTCH_invariant; eauto.
+        * erewrite restrPermMap_irr; eauto.
+        * erewrite restrPermMap_irr; eauto.
+        * erewrite restrPermMap_irr; eauto.
+          erewrite mtch_gtr2; eauto.
+        * rewrite <- mtch_locks; eauto.
+        * clear - Hangel1 mtch_gtr1.
+          repeat intro.
+          specialize (Hangel1 b ofs); simpl in *.
+          erewrite <- mtch_gtr1, <- computeMap_ext; eauto.
+        * erewrite <- mtch_gtr2; apply Hangel2. }
+      { rewrite <- H6 in Hsafe.
+        intro; eapply IHn.
+        { eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
+        apply MTCH_updLockSet, MTCH_updThread; auto.
+        - constructor; constructor; auto.
+        - apply computeMap_ext; auto.
+        - subst newThreadPerm; intros; simpl.
+          erewrite mtch_gtr2; eauto. }
+    + eapply AngelSafe.
+      { eapply sync_step with (Hcmpt0 := MTCH_compat _ _ _ H0 Hcmpt); eauto.
+        eapply step_create with (virtue3 := virtue1)(virtue4 := virtue2); simpl; eauto; simpl; eauto.
+        * eapply MTCH_invariant; eauto.
+        * subst newThreadPerm threadPerm'; intros ??; simpl in *.
+          specialize (Hangel1 b0 ofs0).
+          erewrite <- mtch_gtr1, <- (computeMap_ext _ _ (fst virtue1)) by eauto; apply Hangel1.
+        * erewrite <- mtch_gtr2; apply Hangel2. }
+      { rewrite <- H6 in Hsafe.
+        intro; eapply IHn.
+        { eapply (csafe_trace(ThreadPool := OrdinalPool.OrdinalThreadPool)),
+            (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
+        apply MTCH_addThread; auto.
+        apply MTCH_updThread; auto.
+        - constructor; constructor; auto.
+        - apply computeMap_ext; auto.
+        - subst threadPerm'; intros; simpl.
+          erewrite mtch_gtr2; eauto. }
+    + eapply AngelSafe.
+      { eapply sync_step with (Hcmpt0 := MTCH_compat _ _ _ H0 Hcmpt); eauto.
+        eapply step_mklock with (pmap_tid'0 := (_, _)); simpl; eauto; simpl; eauto.
+        * eapply MTCH_invariant; eauto.
+        * erewrite <- restrPermMap_ext; eauto.
+          intro; extensionality ofs0; auto.
+        * erewrite <- restrPermMap_ext; eauto.
+          intro; extensionality ofs0; auto.
+        * rewrite <- mtch_locks; auto. }
+      { rewrite <- H6 in Hsafe.
+        intro; eapply IHn.
+        { eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
+        apply MTCH_updLockSet, MTCH_updThread; auto.
+        * constructor; constructor; auto.
+        * intros; simpl.
+          setoid_rewrite <- Hdata_perm.
+          rewrite !addressFiniteMap.setPermBlock_lookup.
+          destruct (adr_range_dec _ _ _); auto.
+        * simpl.
+          setoid_rewrite <- Hlock_perm.
+          erewrite <- mtch_gtr2; eauto. }
+    + eapply AngelSafe.
+      { eapply sync_step with (Hcmpt0 := MTCH_compat _ _ _ H0 Hcmpt); eauto.
+        eapply step_freelock with (pmap_tid'0 := (_, _)); simpl; eauto; simpl; eauto.
+        * eapply MTCH_invariant; eauto.
+        * rewrite <- mtch_locks; auto.
+        * erewrite restrPermMap_irr; eauto. }
+      { rewrite <- H6 in Hsafe.
+        intro; eapply IHn.
+        { eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
+        apply MTCH_remLockSet, MTCH_updThread; auto.
+        * constructor; constructor; auto.
+        * intros; simpl.
+          setoid_rewrite <- Hdata_perm.
+          destruct (adr_range_dec (b, Ptrofs.intval ofs) LKSIZE (b0, ofs0)).
+          -- destruct a; subst.
+             rewrite !setPermBlock_var_same by (unfold LKSIZE_nat; rewrite Z2Nat.id; lkomega); auto.
+          -- destruct (eq_dec b b0); [|rewrite !setPermBlock_var_other_2; auto].
+             subst; assert (~(Ptrofs.intval ofs <= ofs0 < Ptrofs.intval ofs + LKSIZE)).
+             { intro; contradiction n0; split; auto. }
+             rewrite !setPermBlock_var_other_1; auto; unfold LKSIZE_nat; rewrite Z2Nat.id; lkomega.
+        * simpl.
+          setoid_rewrite <- Hlock_perm.
+          erewrite <- mtch_gtr2; eauto. }
+    + eapply AngelSafe.
+      { eapply sync_step with (Hcmpt0 := MTCH_compat _ _ _ H0 Hcmpt); eauto.
+        eapply step_acqfail; simpl; eauto; simpl; eauto.
+        * eapply MTCH_invariant; eauto.
+        * erewrite restrPermMap_irr; eauto.
+        * erewrite restrPermMap_irr; eauto. }
+      { rewrite <- H6 in Hsafe.
+        intro; eapply IHn; eauto.
+        eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
   - inv Hhalted; contradiction.
   - subst; eapply AngelSafe.
     { simpl; rewrite <- H5.
@@ -342,7 +900,7 @@ Proof.
       - eapply MTCH_invariant; eauto.
       - eapply MTCH_compat; eauto. }
     { intro; eapply IHn; eauto.
-      eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto.
+      eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
 Admitted.
 
 Transparent getThreadC.

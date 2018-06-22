@@ -24,6 +24,7 @@ Require Import VST.veric.res_predicates.
 (* Concurrency Imports *)
 Require Import VST.concurrency.common.threadPool. Import addressFiniteMap.
 Require Import VST.concurrency.common.HybridMachineSig.
+Require Import VST.concurrency.common.bounded_maps.
 Require Import VST.concurrency.juicy.juicy_machine.
 Require Import VST.concurrency.common.HybridMachine.
 Require Import VST.concurrency.common.dry_machine_lemmas.
@@ -1204,27 +1205,6 @@ Module Parching <: ErasureSig.
       apply lockRes_valid0.
   Qed.
 
-  Lemma same_shape_map:
-    forall {A B} m f,
-      @bounded_maps.same_shape A B
-                               (PTree.map f m) m.
-  Proof.
-    intros until m.
-    unfold PTree.map.
-    pose (i:=1%positive); fold i.
-    generalize i; clear i.
-    induction m.
-    - intros;
-        unfold bounded_maps.same_shape;
-        simpl; auto.
-    - intros;
-        unfold bounded_maps.same_shape;
-        split; [| split].
-      + destruct o; simpl; auto.
-      + eapply IHm1.
-      + eapply IHm2.
-  Qed.
-  
   (* Proof of the step diagram when the step is a synchronization step *)
   Lemma sync_step_diagram:
     forall (m m':Memory.mem) (U:seq nat) js js' ds i ev
@@ -1796,13 +1776,13 @@ Module Parching <: ErasureSig.
       10: eassumption.
       + (*boundedness*)
         split.
-        * eapply bounded_maps.sub_map_and_shape;
+        * eapply sub_map_and_shape;
           [eapply same_shape_map|].
 
           move=> p f1 HH.
           assert (HH':= HH).
-          eapply bounded_maps.map_leq_apply in HH';
-            try apply bounded_maps.treemap_sub_map.
+          eapply map_leq_apply in HH';
+            try apply treemap_sub_map.
           rewrite PTree.gmap in HH.
           destruct HH'  as [f2 HH'].
           rewrite HH' in HH; simpl in HH; inversion HH.
@@ -1827,12 +1807,12 @@ Module Parching <: ErasureSig.
 
             rewrite /PMap.get HH' is_none => /po_None1 //.
             }
-        * eapply bounded_maps.sub_map_and_shape;
+        * eapply sub_map_and_shape;
           [eapply same_shape_map|].
           move=> p f1 HH.
           assert (HH':= HH).
-          eapply bounded_maps.map_leq_apply in HH';
-            try apply bounded_maps.treemap_sub_map.
+          eapply map_leq_apply in HH';
+            try apply treemap_sub_map.
           rewrite PTree.gmap in HH.
           destruct HH'  as [f2 HH'].
           rewrite HH' in HH; simpl in HH; inversion HH.
@@ -1856,7 +1836,7 @@ Module Parching <: ErasureSig.
             rewrite /PMap.get HH' is_none => /po_None1 //.
             }
 
-          (*eapply bounded_maps.treemap_sub_map.*)
+          (*eapply treemap_sub_map.*)
       + assumption.
       + eapply MTCH_getThreadC; eassumption.
       + reflexivity.
@@ -2478,12 +2458,12 @@ Module Parching <: ErasureSig.
       9: reflexivity.
       + (*boundedness 1*)
         split.
-        * eapply bounded_maps.sub_map_and_shape;
+        * eapply sub_map_and_shape;
           [eapply same_shape_map|].
           move=> p f1 HH.
           assert (HH':= HH).
-          eapply bounded_maps.map_leq_apply in HH';
-            try apply bounded_maps.treemap_sub_map.
+          eapply map_leq_apply in HH';
+            try apply treemap_sub_map.
           rewrite PTree.gmap in HH.
           destruct HH'  as [f2 HH'].
           rewrite HH' in HH; simpl in HH; inversion HH.
@@ -2531,13 +2511,13 @@ Module Parching <: ErasureSig.
             rewrite is_none => /po_None1.
             auto.
             }
-          (* eapply bounded_maps.treemap_sub_map. *)
-        * eapply bounded_maps.sub_map_and_shape;
+          (* eapply treemap_sub_map. *)
+        * eapply sub_map_and_shape;
           [eapply same_shape_map|].
           move=> p f1 HH.
           assert (HH':= HH).
-          eapply bounded_maps.map_leq_apply in HH';
-            try apply bounded_maps.treemap_sub_map.
+          eapply map_leq_apply in HH';
+            try apply treemap_sub_map.
           rewrite PTree.gmap in HH.
           destruct HH'  as [f2 HH'].
           rewrite HH' in HH; simpl in HH; inversion HH.
@@ -2587,15 +2567,15 @@ Module Parching <: ErasureSig.
             }
 
 
-          (* eapply bounded_maps.treemap_sub_map. *)
+          (* eapply treemap_sub_map. *)
       + (*boundedness 2*)
         repeat split.
-        * eapply bounded_maps.sub_map_and_shape;
+        * eapply sub_map_and_shape;
           [eapply same_shape_map|].
           move=> p f1 HH.
           assert (HH':= HH).
-          eapply bounded_maps.map_leq_apply in HH';
-            try apply bounded_maps.treemap_sub_map.
+          eapply map_leq_apply in HH';
+            try apply treemap_sub_map.
           rewrite PTree.gmap in HH.
           destruct HH'  as [f2 HH'].
           rewrite HH' in HH; simpl in HH; inversion HH.
@@ -2634,13 +2614,13 @@ Module Parching <: ErasureSig.
             rewrite is_none => /po_None1.
             auto.
             }
-          (* eapply bounded_maps.treemap_sub_map. *)
-        * eapply bounded_maps.sub_map_and_shape;
+          (* eapply treemap_sub_map. *)
+        * eapply sub_map_and_shape;
           [eapply same_shape_map|].
           move=> p f1 HH.
           assert (HH':= HH).
-          eapply bounded_maps.map_leq_apply in HH';
-            try apply bounded_maps.treemap_sub_map.
+          eapply map_leq_apply in HH';
+            try apply treemap_sub_map.
           rewrite PTree.gmap in HH.
           destruct HH'  as [f2 HH'].
           rewrite HH' in HH; simpl in HH; inversion HH.
@@ -3339,12 +3319,12 @@ Module Parching <: ErasureSig.
           (virtue2:=(virtue21,virtue22)).
         - (*boundedness 1*)
           split.
-        * eapply bounded_maps.sub_map_and_shape;
+        * eapply sub_map_and_shape;
           [eapply same_shape_map|].
           move=> p0 f1 HH.
           assert (HH':= HH).
-          eapply bounded_maps.map_leq_apply in HH';
-            try apply bounded_maps.treemap_sub_map.
+          eapply map_leq_apply in HH';
+            try apply treemap_sub_map.
           rewrite PTree.gmap in HH.
           destruct HH'  as [f2 HH'].
           rewrite HH' in HH; simpl in HH; inversion HH.
@@ -3392,13 +3372,13 @@ Module Parching <: ErasureSig.
             rewrite is_none => /po_None1.
             auto.
             }
-          (* eapply bounded_maps.treemap_sub_map. *)
-        * eapply bounded_maps.sub_map_and_shape;
+          (* eapply treemap_sub_map. *)
+        * eapply sub_map_and_shape;
           [eapply same_shape_map|].
           move=> p f1 HH.
           assert (HH':= HH).
-          eapply bounded_maps.map_leq_apply in HH';
-            try apply bounded_maps.treemap_sub_map.
+          eapply map_leq_apply in HH';
+            try apply treemap_sub_map.
           rewrite PTree.gmap in HH.
           destruct HH'  as [f2 HH'].
           rewrite HH' in HH; simpl in HH; inversion HH.
@@ -3449,12 +3429,12 @@ Module Parching <: ErasureSig.
 
         - (*boundedness 2*)
            split.
-        * eapply bounded_maps.sub_map_and_shape;
+        * eapply sub_map_and_shape;
           [eapply same_shape_map|].
           move=> p0 f1 HH.
           assert (HH':= HH).
-          eapply bounded_maps.map_leq_apply in HH';
-            try apply bounded_maps.treemap_sub_map.
+          eapply map_leq_apply in HH';
+            try apply treemap_sub_map.
           rewrite PTree.gmap in HH.
           destruct HH'  as [f2 HH'].
           rewrite HH' in HH; simpl in HH; inversion HH.
@@ -3502,13 +3482,13 @@ Module Parching <: ErasureSig.
             rewrite is_none => /po_None1.
             auto.
             }
-          (* eapply bounded_maps.treemap_sub_map. *)
-        * eapply bounded_maps.sub_map_and_shape;
+          (* eapply treemap_sub_map. *)
+        * eapply sub_map_and_shape;
           [eapply same_shape_map|].
           move=> p f1 HH.
           assert (HH':= HH).
-          eapply bounded_maps.map_leq_apply in HH';
-            try apply bounded_maps.treemap_sub_map.
+          eapply map_leq_apply in HH';
+            try apply treemap_sub_map.
           rewrite PTree.gmap in HH.
           destruct HH'  as [f2 HH'].
           rewrite HH' in HH; simpl in HH; inversion HH.
