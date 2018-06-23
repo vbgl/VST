@@ -1,10 +1,9 @@
-(** * SC Machine is spinlock clean and well-synchronized*)
+(** * Trace erasure preserves spinlock clean and well-synchronized*)
 Require Import compcert.lib.Axioms.
 
-Require Import VST.sepcomp. Import SepComp.
-Require Import VST.sepcomp.semantics_lemmas.
 
-Require Import VST.concurrency.common.pos.
+Require Import VST.concurrency.common.sepcomp. Import SepComp.
+Require Import VST.sepcomp.semantics_lemmas.
 
 From mathcomp.ssreflect Require Import ssreflect ssrbool ssrnat ssrfun eqtype seq fintype finfun.
 Set Implicit Arguments.
@@ -19,45 +18,36 @@ Require Import compcert.common.Memory.
 Require Import compcert.lib.Integers.
 
 Require Import Coq.ZArith.ZArith.
-
-Require Import VST.concurrency.common.threads_lemmas.
 Require Import VST.concurrency.common.HybridMachineSig.
-Require Import VST.concurrency.common.dry_context.
-Require Import VST.concurrency.common.HybridMachine_lemmas.
-Require Import VST.concurrency.SC_erasure.
-Require Import VST.concurrency.spinlocks.
-Require Import VST.concurrency.executions.
+Require Import VST.concurrency.sc_drf.SC_erasure.
+Require Import VST.concurrency.sc_drf.spinlocks.
+Require Import VST.concurrency.sc_drf.executions.
 Require Import Coqlib.
 Require Import VST.msl.Coqlib2.
 
 Set Bullet Behavior "None".
 Set Bullet Behavior "Strict Subproofs".
 
-Module SCSpinlocks (SEM: Semantics)
-       (SemAxioms: SemanticsAxioms SEM)
-       (Machines: MachinesSig with Module SEM := SEM)
-       (AsmContext: AsmContext SEM Machines)
-       (CE : CoreErasure SEM).
-  Import Machines DryMachine ThreadPool AsmContext.
+Module SpinLocksSC.
+
+  Import CoreErasure.
+  Import Executions SpinLocks SCErasure TraceErasure.
   Import event_semantics.
   Import Events.
 
-  Module Executions := Executions SEM SemAxioms Machines AsmContext.
-  Module SpinLocks := SpinLocks SEM SemAxioms Machines AsmContext.
-  Module SCErasure := SCErasure SEM SemAxioms Machines AsmContext CE.
-  Import Executions SpinLocks SCErasure TraceErasure.
-
-  Lemma event_erasure_action:
-    forall ev ev',
-      event_erasure ev ev' ->
-      action ev = action ev'.
-  Proof.
-    intros.
-    inversion H; subst.
-    inv H0; reflexivity.
-    inv H. simpl.
-    destruct ev0; reflexivity.
-  Qed.
+    Open Scope nat.
+    
+    Lemma event_erasure_action:
+      forall ev ev',
+        event_erasure ev ev' ->
+        action ev = action ev'.
+    Proof.
+      intros.
+      inversion H; subst.
+      inv H0; reflexivity.
+      inv H. simpl.
+      destruct ev0; reflexivity.
+    Qed.
 
   Lemma memval_erasure_list_length:
     forall mval mval',
@@ -272,4 +262,4 @@ Module SCSpinlocks (SEM: Semantics)
         repeat split; eauto.
   Qed.
 
-End SCSpinlocks.
+End SpinLocksSC.

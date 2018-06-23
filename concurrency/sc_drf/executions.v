@@ -4019,4 +4019,184 @@ Module Executions.
     Qed.
   End FineGrainedExecutions.
 
+  Section SCExecutions.
+
+    Context
+      {Sem : Semantics}
+      {initU : seq.seq nat}
+      {SemAx : CoreLanguage.SemAxioms}.
+
+    Existing Instance BareMachine.resources.
+    Existing Instance HybridFineMachine.scheduler.
+    Existing Instance OrdinalPool.OrdinalThreadPool.
+    Existing Instance BareMachine.BareMachineSig.
+    Existing Instance BareDilMem.
+    Existing Instance bareMach.
+
+    Opaque containsThread mem_compatible.
+    Lemma start_thread_det:
+      forall tp m tid (cnt: containsThread tp tid) tp' m' tp'' m''
+        (Hstart: start_thread m cnt tp' m')
+        (Hstart': start_thread m cnt tp'' m''),
+        tp' = tp'' /\ m' = m''.
+    Proof.
+      intros.
+      inv Hstart; inv Hstart'.
+      inv Hperm; inv Hperm0.
+      Tactics.pf_cleanup.
+      rewrite Hcode in Hcode0.
+      inv Hcode0.
+      eapply CoreLanguage.initial_core_det in Hinitial; eauto.
+      destruct Hinitial; subst.
+      now auto.
+    Qed.
+    
+
+    Lemma sync_step_det:
+      forall tp m tid (cnt: containsThread tp tid) tp' m' tp'' m'' ev ev'
+        (Hcmpt: mem_compatible tp m)
+        (Hstep: @BareMachine.syncStep _ false _ tp m cnt Hcmpt tp' m' ev)
+        (Hstep': @BareMachine.syncStep _ false _ tp m cnt Hcmpt tp'' m'' ev'),
+        tp' = tp'' /\ m' = m'' /\ ev = ev'.
+    Proof.
+      intros.
+      inv Hstep; inv Hstep';
+        repeat match goal with
+               | [H: ?Expr = _, H1: ?Expr = _ |- _] =>
+                 rewrite H in H1; inv H1
+               end;
+        now auto.
+    Qed.
+    
+    Lemma suspend_thread_det:
+      forall tp m tid (cnt: containsThread tp tid) tp' tp''
+        (Hsuspend: suspend_thread m cnt tp')
+        (Hsuspend': suspend_thread m cnt tp''),
+        tp' = tp''.
+    Proof.
+      intros.
+      inv Hsuspend; inv Hsuspend';
+        inv Hperm; inv Hperm0;
+          Tactics.pf_cleanup.
+      repeat match goal with
+             | [H: ?Expr = _, H1: ?Expr = _ |- _] =>
+               rewrite H in H1; inv H1
+             end;
+        reflexivity.
+    Qed.
+
+    Lemma step_thread_det:
+      forall tp m tid (cnt: containsThread tp tid) tp' m' tp'' m'' ev ev'
+        (Hcmpt: mem_compatible tp m)
+        (Hstep: threadStep cnt Hcmpt tp' m' ev)
+        (Hstep': threadStep cnt Hcmpt tp'' m'' ev'),
+        tp' = tp'' /\ m' = m'' /\ ev = ev'.
+    Proof.
+      intros.
+      inv Hstep; inv Hstep'.
+      rewrite Hcode in Hcode0; inv Hcode0.
+      destruct (CoreLanguage.ev_step_det _ _ _ _ _ _ _ _ Hcorestep Hcorestep0) as [? [? ?]];
+        subst.
+      now auto.
+    Qed.
+    
+    Lemma resume_thread_det:
+      forall tp m tid (cnt: containsThread tp tid) tp' tp''
+        (Hresume: resume_thread m cnt tp')
+        (Hresume': resume_thread m cnt tp''),
+        tp' = tp''.
+    Proof.
+      intros.
+      inv Hresume; inv Hresume';
+        inv Hperm; inv Hperm0;
+          Tactics.pf_cleanup.
+      repeat match goal with
+             | [H: ?Expr = _, H1: ?Expr = _ |- _] =>
+               rewrite H in H1; inv H1
+             end;
+        reflexivity.
+    Qed.
+    
+    Lemma bareStep_det:
+      forall U tr tp m U' tr' tp' m' U'' tr'' tp'' m''
+        (Hstep: MachStep (U, tr, tp) m
+                         (U', tr', tp') m')
+        (Hstep': MachStep (U, tr, tp) m
+                          (U'', tr'', tp'') m''),
+        U' = U'' /\ tr' = tr'' /\ tp' = tp'' /\ m' = m''.
+    Proof.
+      intros.
+      inv Hstep; simpl in *; subst;
+      inv Hstep'; simpl in *; subst;
+      match goal with
+      | [H: schedPeek _ = _, H1: schedPeek _ = _ |- _] =>
+        rewrite H in H1; inv H1
+      end; Tactics.pf_cleanup;
+        try (inv Htstep; inv Htstep0;
+             Tactics.pf_cleanup;
+             congruence);
+      try (inv Htstep; inv Hhalted;
+           Tactics.pf_cleanup;
+           congruence);
+      try (now exfalso);
+      try (inv Htstep; inv Htstep0;
+      Tactics.pf_cleanup;
+      rewrite Hcode in Hcode0; inv Hcode0;
+      eapply ev_step_ax1 in Hcorestep;
+      eapply corestep_not_at_external in Hcorestep;
+      inv Hperm;
+      congruence);
+      try (exfalso;
+      inv Hhalted;
+      inv Htstep;
+      Tactics.pf_cleanup;
+      rewrite Hcode in Hcode0; inv Hcode0;
+      solve [eapply ev_step_ax1 in Hcorestep;
+             eapply corestep_not_halted in Hcorestep;
+             now eauto |
+             destruct (CoreLanguage.at_external_halted_excl c0 m') as [Hcontra | Hcontra]
+               in Hat_external;
+             [congruence | eapply Hcontra; eauto]]).
+      destruct (start_thread_det Htstep Htstep0); subst;
+        now auto.
+      destruct (resume_thread_det Htstep Htstep0); subst;
+        now auto.
+      destruct (step_thread_det Htstep Htstep0) as [? [? ?]]; subst;
+        now auto.
+      destruct (suspend_thread_det Htstep Htstep0); subst;
+        now auto.      
+      destruct (sync_step_det Htstep Htstep0) as [? [? ?]]; subst;
+        now auto.
+      now auto.
+      now auto.      
+    Qed.
+
+
+    Lemma bare_execution_det:
+      forall st m st' m' st'' m''
+        (Hstep: fine_execution st m st' m')
+        (Hstep': fine_execution st m st'' m''),
+        st' = st'' /\ m' = m''.
+    Proof.
+      intros st.
+      destruct st as [[U tr] tp].
+      generalize dependent tr.
+      generalize dependent tp.
+      induction U; intros.
+      - inv Hstep; inv Hstep'.
+        now  auto.
+      - inv Hstep;
+        [simpl in H;
+         now exfalso|].
+        inv Hstep';
+          [simpl in H;
+           now exfalso|].
+        destruct (bareStep_det H6 H8) as [? [? [? ?]]];
+          subst.
+        apply app_inv_head in H0; subst.
+        now eauto.
+    Qed.
+
+    End SCExecutions.
+    
 End Executions.

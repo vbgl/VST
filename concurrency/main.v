@@ -6,15 +6,21 @@ Require Import VST.concurrency.juicy.erasure_safety.
 Require Import VST.concurrency.compiler.concurrent_compiler_safety_proof.
 Require Import VST.concurrency.compiler.sequential_compiler_correct.
 
+Require Import VST.concurrency.sc_drf.mem_obs_eq.
+Require Import VST.concurrency.sc_drf.fineConc_safe.
+Require Import VST.concurrency.sc_drf.x86_inj.
 Require Import VST.concurrency.sc_drf.x86_safe.
 
 Require Import VST.concurrency.common.threadPool.
 Require Import VST.concurrency.common.erased_machine.
+Require Import VST.concurrency.common.HybridMachineSig.
+
 
 Set Bullet Behavior "Strict Subproofs".
 
 Module Main (CC_correct: CompCert_correctness).
-  (*Import the *)
+
+  Import HybridMachineSig MemoryWD.
   (*Import the safety of the compiler for concurrent programs*)
   Module ConcurCC_safe:= (Concurrent_Safety CC_correct).
   Import ConcurCC_safe.
@@ -31,7 +37,6 @@ Module Main (CC_correct: CompCert_correctness).
   Context (Asm_prog: Asm.program).
   Context (asm_genv_safe: Asm_core.safe_genv (@x86_context.X86Context.the_ge Asm_prog)).
   Context (compilation : CC_correct.CompCert_compiler Clight_prog = Some Asm_prog).
-  Definition AsmSem:= @x86_context.X86Context.X86Sem Asm_prog asm_genv_safe.
   
   (* This should be instantiated:
      it says initial_Clight_state taken from CPROOF, is an initial state of CompCert.
@@ -41,15 +46,26 @@ Module Main (CC_correct: CompCert_correctness).
                                 (init_mem CPROOF)
                                 (Clight_safety.initial_Clight_state CPROOF)
                                 Main_ptr nil).
+
+  (** ** Assembly level instances *)
+
+  (** Asm Semantics *)
+  Instance AsmSem : Semantics:= @x86_context.X86Context.X86Sem Asm_prog asm_genv_safe.
+  (** Asm semantic preservation under alpha renaming *)
+  Existing Instance X86Inj.X86Inj.
+  (** Initial memory is well defined *)
+  Instance InitMem : FineConcInitial.FineInit :=
+    {|FineConcInitial.init_mem := init_mem CPROOF|}.
+  Admitted.    
   
+  Variable em :  ClassicalFacts.excluded_middle.
 
   (*Safety from CSL to Coarse Asm*)
   Lemma CSL2CoarseAsm_safety:
     forall U,
-    exists init_mem_target init_mem_target' init_thread_target,
-      Asm.entry_point (Globalenvs.Genv.globalenv Asm_prog)
-                      init_mem_target init_thread_target Main_ptr
-      nil /\
+    exists init_mem_target' init_thread_target,
+      initial_core (event_semantics.msem semSem) 0 FineConcInitial.init_mem
+                   init_thread_target init_mem_target' Main_ptr nil /\
     let res_target := permissions.getCurPerm init_mem_target' in
   let init_tp_target :=
       threadPool.ThreadPool.mkPool
@@ -68,7 +84,7 @@ Module Main (CC_correct: CompCert_correctness).
     intros.
     pose proof (ConcurrentCompilerSafety _ _ compilation asm_genv_safe).
     unfold concurrent_compiler_safety.concurrent_simulation_safety_preservation in *.
-    specialize (H U U (init_mem CPROOF) (init_mem CPROOF) (Clight_safety.initial_Clight_state CPROOF) Main_ptr nil).
+    specialize (H U U FineConcInitial.init_mem FineConcInitial.init_mem (Clight_safety.initial_Clight_state CPROOF) Main_ptr nil).
     match type of H with
       | ?A -> _ => cut A
     end.
@@ -105,17 +121,15 @@ Module Main (CC_correct: CompCert_correctness).
           subst C1; auto.
           f_equal. eapply Axioms.proof_irr.
       + eapply SAFE.
-
     - econstructor; repeat split; try reflexivity; eauto.
   Qed.
 
 
   Theorem CSL2FineBareAsm_safety:
     forall U,
-    exists init_mem_target init_mem_target' init_thread_target,
-      Asm.entry_point (Globalenvs.Genv.globalenv Asm_prog)
-                      init_mem_target init_thread_target Main_ptr
-      nil /\
+    exists init_mem_target' init_thread_target,
+      initial_core (event_semantics.msem semSem) 0 init_mem
+                   init_thread_target init_mem_target' Main_ptr nil /\
       let init_tp_bare :=
           threadPool.ThreadPool.mkPool
             (Sem:=AsmSem)
@@ -128,13 +142,17 @@ Module Main (CC_correct: CompCert_correctness).
                          (resources:=BareMachine.resources)
                          (Sem:=AsmSem))
           (machineSig:= BareMachine.BareMachineSig)
-          init_tp_bare init_mem_target' U n.
+          init_tp_bare (@diluteMem BareDilMem init_mem_target') U n.
   Proof.
     intros U.
     pose proof (CSL2CoarseAsm_safety U) as
-        (init_mem_target & init_mem_target' & init_thread_target & INIT & HH).
-    exists init_mem_target, init_mem_target',  init_thread_target.
-    split; auto; simpl.
+        (init_mem_target' & init_thread_target & INIT & HH).
+    exists init_mem_target',  init_thread_target.
+    split; auto.
+    intros.
+    subst init_tp_bare.
+    eapply X86Safe.x86SC_safe with (Main_ptr := Main_ptr); eauto.
+    simpl.
     admit.
     (* Should be something about X86Safe.x86SC_safe.*)
   Admitted.

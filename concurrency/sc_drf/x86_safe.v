@@ -31,9 +31,11 @@ Require Import VST.concurrency.common.HybridMachineSig.
 Require Import VST.concurrency.common.dry_context.
 Require Import VST.concurrency.common.x86_context.
 Require Import VST.concurrency.common.Asm_core.
+Require Import VST.concurrency.sc_drf.x86_erasure.
 Require Import VST.concurrency.sc_drf.x86_inj.
 Require Import VST.concurrency.sc_drf.fineConc_safe.
 Require Import VST.concurrency.sc_drf.SC_erasure.
+Require Import VST.concurrency.sc_drf.SC_spinlock_safe.
 
 Require Import Coqlib.
 Require Import VST.msl.Coqlib2.
@@ -52,13 +54,12 @@ Module X86Safe.
     
     Instance X86Sem : Semantics := @X86Sem the_program Hsafe.
     Instance X86Axioms : CoreLanguage.SemAxioms := @X86Axioms U the_program Hsafe.
-    Context {CE : @CoreErasure.CoreErasure X86Sem}. (*TODO: replace with instance *)
-    Existing Instance X86Inj.X86Inj. 
-    Context {FI : FineInit}. (* We don't really have an instance for that, it would require to prove that
+    Existing Instance X86CoreErasure.X86Erasure.
+    Existing Instance X86Inj.X86Inj.
+    (* We don't really have an instance for that, it would require to prove that
                                 the initial memory has no invalid pointers *)
+    Context {FI : FineInit}. 
     Variable em : ClassicalFacts.excluded_middle.
-    
-
     Existing Instance dryCoarseMach.
     Existing Instance dryFineMach.
     Existing Instance bareMach.
@@ -136,4 +137,3 @@ Module X86Safe.
 
   End X86Safe.
 End X86Safe.
-               

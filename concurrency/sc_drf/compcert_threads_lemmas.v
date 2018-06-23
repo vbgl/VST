@@ -168,7 +168,7 @@ Module SimDefs.
 - The DryConc machine is safe for all schedules
 - There is a weak simulation ([weak_tsim]) between threads with the same id in the two machines
 - Blocks that are not yet committed (in the sense that the global renaming [f : memren] does not map these blocks) are mapped in different blocks by distinct thread renamings.
-- Every thread in the DryConc machine can be stepped as mandated by the delta [xs] until the DryConc machine reaches a state for which this thread is in [strong_tsim] between the two machines.
+- Every thread in the DryConc machine can be stepped as mandated by the delta [xs] until the DryCo   nc machine reaches a state for which this thread is in [strong_tsim] between the two machines.
 - Lock resources are related by the global renaming and the two machines have equivalent [lockRes] for mapped blocks
 - The [invariant] holds for the FineConc machine
 - The [Max] permissions on the memory of the FineConc machine are always set to [Freeable]
