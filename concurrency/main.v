@@ -11,6 +11,7 @@ Require Import VST.concurrency.sc_drf.x86_safe.
 Require Import VST.concurrency.common.threadPool.
 Require Import VST.concurrency.common.erased_machine.
 
+Set Bullet Behavior "Strict Subproofs".
 
 Module Main (CC_correct: CompCert_correctness).
   (*Import the *)
@@ -45,11 +46,11 @@ Module Main (CC_correct: CompCert_correctness).
   (*Safety from CSL to Coarse Asm*)
   Lemma CSL2CoarseAsm_safety:
     forall U,
-    exists init_mem_target init_thread_target,
+    exists init_mem_target init_mem_target' init_thread_target,
       Asm.entry_point (Globalenvs.Genv.globalenv Asm_prog)
                       init_mem_target init_thread_target Main_ptr
       nil /\
-    let res_target := permissions.getCurPerm init_mem_target in
+    let res_target := permissions.getCurPerm init_mem_target' in
   let init_tp_target :=
       threadPool.ThreadPool.mkPool
         (Sem:=AsmSem)
@@ -62,19 +63,56 @@ Module Main (CC_correct: CompCert_correctness).
       (ThreadPool:=threadPool.OrdinalPool.OrdinalThreadPool
                      (Sem:=AsmSem))
       (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig)
-      init_MachState_target init_mem_target n.
+      init_MachState_target init_mem_target' n.
   Proof.
     intros.
-    eapply ConcurrentCompilerSafety.
-    3: eapply Clight_initial_safe.
-    - eexact compilation.
-    - exact CPROOF_initial.
+    pose proof (ConcurrentCompilerSafety _ _ compilation asm_genv_safe).
+    unfold concurrent_compiler_safety.concurrent_simulation_safety_preservation in *.
+    specialize (H U U (init_mem CPROOF) (init_mem CPROOF) (Clight_safety.initial_Clight_state CPROOF) Main_ptr nil).
+    match type of H with
+      | ?A -> _ => cut A
+    end.
+    intros HH; specialize (H HH);
+      match type of H with
+      | ?A -> _ => cut A; try (intros; eapply Clight_initial_safe) 
+      end.
+    intros HH'; specialize (H HH').
+
+    - destruct H as (mem_t& mem_t' & thread_target & INIT & SAFE).
+      exists mem_t, mem_t', thread_target; split.
+      + (**) 
+        clear - INIT.
+        simpl in INIT.
+        destruct INIT as (c & (INIT&mem_eq) & EQ); simpl in *.
+        cut (c = thread_target).
+        * intros ?; subst c; eauto.
+        * clear - EQ.
+          cut (Krun c = Krun thread_target).
+          { intros HH; inversion HH; eauto. }
+          match type of EQ with
+          | ?A = ?B =>
+            remember A as C1; remember B as C2
+          end.
+          assert (cnt1: OrdinalPool.containsThread C1 0).
+          { clear - HeqC1. unfold OrdinalPool.containsThread.
+            subst C1; auto. }
+          assert (cnt2: OrdinalPool.containsThread C2 0).
+          { clear - HeqC2. unfold OrdinalPool.containsThread.
+            subst C2; auto. }
+          replace (Krun c) with (OrdinalPool.getThreadC cnt2) by (subst C2; simpl; auto).
+          replace (Krun thread_target) with (OrdinalPool.getThreadC cnt1) by (subst C1; simpl; auto).
+          clear - EQ.
+          subst C1; auto.
+          f_equal. eapply Axioms.proof_irr.
+      + eapply SAFE.
+
+    - econstructor; repeat split; try reflexivity; eauto.
   Qed.
 
 
   Theorem CSL2FineBareAsm_safety:
     forall U,
-    exists init_mem_target init_thread_target,
+    exists init_mem_target init_mem_target' init_thread_target,
       Asm.entry_point (Globalenvs.Genv.globalenv Asm_prog)
                       init_mem_target init_thread_target Main_ptr
       nil /\
@@ -90,15 +128,16 @@ Module Main (CC_correct: CompCert_correctness).
                          (resources:=BareMachine.resources)
                          (Sem:=AsmSem))
           (machineSig:= BareMachine.BareMachineSig)
-          init_tp_bare init_mem_target U n.
+          init_tp_bare init_mem_target' U n.
   Proof.
     intros U.
     pose proof (CSL2CoarseAsm_safety U) as
-        (init_mem_target & init_thread_target & INIT & HH).
-    exists init_mem_target, init_thread_target.
+        (init_mem_target & init_mem_target' & init_thread_target & INIT & HH).
+    exists init_mem_target, init_mem_target',  init_thread_target.
     split; auto; simpl.
-    eapply Coarse2FineAsm_safety; eauto.
-  Qed.
+    admit.
+    (* Should be something about X86Safe.x86SC_safe.*)
+  Admitted.
   End MainTheorem.
   
 End Main.
