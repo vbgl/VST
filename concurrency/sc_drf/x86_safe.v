@@ -31,6 +31,7 @@ Require Import VST.concurrency.common.HybridMachineSig.
 Require Import VST.concurrency.common.dry_context.
 Require Import VST.concurrency.common.x86_context.
 Require Import VST.concurrency.common.Asm_core.
+Require Import VST.concurrency.sc_drf.mem_obs_eq.
 Require Import VST.concurrency.sc_drf.x86_erasure.
 Require Import VST.concurrency.sc_drf.x86_inj.
 Require Import VST.concurrency.sc_drf.fineConc_safe.
@@ -39,6 +40,340 @@ Require Import VST.concurrency.sc_drf.SC_spinlock_safe.
 
 Require Import Coqlib.
 Require Import VST.msl.Coqlib2.
+
+Module InitialMemWD.
+
+  Import Memory CoreInjections Renamings ValueWD.
+
+  Lemma valid_genv_alloc: forall ge (m m1:mem) lo hi b
+                            (ALLOC: Mem.alloc m lo hi = (m1,b))
+                            (G: X86WD.ge_wd (id_ren m) ge),
+      X86WD.ge_wd (id_ren m1) ge.
+  Proof.
+    intros. destruct G. intros. unfold X86WD.ge_wd.
+    split.
+    - intros b0 Hge.
+      specialize (H _ Hge).
+      unfold id_ren in H.
+      destruct (valid_block_dec m b0); simpl in H; try discriminate.
+      eapply Mem.valid_block_alloc with (b' := b0) in v; eauto.
+      destruct (id_ren m1 b0) eqn:Hcontra; auto.
+      eapply id_ren_validblock in v.
+      congruence.
+    - intros. specialize (H0 _ _ _ H1).
+      destruct v; simpl in *; auto.
+      destruct H0 as [b' Hid_ren].
+      unfold id_ren in Hid_ren.
+      destruct (valid_block_dec m b0); simpl in Hid_ren; try discriminate.
+      eapply Mem.valid_block_alloc with (b' := b0) in v; eauto.
+      inv Hid_ren.
+      exists b'.
+      eapply id_ren_validblock in v.
+      now eauto.
+  Qed.
+  
+Lemma valid_genv_store: forall ge m m1 b ofs v chunk
+    (STORE: Mem.store chunk m b ofs v = Some m1)
+     (G: X86WD.ge_wd (id_ren m) ge), X86WD.ge_wd (id_ren m1) ge.
+Proof.
+  intros. case G; intros.
+  - constructor; intros.
+    specialize (H _ H1).
+    unfold id_ren in *.
+    destruct (valid_block_dec m b0); simpl in H; try discriminate.
+    eapply Mem.store_valid_block_1 in v0; eauto.
+    destruct (valid_block_dec m1 b0); now eauto.
+  - eapply MemoryWD.wd_val_valid; eauto using id_ren_domain.
+    eapply MemoryWD.valid_val_store; eauto.
+    eapply MemoryWD.wd_val_valid;
+      now eauto using id_ren_domain.
+Qed.
+
+Lemma valid_genv_store_zeros: forall ge m m1 b y z
+    (STORE_ZERO: store_zeros m b y z = Some m1)
+    (G: X86WD.ge_wd (id_ren m) ge), X86WD.ge_wd (id_ren m1) ge.
+Proof.
+  intros. case G; intros.
+  apply Genv.store_zeros_nextblock in STORE_ZERO.
+  constructor; intros.
+  - specialize (H _ H1).
+    rewrite id_ren_validblock; eauto.
+    unfold id_ren in H.
+    destruct (valid_block_dec m b0); simpl in H; [|now exfalso].
+    unfold Mem.valid_block in *.
+    rewrite STORE_ZERO;
+      now assumption.
+  - specialize (H0 _ _ _ H1).
+    destruct v; auto.
+    simpl in *.
+    destruct H0 as [b' H0].
+    exists b'.
+    erewrite id_ren_validblock.
+    apply id_ren_correct in H0; subst; eauto.
+    unfold id_ren in H0.
+    destruct (valid_block_dec m b0); simpl in H; [|now exfalso].
+    unfold Mem.valid_block in *.
+    rewrite STORE_ZERO;
+      now assumption.
+Qed.
+Require Import FunInd.
+
+Lemma mem_wd_store_zeros: forall m b p n m1
+                            (STORE_ZERO: store_zeros m b p n = Some m1)
+                            (WD: MemoryWD.valid_mem m),
+    MemoryWD.valid_mem m1.
+Proof. intros until n. functional induction (store_zeros m b p n); intros.
+  inv STORE_ZERO; tauto.
+  apply (IHo _ STORE_ZERO); clear IHo.
+  eapply (MemoryWD.store_wd_domain); eauto.
+  now eapply id_ren_domain.
+  simpl; auto.
+  inv STORE_ZERO.
+Qed.
+
+    Lemma validblock_id_ren : forall (m : mem) (b : block),
+        id_ren m b ->  Mem.valid_block m b.
+    Proof.
+      intros.
+      unfold id_ren in H.
+      destruct (valid_block_dec m b); simpl in H; auto; discriminate.
+    Qed.
+
+Lemma valid_genv_drop: forall ge (m m1:mem) b lo hi p
+    (DROP: Mem.drop_perm m b lo hi p = Some m1) (G: X86WD.ge_wd (id_ren m) ge),
+    X86WD.ge_wd (id_ren m1) ge.
+Proof.
+  intros. case G; intros. constructor; intros.
+  - specialize (H _ H1).
+    erewrite id_ren_validblock; eauto.
+    eapply validblock_id_ren in H.
+    apply (Mem.drop_perm_valid_block_1 _ _ _ _ _ _ DROP);
+      auto.
+  - specialize (H0 _ _ _ H1).
+    destruct v; simpl in *; auto.
+    destruct H0 as [? H0].
+    exists b0.
+    eapply id_ren_validblock.
+    apply (Mem.drop_perm_valid_block_1 _ _ _ _ _ _ DROP).
+    eapply validblock_id_ren.
+    erewrite H0;
+      now eauto.
+Qed.
+
+Lemma mem_wd_store_init_data: forall ge a (b:block) (z:Z)
+  m1 m2 (SID:Genv.store_init_data ge m1 b z a = Some m2),
+  X86WD.ge_wd (id_ren m1) ge -> MemoryWD.valid_mem m1 -> MemoryWD.valid_mem m2.
+Proof.
+  intros ge a.
+  destruct a; simpl; intros;
+    try (eapply (MemoryWD.store_wd_domain); eauto using id_ren_domain; simpl; now trivial).
+  inv SID.
+  now auto.
+  destruct (Genv.find_symbol ge i) eqn:Hfind.
+  eapply MemoryWD.store_wd_domain; eauto using id_ren_domain.
+  simpl.
+  destruct H.
+  specialize (H1 i i0 (Vptr b0 i0)).
+  unfold Senv.symbol_address, Senv.find_symbol in H1.
+  simpl in H1.
+  rewrite Hfind in H1.
+  specialize (H1 ltac:(reflexivity)).
+  destruct H1 as [b' H1].
+  eapply validblock_id_ren.
+  erewrite H1;
+    now eauto.
+  discriminate.
+Qed.
+
+Lemma valid_genv_store_init_data:
+  forall ge a (b:block) (z:Z) m1 m2
+    (SID: Genv.store_init_data ge m1 b z a = Some m2),
+    X86WD.ge_wd (id_ren m1) ge -> X86WD.ge_wd (id_ren m2) ge.
+Proof.
+  intros ge a.
+  destruct a; simpl; intros; inv H; constructor;
+  try (intros b0 X;
+       erewrite id_ren_validblock; eauto;
+       eapply Mem.store_valid_block_1 with (b' := b0); eauto;
+       eapply validblock_id_ren; eauto);
+  try (intros id ofs v Hsenv;
+       specialize (H1 _ _ _ Hsenv);
+       eapply MemoryWD.wd_val_valid; eauto using id_ren_domain;
+       eapply MemoryWD.valid_val_store; eauto;
+       eapply MemoryWD.wd_val_valid; eauto using id_ren_domain);
+  inv SID; auto;
+  intros;
+  destruct (Genv.find_symbol ge i) eqn:Hfind; try discriminate.
+  erewrite id_ren_validblock; eauto.
+  eapply Mem.store_valid_block_1; eauto.
+  eapply validblock_id_ren; now eauto.
+  intros .
+  specialize (H1 _ _ _ H).
+  eapply MemoryWD.wd_val_valid; eauto using id_ren_domain;
+    eapply MemoryWD.valid_val_store; eauto;
+      eapply MemoryWD.wd_val_valid;
+      now eauto using id_ren_domain.
+Qed.
+
+Lemma mem_wd_store_init_datalist: forall ge l (b:block)
+  (z:Z) m1 m2 (SID: Genv.store_init_data_list ge m1 b z l = Some m2),
+  X86WD.ge_wd (id_ren m1) ge -> MemoryWD.valid_mem m1 -> MemoryWD.valid_mem m2.
+Proof.
+  intros ge l.
+  induction l; simpl; intros.
+    inv SID. trivial.
+  destruct (Genv.store_init_data ge m1 b z a) eqn:Hstore; try discriminate.
+  inv SID.
+  apply (IHl _ _ _ _ H2); clear IHl H2.
+     eapply valid_genv_store_init_data; eauto.
+  eapply mem_wd_store_init_data;
+    now eauto.
+Qed.
+
+Lemma valid_genv_store_init_datalist: forall ge l (b:block)
+  (z:Z) m1 m2 (SID: Genv.store_init_data_list ge m1 b z l = Some m2),
+    X86WD.ge_wd (id_ren m1) ge -> X86WD.ge_wd (id_ren m2) ge.
+Proof.
+  intros ge l.
+  induction l; simpl; intros.
+    inv SID. trivial.
+  destruct (Genv.store_init_data ge m1 b z a) eqn:Hstore; try discriminate.
+  inv SID.
+  apply (IHl _ _ _ _ H1); clear IHl H1.
+  eapply valid_genv_store_init_data;
+    now eauto.
+Qed.
+
+Lemma mem_valid_drop :
+  forall (m : mem) (b : block) (lo hi : Z) (p : permission) (m' : mem),
+    Mem.drop_perm m b lo hi p = Some m' ->
+    MemoryWD.valid_mem m -> MemoryWD.valid_mem m'.
+Proof.
+  intros.
+  unfold Mem.drop_perm in H.
+  destruct (Mem.range_perm_dec m b lo hi Cur Freeable); inv H.
+  unfold MemoryWD.valid_mem, mem_wd.val_valid, Mem.valid_block in *.
+  simpl in *.
+  now auto.
+Qed.
+
+Lemma mem_wd_alloc_global: forall ge a m0 m1
+   (GA: Genv.alloc_global ge m0 a = Some m1),
+   MemoryWD.valid_mem m0 -> X86WD.ge_wd (id_ren m0) ge -> MemoryWD.valid_mem m1.
+Proof.
+  intros ge a.
+  destruct a; simpl. intros.
+  destruct g.
+  remember (Mem.alloc m0 0 1) as mm. destruct mm.
+  symmetry in Heqmm.
+  specialize (X86Inj.mem_valid_alloc ltac:(eauto using id_ren_domain) H Heqmm).
+  intros (? & ?).
+  eapply mem_valid_drop;
+    now eauto.
+  (* apply (Mem.valid_new_block _ _ _ _ _ Heqmm). *)
+  remember (Mem.alloc m0 0 (init_data_list_size (AST.gvar_init v)) ) as mm.
+  destruct mm. symmetry in Heqmm.
+  destruct (store_zeros m b 0 (init_data_list_size (AST.gvar_init v))) eqn:Hzeros;
+    try discriminate.
+  destruct (Genv.store_init_data_list ge m2 b 0 (AST.gvar_init v)) eqn:Hinit_data;
+    try discriminate.
+  eapply mem_valid_drop in GA; eauto.
+  eapply mem_wd_store_init_datalist; eauto.
+  eapply valid_genv_store_zeros; eauto.
+  eapply valid_genv_alloc; eauto.
+  eapply mem_wd_store_zeros; eauto.
+  eapply X86Inj.mem_valid_alloc;
+    now eauto using id_ren_domain.
+Qed.
+
+Lemma valid_genv_alloc_global: forall ge a m0 m1
+   (GA: Genv.alloc_global ge m0 a = Some m1),
+   X86WD.ge_wd (id_ren m0) ge -> X86WD.ge_wd (id_ren m1) ge.
+Proof.
+  intros ge a.
+  destruct a; simpl. intros.
+  destruct g.
+  destruct (Mem.alloc m0 0 1) eqn:Hmem.
+  eapply valid_genv_drop in GA; eauto.
+  eapply valid_genv_alloc in Hmem; eauto.
+  destruct  (Mem.alloc m0 0 (init_data_list_size (AST.gvar_init v))) eqn:Halloc;
+    try discriminate.
+  destruct (store_zeros m b 0
+                        (init_data_list_size (AST.gvar_init v))) eqn:SZ;
+    try discriminate.
+  destruct (Genv.store_init_data_list ge m2 b 0 (AST.gvar_init v)) eqn:init_data;
+    try discriminate.
+  eapply valid_genv_drop in GA; eauto.
+  eapply valid_genv_store_init_datalist in init_data; eauto.
+  eapply valid_genv_store_zeros in SZ; eauto.
+  eapply valid_genv_alloc in Halloc;
+    now eauto.
+Qed.
+
+Lemma valid_genv_alloc_globals:
+   forall ge init_list m0 m
+   (GA: Genv.alloc_globals ge m0 init_list = Some m),
+     X86WD.ge_wd (id_ren m0) ge -> X86WD.ge_wd (id_ren m) ge.
+Proof.
+  intros ge l.
+  induction l; intros; simpl in *.
+  inv GA. assumption.
+  destruct (Genv.alloc_global ge m0 a) eqn:Halloc; try discriminate.
+  eapply (IHl  _ _  GA).
+  eapply valid_genv_alloc_global;
+    now eauto.
+Qed.
+
+Lemma mem_wd_alloc_globals:
+   forall ge init_list m0 m
+   (GA: Genv.alloc_globals ge m0 init_list = Some m),
+   MemoryWD.valid_mem m0 -> X86WD.ge_wd (id_ren m0) ge -> MemoryWD.valid_mem m.
+Proof.
+  intros ge l.
+  induction l; intros; simpl in *.
+  inv GA. assumption.
+  destruct (Genv.alloc_global ge m0 a) eqn:Halloc; try discriminate.
+  eapply (IHl  _ _ GA).
+  eapply mem_wd_alloc_global;
+    eauto.
+  eapply valid_genv_alloc_global;
+    now eauto.
+Qed.
+
+(*Lemma  genv_init_mem_valid:
+  forall (p : Asm.program) m1,
+    Globalenvs.Genv.init_mem p = Some m1 ->
+    MemoryWD.valid_mem m1.
+Proof.
+  intros.
+  unfold Globalenvs.Genv.init_mem in H.
+  eapply InitialMemWD.mem_wd_alloc_globals;
+    eauto.
+  intros b Hcontra ? ? ?.
+  clear - Hcontra.
+  unfold Mem.valid_block, Plt in Hcontra. simpl in Hcontra.
+  exfalso.
+  zify; now omega.
+  assert (X86WD.ge_wd (id_ren m1) (Genv.globalenv p)).
+  { econstructor.
+    intros.
+    destruct ( (Genv.genv_defs (Genv.globalenv p)) ! b) eqn:Hgenv.
+    eapply Genv.genv_defs_range in Hgenv.
+    erewrite Genv.init_mem_genv_next in Hgenv by eauto.
+    (*easy*)
+    now exfalso.
+    intros.
+    unfold Senv.symbol_address in H0.
+    destruct (Senv.find_symbol (Genv.globalenv p) id) eqn:Hfind; subst; simpl; auto.
+    apply Senv.find_symbol_below in Hfind.
+    unfold Senv.nextblock in Hfind.
+    simpl in Hfind.
+    erewrite Genv.init_mem_genv_next in Hfind by eauto.
+    (*easy*)
+  } *)
+
+End InitialMemWD.
+
 
 Module X86Safe.
 

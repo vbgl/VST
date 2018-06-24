@@ -54,11 +54,9 @@ Module Main (CC_correct: CompCert_correctness).
   (** Asm semantic preservation under alpha renaming *)
   Existing Instance X86Inj.X86Inj.
   (** Initial memory is well defined *)
-  Instance InitMem : FineConcInitial.FineInit :=
-    {|FineConcInitial.init_mem := init_mem CPROOF|}.
-  Admitted.    
-  
+  Context {InitMem : FineConcInitial.FineInit}.
   Variable em :  ClassicalFacts.excluded_middle.
+  
 
   (*Safety from CSL to Coarse Asm*)
   Lemma CSL2CoarseAsm_safety:
@@ -128,7 +126,7 @@ Module Main (CC_correct: CompCert_correctness).
   Theorem CSL2FineBareAsm_safety:
     forall U,
     exists init_mem_target' init_thread_target,
-      initial_core (event_semantics.msem semSem) 0 init_mem
+      initial_core (event_semantics.msem semSem) 0  FineConcInitial.init_mem
                    init_thread_target init_mem_target' Main_ptr nil /\
       let init_tp_bare :=
           threadPool.ThreadPool.mkPool
