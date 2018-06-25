@@ -12,6 +12,8 @@ Require Import VST.concurrency.sc_drf.x86_safe.
 
 Require Import VST.concurrency.common.threadPool.
 Require Import VST.concurrency.common.erased_machine.
+Require Import VST.concurrency.common.HybridMachineSig.
+
 
 Set Bullet Behavior "Strict Subproofs".
 
@@ -33,7 +35,8 @@ Module Main (CC_correct: CompCert_correctness).
   Context (Asm_prog: Asm.program).
   Context (asm_genv_safe: Asm_core.safe_genv (@x86_context.X86Context.the_ge Asm_prog)).
   Context (compilation : CC_correct.CompCert_compiler Clight_prog = Some Asm_prog).
-  Definition AsmSem:= @x86_context.X86Context.X86Sem Asm_prog asm_genv_safe.
+  Instance AsmSem : Semantics:= @x86_context.X86Context.X86Sem Asm_prog asm_genv_safe.
+  Variable em : ClassicalFacts.excluded_middle.
   
   (* This should be instantiated:
      it says initial_Clight_state taken from CPROOF, is an initial state of CompCert.
@@ -143,8 +146,18 @@ Module Main (CC_correct: CompCert_correctness).
   Proof.
     intros U.
     pose proof (CSL2CoarseAsm_safety U) as
-        (init_mem_target & init_mem_target' & init_thread_target & INIT & HH).
-    exists init_mem_target, init_mem_target',  init_thread_target.
+        (init_mem_target & init_mem_target' & init_thread_target & INIT & Hentry & Hsafe).
+    exists init_mem_target, (@HybridMachineSig.diluteMem BareDilMem init_mem_target'),
+    init_thread_target.
+    split.
+    assumption.
+    split.
+    assumption.
+    intros.
+    eapply X86Safe.x86SC_safe with (Main_ptr := Main_ptr); eauto.
+    simpl. eauto. admit.
+    intros.
+    
     repeat split; auto; simpl.
     
     (* Should be something about X86Safe.x86SC_safe.*)
