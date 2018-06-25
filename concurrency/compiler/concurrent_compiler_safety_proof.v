@@ -1,4 +1,6 @@
 
+Require Import compcert.common.Globalenvs.
+
 Require Import VST.concurrency.common.HybridMachineSig.
 Import HybridMachineSig.
 Set Bullet Behavior "Strict Subproofs".
@@ -42,8 +44,10 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
     Notation valid Sem:=
       (valid dryResources Sem OrdinalPool.OrdinalThreadPool DryHybridMachineSig).
 
-
-    
+    Definition opt_init_mem_source (p : Clight.program):=
+      (Genv.init_mem (Ctypes.program_of_program p)).
+    Definition opt_init_mem_target {F V} (tp:AST.program F V ):=
+            (Genv.init_mem tp).
     Lemma explicit_safety_step:
       forall (p : Clight.program) (tp : Asm.program) (asm_genv_safety : Asm_core.safe_genv the_ge),
         let SemSource:= (ClightSemantincsForMachines.ClightSem (Clight.globalenv p)) in
@@ -52,8 +56,8 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
              (j : Values.Val.meminj) (c : Asm.state)
              (C_source : OrdinalPool.t(Sem:=SemSource))
              (C_target : OrdinalPool.t(Sem:=SemTarget)) tr
-             (SIM : HybridMachine_simulation (ClightConcurSem U)
-                                             (AsmConcurSem U)) (cd : index SIM),
+             (SIM : HybridMachine_simulation (ClightConcurSem (opt_init_mem_source p))
+                                             (AsmConcurSem (opt_init_mem_target tp))) (cd : index SIM),
            match_state SIM cd j C_source m_s C_target
                     m_t ->
         (forall U,
@@ -99,8 +103,8 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
              (j : Values.Val.meminj) (c : Asm.state)
              (C_source : OrdinalPool.t(Sem:=SemSource))
              (C_target : OrdinalPool.t) tr
-             (SIM : HybridMachine_simulation (ClightConcurSem U)
-                                             (AsmConcurSem U)) (cd : index SIM),
+             (SIM : HybridMachine_simulation (ClightConcurSem (opt_init_mem_source p))
+                                             (AsmConcurSem (opt_init_mem_target tp))) (cd : index SIM),
         match_state SIM cd j C_source init_mem_source' C_target
                     (Asm.get_mem c) ->
         (forall (n : nat) U,
@@ -195,7 +199,9 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
         forall asm_genv_safety : Asm_core.safe_genv (@the_ge tp),
           let SemSource:= (ClightSemantincsForMachines.ClightSem (Clight.globalenv p)) in
           let SemTarget:= @X86Sem tp asm_genv_safety in
-          concurrent_simulation_safety_preservation 
+          concurrent_simulation_safety_preservation
+            (Genv.init_mem (Ctypes.program_of_program p))
+            (Genv.init_mem tp)
             (SemSource:= SemSource)
             (SourceThreadPool:= threadPool.OrdinalPool.OrdinalThreadPool(Sem:=SemSource))
             (SourceMachineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig)
@@ -204,24 +210,25 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
             (TargetMachineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig)
     .
       unfold concurrent_simulation_safety_preservation; intros.
-      pose proof (ConcurrentCompilerCorrectness p tp H asm_genv_safety U) as SIM.
-
+      pose proof (ConcurrentCompilerCorrectness p tp H asm_genv_safety) as SIM.
+      unfold ConcurrentCompilerCorrectness_specification in SIM.
       (*Construct the initial state*)
-      
-      apply (HybridMachine_simulation.initial_setup SIM) in H0 as
-          (j&cd&t_mach_state&t_mem&t_mem'&r2&INIT&?).
+      apply (HybridMachine_simulation.initial_setup SIM) in H1 as
+          (j&cd&t_mach_state&t_mem&t_mem'&r2&(INIT_mem & INIT)&?).
       assert(INIT':= INIT).
       destruct r2; try solve[inversion INIT'].
       destruct INIT' as (c&?&?).
       subst t_mach_state; simpl in *.
-      do 3 eexists; split; eauto.
-      destruct H2 as (H21 & H22); subst.
+      do 3 eexists; repeat split; eauto.
+      eapply INIT.
+      
+      destruct H3 as (H21 & H22); subst.
       clear INIT H21.
 
       (* Now, we strip out the scheudle, until it starts with 1*)
       eapply initial_csafe_all_schedule.
       intros; eapply csafety_step; eauto.
-      eapply H0.
+      eapply H1.
     Qed.
     
 End Concurrent_Safety.

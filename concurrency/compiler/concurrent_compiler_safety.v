@@ -4,6 +4,9 @@
     the x86 concurrent semantics.
  *)
 
+
+Require Import compcert.common.Globalenvs.
+
 Require Import VST.concurrency.common.HybridMachineSig.
 Require Import VST.concurrency.compiler.HybridMachine_simulation.
 Require Import VST.concurrency.compiler.concurrent_compiler_simulation.
@@ -31,21 +34,23 @@ Section ConcurrentCopmpilerSafety.
 
   Notation SHM U:= (ConcurMachineSemantics(HybridMachine:=SourceHybridMachine) U).
   Notation THM U:= (ConcurMachineSemantics(HybridMachine:=TargetHybridMachine) U).
+  Variable opt_init_mem_source: option Memory.Mem.mem.
+  Variable opt_init_mem_target: option Memory.Mem.mem.
   Definition concurrent_simulation_safety_preservation:=
-    forall init_U,
     forall U init_mem_source init_mem_source' init_thread main args,
       let res1:= permissions.getCurPerm init_mem_source in
       let res := (res1,permissions.empty_map) in
       let init_tp_source:= ThreadPool.mkPool(ThreadPool:=SourceThreadPool) (Krun init_thread) res in
       let init_MachState_source U:= (U, nil, init_tp_source) in
-      machine_semantics.initial_machine (SHM init_U) (Some res) init_mem_source init_tp_source init_mem_source' main args ->
+      opt_init_mem_source = Some init_mem_source ->
+      machine_semantics.initial_machine (SHM opt_init_mem_source) (Some res) init_mem_source init_tp_source init_mem_source' main args ->
       (forall n U, HybridCoarseMachine.csafe (init_MachState_source U) init_mem_source' n) ->
       exists init_mem_target init_mem_target' init_thread_target,
-        (*initial_target_thread SIM init_mem_target init_thread_target main args /\*)
         let res_target:= permissions.getCurPerm init_mem_target' in
         let init_tp_target:= ThreadPool.mkPool (Krun init_thread_target) (res_target,permissions.empty_map) in
         let init_MachState_target:= (U, nil, init_tp_target) in
-        machine_semantics.initial_machine (THM init_U) (Some res) init_mem_target init_tp_target init_mem_target' main args /\
+        opt_init_mem_target = Some init_mem_target /\
+        machine_semantics.initial_machine (THM opt_init_mem_target) (Some res) init_mem_target init_tp_target init_mem_target' main args /\
         (forall n, HybridCoarseMachine.csafe init_MachState_target init_mem_target' n).
 
 

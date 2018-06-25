@@ -427,9 +427,10 @@ Module HybridMachineSig.
                             if op_r is Some r then 
                               init_mach op_r m (make_init_machine c r) m' f args
                             else False.
-    Definition init_machine'' (op_r : option res) (m: mem)
+    Definition init_machine'' (op_m: option mem)(op_r : option res)(m: mem)
                (tp : thread_pool) (m': mem) (f : val) (args : list val)
       : Prop :=
+      op_m = Some m /\
       if op_r is Some r then 
         init_mach op_r m tp m' f args
       else False.
@@ -543,10 +544,10 @@ Module HybridMachineSig.
       Qed.
 
       Set Printing Implicit.
-      Program Definition new_MachineSemantics (U:schedule):
+      Program Definition new_MachineSemantics (op_m:option Mem.mem):
         @ConcurSemantics G nat schedule event_trace machine_state mem res (*@semC Sem*).
       apply (@Build_ConcurSemantics _ nat schedule event_trace machine_state _ _ (*_*)
-                                    (init_machine'')
+                                    (init_machine'' op_m)
                                     (fun U st => halted_machine (U, nil, st))
                                     (fun ge U st m st' m' =>
                                        @internal_step U st m
@@ -570,7 +571,7 @@ Module HybridMachineSig.
       {
         MachineSemantics: schedule -> option res ->
                           CoreSemantics MachState mem
-        ; ConcurMachineSemantics: schedule ->
+        ; ConcurMachineSemantics: option mem ->
                                   @ConcurSemantics G nat (seq.seq nat) event_trace t mem res (*@semC Sem*)
         ; initial_schedule: forall m m' main vals U p st n,
             initial_core (MachineCoreSemantics U p) n m st m' main vals ->
