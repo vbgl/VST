@@ -24,8 +24,7 @@ Module X86Context.
   
   Section X86Context.
 
-    Context {initU: seq.seq nat}
-            {the_program: Asm.program}.
+    Context {the_program: Asm.program}.
 
     Definition the_ge := Globalenvs.Genv.globalenv the_program.
     Context {Hsafe : safe_genv the_ge}.

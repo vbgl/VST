@@ -126,11 +126,11 @@ Module FineConcSafe.
     (** Assuming safety of cooperative VST.concurrency*)
     Section Safety.
 
-      Variables (f : val) (arg : list val) (initU : seq.seq nat).
+      Variables (f : val) (arg : list val).
 
       Variable init_coarse_safe:
         forall sched tpc mem' n,
-          tpc_init initU init_mem (initU, [::], tpc) mem' f arg ->
+          tpc_init sched init_mem (sched, [::], tpc) mem' f arg ->
           HybridCoarseMachine.csafe (sched,[::],tpc) mem' n.
 
       (** [init_mach] and [init_mem] are related by [mem_compatible]*)
@@ -269,9 +269,9 @@ Module FineConcSafe.
 
       (** Establishing the simulation relation for the initial state*)
       Lemma init_sim:
-        forall tpc tpf m' n (ARG:valid_val_list (id_ren init_mem) arg),
-          tpc_init initU init_mem (initU, [::], tpc) m' f arg ->
-          tpf_init initU init_mem (initU, [::], tpf) m' f arg ->
+        forall sched tpc tpf m' n (ARG:valid_val_list (id_ren init_mem) arg),
+          tpc_init sched init_mem (sched, [::], tpc) m' f arg ->
+          tpf_init sched init_mem (sched, [::], tpf) m' f arg ->
           SimDefs.sim tpc [::] m' tpf [::] (@diluteMem FineDilMem m') nil (id_ren m')
                       (id_ren init_mem) (fun i cnti => id_ren m') n.
       Proof.
@@ -480,7 +480,7 @@ Module FineConcSafe.
           destruct Htype as [Htype | [Htype | [Htype | Htype]]].
           + assert (~ List.In i xs)
               by (eapply at_external_not_in_xs; eauto).
-            pose proof (@SimProofs.sim_external _ _ _ initU em _ _ _ _ _ _ _ _ _ _ _ _ cnti H Hsim Htype) as Hsim'.
+            pose proof (@SimProofs.sim_external _ _ _ sched em _ _ _ _ _ _ _ _ _ _ _ _ cnti H Hsim Htype) as Hsim'.
             destruct Hsim' as (tpc' & trc' & mc' & tpf' & mf' & f' & fp' & tr' & Hstep & Hsim'').
             specialize (IHsched _ _ _ _ _ _ _ _ _ Hsim'').
             specialize (Hstep sched).
@@ -488,14 +488,14 @@ Module FineConcSafe.
             simpl in Hstep.
             eapply @HybridFineMachine.StepSafe with (dilMem := FineDilMem);
               eauto.
-          + pose proof (@SimProofs.sim_internal _ _ _ initU  _ _ _ _ _ _ _ _ _ _ _ _ cnti Hsim Htype) as
+          + pose proof (@SimProofs.sim_internal _ _ _ sched  _ _ _ _ _ _ _ _ _ _ _ _ cnti Hsim Htype) as
                 (tpf' & m' & fp' & tr' & Hstep & Hsim').
             specialize (Hstep sched).
             specialize (IHsched _ _ _ _ _ _ _ _ _ Hsim').
             unfold corestep in Hstep.
             simpl in Hstep.
             econstructor 3; simpl; eauto.
-          + pose proof (@SimProofs.sim_halted _ _ initU _ _ _ _ _  _ _ _  _ _  _  _ cnti Hsim Htype) as Hsim'.
+          + pose proof (@SimProofs.sim_halted _ _ sched _ _ _ _ _  _ _ _  _ _  _  _ cnti Hsim Htype) as Hsim'.
             destruct Hsim' as (tr' & Hstep & Hsim'').
             specialize (IHsched _ _ _ _ _ _ _ _ _ Hsim'').
             specialize (Hstep sched).
@@ -503,7 +503,7 @@ Module FineConcSafe.
             simpl in Hstep.
             econstructor 3;
               eauto.
-          + pose proof (@SimProofs.sim_suspend _ _ _ initU em _ _ _ _ _ _ _  _ _ _ _ _ cnti Hsim Htype) as
+          + pose proof (@SimProofs.sim_suspend _ _ _ sched em _ _ _ _ _ _ _  _ _ _ _ _ cnti Hsim Htype) as
                 (tpc' & trc' & mc' & tpf' & mf' & f' & fp' & tr' & Hstep & Hsim').
             specialize (IHsched _ _ _ _ _ _ _ _ _ Hsim').
             specialize (Hstep sched).
@@ -511,7 +511,7 @@ Module FineConcSafe.
             simpl in Hstep.
             econstructor 3; simpl;
               now eauto.
-        -  pose proof (@SimProofs.sim_fail _ _  initU _ _ _ _  _  _ _  _ _ _ _ _ invalid Hsim) as
+        -  pose proof (@SimProofs.sim_fail _ _  sched _ _ _ _  _  _ _  _ _ _ _ _ invalid Hsim) as
               (tr' & Hstep & Hsim').
            specialize (IHsched _ _ _ _ _ _ _ _ _ Hsim').
            specialize (Hstep sched).
@@ -562,13 +562,13 @@ Module FineConcSafe.
       
       (** *** Safety preservation for the FineConc machine starting from the initial state*)
       Theorem init_fine_safe:
-        forall n tpf m'
-          (Hinit: tpf_init initU init_mem (initU, [::], tpf) m' f arg)
+        forall sched n tpf m'
+          (Hinit: tpf_init sched init_mem (sched, [::], tpf) m' f arg)
           (ARG: valid_val_list (id_ren init_mem) arg),
-          fsafe tpf (@diluteMem FineDilMem m') initU n.
+          fsafe tpf (@diluteMem FineDilMem m') sched n.
       Proof.
         intros.
-        assert (Hsim := init_sim (S (size initU)) ARG Hinit Hinit).
+        assert (Hsim := init_sim (S (size sched)) ARG Hinit Hinit).
         eapply fine_safe.
         eapply fine_safe_sched;
           now eauto.

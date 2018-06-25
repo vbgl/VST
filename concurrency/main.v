@@ -8,10 +8,14 @@ Require Import VST.concurrency.juicy.erasure_safety.
 Require Import VST.concurrency.compiler.concurrent_compiler_safety_proof.
 Require Import VST.concurrency.compiler.sequential_compiler_correct.
 
+Require Import VST.concurrency.sc_drf.mem_obs_eq.
+Require Import VST.concurrency.sc_drf.x86_inj.
 Require Import VST.concurrency.sc_drf.x86_safe.
 
 Require Import VST.concurrency.common.threadPool.
 Require Import VST.concurrency.common.erased_machine.
+Require Import VST.concurrency.common.HybridMachineSig.
+
 
 Set Bullet Behavior "Strict Subproofs".
 
@@ -33,7 +37,16 @@ Module Main (CC_correct: CompCert_correctness).
   Context (Asm_prog: Asm.program).
   Context (asm_genv_safe: Asm_core.safe_genv (@x86_context.X86Context.the_ge Asm_prog)).
   Context (compilation : CC_correct.CompCert_compiler Clight_prog = Some Asm_prog).
-  Definition AsmSem:= @x86_context.X86Context.X86Sem Asm_prog asm_genv_safe.
+  Instance AsmSem : Semantics:= @x86_context.X86Context.X86Sem Asm_prog asm_genv_safe.
+  Existing Instance X86Inj.X86Inj.
+
+  Variable init_mem_wd:
+    forall m,
+      Genv.init_mem Asm_prog = Some m ->
+      mem_obs_eq.MemoryWD.valid_mem m /\
+      mem_obs_eq.CoreInjections.ge_wd (Renamings.id_ren m) the_ge.
+        
+  Variable em : ClassicalFacts.excluded_middle.
   
   (* This should be instantiated:
      it says initial_Clight_state taken from CPROOF, is an initial state of CompCert.
@@ -154,6 +167,8 @@ Module Main (CC_correct: CompCert_correctness).
           init_tp_bare init_mem_target' U n.
   Proof.
     intros U.
+    (*
+<<<<<<< HEAD
     pose proof (CSL2CoarseAsm_safety U) as
         (init_mem_target & init_mem_target' & init_thread_target & INIT & HH).
     exists init_mem_target, init_mem_target',  init_thread_target.
@@ -162,7 +177,37 @@ Module Main (CC_correct: CompCert_correctness).
     - inversion INIT; auto.
     - admit.
     (* Should be something about X86Safe.x86SC_safe.*)
+=======
+    destruct (CSL2CoarseAsm_safety U) as
+        (init_mem_target & init_mem_target' & init_thread_target & INIT & Hentry & Hsafe).
+    exists init_mem_target, (@HybridMachineSig.diluteMem BareDilMem init_mem_target'),
+    init_thread_target.
+    split.
+    assumption.
+    split.
+    assumption.
+    intros.
+    eapply X86Safe.x86SC_safe with (Main_ptr := Main_ptr); eauto.
+    admit. (* require initial_core *)
+    (* proof of safety for new schedule *)
+    intros.
+    pose proof (CSL2CoarseAsm_safety sched) as
+        (init_mem_target2 & init_mem_target2' & init_thread_target2 & INIT2 & Hentry2 & Hsafe2).
+    rewrite INIT2 in INIT. inversion INIT; subst.
+    destruct (Asm.semantics_determinate Asm_prog).
+    simpl in sd_initial_determ.
+    specialize (sd_initial_determ _ _ _ _ _ Hentry Hentry2); subst.
+    assert (init_mem_target2' = init_mem_target') by admit. (* by initial_core *)
+    subst.
+    now eauto.
+    Unshelve.
+    destruct (init_mem_wd _ INIT).
+    econstructor;
+     now eauto.
+>>>>>>> 63ff7d2f265135e602791c765b8670345321082e
+*)
   Admitted.
+    
   End MainTheorem.
   
 End Main.
