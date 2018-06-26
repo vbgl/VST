@@ -75,25 +75,48 @@ Module X86SEMAxioms.
     Instance X86Sem: Semantics := @X86Sem the_program Hsafe.
 
     Lemma corestep_det: corestep_fun semSem.
-   Proof.
+    Proof.
+      (* simpl. *)
+      (* intros m m' m'' c c' c'' Hstep1 Hstep2. *)
+      (* simpl in *.  *)
+      (* simpl. *)
+      (* intros m m' m'' c c' c'' Hstep1 Hstep2. *)
+      (* simpl in Hstep1, Hstep2. *)
+      (* inv Hstep1. simpl in H. *)
+      (* inv Hstep1; *)
+      (*   inv Hstep2. *)
+      (* simpl in *. *)
+      (* inv H; inv H1; subst; *)
+      (*   try (congruence); *)
+      (*   unfold set_mem in *; destruct c, c', c''. *)
+      (*     repeat match goal with *)
+      (*            |[H: State _ _ = State _ _ |- _] => *)
+      (*             inv H *)
+      (*            end. *)
+      (* rewrite H5 in H10. *)
+      (* inv H10. *)
+      (* rewrite H6 in H11. inv H11. *)
+      (* rewrite H7 in H12. inv H12. *)
+      (* rewrite  *)
+      (* pose proof (semantics_determinate *)
    Admitted.
-    (*  hnf; intros.
-      inv H; inv H0; simpl in *.
-      inv H; inv H1;
-        repeat
-          match goal with
-          | H: ?A = _, H':?A=_ |- _ => inversion2 H H'
-          | H: ?A, H': ?A |- _ => clear H'
-          end;
-        try congruence; try now (split; auto).
-      assert (vargs0=vargs) by (eapply Events.eval_builtin_args_determ; eauto).
-      subst vargs0.
-      exploit Hsafe; eauto.
-      assert (t0=t) by (eapply builtin_event_determ; eauto). subst t0.
-      destruct (Events.external_call_determ _ _ _ _ _ _ _ _ _ _ H12 H16).
-      specialize (H0 (eq_refl _)). destruct H0; subst m'' vres0.
-      auto.
-    Qed. *)
+    (*   hnf; intros. *)
+    (*   inv H; inv H0; simpl in *. *)
+    (*   inv H; inv H1; *)
+    (*     repeat *)
+    (*       match goal with *)
+    (*       | H: ?A = _, H':?A=_ |- _ => inversion2 H H' *)
+    (*       | H: ?A, H': ?A |- _ => clear H' *)
+    (*       end; *)
+    (*     try congruence; try now (split; auto). *)
+    (*   assert (vargs0=vargs) by (eapply Events.eval_builtin_args_determ; eauto). *)
+    (*   subst vargs0. *)
+    (*   exploit Hsafe; eauto. *)
+    (*   assert (t0=t) by (eapply builtin_event_determ; eauto). subst t0. *)
+    (*   destruct (Events.external_call_determ _ _ _ _ _ _ _ _ _ _ H12 H16). *)
+    (*   specialize (H0 (eq_refl _)). destruct H0; subst m'' vres0. *)
+    (*   auto. *)
+    (* Qed. *)
 
     Lemma mem_step_decay:
       forall m m',
@@ -350,9 +373,17 @@ Module X86SEMAxioms.
         initial_core semSem i m c' m'' v args ->
         c = c' /\ m' = m''.
     Proof.
-    Admitted.
-
-
+      intros.
+      simpl in H, H0.
+      destruct H, H0.
+      pose proof (Smallstep.sd_initial_determ
+                    (Asm.semantics_determinate the_program)).
+      simpl in H1.
+      specialize (H3 _ _ _ _ _ H H0).
+      subst.
+      auto.
+    Qed.
+      
     Lemma make_arg_unchanged_on:
       forall rs m l arg rs' m'
         (Hmake_args: make_arg rs m l arg = Some (rs', m')),
