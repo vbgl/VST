@@ -123,9 +123,27 @@ Module SimDefs.
            exists b1, f b1 = Some b2).      
 
   Definition isProjection (f : memren) (deltaMap deltaMap' : delta_map) : Prop :=
-    forall b b',
+    (forall b b',
       f b = Some b' ->
-      Maps.PTree.get b deltaMap = Maps.PTree.get b' deltaMap'.
+      Maps.PTree.get b deltaMap = Maps.PTree.get b' deltaMap').
+
+  Definition delta_inj (f : memren) (deltaMap deltaMap' : delta_map) : Prop :=
+    (forall b b',
+        f b = Some b' ->
+        match Maps.PTree.get b deltaMap, Maps.PTree.get b' deltaMap' with
+        | Some d1, Some d2 => d1 = d2
+        | Some d1, None => forall ofs, d1 ofs = None \/ d1 ofs = Some None
+        | None, None => True
+        | _, _ => False
+        end) /\
+    (forall b, f b = None ->
+          match Maps.PTree.get b deltaMap with
+          | None => True
+          | Some d => forall ofs, d ofs = None \/ d ofs = Some None
+          end ) /\
+    (forall b', (~exists b, f b = Some b') ->
+           Maps.PTree.get b' deltaMap' = None).
+
       
   Inductive event_sim (f:memren) : Events.machine_event -> Events.machine_event -> Prop :=
   | ReleaseSim : forall i b1 b2 ofs pmap1c pmap2c pmap1f pmap2f
@@ -136,8 +154,8 @@ Module SimDefs.
                 (Events.external i (Events.release (b2,ofs) (Some (pmap1f, pmap2f))))
   | AcquireSim : forall i b1 b2 ofs pmap1c pmap2c pmap1f pmap2f
                    (Hf: f b1 = Some b2)
-                   (Hpmap1_inj: isProjection f pmap1c pmap1f)
-                   (Hpmap2_inj: isProjection f pmap2c pmap2f),
+                   (Hpmap1_inj: delta_inj f pmap1c pmap1f)
+                   (Hpmap2_inj: delta_inj f pmap2c pmap2f),
       event_sim f (Events.external i (Events.acquire (b1,ofs) (Some (pmap1c, pmap2c))))
                 (Events.external i (Events.acquire (b2,ofs) (Some (pmap1f, pmap2f))))
   | MkLockSim : forall i b1 b2 ofs
@@ -147,22 +165,17 @@ Module SimDefs.
   | FreeLockSim : forall i b1 b2 ofs
                   (Hf: f b1 = Some b2),
       event_sim f (Events.external i (Events.freelock (b1,ofs)))
-                (Events.external i (Events.freelock (b2, ofs))).
-
-  (* Inductive ev_wd (f:memren) : Events.machine_event -> Prop := *)
-  (* | ReleaseWD: forall i laddr pmap1 pmap2 *)
-  (*                (Hempty: forall b, f b = None -> forall ofs, *)
-  (*                      pmap1 # b ofs = None /\ pmap2 # b ofs = None), *)
-  (*     ev_wd f (Events.external i (Events.release laddr (Some (pmap1, pmap2)))) *)
-  (* | AcquireWD: forall i laddr pmap1 pmap2 *)
-  (*                (Hempty: forall b, f b = None -> *)
-  (*                              (Maps.PTree.get b pmap1) = None /\ *)
-  (*                              (Maps.PTree.get b pmap2) = None), *)
-  (*     ev_wd f (Events.external i (Events.acquire laddr (Some (pmap1, pmap2)))). *)
-
-  (* Definition trace_wd (f:memren) (tr : event_trace) := *)
-  (*   forall e, List.In e tr -> *)
-  (*        ev_wd f e. *)
+                (Events.external i (Events.freelock (b2, ofs)))
+  | SpawnSim : forall i b1 b2 ofs pmap pmapF virtue1 virtue1F virtue2 virtue2F
+                 (Hf: f b1 = Some b2)
+                 (Hinj1: delta_inj f virtue2#1 virtue2F#1)
+                 (Hinj2: delta_inj f virtue2#2 virtue2F#2),
+      event_sim f (Events.external i (Events.spawn (b1, ofs) (Some (pmap, virtue1)) (Some virtue2)))
+                (Events.external i (Events.spawn (b2, ofs) (Some (pmapF, virtue1F)) (Some virtue2F)))
+  | FAcqSim: forall i b1 b2 ofs
+               (Hf: f b1 = Some b2),
+      event_sim f (Events.external i (Events.failacq (b1,ofs)))
+                (Events.external i (Events.failacq (b2, ofs))).
       
   Inductive trace_sim (f:memren) : event_trace -> event_trace -> Prop :=
   | TraceEmpty : trace_sim f [::] [::]
@@ -170,85 +183,6 @@ Module SimDefs.
                   (Hev: event_sim f ev ev')
                   (Htr: trace_sim f tr tr'),
       trace_sim f (tr ++ [:: ev]) (tr' ++ [:: ev']).
-
-  
-
-  Lemma pmap_inj_incr:
-    forall f f' pmap pmap'
-      (Hincr: ren_incr f f')
-      (Hinjective: forall b1 b1' b2,
-          f' b1 = Some b2 ->
-          f' b1' = Some b2 ->
-          b1 = b1')
-      (Hinj: pmap_inj f pmap pmap'),
-      pmap_inj f' pmap pmap'.
-  Proof.
-    intros.
-    destruct Hinj as [H1 [H2 H3]].
-    repeat split.
-    - intros b1 b2 Hf'.
-      destruct (f b1) eqn:Hf.
-      + eapply H1.
-        pose proof (Hincr _ _ Hf) as Hf2.
-        rewrite Hf2 in Hf'; inversion Hf'; subst.
-        assumption.
-      + rewrite H2; auto.
-        apply extensionality.
-        intros ofs.
-        destruct (pmap' # b2 ofs) eqn:Hpmap'; auto.
-        exfalso.
-        specialize (H3 b2 ltac:(exists ofs; rewrite Hpmap'; intros Hcontra; congruence)).
-        destruct H3.
-        pose proof (Hincr _ _ H).
-        specialize (Hinjective _ _ _ H0 Hf'); subst.
-        congruence.
-    - intros b1 Hf'.
-      eapply H2.
-      destruct (f b1) eqn:Hf; auto.
-      eapply Hincr in Hf.
-      congruence.
-    - intros b2 Hnonempty.
-      specialize (H3 _ Hnonempty).
-      destruct H3.
-      eapply Hincr in H.
-      eexists; eauto.
-  Qed.
-  
-  Lemma ev_sim_incr:
-    forall f f' ev ev'
-      (Hincr: ren_incr f f')
-      (Hinjective: forall b1 b1' b2,
-          f' b1 = Some b2 ->
-          f' b1' = Some b2 ->
-          b1 = b1')
-      (Hev_sim: event_sim f ev ev'),
-      event_sim f' ev ev'.
-  Proof.
-    intros.
-    inversion Hev_sim.
-    - subst.
-      econstructor 1; eauto using pmap_inj_incr.
-    - admit.
-    - subst.
-      econstructor; eauto.
-    - subst. econstructor; eauto.
-  Admitted.
-  
-  Lemma trace_sim_incr:
-    forall f f' trc trf
-      (Hincr: ren_incr f f')
-      (Hinjective: forall b1 b1' b2,
-          f' b1 = Some b2 ->
-          f' b1' = Some b2 ->
-          b1 = b1')
-      (Htr: trace_sim f trc trf),
-      trace_sim f' trc trf.
-  Proof.
-    intros.
-    induction Htr;
-      econstructor;
-      eauto using ev_sim_incr.
-  Qed.       
 
   (** *** Simulation between the two machines *)
 
@@ -468,6 +402,394 @@ Module SimProofs.
   Notation sim_internal_def := (@sim_internal_def _ _ initU).
   Notation sim_suspend_def := (@sim_suspend_def _ _ initU).
   Notation sim_external_def := (@sim_external_def _ _ initU).
+
+  (** NOTE: this is only needed to find out if a block is in the
+    codomain of f, which is decidable *)
+  Hypothesis em : excluded_middle.
+
+  (** Function that projects the angel through a memory injection to
+    compute a new angel *)
+
+  Definition projectAngel (f : memren) (deltaMap : delta_map) : delta_map :=
+    Maps.PTree.fold (fun acc b bperm =>
+                       match f b with
+                       | Some b' =>
+                         Maps.PTree.set b' bperm acc
+                       | None =>
+                         acc end)
+                    deltaMap (Maps.PTree.empty _).
+
+
+  (** Its proof of correctness under the assumption that f is injective *)
+  Lemma projectAngel_correct:
+    forall (f:memren) deltaMap
+      (Hf_injective: forall b1 b1' b2,
+          f b1 = Some b2 ->
+          f b1' = Some b2 ->
+          b1 = b1'),
+      isProjection f deltaMap (projectAngel f deltaMap).
+  Proof.
+    intros.
+    eapply Maps.PTree_Properties.fold_rec with (P := isProjection f).
+    { intros dmap dmap' a Heq Hprojection. intros b b' Hf.
+      specialize (Heq b). rewrite <- Heq.
+      unfold isProjection in Hprojection. eauto.
+    }
+    { unfold isProjection.
+      intros;
+        by do 2 rewrite Maps.PTree.gempty.
+    }
+    { intros dmap a bnew fnew Hget_dmap Hget_delta Hprojection.
+      intros b b' Hf.
+      destruct (Pos.eq_dec b bnew) as [Heq | Hneq].
+      - subst bnew. rewrite Maps.PTree.gss.
+        rewrite Hf.
+          by rewrite Maps.PTree.gss.
+      - rewrite Maps.PTree.gso; auto.
+        unfold isProjection in Hprojection.
+        destruct (f bnew) as [b'0|] eqn:Hfnew;
+          try eauto.
+        rewrite Maps.PTree.gso.
+        eapply Hprojection; eauto.
+        intros Hcontra.
+        subst b'0;
+          by eauto.
+    }
+  Qed.
+
+  Lemma projectAngel_correct_2:
+    forall (f:memren) deltaMap b'
+      (Hf: ~ exists b, f b = Some b'),
+      Maps.PTree.get b' (projectAngel f deltaMap) = None.
+  Proof.
+    intros.
+    unfold projectAngel.
+    eapply Maps.PTree_Properties.fold_rec. auto.
+    rewrite Maps.PTree.gempty. reflexivity.
+    intros.
+    destruct (f k) as [b'0 |] eqn:Hf'.
+    destruct (Pos.eq_dec b' b'0); subst.
+    exfalso.
+      by eauto.
+      rewrite Maps.PTree.gso;
+        by auto.
+        by assumption.
+  Qed.
+
+  Lemma computeMap_projection_1:
+    forall (mc mf : mem) f
+      pmap pmapF
+      (Hlt: permMapLt pmap (getMaxPerm mc))
+      (HltF: permMapLt pmapF (getMaxPerm mf))
+      (virtue : delta_map)
+      (Hobs_eq: mem_obs_eq f (restrPermMap Hlt)
+                           (restrPermMap HltF))
+      b1 b2
+      (Hf: f b1 = Some b2),
+      (computeMap pmapF (projectAngel f virtue)) # b2 =
+      (computeMap pmap virtue) # b1.
+  Proof.
+    intros.
+    extensionality ofs.
+    destruct Hobs_eq as [Hweak_obs Hstrong_obs].
+    destruct Hweak_obs.
+    assert (Hangel := projectAngel_correct _ virtue injective0).
+    specialize (Hangel _ _ Hf).
+    symmetry in Hangel.
+    destruct (Maps.PTree.get b1 virtue) as [df |] eqn:Hget.
+    destruct (df ofs) as [p|] eqn:Hdf.
+    erewrite (computeMap_1 _ _ _ _ Hget Hdf).
+    erewrite (computeMap_1 _ _ _ _ Hangel Hdf);
+      by reflexivity.
+    erewrite (computeMap_2 _ _ _ _ Hget Hdf).
+    erewrite (computeMap_2 _ _ _ _ Hangel Hdf).
+    destruct Hstrong_obs.
+    specialize (perm_obs_strong0 b1 b2 ofs Hf);
+      by do 2 rewrite restrPermMap_Cur in perm_obs_strong0.
+    erewrite (computeMap_3 _ _ _ _ Hget).
+    erewrite (computeMap_3 _ _ _ _ Hangel).
+    destruct Hstrong_obs.
+    specialize (perm_obs_strong0 b1 b2 ofs Hf);
+      by do 2 rewrite restrPermMap_Cur in perm_obs_strong0.
+  Qed.
+
+  Lemma computeMap_projection_2:
+    forall f pmap
+      (virtue : delta_map) b2
+      (Hb1: ~ (exists b1 : block, f b1 = Some b2)),
+      (computeMap pmap (projectAngel f virtue)) # b2 =
+      pmap # b2.
+  Proof.
+    intros.
+    assert (H := projectAngel_correct_2 _ virtue Hb1).
+    extensionality ofs';
+      by erewrite computeMap_3.
+  Qed.
+
+  Lemma computeMap_projection_3 :
+    forall  (f : memren) (virtue : delta_map) b1 b2
+       (Hf: f b1 = Some b2)
+       (Hinjective : forall b1 b1' b2 : block,
+           f b1 = Some b2 -> f b1' = Some b2 -> b1 = b1'),
+      (computeMap empty_map (projectAngel f virtue)) # b2 =
+      (computeMap empty_map virtue) # b1.
+  Proof.
+    intros.
+    extensionality ofs.
+    assert (Hangel := projectAngel_correct _ virtue Hinjective).
+    specialize (Hangel _ _ Hf).
+    symmetry in Hangel.
+    destruct (Maps.PTree.get b1 virtue) as [df |] eqn:Hget.
+    destruct (df ofs) as [p|] eqn:Hdf.
+    erewrite (computeMap_1 _ _ _ _ Hget Hdf).
+    erewrite (computeMap_1 _ _ _ _ Hangel Hdf);
+      by reflexivity.
+    erewrite (computeMap_2 _ _ _ _ Hget Hdf).
+    erewrite (computeMap_2 _ _ _ _ Hangel Hdf);
+      by do 2 rewrite empty_map_spec.
+    erewrite (computeMap_3 _ _ _ _ Hget).
+    erewrite (computeMap_3 _ _ _ _ Hangel);
+      by do 2 rewrite empty_map_spec.
+  Qed.
+
+
+  (* Blocks that are not mapped by f are set to empty permission. This
+  makes the invariant preservation easier. *)
+  Definition projectMap (f : memren) (pmap : access_map) : access_map :=
+    (pmap#1, Maps.PTree.fold (fun acc b bperm =>
+                                match f b with
+                                | Some b' =>
+                                  Maps.PTree.set b' bperm acc
+                                | None =>
+                                  acc end)
+                             pmap.2 (Maps.PTree.empty _)).
+
+
+  (** Its proof of correctness under the assumption that f is injective *)
+  Lemma projectMap_tree:
+    forall (f:memren) pmap
+      (Hf_injective: forall b1 b1' b2,
+          f b1 = Some b2 ->
+          f b1' = Some b2 ->
+          b1 = b1') b b'
+      (Hf: f b = Some b'),
+      Maps.PTree.get b pmap.2 = Maps.PTree.get b' (projectMap f pmap).2.
+  Proof.
+    intros.
+    unfold projectMap.
+    eapply Maps.PTree_Properties.fold_rec; eauto.
+    { intros dmap dmap' a Heq Hprojection. simpl in *.
+      specialize (Heq b). rewrite <- Heq. auto.
+    }
+    { by do 2 rewrite Maps.PTree.gempty.
+    }
+    { intros dmap a bnew fnew Hget_dmap Hget_delta Hprojection.
+      destruct (Pos.eq_dec b bnew) as [Heq | Hneq].
+      - subst bnew. rewrite Maps.PTree.gss.
+        rewrite Hf.
+          by rewrite Maps.PTree.gss.
+      - rewrite Maps.PTree.gso; auto.
+        unfold isProjection in Hprojection.
+        destruct (f bnew) as [b'0|] eqn:Hfnew;
+          try eauto.
+        rewrite Maps.PTree.gso.
+        eapply Hprojection; eauto.
+        intros Hcontra.
+        subst b'0;
+          by eauto.
+    }
+  Qed.
+
+  Lemma projectMap_correct:
+    forall (f:memren) pmap
+      (Hf_injective: forall b1 b1' b2,
+          f b1 = Some b2 ->
+          f b1' = Some b2 ->
+          b1 = b1') b b'
+      (Hf: f b = Some b'),
+      Maps.PMap.get b pmap = Maps.PMap.get b' (projectMap f pmap).
+  Proof.
+    intros.
+    unfold Maps.PMap.get.
+    erewrite projectMap_tree;
+      by eauto.
+  Qed.
+
+  Lemma projectMap_tree_2:
+    forall (f:memren) pmap b'
+      (Hf: ~ exists b, f b = Some b'),
+      Maps.PTree.get b' (projectMap f pmap).2 = None.
+  Proof.
+    intros.
+    unfold projectMap.
+    eapply Maps.PTree_Properties.fold_rec. auto.
+    rewrite Maps.PTree.gempty. reflexivity.
+    intros.
+    destruct (f k) as [b'0 |] eqn:Hf'.
+    destruct (Pos.eq_dec b' b'0); subst.
+    exfalso.
+      by eauto.
+      rewrite Maps.PTree.gso;
+        by auto.
+        by assumption.
+  Qed.
+
+
+  Lemma projectMap_tree_unchanged :
+    forall f (pmap : access_map) (b2 : positive)
+      (Hb1: ~ (exists b1 : block, f b1 = Some b2)),
+      Maps.PTree.get b2 (projectMap f pmap).2 = None.
+  Proof.
+    intros.
+    unfold projectMap.
+    eapply Maps.PTree_Properties.fold_rec; auto.
+    rewrite Maps.PTree.gempty. reflexivity.
+    intros.
+    destruct (f k) as [b'0 |] eqn:Hf'.
+    destruct (Pos.eq_dec b2 b'0); subst.
+    exfalso;
+      by eauto.
+    rewrite Maps.PTree.gso;
+      by auto.
+      by assumption.
+  Qed.
+
+  Lemma projectMap_correct_2:
+    forall f pmap b2
+      (Hb1: ~ (exists b1 : block, f b1 = Some b2)),
+      (projectMap f pmap) # b2 = pmap.1.
+  Proof.
+    intros.
+    assert (H := projectMap_tree_2 _ pmap Hb1).
+    extensionality ofs'.
+    unfold Maps.PMap.get. rewrite H.
+      by reflexivity.
+  Qed.
+  
+  Lemma pmap_inj_incr:
+    forall f f' pmap pmap'
+      (Hincr: ren_incr f f')
+      (Hinjective: forall b1 b1' b2,
+          f' b1 = Some b2 ->
+          f' b1' = Some b2 ->
+          b1 = b1')
+      (Hinj: pmap_inj f pmap pmap'),
+      pmap_inj f' pmap pmap'.
+  Proof.
+    intros.
+    destruct Hinj as [H1 [H2 H3]].
+    repeat split.
+    - intros b1 b2 Hf'.
+      destruct (f b1) eqn:Hf.
+      + eapply H1.
+        pose proof (Hincr _ _ Hf) as Hf2.
+        rewrite Hf2 in Hf'; inversion Hf'; subst.
+        assumption.
+      + rewrite H2; auto.
+        apply extensionality.
+        intros ofs.
+        destruct (pmap' # b2 ofs) eqn:Hpmap'; auto.
+        exfalso.
+        specialize (H3 b2 ltac:(exists ofs; rewrite Hpmap'; intros Hcontra; congruence)).
+        destruct H3.
+        pose proof (Hincr _ _ H).
+        specialize (Hinjective _ _ _ H0 Hf'); subst.
+        congruence.
+    - intros b1 Hf'.
+      eapply H2.
+      destruct (f b1) eqn:Hf; auto.
+      eapply Hincr in Hf.
+      congruence.
+    - intros b2 Hnonempty.
+      specialize (H3 _ Hnonempty).
+      destruct H3.
+      eapply Hincr in H.
+      eexists; eauto.
+  Qed.
+
+  Lemma delta_inj_incr:
+    forall f f' pmap pmap'
+      (Hincr: ren_incr f f')
+      (Hinjective: forall b1 b1' b2,
+          f' b1 = Some b2 ->
+          f' b1' = Some b2 ->
+          b1 = b1')
+      (Hinj: delta_inj f pmap pmap'),
+      delta_inj f' pmap pmap'.
+  Proof.
+    intros.
+    repeat split.
+    - intros b b' Hf'.
+      destruct (f b) eqn:Hfb.
+      + pose proof (Hincr _ _ Hfb) as Hf'b.
+        rewrite Hf'b in Hf'.
+        inversion Hf'; subst.
+        eapply Hinj;
+          now auto.
+      + destruct Hinj as [H0 [H1 H2]].
+        specialize (H1 b Hfb).
+        destruct (pmap ! b) eqn:Hpmap.
+        * assert ((exists b, f b = Some b') \/ (~ exists b, f b = Some b'))
+            by (eapply em).
+          destruct H as [H | H].
+          ** destruct H as [b0 Hf0].
+             pose proof (Hincr _ _ Hf0) as Hf0'.
+             specialize (Hinjective _ _ _ Hf' Hf0'); subst.
+             congruence.
+          ** erewrite H2 by eauto.
+             assumption.
+        * erewrite H2.
+          auto.
+          intros (b0 & Hf0).
+          pose proof (Hincr _ _ Hf0) as Hf0'.
+          specialize (Hinjective _ _ _ Hf' Hf0'); subst.
+          congruence.
+    - intros b Hf'.
+      destruct (f b) eqn:Hfb.
+      +  eapply Hincr in Hfb.
+         congruence.
+      +  eapply Hinj;
+           eauto.
+    - intros b' Hf'.
+      eapply Hinj.
+      intros Hcontra.
+      eapply Hf'.
+      destruct Hcontra as [b0 Hf0].
+      exists b0.
+      eapply Hincr;
+        now eauto.
+  Qed.
+  
+  Lemma ev_sim_incr:
+    forall f f' ev ev'
+      (Hincr: ren_incr f f')
+      (Hinjective: forall b1 b1' b2,
+          f' b1 = Some b2 ->
+          f' b1' = Some b2 ->
+          b1 = b1')
+      (Hev_sim: event_sim f ev ev'),
+      event_sim f' ev ev'.
+  Proof.
+    intros.
+    inversion Hev_sim;
+      econstructor; eauto using pmap_inj_incr, delta_inj_incr.
+  Qed.
+  
+  Lemma trace_sim_incr:
+    forall f f' trc trf
+      (Hincr: ren_incr f f')
+      (Hinjective: forall b1 b1' b2,
+          f' b1 = Some b2 ->
+          f' b1' = Some b2 ->
+          b1 = b1')
+      (Htr: trace_sim f trc trf),
+      trace_sim f' trc trf.
+  Proof.
+    intros.
+    induction Htr;
+      econstructor;
+      eauto using ev_sim_incr.
+  Qed.       
   
   Lemma ctlType_inj :
     forall st c c' m m' (f fg: memren)
@@ -3625,10 +3947,6 @@ Module SimProofs.
         now auto.
   Qed.
 
-  (** NOTE: this is only needed to find out if a block is in the
-    codomain of f, which is decidable *)
-  Hypothesis em : excluded_middle.
-
   Lemma sim_suspend : sim_suspend_def.
   Proof.
     unfold sim_suspend_def.
@@ -5588,266 +5906,6 @@ into mcj' with an extension of the id injection (fij). *)
     destruct Hexternal as [[? ?] | [? ?]]; discriminate.
   Qed.
     
-  (** Function that projects the angel through a memory injection to
-    compute a new angel *)
-
-  Definition projectAngel (f : memren) (deltaMap : delta_map) : delta_map :=
-    Maps.PTree.fold (fun acc b bperm =>
-                       match f b with
-                       | Some b' =>
-                         Maps.PTree.set b' bperm acc
-                       | None =>
-                         acc end)
-                    deltaMap (Maps.PTree.empty _).
-
-
-
-
-  (** Its proof of correctness under the assumption that f is injective *)
-  Lemma projectAngel_correct:
-    forall (f:memren) deltaMap
-      (Hf_injective: forall b1 b1' b2,
-          f b1 = Some b2 ->
-          f b1' = Some b2 ->
-          b1 = b1'),
-      isProjection f deltaMap (projectAngel f deltaMap).
-  Proof.
-    intros.
-    eapply Maps.PTree_Properties.fold_rec with (P := isProjection f).
-    { intros dmap dmap' a Heq Hprojection. intros b b' Hf.
-      specialize (Heq b). rewrite <- Heq.
-      unfold isProjection in Hprojection. eauto.
-    }
-    { unfold isProjection.
-      intros;
-        by do 2 rewrite Maps.PTree.gempty.
-    }
-    { intros dmap a bnew fnew Hget_dmap Hget_delta Hprojection.
-      intros b b' Hf.
-      destruct (Pos.eq_dec b bnew) as [Heq | Hneq].
-      - subst bnew. rewrite Maps.PTree.gss.
-        rewrite Hf.
-          by rewrite Maps.PTree.gss.
-      - rewrite Maps.PTree.gso; auto.
-        unfold isProjection in Hprojection.
-        destruct (f bnew) as [b'0|] eqn:Hfnew;
-          try eauto.
-        rewrite Maps.PTree.gso.
-        eapply Hprojection; eauto.
-        intros Hcontra.
-        subst b'0;
-          by eauto.
-    }
-  Qed.
-
-  Lemma projectAngel_correct_2:
-    forall (f:memren) deltaMap b'
-      (Hf: ~ exists b, f b = Some b'),
-      Maps.PTree.get b' (projectAngel f deltaMap) = None.
-  Proof.
-    intros.
-    unfold projectAngel.
-    eapply Maps.PTree_Properties.fold_rec. auto.
-    rewrite Maps.PTree.gempty. reflexivity.
-    intros.
-    destruct (f k) as [b'0 |] eqn:Hf'.
-    destruct (Pos.eq_dec b' b'0); subst.
-    exfalso.
-      by eauto.
-      rewrite Maps.PTree.gso;
-        by auto.
-        by assumption.
-  Qed.
-
-  Lemma computeMap_projection_1:
-    forall (mc mf : mem) f
-      pmap pmapF
-      (Hlt: permMapLt pmap (getMaxPerm mc))
-      (HltF: permMapLt pmapF (getMaxPerm mf))
-      (virtue : delta_map)
-      (Hobs_eq: mem_obs_eq f (restrPermMap Hlt)
-                           (restrPermMap HltF))
-      b1 b2
-      (Hf: f b1 = Some b2),
-      (computeMap pmapF (projectAngel f virtue)) # b2 =
-      (computeMap pmap virtue) # b1.
-  Proof.
-    intros.
-    extensionality ofs.
-    destruct Hobs_eq as [Hweak_obs Hstrong_obs].
-    destruct Hweak_obs.
-    assert (Hangel := projectAngel_correct _ virtue injective0).
-    specialize (Hangel _ _ Hf).
-    symmetry in Hangel.
-    destruct (Maps.PTree.get b1 virtue) as [df |] eqn:Hget.
-    destruct (df ofs) as [p|] eqn:Hdf.
-    erewrite (computeMap_1 _ _ _ _ Hget Hdf).
-    erewrite (computeMap_1 _ _ _ _ Hangel Hdf);
-      by reflexivity.
-    erewrite (computeMap_2 _ _ _ _ Hget Hdf).
-    erewrite (computeMap_2 _ _ _ _ Hangel Hdf).
-    destruct Hstrong_obs.
-    specialize (perm_obs_strong0 b1 b2 ofs Hf);
-      by do 2 rewrite restrPermMap_Cur in perm_obs_strong0.
-    erewrite (computeMap_3 _ _ _ _ Hget).
-    erewrite (computeMap_3 _ _ _ _ Hangel).
-    destruct Hstrong_obs.
-    specialize (perm_obs_strong0 b1 b2 ofs Hf);
-      by do 2 rewrite restrPermMap_Cur in perm_obs_strong0.
-  Qed.
-
-  Lemma computeMap_projection_2:
-    forall f pmap
-      (virtue : delta_map) b2
-      (Hb1: ~ (exists b1 : block, f b1 = Some b2)),
-      (computeMap pmap (projectAngel f virtue)) # b2 =
-      pmap # b2.
-  Proof.
-    intros.
-    assert (H := projectAngel_correct_2 _ virtue Hb1).
-    extensionality ofs';
-      by erewrite computeMap_3.
-  Qed.
-
-  Lemma computeMap_projection_3 :
-    forall  (f : memren) (virtue : delta_map) b1 b2
-       (Hf: f b1 = Some b2)
-       (Hinjective : forall b1 b1' b2 : block,
-           f b1 = Some b2 -> f b1' = Some b2 -> b1 = b1'),
-      (computeMap empty_map (projectAngel f virtue)) # b2 =
-      (computeMap empty_map virtue) # b1.
-  Proof.
-    intros.
-    extensionality ofs.
-    assert (Hangel := projectAngel_correct _ virtue Hinjective).
-    specialize (Hangel _ _ Hf).
-    symmetry in Hangel.
-    destruct (Maps.PTree.get b1 virtue) as [df |] eqn:Hget.
-    destruct (df ofs) as [p|] eqn:Hdf.
-    erewrite (computeMap_1 _ _ _ _ Hget Hdf).
-    erewrite (computeMap_1 _ _ _ _ Hangel Hdf);
-      by reflexivity.
-    erewrite (computeMap_2 _ _ _ _ Hget Hdf).
-    erewrite (computeMap_2 _ _ _ _ Hangel Hdf);
-      by do 2 rewrite empty_map_spec.
-    erewrite (computeMap_3 _ _ _ _ Hget).
-    erewrite (computeMap_3 _ _ _ _ Hangel);
-      by do 2 rewrite empty_map_spec.
-  Qed.
-
-
-  (* Blocks that are not mapped by f are set to empty permission. This
-  makes the invariant preservation easier. *)
-  Definition projectMap (f : memren) (pmap : access_map) : access_map :=
-    (pmap#1, Maps.PTree.fold (fun acc b bperm =>
-                                      match f b with
-                                      | Some b' =>
-                                        Maps.PTree.set b' bperm acc
-                                      | None =>
-                                        acc end)
-                                   pmap.2 (Maps.PTree.empty _)).
-
-
-  (** Its proof of correctness under the assumption that f is injective *)
-  Lemma projectMap_tree:
-    forall (f:memren) pmap
-      (Hf_injective: forall b1 b1' b2,
-          f b1 = Some b2 ->
-          f b1' = Some b2 ->
-          b1 = b1') b b'
-      (Hf: f b = Some b'),
-      Maps.PTree.get b pmap.2 = Maps.PTree.get b' (projectMap f pmap).2.
-  Proof.
-    intros.
-    unfold projectMap.
-    eapply Maps.PTree_Properties.fold_rec; eauto.
-    { intros dmap dmap' a Heq Hprojection. simpl in *.
-      specialize (Heq b). rewrite <- Heq. auto.
-    }
-    { by do 2 rewrite Maps.PTree.gempty.
-    }
-    { intros dmap a bnew fnew Hget_dmap Hget_delta Hprojection.
-      destruct (Pos.eq_dec b bnew) as [Heq | Hneq].
-      - subst bnew. rewrite Maps.PTree.gss.
-        rewrite Hf.
-          by rewrite Maps.PTree.gss.
-      - rewrite Maps.PTree.gso; auto.
-        unfold isProjection in Hprojection.
-        destruct (f bnew) as [b'0|] eqn:Hfnew;
-          try eauto.
-        rewrite Maps.PTree.gso.
-        eapply Hprojection; eauto.
-        intros Hcontra.
-        subst b'0;
-          by eauto.
-    }
-  Qed.
-
-  Lemma projectMap_correct:
-    forall (f:memren) pmap
-      (Hf_injective: forall b1 b1' b2,
-          f b1 = Some b2 ->
-          f b1' = Some b2 ->
-          b1 = b1') b b'
-      (Hf: f b = Some b'),
-      Maps.PMap.get b pmap = Maps.PMap.get b' (projectMap f pmap).
-  Proof.
-    intros.
-    unfold Maps.PMap.get.
-    erewrite projectMap_tree;
-      by eauto.
-  Qed.
-
-  Lemma projectMap_tree_2:
-    forall (f:memren) pmap b'
-      (Hf: ~ exists b, f b = Some b'),
-      Maps.PTree.get b' (projectMap f pmap).2 = None.
-  Proof.
-    intros.
-    unfold projectMap.
-    eapply Maps.PTree_Properties.fold_rec. auto.
-    rewrite Maps.PTree.gempty. reflexivity.
-    intros.
-    destruct (f k) as [b'0 |] eqn:Hf'.
-    destruct (Pos.eq_dec b' b'0); subst.
-    exfalso.
-      by eauto.
-      rewrite Maps.PTree.gso;
-        by auto.
-        by assumption.
-  Qed.
-
-
-  Lemma projectMap_tree_unchanged :
-    forall f (pmap : access_map) (b2 : positive)
-      (Hb1: ~ (exists b1 : block, f b1 = Some b2)),
-      Maps.PTree.get b2 (projectMap f pmap).2 = None.
-  Proof.
-    intros.
-    unfold projectMap.
-    eapply Maps.PTree_Properties.fold_rec; auto.
-    rewrite Maps.PTree.gempty. reflexivity.
-    intros.
-    destruct (f k) as [b'0 |] eqn:Hf'.
-    destruct (Pos.eq_dec b2 b'0); subst.
-    exfalso;
-      by eauto.
-    rewrite Maps.PTree.gso;
-        by auto.
-      by assumption.
-  Qed.
-
-  Lemma projectMap_correct_2:
-    forall f pmap b2
-      (Hb1: ~ (exists b1 : block, f b1 = Some b2)),
-      (projectMap f pmap) # b2 = pmap.1.
-  Proof.
-    intros.
-    assert (H := projectMap_tree_2 _ pmap Hb1).
-    extensionality ofs'.
-    unfold Maps.PMap.get. rewrite H.
-      by reflexivity.
-  Qed.
 
   (** Performing a store on some disjoint (coherent) part of the memory, retains
   a [mem_obs_eq] for data and [ctl_inj], using the id injection, for threads*)
@@ -9031,14 +9089,85 @@ relation*)
           apply cntUpdateL;
             apply cntUpdate;
               by eauto.
-        - econstructor 2.
+        - econstructor 2;
+            eauto.
+          unfold virtueF.
+          destruct virtueThread as [vT1 vT2].
+          econstructor; eauto.
+          + repeat (split).
+            * intros.
+              erewrite <- projectAngel_correct with (b := b0) by eauto.
+              simpl.
+              destruct (vT1 ! b0) eqn:HvT1; auto.
+            * intros b0 Hf0.
+              assert (Hinvalid: ~ Mem.valid_block mc b0).
+              { destruct (HsimWeak _ pfc pff).
+                destruct weak_tsim_data0.
+                intros Hcontra.
+                eapply domain_valid0 in Hcontra.
+                destruct Hcontra.
+                congruence.
+              }
+              destruct (vT1 ! b0) eqn:HvT1; auto.
+              intros ofs0.
+              destruct (o ofs0) eqn:Hofs0; auto.
+              eapply Hvb' in Hinvalid.
+              eapply @mem_compatible_invalid_block with (ofs := ofs0) in Hinvalid; eauto.
+              destruct Hinvalid.
+              assert (pfc': containsThread
+                              (updLockSet (updThread pfc (Kresume c Vundef) newThreadPerm)
+                                          (b, Ptrofs.intval ofs) (empty_map, empty_map)) i).
+              { eapply cntUpdateL; eapply cntUpdate; eauto. }
+              specialize (H _ pfc').
+              rewrite gLockSetRes gssThreadRes in H.
+              simpl in H.
+              erewrite computeMap_1 in H by eauto.
+              destruct H. subst.
+              auto.
+            * intros.
+              erewrite projectAngel_correct_2 by eauto.
+              reflexivity.
+          +  repeat (split).
+             * intros.
+               erewrite <- projectAngel_correct with (b := b0) by eauto.
+               simpl.
+               destruct (vT2 ! b0) eqn:HvT2; auto.
+             * intros b0 Hf0.
+               assert (Hinvalid: ~ Mem.valid_block mc b0).
+               { destruct (HsimWeak _ pfc pff).
+                 destruct weak_tsim_data0.
+                 intros Hcontra.
+                 eapply domain_valid0 in Hcontra.
+                 destruct Hcontra.
+                 congruence.
+               }
+               destruct (vT2 ! b0) eqn:HvT2; auto.
+               intros ofs0.
+               destruct (o ofs0) eqn:Hofs0; auto.
+               eapply Hvb' in Hinvalid.
+               eapply @mem_compatible_invalid_block with (ofs := ofs0) in Hinvalid; eauto.
+               destruct Hinvalid.
+               assert (pfc': containsThread
+                               (updLockSet (updThread pfc (Kresume c Vundef) newThreadPerm)
+                                           (b, Ptrofs.intval ofs) (empty_map, empty_map)) i).
+               { eapply cntUpdateL; eapply cntUpdate; eauto. }
+               specialize (H _ pfc').
+               rewrite gLockSetRes gssThreadRes in H.
+               simpl in H.
+               destruct H as [_ H].
+               erewrite computeMap_1 in H by eauto.
+               subst.
+               auto.
+             * intros.
+               erewrite projectAngel_correct_2 by eauto.
+               reflexivity.
     }
     { (** Lock release case *)
       (** In order to construct the new memory we have to perform the
         load and store of the lock, after setting the correct permissions*)
       (** We prove that b is valid in m1 (and mc)*)
       assert (Hvalidb: Mem.valid_block m0 b)
-          by (eapply load_valid_block; eauto).
+        by (eapply load_valid_block; eauto).
       rewrite <- Hrestrict_pmap0 in Hvalidb.
       (** and compute the corresponding block in mf *)
       destruct ((domain_valid (weak_obs_eq (obs_eq_data Htsim))) _ Hvalidb)
@@ -9287,7 +9416,9 @@ relation*)
         apply cntUpdate' in cntj;
           by eapply HnumThreads.
       - (** safety of DryConc*)
-          by assumption.
+        intros sched tr.
+        eapply HybridCoarseMachine.csafe_trace;
+          now eauto.
       - (** weak simulation between the two machines*)
         intros j pfcj' pffj'.
         assert (pfcj: containsThread tpc j)
@@ -10036,6 +10167,65 @@ relation*)
           apply cntUpdateL;
             apply cntUpdate;
               by eauto.
+        - econstructor 2;
+            eauto.
+          destruct virtueLP as [vLP1 vLP2].
+          assert (Hempty: forall b1 ofs, fp i pfc b1 = None ->
+                                    (getThreadR pfc)#1 # b1 ofs = None /\
+                                    (getThreadR pfc)#2 # b1 ofs = None).
+          { intros.
+            assert (Hinvalid: ~ Mem.valid_block mc b1).
+            { destruct (HsimWeak _ pfc pff).
+              destruct weak_tsim_data0.
+              intros Hcontra.
+              eapply domain_valid0 in Hcontra.
+              destruct Hcontra.
+              congruence.
+            }
+            eapply @mem_compatible_invalid_block with (ofs := ofs0) in Hinvalid; eauto.
+            destruct Hinvalid.
+            now eauto.
+          }
+          econstructor; eauto using projectAngel_correct;
+          repeat (split);
+          try (now eapply projectMap_correct).
+          intros.
+          apply extensionality.
+          intros ofs0.
+          specialize (Hangel1 b1 ofs0).
+          erewrite (Hempty _ ofs0 H).1 in Hangel1.
+          inversion Hangel1; subst.
+          reflexivity.
+          reflexivity.
+          intros b0 Hnone.
+          destruct Hnone as [ofs0 HvLP1F].
+          destruct (em (exists b1, fp i pfc b1 = Some b0)); auto.
+          exfalso.
+          eapply projectMap_correct_2 with (pmap := vLP1) in H.
+          simpl in Hcanonical.
+          unfold isCanonical in Hcanonical.
+          rewrite Hcanonical.1 in H.
+          rewrite H in HvLP1F.
+          now auto.
+          (* second map *)
+          intros.
+          apply extensionality.
+          intros ofs0.
+          specialize (Hangel2 b1 ofs0).
+          erewrite (Hempty _ ofs0 H).2 in Hangel2.
+          inversion Hangel2; subst.
+          reflexivity.
+          reflexivity.
+          intros b0 Hnone.
+          destruct Hnone as [ofs0 HvLP2F].
+          destruct (em (exists b1, fp i pfc b1 = Some b0)); auto.
+          exfalso.
+          eapply projectMap_correct_2 with (pmap := vLP2) in H.
+          simpl in Hcanonical.
+          unfold isCanonical in Hcanonical.
+          rewrite Hcanonical.2 in H.
+          rewrite H in HvLP2F.
+          now auto.
     }
     { (** Thread Spawn case *)
       subst.
@@ -10164,7 +10354,9 @@ relation*)
                    by ssromega).
           Opaque containsThread OrdinalPool.containsThread.
         - (** safety of coarse machine*)
-            by assumption.
+          intros sched tr.
+          eapply HybridCoarseMachine.csafe_trace;
+            now eauto.
         - (** weak simulation between the two machines*)
           clear - HsimWeak HnumThreads Htsim Hnum.
           intros j pfcj' pffj'.
@@ -10618,6 +10810,86 @@ relation*)
           specialize (Hxs _ Hin).
           apply cntAdd;
             by apply cntUpdate.
+        - econstructor; eauto.
+          econstructor; eauto.
+          + repeat (split).
+            * intros.
+              simpl.
+              erewrite <- projectAngel_correct with (b := b0) by eauto.
+              destruct (virtue2#1 ! b0) eqn:HvT1;
+              rewrite HvT1.
+              reflexivity.
+              auto.
+            * intros b0 Hf0.
+              assert (Hinvalid: ~ Mem.valid_block mc' b0).
+              { destruct (HsimWeak _ pfc pff).
+                destruct weak_tsim_data0.
+                intros Hcontra.
+                eapply domain_valid0 in Hcontra.
+                destruct Hcontra.
+                congruence.
+              }
+              destruct (virtue2#1 ! b0) eqn:HvT1; rewrite HvT1; auto.
+              intros ofs0.
+              destruct (o ofs0) eqn:Hofs0; auto.
+              eapply @mem_compatible_invalid_block with (ofs := ofs0) in Hinvalid; eauto.
+              destruct Hinvalid.
+              assert (pfc': containsThread
+                              (addThread (updThread pfc (Kresume c Vundef) threadPerm')
+                                         (Vptr b ofs) arg newThreadPerm)
+                              (latestThread
+                                 (updThread pfc (Kresume c Vundef) threadPerm')))
+                by (eapply cntAddLatest).
+               
+              specialize (H  _ pfc').
+              destruct H as [H _].
+              erewrite gssAddRes in H by eauto.
+              simpl in H.
+              erewrite computeMap_1 in H by eauto.
+              auto.
+            * intros.
+              simpl.
+              erewrite projectAngel_correct_2 by eauto.
+              reflexivity.
+          +  repeat (split).
+             * intros.
+               simpl.
+               erewrite <- projectAngel_correct with (b := b0) by eauto.
+               destruct (virtue2#2 ! b0) eqn:HvT2;
+                 rewrite HvT2.
+               reflexivity.
+               auto.
+            * intros b0 Hf0.
+              assert (Hinvalid: ~ Mem.valid_block mc' b0).
+              { destruct (HsimWeak _ pfc pff).
+                destruct weak_tsim_data0.
+                intros Hcontra.
+                eapply domain_valid0 in Hcontra.
+                destruct Hcontra.
+                congruence.
+              }
+              destruct (virtue2#2 ! b0) eqn:HvT2; rewrite HvT2; auto.
+              intros ofs0.
+              destruct (o ofs0) eqn:Hofs0; auto.
+              eapply @mem_compatible_invalid_block with (ofs := ofs0) in Hinvalid; eauto.
+              destruct Hinvalid.
+              assert (pfc': containsThread
+                              (addThread (updThread pfc (Kresume c Vundef) threadPerm')
+                                         (Vptr b ofs) arg newThreadPerm)
+                              (latestThread
+                                 (updThread pfc (Kresume c Vundef) threadPerm')))
+                by (eapply cntAddLatest).
+               
+              specialize (H  _ pfc').
+              destruct H as [_ H].
+              erewrite gssAddRes in H by eauto.
+              simpl in H.
+              erewrite computeMap_1 in H by eauto.
+              auto.
+            * intros.
+              simpl.
+              erewrite projectAngel_correct_2 by eauto.
+              reflexivity.   
     }
     { (** Makelock case *)
       Opaque updThread.
@@ -10813,7 +11085,9 @@ relation*)
         apply cntUpdate' in cntj;
           by eapply HnumThreads.
       - (** safety of coarse machine*)
-          by assumption.
+        intros sched tr.
+        eapply HybridCoarseMachine.csafe_trace;
+          now eauto.
       - (** weak simulation between the two machines*)
         intros j pfcj' pffj'.
         assert (pfcj: containsThread tpc j)
@@ -11662,6 +11936,10 @@ relation*)
         apply cntUpdateL;
           apply cntUpdate;
             by eauto.
+      - econstructor;
+          eauto.
+        econstructor;
+          now eauto.
     }
     { (** Freelock case*)
       subst mc'.
@@ -11861,7 +12139,9 @@ relation*)
         apply cntUpdate' in cntj;
           by eapply HnumThreads.
       - (** safety of coarse machine*)
-          by assumption.
+        intros sched tr.
+        eapply HybridCoarseMachine.csafe_trace;
+          now eauto.
       - (** weak simulation between the two machines*)
         intros j pfcj' pffj'.
         assert (pfcj: containsThread tpc j)
@@ -12185,6 +12465,10 @@ relation*)
         apply cntRemoveL;
           apply cntUpdate;
             by eauto.
+      - econstructor;
+          eauto.
+        econstructor;
+          now eauto.
     }
     { (** Failed lock acquire case*)
       subst tpc' mc'.
@@ -12234,12 +12518,18 @@ relation*)
         now eauto.
       (** Proof that the new coarse and fine state are in simulation*)
       eapply sim_reduce; eauto.
-      admit. (* easy, but get back to it, once sim relation includes traces*)
+      econstructor; eauto.
+      destruct Hsim.
+      eauto.
+      econstructor;
+        eauto.
+      econstructor;
+        now eauto.
     }
     Unshelve. all:eauto.
     eapply store_compatible; eauto. eapply (mem_compf Hsim).
     eapply store_compatible; eauto. eapply (mem_compf Hsim).
-Admitted.
+Qed.
 
 End SimProofs.
 

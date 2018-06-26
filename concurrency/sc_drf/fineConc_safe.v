@@ -303,9 +303,11 @@ Module FineConcSafe.
         destruct HinitC as [Hvalid_mem' [Hf' Hcore_wd']].
         eapply SimDefs.Build_sim with (mem_compc := HmemComp) (mem_compf := HmemCompF).
         - intros; split; auto.
-        - simpl. rewrite addn0.
-          intros.
-          eapply init_coarse_safe with (n := n); eauto.
+        - intros.
+          eapply @HybridCoarseMachine.csafe_trace with (tr := [::]).
+          simpl. rewrite addn0.
+          eapply init_coarse_safe with (n := n);
+            now eauto.
         - intros i cnti cnti'.
           pose proof (strong_tsim_refl cnti HmemComp HmemCompF ARG HinitC').
           Tactics.pf_cleanup.
@@ -392,6 +394,7 @@ Module FineConcSafe.
           zify; omega.
           now apply id_ren_correct.
         - simpl. tauto.
+        - constructor.
           Unshelve. apply None.
       Qed.
 
