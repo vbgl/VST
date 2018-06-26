@@ -114,9 +114,13 @@ Module SimDefs.
   (** *** Simulation between events *)
 
   Definition pmap_inj f (pmap1 pmap2 : access_map) :=
-    forall b1 b2,
-      f b1 = Some b2 ->
-      Maps.PMap.get b1 pmap1 = Maps.PMap.get b2 pmap2.
+    (forall b1 b2,
+        f b1 = Some b2 ->
+        Maps.PMap.get b1 pmap1 = Maps.PMap.get b2 pmap2) /\
+    (forall b1, f b1 = None ->
+           Maps.PMap.get b1 pmap1 = fun _ => None) /\
+    (forall b2, (exists ofs, Maps.PMap.get b2 pmap2 ofs <> None) ->
+           exists b1, f b1 = Some b2).      
 
   Definition isProjection (f : memren) (deltaMap deltaMap' : delta_map) : Prop :=
     forall b b',
@@ -144,7 +148,108 @@ Module SimDefs.
                   (Hf: f b1 = Some b2),
       event_sim f (Events.external i (Events.freelock (b1,ofs)))
                 (Events.external i (Events.freelock (b2, ofs))).
-                   
+
+  (* Inductive ev_wd (f:memren) : Events.machine_event -> Prop := *)
+  (* | ReleaseWD: forall i laddr pmap1 pmap2 *)
+  (*                (Hempty: forall b, f b = None -> forall ofs, *)
+  (*                      pmap1 # b ofs = None /\ pmap2 # b ofs = None), *)
+  (*     ev_wd f (Events.external i (Events.release laddr (Some (pmap1, pmap2)))) *)
+  (* | AcquireWD: forall i laddr pmap1 pmap2 *)
+  (*                (Hempty: forall b, f b = None -> *)
+  (*                              (Maps.PTree.get b pmap1) = None /\ *)
+  (*                              (Maps.PTree.get b pmap2) = None), *)
+  (*     ev_wd f (Events.external i (Events.acquire laddr (Some (pmap1, pmap2)))). *)
+
+  (* Definition trace_wd (f:memren) (tr : event_trace) := *)
+  (*   forall e, List.In e tr -> *)
+  (*        ev_wd f e. *)
+      
+  Inductive trace_sim (f:memren) : event_trace -> event_trace -> Prop :=
+  | TraceEmpty : trace_sim f [::] [::]
+  | TraceCons : forall ev ev' tr tr'
+                  (Hev: event_sim f ev ev')
+                  (Htr: trace_sim f tr tr'),
+      trace_sim f (tr ++ [:: ev]) (tr' ++ [:: ev']).
+
+  
+
+  Lemma pmap_inj_incr:
+    forall f f' pmap pmap'
+      (Hincr: ren_incr f f')
+      (Hinjective: forall b1 b1' b2,
+          f' b1 = Some b2 ->
+          f' b1' = Some b2 ->
+          b1 = b1')
+      (Hinj: pmap_inj f pmap pmap'),
+      pmap_inj f' pmap pmap'.
+  Proof.
+    intros.
+    destruct Hinj as [H1 [H2 H3]].
+    repeat split.
+    - intros b1 b2 Hf'.
+      destruct (f b1) eqn:Hf.
+      + eapply H1.
+        pose proof (Hincr _ _ Hf) as Hf2.
+        rewrite Hf2 in Hf'; inversion Hf'; subst.
+        assumption.
+      + rewrite H2; auto.
+        apply extensionality.
+        intros ofs.
+        destruct (pmap' # b2 ofs) eqn:Hpmap'; auto.
+        exfalso.
+        specialize (H3 b2 ltac:(exists ofs; rewrite Hpmap'; intros Hcontra; congruence)).
+        destruct H3.
+        pose proof (Hincr _ _ H).
+        specialize (Hinjective _ _ _ H0 Hf'); subst.
+        congruence.
+    - intros b1 Hf'.
+      eapply H2.
+      destruct (f b1) eqn:Hf; auto.
+      eapply Hincr in Hf.
+      congruence.
+    - intros b2 Hnonempty.
+      specialize (H3 _ Hnonempty).
+      destruct H3.
+      eapply Hincr in H.
+      eexists; eauto.
+  Qed.
+  
+  Lemma ev_sim_incr:
+    forall f f' ev ev'
+      (Hincr: ren_incr f f')
+      (Hinjective: forall b1 b1' b2,
+          f' b1 = Some b2 ->
+          f' b1' = Some b2 ->
+          b1 = b1')
+      (Hev_sim: event_sim f ev ev'),
+      event_sim f' ev ev'.
+  Proof.
+    intros.
+    inversion Hev_sim.
+    - subst.
+      econstructor 1; eauto using pmap_inj_incr.
+    - admit.
+    - subst.
+      econstructor; eauto.
+    - subst. econstructor; eauto.
+  Admitted.
+  
+  Lemma trace_sim_incr:
+    forall f f' trc trf
+      (Hincr: ren_incr f f')
+      (Hinjective: forall b1 b1' b2,
+          f' b1 = Some b2 ->
+          f' b1' = Some b2 ->
+          b1 = b1')
+      (Htr: trace_sim f trc trf),
+      trace_sim f' trc trf.
+  Proof.
+    intros.
+    induction Htr;
+      econstructor;
+      eauto using ev_sim_incr.
+  Qed.       
+
   (** *** Simulation between the two machines *)
 
 
@@ -179,8 +284,8 @@ Module SimDefs.
     { numThreads : forall i, containsThread tpc i <-> containsThread tpf i;
       mem_compc: mem_compatible tpc mc;
       mem_compf: mem_compatible tpf mf;
-      safeCoarse: forall sched,
-          HybridCoarseMachine.csafe (sched,trc,tpc) mc (fuelF + size xs);
+      safeCoarse: forall sched tr,
+          HybridCoarseMachine.csafe (sched,tr,tpc) mc (fuelF + size xs);
       simWeak:
         forall tid
           (pfc: containsThread tpc tid)
@@ -243,7 +348,9 @@ Module SimDefs.
       tpc_wd: tp_wd f tpc;
       thege_wd: ge_wd fg the_ge;
       fg_spec: ren_incr fg f /\ forall b b', fg b = Some b' -> b = b';
-      xs_wd: forall i, List.In i xs -> containsThread tpc i
+      xs_wd: forall i, List.In i xs -> containsThread tpc i;
+      (* traceWD: trace_wd f trc; *)
+      traceSim: trace_sim f trc trf
     }.
 
   Arguments sim : clear implicits.
@@ -1817,7 +1924,7 @@ Module SimProofs.
     inversion Hsim as
         [HnumThreads HmemCompC HmemCompF HsafeC
                      HsimWeak Hfpsep HsimStrong HsimRes HunmappedRes
-                     HinvF HmaxF Hmemc_wd Htpc_wd Hge_wd Hge_spec Hxs].
+                     HinvF HmaxF Hmemc_wd Htpc_wd Hge_wd Hge_spec Hxs HtraceSim].
     assert (pfc: containsThread tpc i)
       by (eapply HnumThreads; eauto).
     (** Strong simulation for thread i*)
@@ -1852,7 +1959,7 @@ Module SimProofs.
       assumption.
     }
     (** It's safe to step the coarse grained machine for one more step on i*)
-    specialize (HsafeC ([:: i])).
+    specialize (HsafeC ([:: i]) trc).
     assert (HcoreN := safety_det_corestepN_internal xs HsafeC Hexec).
     destruct HcoreN as [trc' [HcorestepN Hsafety]].
     destruct (@csafe_internal_step _ _ _ _ pfc' _ (fuelF.+2 + size [seq x <- xs | x != i])
@@ -2364,6 +2471,7 @@ Module SimProofs.
     - intros j Hin.
       inversion Hin; subst;
         now auto.
+    - assumption.
       Unshelve. all:eauto.     
   Qed.
 
@@ -3528,7 +3636,7 @@ Module SimProofs.
     inversion Hsim as
         [HnumThreads HmemCompC HmemCompF HsafeC HsimWeak Hfpsep
                      HsimStrong HsimRes HunmappedRes HinvF HmaxF
-                     Hwd_mem Htp_wd Hge_wd [Hge_incr Hfg] Hxs].
+                     Hwd_mem Htp_wd Hge_wd [Hge_incr Hfg] Hxs HtraceSim].
     assert (pfc: containsThread tpc i)
       by (eapply HnumThreads; eauto).
     destruct (HsimStrong i pfc pff)
@@ -3548,7 +3656,7 @@ Module SimProofs.
       by (erewrite (stepType_inj pff pfc' _ Hfg Hincr_ge' Hge_wd _ 
                            (obs_eq_data Htsim) (code_eq Htsim)); eauto).
     (** It's safe to step the coarse grained machine for one more step on i*)
-    specialize (HsafeC ([:: i])).
+    specialize (HsafeC ([:: i]) trc).
     assert (HcoreN := safety_det_corestepN_internal xs HsafeC Hexec).
     destruct HcoreN as [trc' [HcorestepN Hsafety]].
     destruct (csafe_pop_step pfc' _ ltac:(eauto) Hsafety) as
@@ -3578,7 +3686,7 @@ Module SimProofs.
     destruct HstepF as [tpf' [HstepF Htsim']].
     assert (memCompF': mem_compatible tpf' mf).
       by (destruct Hsim; eapply StepLemmas.suspend_compatible; eauto).
-    exists tpc'', trc', mc'', tpf', mf.
+    exists tpc'', [::], mc'', tpf', mf.
     (** since thread i commits, the new global renaming will be fi *)
     exists (fp i pfc).
     assert (pfci': containsThread tpc' i)
@@ -3640,7 +3748,10 @@ Module SimProofs.
           destruct (HnumThreads j); by auto].
       }
       { (** safety of coarse state *)
+        intros.
         rewrite cats0 in Hsafe'.
+        specialize (Hsafe' sched).
+        eapply HybridCoarseMachine.csafe_trace with (tr' := tr) in Hsafe'.
         assumption.
       }
       { (** Proof of weak simulation between the threadpools and memories *)
@@ -5410,6 +5521,21 @@ into mcj' with an extension of the id injection (fij). *)
         eapply containsThread_internal_execution;
           by eauto.
       }
+      { rewrite cats0.
+        assert (ren_incr f (fp i pfc)).
+        auto.
+        assert (Hinjective:
+                  forall b1 b1' b2,
+                    (fp i pfc) b1 = Some b2 ->
+                    (fp i pfc) b1' = Some b2 ->
+                    b1 = b1')
+          by (destruct Htsim';
+              destruct obs_eq_data0;
+              destruct weak_obs_eq0;
+              eauto).
+        eapply trace_sim_incr;
+          eauto.
+      } 
     }
     Unshelve. all: eauto.
     erewrite <- restrPermMap_mem_valid.
@@ -7946,7 +8072,7 @@ relation*)
     inversion Hsim as
         [HnumThreads HmemCompC HmemCompF HsafeC HsimWeak HfpSep HsimStrong
                      [HsimRes [Hlock_mapped Hlock_if]] HunmappedRes HinvF HmaxF
-                     Hmemc_wd Htpc_wd Hge_wd [Hge_incr Hfg] Hxs].
+                     Hmemc_wd Htpc_wd Hge_wd [Hge_incr Hfg] Hxs HtraceSim].
     (** Thread i is in the coarse-grained machine*)
     assert (pfc: containsThread tpc i)
       by (eapply HnumThreads; eauto).
@@ -7975,7 +8101,7 @@ relation*)
       by (erewrite (stepType_inj pff pfc _  Hfg Hge_incr Hge_wd Hvalid_mem'
                            (obs_eq_data Htsim) (code_eq Htsim)); eauto).
     (** It's safe to step the coarse grained machine for one more step on i*)
-    specialize (HsafeC ([:: i])).
+    specialize (HsafeC ([:: i]) trc).
     destruct (csafe_pop_step pfc _ ltac:(eauto) HsafeC) as
         (tpc' & trc' & mc' & _ & Hstep' & Hsafe').
     (** the invariant for tpc is implied by safety*)
@@ -8214,7 +8340,9 @@ relation*)
           apply cntUpdate' in cntj;
             by eapply HnumThreads.
         - (** safety of coarse machine*)
-            by assumption.
+          intros sched tr.
+          eapply HybridCoarseMachine.csafe_trace;
+            now eauto.
         - (** weak simulation between the two machines*)
           (*NOTE: pointless to factor this out as a lemma, since acquire/release virtue types do not match*)
 
@@ -8903,6 +9031,7 @@ relation*)
           apply cntUpdateL;
             apply cntUpdate;
               by eauto.
+        - econstructor 2.
     }
     { (** Lock release case *)
       (** In order to construct the new memory we have to perform the
