@@ -399,7 +399,7 @@ Module X86Safe.
     Existing Instance dryFineMach.
     Existing Instance bareMach.
 
-
+    
     Lemma x86SC_safe:
       forall Main_ptr init_thread_target new_mem_target,
         initial_core (event_semantics.msem semSem) 0 init_mem init_thread_target new_mem_target Main_ptr nil ->

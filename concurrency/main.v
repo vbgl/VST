@@ -60,21 +60,27 @@ Module Main (CC_correct: CompCert_correctness).
   
 
   (*Safety from CSL to Coarse Asm*)
+  Definition SemSource p:= (ClightSemantincsForMachines.ClightSem (Clight.globalenv p)).
+  Definition SemTarget:= @x86_context.X86Context.X86Sem Asm_prog asm_genv_safe.
+  Definition THM m:=
+    (HybridMachineSig.HybridMachineSig.ConcurMachineSemantics
+       (Sem:=SemTarget)
+       (ThreadPool:= threadPool.OrdinalPool.OrdinalThreadPool(Sem:=SemTarget))
+       (HybridMachine:=concurrent_compiler_safety.TargetHybridMachine)
+      (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig) m).
   Lemma CSL2CoarseAsm_safety:
     forall U,
     exists init_mem_target init_mem_target' init_thread_target,
-      Genv.init_mem Asm_prog = Some init_mem_target /\
-      Asm.entry_point (Globalenvs.Genv.globalenv Asm_prog)
-                      init_mem_target init_thread_target Main_ptr
-      nil /\
-    let res_target := permissions.getCurPerm init_mem_target' in
+      let res_target := permissions.getCurPerm init_mem_target' in
+      let res:=(res_target, permissions.empty_map) in
   let init_tp_target :=
       threadPool.ThreadPool.mkPool
         (Sem:=AsmSem)
         (resources:=erasure_proof.Parching.DR)
         (Krun init_thread_target)
-      (res_target, permissions.empty_map) in
+      res in
   let init_MachState_target := (U, nil, init_tp_target) in  
+      machine_semantics.initial_machine (THM (Genv.init_mem Asm_prog)) (Some res) init_mem_target init_tp_target init_mem_target' Main_ptr nil /\
   forall n,
     HybridMachineSig.HybridMachineSig.HybridCoarseMachine.csafe
       (ThreadPool:=threadPool.OrdinalPool.OrdinalThreadPool
@@ -100,8 +106,9 @@ Module Main (CC_correct: CompCert_correctness).
     intros HH''; specialize (H HH'').
 
     - destruct H as (mem_t& mem_t' & thread_target & INIT_mem & INIT & SAFE).
-      exists mem_t, mem_t', thread_target; split;[|split].
+      exists mem_t, mem_t', thread_target; split (*;[|split] *).
       + eauto. (*Initial memory*)
+        (*
       + (**) 
         clear - INIT.
         simpl in INIT.
@@ -125,7 +132,7 @@ Module Main (CC_correct: CompCert_correctness).
           replace (Krun thread_target) with (OrdinalPool.getThreadC cnt1) by (subst C1; simpl; auto).
           clear - EQ.
           subst C1; auto.
-          f_equal. eapply Axioms.proof_irr.
+          f_equal. eapply Axioms.proof_irr. *)
       + eapply SAFE.
 
     - clear H. split; eauto; econstructor; repeat split; try reflexivity; eauto.
@@ -136,10 +143,15 @@ Module Main (CC_correct: CompCert_correctness).
   Theorem CSL2FineBareAsm_safety:
     forall U,
     exists init_mem_target init_mem_target' init_thread_target,
-      Genv.init_mem Asm_prog = Some init_mem_target /\
-      Asm.entry_point (Globalenvs.Genv.globalenv Asm_prog)
-                      init_mem_target init_thread_target Main_ptr
-      nil /\
+      let res_target := permissions.getCurPerm init_mem_target' in
+      let res:=(res_target, permissions.empty_map) in
+      let init_tp_target :=
+          threadPool.ThreadPool.mkPool
+            (Sem:=AsmSem)
+            (resources:=erasure_proof.Parching.DR)
+            (Krun init_thread_target)
+            res in
+      machine_semantics.initial_machine (THM (Genv.init_mem Asm_prog)) (Some res) init_mem_target init_tp_target init_mem_target' Main_ptr nil /\
       let init_tp_bare :=
           threadPool.ThreadPool.mkPool
             (Sem:=AsmSem)
@@ -155,6 +167,17 @@ Module Main (CC_correct: CompCert_correctness).
           init_tp_bare init_mem_target' U n.
   Proof.
     intros U.
+    (*
+<<<<<<< HEAD
+    pose proof (CSL2CoarseAsm_safety U) as
+        (init_mem_target & init_mem_target' & init_thread_target & INIT & HH).
+    exists init_mem_target, init_mem_target',  init_thread_target.
+    repeat split; auto; simpl.
+    - inversion INIT; auto.
+    - inversion INIT; auto.
+    - admit.
+    (* Should be something about X86Safe.x86SC_safe.*)
+=======
     destruct (CSL2CoarseAsm_safety U) as
         (init_mem_target & init_mem_target' & init_thread_target & INIT & Hentry & Hsafe).
     exists init_mem_target, (@HybridMachineSig.diluteMem BareDilMem init_mem_target'),
@@ -181,6 +204,8 @@ Module Main (CC_correct: CompCert_correctness).
     destruct (init_mem_wd _ INIT).
     econstructor;
      now eauto.
+>>>>>>> 63ff7d2f265135e602791c765b8670345321082e
+*)
   Admitted.
     
   End MainTheorem.

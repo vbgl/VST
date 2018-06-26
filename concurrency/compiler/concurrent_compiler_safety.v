@@ -32,6 +32,9 @@ Section ConcurrentCopmpilerSafety.
   Definition TargetHybridMachine:=
     @HybridCoarseMachine resources SemTarget TargetThreadPool TargetMachineSig.
 
+  Definition part_sem_target:=
+    event_semantics.msem(@semSem (SemTarget)).
+
   Notation SHM U:= (ConcurMachineSemantics(HybridMachine:=SourceHybridMachine) U).
   Notation THM U:= (ConcurMachineSemantics(HybridMachine:=TargetHybridMachine) U).
   Variable opt_init_mem_source: option Memory.Mem.mem.
