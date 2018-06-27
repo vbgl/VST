@@ -67,11 +67,12 @@ Section HybridSimulation.
   Context (SG TG TID SCH TR SC TC R1 R2 (*s_thread_type t_thread_type*): Type).
   Variable SourceHybridMachine: @ConcurSemantics SG TID SCH TR SC mem R1.
   Variable TargetHybridMachine: @ConcurSemantics TG TID SCH TR TC mem R2.
+  Variable opt_init_mem_source : option Memory.Mem.mem.
+  Variable opt_init_mem_target : option Memory.Mem.mem.
   
-  Record HybridMachine_simulation:=
-    { index : Type
-      ; match_state : index -> meminj -> SC -> mem -> TC -> mem -> Prop
-      ; core_ord : index -> index -> Prop
+  Record HybridMachine_simulation_properties
+         (index: Type)(match_state : index -> meminj -> SC -> mem -> TC -> mem -> Prop) :=
+    { core_ord : index -> index -> Prop
       ; core_ord_wf : well_founded core_ord
 
       (* This is the match relation for initial state of the initial core:*)
@@ -114,6 +115,12 @@ Section HybridSimulation.
           forall cd mu c1 m1 c2 m2 ,
             match_state cd mu c1 m1 c2 m2 ->
             forall i, running_thread SourceHybridMachine c1 i <-> running_thread TargetHybridMachine c2 i
- }.
+    }.
+
+  Inductive HybridMachine_simulation:=
+  | Build_HybridMachine_simulation:
+      forall (index: Type)(match_state : index -> meminj -> SC -> mem -> TC -> mem -> Prop),
+        @HybridMachine_simulation_properties index match_state ->
+        HybridMachine_simulation.
 
 End HybridSimulation.

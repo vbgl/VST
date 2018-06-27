@@ -2,9 +2,9 @@ Require Import compcert.common.Globalenvs.
 
 Require Import VST.concurrency.compiler.concurrent_compiler_simulation.
 Require Import VST.concurrency.compiler.sequential_compiler_correct.
+Require Import VST.concurrency.compiler.CoreSemantics_sum.
 
 
-(*
 (*Clight Machine *)
 Require Import VST.concurrency.common.ClightMachine.
 (*Asm Machine*)
@@ -33,24 +33,49 @@ Module OneThreadSimulation (CC_correct: CompCert_correctness).
   
   Definition AsmSem : Semantics := @X86Sem Asm_program Asm_genv_safe.
 
-  
+  (** The hybrid semantics*)
+  Definition HybridSem h : Semantics := CoreSem_Sum h CSem AsmSem.
 
-  (* First construct the Clight machine and the two projections:
-     - ClightMachineSem (i.e.  MachineSemantics) 
-     - ClightConcurSem (i.e. ConcurMachineSemantics)
-  *)
-  
-  Definition ClightMachine :=(HybridCoarseMachine.HybridCoarseMachine
-                                 (machineSig := DryHybridMachine.DryHybridMachineSig)).
-  Definition ClightMachineSem := (MachineSemantics(HybridMachine := ClightMachine)).
-  Definition ClightConcurSem := (ConcurMachineSemantics(HybridMachine := ClightMachine)). 
-  
+  Existing Instance HybridMachine.DryHybridMachine.dryResources.
+  Notation TP h := (threadPool.OrdinalPool.OrdinalThreadPool(Sem:=HybridSem h)).
+  Existing Instance HybridMachine.DryHybridMachine.DryHybridMachineSig.
 
-  
-  Lemma compile_one_thread:
+  Definition HybMachine h:=
+    HybridMachineSig.HybridCoarseMachine.HybridCoarseMachine
+      (ThreadPool:= TP h).
+
+  Definition HybConcSem h:=
+    HybridMachineSig.ConcurMachineSemantics(HybridMachine:=HybMachine h).
+
+  Section CompileOneThread.
     
-    HybridMachine_simulation.HybridMachine_simulation
+    Lemma compile_one_thread:
+      forall n m,
+        HybridMachine_simulation.HybridMachine_simulation
+          (HybConcSem (Some n) m)
+          (HybConcSem (Some (S n)) m).
+    Proof.
+      intros.
+    Admitted.
+
+  End CompileOneThread.
+
   
+  Section CompileNThread.
+  
+  Lemma compile_n_threads:
+      forall n m,
+        HybridMachine_simulation.HybridMachine_simulation
+          (HybConcSem (Some 0) m)
+          (HybConcSem (Some n) m).
+    Proof.
+      intros.
+    Admitted.
+
+  End CompileNThread.
+
+  
+      
   
   Lemma ConcurrentCompilerCorrectness:
     forall (p:Clight.program) (tp:Asm.program),
