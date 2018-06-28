@@ -1193,7 +1193,7 @@ Arguments memcompat2 {ocd j cstate1 m1 cstate2 m2}.
     admit.
   Admitted.
 
-End OneThreadCompiledProofs.
+End OneThreadCompiledyesProofs.
 
 End OneThreadCompiled.
 
