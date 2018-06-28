@@ -15,8 +15,8 @@ Require Import VST.concurrency.compiler.HybridMachine_simulation.
 Require Import VST.concurrency.common.ClightMachine.
 (*Asm Machine*)
 Require Import VST.concurrency.common.x86_context.
-(*
 
+(*
 (** *One thread simulation*)
 Module ThreadedSimulation (CC_correct: CompCert_correctness).
   
@@ -69,6 +69,38 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
         meminj -> @ctl (@semC (HybridSem (Some n))) -> mem -> @ctl (@semC (HybridSem (Some (S n)))) -> mem -> Prop.
     Variable match_thread_target: forall n,
         meminj -> @ctl (@semC (HybridSem (Some n))) -> mem -> @ctl (@semC (HybridSem (Some (S n)))) -> mem -> Prop.
+
+       
+  Inductive match_thread_compiled:
+    compiler_index -> meminj ->
+    @ctl (state_sum (semC Sems) (semC Semt)) -> mem ->
+    @ctl (state_sum (semC Sems) (semC Semt)) -> mem -> Prop  :=
+  | CThread_Running: forall cd j code1 m1 code2 m2,
+      match_compiled_states cd j code1 m1 code2 m2 ->
+      match_thread_compiled cd j (Krun (SState _ _ code1)) m1
+                            (Krun (TState _ _ code2)) m2
+  | CThread_Blocked: forall cd j code1 m1 code2 m2 ls1 ls2 f f',
+      semantics.at_external (CoreSem Sems) genvS code1 m1  = Some (f,ls1) ->
+      semantics.at_external (CoreSem Semt) genvT code2 m2 = Some (f',ls2) ->
+      Val.inject_list j ls1 ls2 ->
+      match_compiled_states cd j code1 m1 code2 m2 ->
+      match_thread_compiled  cd j (Kblocked (SState _ _ code1)) m1
+                            (Kblocked (TState _ _ code2)) m2
+  | CThread_Resume: forall cd j code1 m1 code2 m2 ls1 ls2 f f' v v' code1' code2',
+      (*Do I need to keep this two? Probanly not*)
+      semantics.at_external (CoreSem Sems) genvS code1 m1 = Some (f,ls1) ->
+      semantics.at_external (CoreSem Semt) genvT code2 m2 = Some (f',ls2) ->
+      Val.inject_list j ls1 ls2 ->
+      semantics.after_external (CoreSem Sems) genvS None code1 = Some code1' ->
+      semantics.after_external (CoreSem Semt) genvT None code2 = Some code2' ->
+      match_compiled_states cd j code1' m1 code2' m2 ->
+      match_thread_compiled cd j (Kresume (SState _ _ code1) v) m1
+                            (Kresume (TState _ _ code2) v') m2
+  | CThread_Init: forall cd j m1 m2 v1 v1' v2 v2',
+      Val.inject j v1 v2 ->
+      Val.inject j v1' v2' ->
+      match_thread_compiled cd j (Kinit v1 v1') m1
+                            (Kinit v2 v2') m2.
     Inductive match_thread_compiled n:
       option compiler_index -> meminj -> @ctl (@semC (HybridSem (Some n))) -> mem -> @ctl (@semC (HybridSem (Some (S n)))) -> mem -> Prop  :=
     | Build_match_thread_compiled:
@@ -201,7 +233,8 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
     econstructor.
 *)
 End ThreadedSimulation.
-  *)
+ *)
+
 Module Concurrent_correctness (CC_correct: CompCert_correctness).
 
   

@@ -139,7 +139,7 @@ CONCUR_COMMON_FILES= \
   core_semantics.v \
   dry_context.v \
   dry_machine_lemmas.v dry_machine_step_lemmas.v \
-  DryMachineSource.v enums_equality.v \
+  enums_equality.v \
   erased_machine.v \
   HybridMachine.v \
   konig.v \
