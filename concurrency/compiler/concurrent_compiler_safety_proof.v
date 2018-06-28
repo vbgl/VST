@@ -37,7 +37,6 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
     Definition Asm_init_state (p: Asm.program):=
     Asm.entry_point (@the_ge p).
   
-    Search semantics.Semantics.
 
     
 

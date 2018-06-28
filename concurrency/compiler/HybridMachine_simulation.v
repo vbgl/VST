@@ -117,10 +117,9 @@ Section HybridSimulation.
             forall i, running_thread SourceHybridMachine c1 i <-> running_thread TargetHybridMachine c2 i
     }.
 
-  Inductive HybridMachine_simulation:=
-  | Build_HybridMachine_simulation:
-      forall (index: Type)(match_state : index -> meminj -> SC -> mem -> TC -> mem -> Prop),
-        @HybridMachine_simulation_properties index match_state ->
-        HybridMachine_simulation.
+  Record HybridMachine_simulation:=
+    { index: Type
+      ; match_state : index -> meminj -> SC -> mem -> TC -> mem -> Prop
+      ; SIM:> @HybridMachine_simulation_properties index match_state}.
 
 End HybridSimulation.
