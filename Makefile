@@ -144,7 +144,7 @@ CONCUR_COMMON_FILES= \
   HybridMachine.v \
   konig.v \
   lksize.v \
-  machine_semantics.v machine_semantics_lemmas.v machine_simulation.v \
+  machine_semantics.v machine_semantics_lemmas.v \
   permissions.v permjoin_def.v pos.v permjoin.v \
   scheduler.v \
   semantics.v \
