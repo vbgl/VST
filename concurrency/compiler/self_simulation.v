@@ -1,28 +1,18 @@
 Require Import Coq.omega.Omega.
-Require Import Clight.
-Require Import Events.
-Require Import Globalenvs.
-Require Import Memory.
-Require Import Values.
-Require Import Coqlib.
+Require Import compcert.cfrontend.Clight.
+Require Import compcert.common.Events.
+Require Import compcert.common.Globalenvs.
+Require Import compcert.common.Memory.
+Require Import compcert.common.Values.
+Require Import compcert.lib.Coqlib.
 
-Require Import msl.Coqlib2.
-
-Require veric.Clight_core. Import Clight_core.
 
 Require Import VST.sepcomp.event_semantics.
-Require Import VST.sepcomp.semantics.
-Require Import VST.sepcomp.mem_lemmas.
-
-
+Require Import VST.concurrency.common.semantics.
 Require Import Smallstep.
-(*To include once Asm has been repaired:
-  Require Import VST.concurrency.x86_context.
-  Require Import VST.concurrency.common.HybridMachine_simulation.*)
 
+Set Bullet Behavior "Strict Subproofs".
 
-(*Require Import VST.concurrency.compiler_correct.*)
-Require Import VST.concurrency.compiler.CoreSemantics_sum.
 
 
 (*Self simulations say that a program has equivalent executions 
@@ -32,8 +22,6 @@ Require Import VST.concurrency.compiler.CoreSemantics_sum.
   - Equivalent executions: the executions have equivalent memories and
     none visible locations are unchanged (in the execution).  
  *)
-
-Set Bullet Behavior "Strict Subproofs".
 
 Section SelfSim.
 
@@ -49,7 +37,8 @@ Section SelfSim.
    state_to_memcore  s = (c,m) -> s = memcore_to_state c m.
   
   
-  (*extension of a mem_injection (slightly stengthens the old inject_separated - LENB: not sure you need the stronger prop*)
+  (*extension of a mem_injection 
+    (slightly stengthens the old inject_separated - LENB: not sure you need the stronger prop*)
   Definition is_ext (f1:meminj)(nb1: positive)(f2:meminj)(nb2:positive) : Prop:=
     forall b1 b2 ofs,
       f2 b1 = Some (b2, ofs) ->
@@ -188,9 +177,9 @@ Section SelfSimulation.
       ssim_diagram: forall f t c1 m1 c2 m2,
         match_self code_inject f c1 m1 c2 m2 ->
         forall (g: genvtype Sem) c1' m1',
-          step Sem g (memcore_to_state c1 m1)  t (memcore_to_state c1' m1') ->
+          step Sem (memcore_to_state c1 m1)  t (memcore_to_state c1' m1') ->
           exists c2' f' t' m2',
-          step Sem g (memcore_to_state c2 m2)  t' (memcore_to_state c2' m2')  /\
+          step Sem (memcore_to_state c2 m2)  t' (memcore_to_state c2' m2')  /\
           match_self code_inject f' c1' m1' c2' m2' /\
           is_ext f (Mem.nextblock m1) f' (Mem.nextblock m2) /\
           Events.inject_trace f' t t'
