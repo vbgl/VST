@@ -86,14 +86,11 @@ which mentions the following axioms, categorized into
     [R] Rdefinitions.up
     [R] Raxioms.total_order_T
     [H] BareMachine.syncstep_equal_run (Nick)
-    [H] semax_ext.symb2genv_ax  (Andrew)
-    [H] semax_ext.symb2genv  (Andrew) 
     [H] Asm.semantics_determinate (William and Nick)
     [A] Axioms.prop_ext
     [A] ProofIrrelevance.proof_irrelevance
     [A] lib.Axioms.proof_irr
     [H] safety.preservation  (Santiago)
-    [H] enums_equality.ord_enum_enum (Andrew)
     [H] safety_equivalence.ksafe_csafe_equiv' (Santiago)
     [C] Events.inline_assembly_sem
     [H] x86_erasure.X86CoreErasure.inline_assembly_erasure (Nick)
