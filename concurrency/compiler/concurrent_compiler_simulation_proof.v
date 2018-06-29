@@ -16,7 +16,7 @@ Set Bullet Behavior "Strict Subproofs".
 Require Import VST.concurrency.common.ClightMachine.
 (*Asm Machine*)
 Require Import VST.concurrency.common.x86_context.
-
+(*
 (** *One thread simulation*)
 Module ThreadedSimulation (CC_correct: CompCert_correctness).
   
