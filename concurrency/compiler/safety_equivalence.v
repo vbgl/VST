@@ -530,7 +530,46 @@ Section Safety_Explicity_Safety.
               eapply H2.
         Qed.        
   End TracesIrrelevant.
-  
+
+  Lemma explicit_safety_schedule_irr:
+    forall U U' tr tp m,
+      schedPeek U = schedPeek U' ->
+      explicit_safety U tr tp m -> explicit_safety U' tr tp m.
+  Proof.
+    cofix.
+    intros. inversion H0; simpl in *.
+    - econstructor.
+      simpl in *.
+      unfold halted_machine in *. simpl in *.
+      rewrite <- H.
+      assumption.
+    - econstructor 2; eauto.
+      simpl.
+      inversion H1; subst.
+      rewrite H in HschedN.
+      rewrite <- H7.
+      econstructor; eauto.
+    - inversion H1;
+        try match goal with
+            | [H: schedSkip _ = _ |- _] =>
+              econstructor 3 with (x' := schedSkip U')
+            | [ |- _] =>
+              econstructor 3 with (x' := U')
+            end; subst;
+        try match goal with
+            | [H: diluteMem _ = _ |- _] =>
+              rewrite <- H; clear H
+            end; eauto;
+          [econstructor 1 |
+           econstructor 2 |
+           econstructor 3 |
+           |
+           econstructor 5 |
+           econstructor 6];
+          try (rewrite <- H); eauto.
+      rewrite <- H9.
+      econstructor 4; try (rewrite <- H); eauto.
+  Qed.
   
   Inductive InternalOrExternal: MachState -> mem -> MachState -> mem -> Prop:=
   | IsInternal st st' m m':

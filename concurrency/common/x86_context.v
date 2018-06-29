@@ -76,9 +76,10 @@ Module X86SEMAxioms.
 
     Lemma corestep_det: corestep_fun semSem.
     Proof.
-      (* simpl. *)
-      (* intros m m' m'' c c' c'' Hstep1 Hstep2. *)
-      (* simpl in *.  *)
+      simpl.
+      intros m m' m'' c c' c'' Hstep1 Hstep2.
+      simpl in *.
+      inv Hstep1.
       (* simpl. *)
       (* intros m m' m'' c c' c'' Hstep1 Hstep2. *)
       (* simpl in Hstep1, Hstep2. *)
