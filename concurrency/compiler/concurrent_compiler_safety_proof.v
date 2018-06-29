@@ -38,9 +38,10 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
   
   Definition Asm_init_state (p: Asm.program):=
     Asm.entry_point (@the_ge p).
-  
+
   Notation valid Sem:=
     (valid dryResources Sem OrdinalPool.OrdinalThreadPool DryHybridMachineSig).
+
 
   Definition opt_init_mem_source (p : Clight.program):=
       (Genv.init_mem (Ctypes.program_of_program p)).

@@ -7,6 +7,7 @@ Require Import VST.sepcomp.semantics_lemmas.
 Require Import VST.concurrency.common.pos.
 
 From mathcomp.ssreflect Require Import ssreflect ssrbool ssrnat ssrfun eqtype seq fintype finfun.
+Require Import FunInd.
 Set Implicit Arguments.
 
 (*NOTE: because of redefinition of [val], these imports must appear
@@ -116,7 +117,6 @@ Proof.
     rewrite STORE_ZERO;
       now assumption.
 Qed.
-Require Import FunInd.
 
 Lemma mem_wd_store_zeros: forall m b p n m1
                             (STORE_ZERO: store_zeros m b p n = Some m1)
@@ -467,7 +467,6 @@ Module X86Safe.
       simpl.
       eexists; now eauto.
       now econstructor.
-      Unshelve. now auto.
     Qed.
 
   End X86Safe.

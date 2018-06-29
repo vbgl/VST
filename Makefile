@@ -62,7 +62,7 @@ DEPFLAGS:=$(COQFLAGS)
 # DO NOT DISABLE coqc WARNINGS!  That would hinder the Coq team's continuous integration.
 # Warning setting  -w -deprecated-focus  is needed until we no longer
 # list version 8.7._ in the COQVERSION list.
-COQC=$(COQBIN)coqc -w -deprecated-focus,-deprecated-unfocus
+COQC=$(COQBIN)coqc -w -deprecated-focus,-deprecated-unfocus,-deprecated,-notation-overridden
 COQTOP=$(COQBIN)coqtop
 COQDEP=$(COQBIN)coqdep $(DEPFLAGS)
 COQDOC=$(COQBIN)coqdoc -d doc/html -g  $(DEPFLAGS)
@@ -139,12 +139,12 @@ CONCUR_COMMON_FILES= \
   core_semantics.v \
   dry_context.v \
   dry_machine_lemmas.v dry_machine_step_lemmas.v \
-  DryMachineSource.v enums_equality.v \
+  enums_equality.v \
   erased_machine.v \
   HybridMachine.v \
   konig.v \
   lksize.v \
-  machine_semantics.v machine_semantics_lemmas.v machine_simulation.v \
+  machine_semantics.v machine_semantics_lemmas.v \
   permissions.v permjoin_def.v pos.v permjoin.v \
   scheduler.v \
   semantics.v \

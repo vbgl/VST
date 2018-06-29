@@ -38,8 +38,8 @@ Module Main (CC_correct: CompCert_correctness).
   Definition Clight_prog:= semax_to_juicy_machine.CSL_prog CPROOF.
   Definition Main_ptr:=Values.Vptr (Ctypes.prog_main Clight_prog) Integers.Ptrofs.zero.
   Context (Asm_prog: Asm.program).
-  Context (asm_genv_safe: Asm_core.safe_genv (@x86_context.X86Context.the_ge Asm_prog)).
   Context (compilation : CC_correct.CompCert_compiler Clight_prog = Some Asm_prog).
+  Context (asm_genv_safe: Asm_core.safe_genv (@x86_context.X86Context.the_ge Asm_prog)).
   Instance SemTarget : Semantics:= @x86_context.X86Context.X86Sem Asm_prog asm_genv_safe.
   Existing Instance X86Inj.X86Inj.
 
@@ -49,8 +49,6 @@ Module Main (CC_correct: CompCert_correctness).
       mem_obs_eq.MemoryWD.valid_mem m /\
       mem_obs_eq.CoreInjections.ge_wd (Renamings.id_ren m) the_ge.
         
-  Variable em : ClassicalFacts.excluded_middle.
-  
   (* This should be instantiated:
      it says initial_Clight_state taken from CPROOF, is an initial state of CompCert.
    *)
@@ -59,8 +57,26 @@ Module Main (CC_correct: CompCert_correctness).
                                 (init_mem CPROOF)
                                 (Clight_safety.initial_Clight_state CPROOF)
                                 Main_ptr nil).
-  Context (CPROOF_initial_mem:  Genv.init_mem (Ctypes.program_of_program Clight_prog) = Some (init_mem CPROOF)).
-  
+
+ (* MOVE THIS TO ANOTHER FILE *)
+  Lemma CPROOF_initial_mem:  Genv.init_mem (Ctypes.program_of_program Clight_prog) = Some (init_mem CPROOF).
+  Proof.
+  unfold Clight_prog, init_mem, semax_to_juicy_machine.init_mem, 
+    semax_initial.init_m, semax_to_juicy_machine.prog, Ctypes.program_of_program.
+  clear.
+  set (H := (semax_to_juicy_machine.init_mem_not_none CPROOF)).
+  clearbody H.
+  set (p := semax_to_juicy_machine.CSL_prog CPROOF) in *.
+  unfold Ctypes.program_of_program in H.
+  clearbody p.
+  set (m := Genv.init_mem
+          {|
+          AST.prog_defs := Ctypes.prog_defs p;
+          AST.prog_public := Ctypes.prog_public p;
+          AST.prog_main := Ctypes.prog_main p |}) in *.
+ clearbody m.
+ destruct m. reflexivity. contradiction H; auto.
+Qed. 
 
   (*Safety from CSL to Coarse Asm*)
   Definition SemSource p:= (ClightSemantincsForMachines.ClightSem (Clight.globalenv p)).
@@ -146,9 +162,8 @@ Module Main (CC_correct: CompCert_correctness).
       + eapply SAFE.
 
     - clear H. split; eauto; econstructor; repeat split; try reflexivity; eauto.
-    - eauto.
+    - apply CPROOF_initial_mem.
   Qed.
-
 
   Theorem CSL2FineBareAsm_safety:
     forall U,
@@ -205,6 +220,7 @@ Module Main (CC_correct: CompCert_correctness).
       destruct (init_mem_wd  Hinit_mem ) as [Hvalid_mem Hvalid_ge].
       pose (fineConc_safe.FineConcInitial.Build_FineInit Hvalid_mem Hvalid_ge).
       eapply @X86Safe.x86SC_safe with (Main_ptr := Main_ptr) (FI := f); eauto.
+      intro; apply Classical_Prop.classic.
       (* proof of safety for new schedule *)
       intros.
       pose proof (CSL2CoarseAsm_safety sched) as
