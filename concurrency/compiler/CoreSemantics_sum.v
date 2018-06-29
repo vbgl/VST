@@ -40,10 +40,10 @@ Definition state_sum_optionmt {Cs Ct M:Type} (cto: option (Ct * option M)): opti
   | _ => None
   end.
 
-Definition lt_op (n: nat) (no:option nat): bool :=
+Definition lt_op (n: nat) (no:option nat): Prop :=
   match no with
-    | None => true
-    | Some n' => Nat.ltb n n' 
+    | None => False
+    | Some n' => n < n' 
   end.
 
 Definition initial_core_sum (no:option nat) (Cs Ct:Type) (M: Type)
@@ -52,8 +52,8 @@ Definition initial_core_sum (no:option nat) (Cs Ct:Type) (M: Type)
   nat -> M -> state_sum Cs Ct -> M -> Values.val -> list Values.val -> Prop :=
   fun (n:nat) m c m' val vals =>
     match c with
-    | SState c => sinitial_core n m c m' val vals
-    | TState c => tinitial_core n m c m' val vals
+    | SState c => lt_op n no /\ sinitial_core n m c m' val vals
+    | TState c => ~lt_op n no /\ tinitial_core n m c m' val vals
     end.
 
 Definition sum_func {Cs Ct X:Type} (fs:Cs -> X) (ft:Ct-> X) s:=
