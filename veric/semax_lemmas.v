@@ -1498,7 +1498,7 @@ Focus 1.
   specialize (CS0 ora ve te m0 (S n)).
   assert (core_semantics.corestep (juicy_core_sem (cl_core_sem ge)) (State ve te ctl1) m0 st' m'0).
   split3; auto.
-  pose proof (jsafeN_step (cl_core_sem ge) OK_spec ge _ _ _ _ _ _ H5 H1).
+  pose proof (@jsafeN_step genv _ _ genv_symb_injective (cl_core_sem ge) OK_spec ge _ _ _ _ _ _ H5 H1).
   apply CS0 in H6; auto.
   destruct (safe_step_forward ge n ora (State ve te ctl2) m0) as [c2 [m2 [? ?]]]; auto.
   exists c2; exists m2; split; auto.
@@ -1516,7 +1516,7 @@ Focus 1.
   specialize (CS0 ora ve te m0 (S n)).
   assert (core_semantics.corestep (juicy_core_sem (cl_core_sem ge)) (State ve te ctl1) m0 st' m'0).
   split3; auto.
-  pose proof (jsafeN_step (cl_core_sem ge) OK_spec ge _ _ _ _ _ _ H5 H1).
+  pose proof (@jsafeN_step genv _ _ genv_symb_injective  (cl_core_sem ge) OK_spec ge _ _ _ _ _ _ H5 H1).
   apply CS0 in H6; auto.
   destruct (safe_step_forward ge n ora (State ve te ctl2) m0) as [c2 [m2 [? ?]]]; auto.
   exists c2; exists m2; split; auto.

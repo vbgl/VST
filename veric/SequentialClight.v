@@ -33,12 +33,12 @@ Definition dryspec : ext_spec unit :=
      Genv.init_mem prog = Some m ->
      exists b, exists q,
        Genv.find_symbol (Genv.globalenv prog) (prog_main prog) = Some b /\
-       initial_core cl_core_sem 
+       initial_core (cl_core_sem)
            0 (*additional temporary argument - TODO (Santiago): FIXME*)
            (Build_genv (Genv.globalenv prog) (prog_comp_env prog))
  (Vptr b Ptrofs.zero) nil = Some q /\
        forall n,
-        @dry_safeN _ _ _ _ (@Genv.genv_symb _ _) (coresem_extract_cenv cl_core_sem (prog_comp_env prog)) dryspec (Build_genv (Genv.globalenv prog) (prog_comp_env prog)) n tt q m.
+        @dry_safeN _ _ _ _ (genv_symb_injective _ _) (coresem_extract_cenv cl_core_sem (prog_comp_env prog)) dryspec (Build_genv (Genv.globalenv prog) (prog_comp_env prog)) n tt q m.
 Proof.
  intros.
  destruct (@semax_prog_rule' NullExtension.Espec CS _ _ _ _ 

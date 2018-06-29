@@ -960,12 +960,19 @@ Definition main_handler : Clight.function :=
   {| Clight.fn_return := Ctypes.Tvoid; Clight.fn_callconv := AST.cc_default; Clight.fn_params := nil;
      Clight.fn_vars := nil; Clight.fn_temps := nil; Clight.fn_body := Clight.Sskip |}.
 
+Definition genv_symb_injective {F V} (ge: Genv.t F V) : extspec.injective_PTree block.
+Proof.
+exists (Genv.genv_symb ge).
+hnf; intros.
+eapply Genv.genv_vars_inj; eauto.
+Defined.
+
  Lemma sim_dry_safeN:
   forall dryspec (prog: Clight.program) b q m m' h,
   initial_core (Clight_new.cl_core_sem (globalenv prog)) h m q m'
           (Vptr b Ptrofs.zero) nil ->
   (forall n, 
-    @dry_safeN _ _ _ _ (@Genv.genv_symb _ _)
+    @dry_safeN _ _ _ _ (@genv_symb_injective _ _)
    (coresem_extract_cenv (Clight_new.cl_core_sem (globalenv prog))
    (prog_comp_env prog)) dryspec 
    (Build_genv (Genv.globalenv prog) (prog_comp_env prog)) n tt q m) ->
@@ -973,7 +980,7 @@ Definition main_handler : Clight.function :=
   initial_core (Clight_core.cl_core_sem (Build_genv (Genv.globalenv prog) (prog_comp_env prog)))
           h m q' m' (Vptr b Ptrofs.zero) nil /\
   (forall n, 
-    @dry_safeN _ _ _ _ (@Genv.genv_symb _ _)
+    @dry_safeN _ _ _ _ (@genv_symb_injective _ _)
    (coresem_extract_cenv (Clight_core.cl_core_sem (Build_genv (Genv.globalenv prog) (prog_comp_env prog)))
    (prog_comp_env prog)) dryspec 
    (Build_genv (Genv.globalenv prog) (prog_comp_env prog)) n tt q' m).

@@ -79,7 +79,7 @@ Lemma shape_of_args2 (F V : Type) (args : list val) v (ge : Genv.t F V) :
   Val.has_type_list args (sig_args (ef_sig CREATE)) ->
   v <> Vundef ->
   v =
-  expr.eval_id _args (make_ext_args (filter_genv (symb2genv (Genv.genv_symb ge))) (_f :: _args :: nil) args) ->
+  expr.eval_id _args (make_ext_args (filter_genv (symb2genv (genv_symb_injective ge))) (_f :: _args :: nil) args) ->
   exists arg1, args = arg1 :: v :: nil.
 Proof.
   intros Hargsty Nu.
@@ -89,7 +89,7 @@ Proof.
   intros Preb.
   match goal with H : context [Map.get ?a ?b] |- _ => destruct (Map.get a b) eqn:E end.
   subst v. 2: tauto.
-  pose  (gx := (filter_genv (symb2genv (Genv.genv_symb ge)))). fold gx in E.
+  pose  (gx := (filter_genv (symb2genv (genv_symb_injective ge)))). fold gx in E.
   destruct args as [ | arg [ | ar [ | ar2 args ] ]].
   + now inversion E.
   + now inversion E.
@@ -102,7 +102,7 @@ Lemma shape_of_args3 (F V : Type) (args : list val) v (ge : Genv.t F V) :
   Val.has_type_list args (sig_args (ef_sig CREATE)) ->
   v <> Vundef ->
   v =
-  expr.eval_id _f (make_ext_args (filter_genv (symb2genv (Genv.genv_symb ge))) (_f :: _args :: nil) args) ->
+  expr.eval_id _f (make_ext_args (filter_genv (symb2genv (genv_symb_injective ge))) (_f :: _args :: nil) args) ->
   exists arg2, args = v :: arg2 :: nil.
 Proof.
   intros Hargsty Nu.
@@ -112,7 +112,7 @@ Proof.
   intros Preb.
   match goal with H : context [Map.get ?a ?b] |- _ => destruct (Map.get a b) eqn:E end.
   subst v. 2: tauto.
-  pose  (gx := (filter_genv (symb2genv (Genv.genv_symb ge)))). fold gx in E.
+  pose  (gx := (filter_genv (symb2genv (genv_symb_injective ge)))). fold gx in E.
   destruct args as [ | arg [ | ar [ | ar2 args ] ]].
   + now inversion E.
   + now inversion E.
@@ -488,7 +488,6 @@ clear - Initcore.
         unfold canon.gvar_denote in *. simpl in *.
         unfold make_venv, Map.get, empty_env. rewrite PTree.gempty.
         unfold Genv.find_symbol in *.
-        rewrite symb2genv_ax in *.
         assumption.
        }
 

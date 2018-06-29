@@ -768,7 +768,7 @@ Qed.
 
 Lemma shape_of_args F V args b ofs ge :
   Val.has_type_list args (AST.Tint :: nil) ->
-  Vptr b ofs = expr.eval_id _lock (make_ext_args (filter_genv (symb2genv (@Genv.genv_symb F V ge))) (_lock :: nil) args) ->
+  Vptr b ofs = expr.eval_id _lock (make_ext_args (filter_genv (symb2genv (@genv_symb_injective F V ge))) (_lock :: nil) args) ->
   args = Vptr b ofs :: nil.
 Proof.
   intros Hargsty.
@@ -778,7 +778,7 @@ Proof.
   intros Preb.
   match goal with H : context [Map.get ?a ?b] |- _ => destruct (Map.get a b) eqn:E end.
   subst v. 2: discriminate.
-  pose  (gx := (filter_genv (symb2genv (Genv.genv_symb ge)))). fold gx in E.
+  pose  (gx := (filter_genv (symb2genv (genv_symb_injective ge)))). fold gx in E.
   destruct args as [ | arg [ | ar args ]].
   + now inversion E.
   + simpl in E. inversion E. reflexivity.
