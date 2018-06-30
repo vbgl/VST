@@ -10,13 +10,18 @@ Require Import VST.concurrency.compiler.CoreSemantics_sum.
 Require Import VST.concurrency.common.HybridMachine.
 Require Import VST.concurrency.compiler.HybridMachine_simulation.
 
+Require Import VST.concurrency.compiler.Clight_self_simulation.
+Require Import VST.concurrency.compiler.Asm_self_simulation.
+
+
+
 Set Bullet Behavior "Strict Subproofs".
 
 (*Clight Machine *)
 Require Import VST.concurrency.common.ClightMachine.
 (*Asm Machine*)
 Require Import VST.concurrency.common.x86_context.
-(*
+
 (** *One thread simulation*)
 Module ThreadedSimulation (CC_correct: CompCert_correctness).
   
@@ -29,6 +34,10 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
   Context (C_program: Clight.program).
   Definition Clight_g : Clight.genv := Clight.globalenv C_program.
   Definition CSem : Semantics := ClightSemantincsForMachines.ClightSem Clight_g.
+  Definition Cself_simulation := clight_self_simulation Clight_g.
+  Definition Clight_match := self_simulation.code_inject _ _ Cself_simulation.
+  
+  
 
   
   (** *Asm Semantics*)
@@ -37,6 +46,8 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
   Context (Asm_program: Asm.program).
   Definition Asm_g := (@the_ge Asm_program).
   Context (Asm_genv_safe: Asm_core.safe_genv (@the_ge Asm_program)).
+  Definition Aself_simulation := Asm_self_simulation Asm_g.
+  Definition Asm_match := self_simulation.code_inject _ _ Aself_simulation.
 
   
   (** *AsHybrid Semantics and Machine*)
@@ -69,25 +80,68 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
   
   Section CompileOneThread.
     Import OrdinalPool.
-    Variable match_thread_source:
-        meminj -> @ctl (@semC SemTop) -> mem -> @ctl (@semC SemBot) -> mem -> Prop.
-    Variable match_thread_target:
-        meminj -> @ctl (@semC SemTop) -> mem -> @ctl (@semC SemBot) -> mem -> Prop.
 
-       
-  Inductive match_thread_compiled:
+    Inductive match_state2match_thread
+              {sem1 sem2: Semantics}
+              (SState: @semC sem1 -> state_sum (@semC CSem) (@semC AsmSem))
+              (TState: @semC sem2 -> state_sum (@semC CSem) (@semC AsmSem))
+              set_mem1 set_mem2 (match_state : meminj -> @semC sem1 -> @semC sem2 -> Prop) :
+    meminj ->
+    @ctl (@semC SemTop) -> mem ->
+    @ctl (@semC SemBot) -> mem -> Prop  :=
+  | CThread_Running: forall j code1 m1 code2 m2,
+      match_state j (set_mem1 code1 m1) (set_mem2 code2 m2) ->
+      match_state2match_thread SState TState set_mem1 set_mem2 match_state j (Krun (SState code1)) m1
+                            (Krun (TState code2)) m2
+  | CThread_Blocked: forall j code1 m1 code2 m2,
+      match_state j (set_mem1 code1 m1) (set_mem2 code2 m2) ->
+      match_state2match_thread SState TState set_mem1 set_mem2 match_state j (Kblocked (SState code1)) m1
+                            (Kblocked (TState code2)) m2
+  | CThread_Resume: forall j code1 m1 code2 m2 v v',
+      match_state2match_thread SState TState set_mem1 set_mem2 match_state j (Kresume (SState code1) v) m1
+                            (Kresume (TState code2) v') m2
+  | CThread_Init: forall j m1 m2 v1 v1' v2 v2',
+      Val.inject j v1 v2 ->
+      Val.inject j v1' v2' ->
+      match_state2match_thread SState TState set_mem1 set_mem2 match_state j (Kinit v1 v1') m1
+                               (Kinit v1 v1') m2.
+    
+    Definition SST := SState (@semC CSem) (@semC AsmSem).
+    Definition TST := TState (@semC CSem) (@semC AsmSem).
+    
+    Definition match_thread_source:
+      meminj -> @ctl (@semC SemTop) -> mem -> @ctl (@semC SemBot) -> mem -> Prop:=
+      match_state2match_thread SST SST
+                               (@Smallstep.set_mem (Clight.part_semantics2 Clight_g))
+                               (@Smallstep.set_mem (Clight.part_semantics2 Clight_g))
+                               Clight_match.
+    Definition match_thread_target:
+      meminj -> @ctl (@semC SemTop) -> mem -> @ctl (@semC SemBot) -> mem -> Prop:=
+      match_state2match_thread TST TST
+                               (@Smallstep.set_mem (Asm.part_semantics Asm_g))
+                               (@Smallstep.set_mem (Asm.part_semantics Asm_g))
+                               Asm_match.
+    Definition match_thread_compiled cd:
+      meminj -> @ctl (@semC SemTop) -> mem -> @ctl (@semC SemBot) -> mem -> Prop:=
+      match_state2match_thread SST TST
+                               (@Smallstep.set_mem (Clight.part_semantics2 Clight_g))
+                               (@Smallstep.set_mem (Asm.part_semantics Asm_g))
+                               (compiler_match cd).
+
+    (* NOTE: Old version*)
+  (* Inductive match_thread_compiled:
     compiler_index -> meminj ->
     @ctl (@semC SemTop) -> mem ->
     @ctl (@semC SemBot) -> mem -> Prop  :=
-  | CThread_Running: forall cd j code1 m1 code2 m2,
+  | CThread_Running': forall cd j code1 m1 code2 m2,
       compiler_match cd j (Smallstep.set_mem code1 m1) (Smallstep.set_mem code2 m2) ->
       match_thread_compiled cd j (Krun (SState _ _ code1)) m1
                             (Krun (TState _ _ code2)) m2
-  | CThread_Blocked: forall cd j code1 m1 code2 m2,
+  | CThread_Blocked': forall cd j code1 m1 code2 m2,
       compiler_match cd j (Smallstep.set_mem code1 m1) (Smallstep.set_mem code2 m2) ->
       match_thread_compiled  cd j (Kblocked (SState _ _ code1)) m1
                             (Kblocked (TState _ _ code2)) m2
-  | CThread_Resume: forall cd j code1 m1 code2 m2 v v',
+  | CThread_Resume': forall cd j code1 m1 code2 m2 v v',
       (*Do I need to keep this two? Probanly not*)
       (*semantics.at_external (CoreSem Sems) genvS code1 m1 = Some (f,ls1) ->
       semantics.at_external (CoreSem Semt) genvT code2 m2 = Some (f',ls2) ->
@@ -97,11 +151,11 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
       compiler_match cd j (Smallstep.set_mem code1 m1) (Smallstep.set_mem code2 m2) ->
       match_thread_compiled cd j (Kresume (SState _ _ code1) v) m1
                             (Kresume (TState _ _ code2) v') m2
-  | CThread_Init: forall cd j m1 m2 v1 v1' v2 v2',
+  | CThread_Init': forall cd j m1 m2 v1 v1' v2 v2',
       Val.inject j v1 v2 ->
       Val.inject j v1' v2' ->
       match_thread_compiled cd j (Kinit v1 v1') m1
-                            (Kinit v2 v2') m2.
+                            (Kinit v2 v2') m2. *)
     
   Definition FST {A B} (HH : A /\ B):=
     fst (ssrfun.pair_of_and HH).
@@ -228,6 +282,32 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
                st2' m2' /\ ord_opt (Injorder compiler_sim) cd' cd).
     Proof.
       intros.
+      inversion H; subst.
+      inversion Htstep; subst.
+      destruct (Compare_dec.lt_eq_lt_dec tid hb) as [[?|?]|?].  
+      - (* tid < hb *)
+        pose proof (mtch_target _ _ _ _ _ _ H0 _ l Htid (contains12 H0 Htid)) as HH.
+        simpl in *.
+
+        Ltac exploit_match:=
+        unfold match_thread_target,match_thread_source,match_thread_compiled in *;
+        match goal with
+        | [ H: getThreadC ?i = _ ?c,
+               H0: context[match_state2match_thread] |- _ ] =>
+          rewrite H in H0; inversion H0; subst; simpl in *
+        end;
+        fold match_thread_target in *;
+        fold match_thread_source in *;
+        fold match_thread_compiled in *.
+
+        exploit_match.
+        eapply Aself_simulation in H5.
+        
+        rewrite Hcode in HH; inversion HH; subst.
+        inversion Hcorestep; subst.
+        
+        eapply mtch_target in l.
+        eapply H0 in l.
       
     Admitted.
 
@@ -334,7 +414,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
  Variable match_state: forall n,
      index n ->
      Values.Val.meminj ->
-     ThreadPool (Some 0) -> Memory.Mem.mem -> ThreadPool (Some n) -> Memory.Mem.mem -> Prop.
+     ThreadPool (Some 0) -> Memory.Mem.mem -> ThreadPool None -> Memory.Mem.mem -> Prop.
  
   Lemma compile_all_threads:
       forall n m,
@@ -370,7 +450,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
     econstructor.
 *)
 End ThreadedSimulation.
- *)
+ 
 
 Module Concurrent_correctness (CC_correct: CompCert_correctness).
 
