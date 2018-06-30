@@ -2,6 +2,7 @@
 From mathcomp.ssreflect Require Import ssreflect ssrbool ssrnat ssrfun eqtype.
 
 Require Import compcert.common.Globalenvs.
+Require Import VST.concurrency.paco.src.paco.
 
 Require Import VST.concurrency.common.HybridMachineSig.
 Import HybridMachineSig.
@@ -98,7 +99,34 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
       now eapply (thread_running _ _ j _ _ _ _ Hmatch). 
     Qed.
 
-    (* This lemma does not hold? *)
+
+    Lemma thread_stepN_schedule_irr:
+      forall (tp : Asm.program)
+        (asm_genv_safety : Asm_core.safe_genv the_ge),
+        let SemTarget:= @X86Sem tp asm_genv_safety in
+        forall  n U U' (c c':  OrdinalPool.t(Sem:=SemTarget)) m m'
+           (Hsched: schedPeek U = schedPeek U')
+           (HstepN: machine_semantics_lemmas.thread_stepN
+                      (AsmConcurSem (opt_init_mem_target tp)) (@the_ge tp) n U c m c' m'),
+          machine_semantics_lemmas.thread_stepN
+            (AsmConcurSem (opt_init_mem_target tp)) (@the_ge tp) n U' c m c' m'.
+    Proof.
+      induction n.
+      - intros. simpl in *.
+        inversion HstepN;
+          now auto.
+      - intros.
+        simpl in HstepN.
+        destruct HstepN as [c'' [m'' [Hstep HstepN]]].
+        simpl.
+        exists c'', m''.
+        split; eauto.
+        inversion Hstep; subst.
+        econstructor; eauto.
+        rewrite <- Hsched;
+          now auto.
+    Qed.
+     
     Lemma explicit_safety_thread_stepN:
       forall (tp : Asm.program) tr
         (asm_genv_safety : Asm_core.safe_genv the_ge),
@@ -107,11 +135,14 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
            (Hval: (valid SemTarget) (tr, c, m) U)
            (HstepN: machine_semantics_lemmas.thread_stepN
                       (AsmConcurSem (opt_init_mem_target tp)) (@the_ge tp) n U c m c' m')
-           (Hsafe: explicit_safety
+           (Hsafe:
+              forall U',
+                (valid SemTarget) (tr, c', m') U' ->
+                explicit_safety
                      HybridMachine.DryHybridMachine.dryResources SemTarget
                      (threadPool.OrdinalPool.OrdinalThreadPool(Sem:=SemTarget))
                      HybridMachine.DryHybridMachine.DryHybridMachineSig
-                     U tr c' m'),
+                     U' tr c' m'),
           explicit_safety HybridMachine.DryHybridMachine.dryResources SemTarget
                           (threadPool.OrdinalPool.OrdinalThreadPool(Sem:=SemTarget))
                           HybridMachine.DryHybridMachine.DryHybridMachineSig
@@ -119,38 +150,64 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
     Proof.
       intros tp tr asm_genv_safety SemTarget n.
       induction n; intros.
-      - simpl in HstepN.
-        inversion HstepN; subst.
-        now eauto.
+      - simpl in HstepN; inversion HstepN; subst; eauto.
       - simpl in HstepN.
         destruct HstepN as [c'' [m'' [Hstep HstepN]]].
-        econstructor 2 with (y' := (tr, c'', m'')).
-        simpl. eauto.
-        intros.
-        simpl in H.
-        unfold valid, correct_schedule in H, Hval.
-        simpl in H, Hval.
-        destruct (schedPeek x') eqn:Hx.
-        + simpl in H.
-          unfold unique_Krun in H.
-          inversion Hstep; subst.
-          inversion Htstep; subst.
-          assert (cnti:  ThreadPool.containsThread
-                           (ThreadPool.updThread Htid (Krun c'0)
-                                                 (permissions.getCurPerm m'0,
-                                                  (ThreadPool.getThreadR Htid)#2)) tid)
-            by (eapply ThreadPool.cntUpdate;
-                eauto).
-          assert (Hhalted: ~ @threadHalted SemTarget _ _ _ cnti).
-          admit. (*False *)
-          admit.
-        + econstructor 1.
+        econstructor 2 with (y' := (tr, c'', m'')); eauto.
+        intros U' HvalidU'.
+        simpl in HvalidU'.        
+        inversion Hstep; inversion Htstep; subst.
+        clear Htstep Hinv.
+        pose proof Htid.
+        assert (Htid' : ThreadPool.containsThread
+                          (ThreadPool.updThread Htid (Krun c'0)
+                                                (permissions.getCurPerm m'0, (ThreadPool.getThreadR Htid)#2)) tid)
+          by(eapply ThreadPool.cntUpdate; eauto).
+        assert (Hhalt: @HybridMachineSig.threadHalted _ _ _ HybridMachine.DryHybridMachine.DryHybridMachineSig
+                                                      _ _ Htid'
+                       \/ ~ @HybridMachineSig.threadHalted _ _ _ HybridMachine.DryHybridMachine.DryHybridMachineSig
+                           _ _ Htid') by admit.
+        destruct Hhalt as [Hhalted | Hnothalted].
+        + assert (n = 0).
+          { destruct n; auto.
+            simpl in HstepN.
+            destruct HstepN as [? [? [Hcontra ?]]].
+            inversion Hcontra; subst.
+            inversion Htstep; subst.
+            rewrite HschedN0 in HschedN; inversion HschedN; subst.
+            inversion Hhalted; subst.
+            tactics.Tactics.pf_cleanup.
+            rewrite Hcode0 in Hcode1; inversion Hcode1; subst.
+            exfalso.
+            eapply event_semantics.ev_step_ax1 in Hcorestep0.
+            eapply core_semantics.corestep_not_halted with (q := c2);
+              now eauto.
+          } subst.
+          simpl in HstepN. inversion HstepN; subst.
           simpl.
-          unfold halted_machine.
-          rewrite Hx.
-          now auto.
+          eapply Hsafe. simpl in HvalidU'.
+          now eauto.
+        + unfold valid, correct_schedule in HvalidU'.
+          destruct (schedPeek U') eqn:HschedU'.
+          * pose proof (HvalidU' _ Htid' c'0) as Heq.
+            rewrite ThreadPool.gssThreadCode in Heq.
+            specialize (Heq ltac:(reflexivity) Hnothalted).
+            destruct (Nat.eq_dec n0 tid); [subst | exfalso; now eauto].
+            rewrite <- HschedU' in HschedN.
+            eapply explicit_safety_schedule_irr with (U := U);
+              eauto.
+            eapply IHn; eauto.
+            unfold valid, correct_schedule.
+            rewrite HschedN HschedU'.
+            simpl.
+            now eauto.
+          * econstructor 1.
+            simpl.
+            unfold halted_machine. simpl.
+            rewrite HschedU'.
+            now auto.
     Admitted.
-    
+
     Lemma explicit_safety_step':
       forall (p : Clight.program) (tp : Asm.program) (asm_genv_safety : Asm_core.safe_genv the_ge),
         let SemSource:= (ClightSemantincsForMachines.ClightSem (Clight.globalenv p)) in
@@ -160,18 +217,17 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
           (C_source : OrdinalPool.t(Sem:=SemSource))
           (C_target : OrdinalPool.t(Sem:=SemTarget)) tr
           (SIM : HybridMachine_simulation (ClightConcurSem (opt_init_mem_source p))
-                                          (AsmConcurSem (opt_init_mem_target tp))) (cd : index SIM),
-          match_state SIM cd j C_source m_s C_target m_t ->
-          (forall U,
+                                          (AsmConcurSem (opt_init_mem_target tp))) (cd : index SIM)
+          (Hmatch: match_state SIM cd j C_source m_s C_target m_t)
+          (HsafeS: forall U,
               (valid SemSource) (tr, C_source, m_s) U ->
               explicit_safety
                 HybridMachine.DryHybridMachine.dryResources
                 SemSource
                 (threadPool.OrdinalPool.OrdinalThreadPool(Sem:=SemSource))
                 HybridMachine.DryHybridMachine.DryHybridMachineSig
-                U tr C_source m_s) ->
-          forall U,
-            (valid SemTarget) (tr, C_target, m_t) U ->
+                U tr C_source m_s)
+           U (HvalidT: (valid SemTarget) (tr, C_target, m_t) U),
             explicit_safety
               HybridMachine.DryHybridMachine.dryResources
               SemTarget
@@ -179,19 +235,34 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
               HybridMachine.DryHybridMachine.DryHybridMachineSig
               U tr C_target m_t.
     Proof.
-      intros p tp asm_genv_safety SemSource SemTarget.
-      cofix HsafeT.
-      intros m_s m_t j C_source C_target tr SIM cd Hmatch HsafeS U HvalidT.
+      intros.
+      eapply coinductive_safety.exp_safety_paco_correct.
+      eapply coinductive_safety.safetyN_equivalence.
+      simpl; now auto.
+      eapply coinductive_safety.speach_therapy with (cd := cd).
+      now eapply (core_ord_wf SIM).
+      generalize dependent m_t.
+      generalize dependent C_target.
+      generalize dependent tr.
+      generalize dependent U.
+      generalize dependent m_s.
+      generalize dependent j.
+      generalize dependent C_source.
+      generalize dependent cd.
+      pcofix HsafeT.
+      intros.
       assert (HvalidS: (valid SemSource) (tr, C_source, m_s) U)
         by (eapply match_valid_equiv; eauto).
       specialize (HsafeS U HvalidS).
-      inversion HsafeS as [HhaltedS | stS' Hstep CIH |].
+      inversion HsafeS as [HhaltedS | stS' Hstep CIH | U' stS' Hstep CIH].
       - (* halted case *)
-        econstructor.
+        pfold.
+        econstructor 1.
         simpl in *.
         remember (machine_semantics.conc_halted (ClightConcurSem (opt_init_mem_source p)) U
                                                 C_source) as v1 eqn:Hhalted.
         symmetry in Hhalted.
+        simpl in Hhalted.
         unfold halted_machine in *.
         simpl in *.
         destruct (schedPeek U);
@@ -204,47 +275,87 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
           eauto.
         destruct Hstep as [C_target' [m_t' [cd' [j' [Hmatch' HstepT]]]]].
         destruct HstepT as [HstepT | [HstepT Hdec]].
-        + (* case the target machine takes one or more steps *)
-          destruct HstepT as [n HstepT].
-          simpl in HstepT.
-          destruct HstepT as [C_target'' [m_t'' [HstepT HstepNT]]].
-          (*Note: I guess the trace of the target machine here is not
-          important because we do not maintain the trace for internal
-          steps.*)
-          eapply coinductive_safety.internal_safety with (y' := (evS, C_target'', m_t''));
-            [now auto|].
-          simpl.
-          intros U' HvalidT'.
-          assert (HvalidT'': (valid SemTarget) (evS, C_target', m_t') U)
-            by admit.
-          specialize (HsafeT m_s' m_t' j' _ _ _ SIM cd' Hmatch' CIH _ HvalidT'').
-          eapply explicit_safety_thread_stepN with (U := U') (c' := C_target') (m' := m_t').
-          admit.
-          intros.
-          Admitted.
-          (*eapply explicit_safety_schedule_irr.
-          unfold valid, correct_schedule in HvalidT'.
-          simpl in HvalidT'.
-          destruct (schedPeek U') eqn:HU'.
-          * assert (Heq: schedPeek U = schedPeek U')
-              by admit. (* by HvalidT, HvalidT' and internal steps *)
-            assert (HvalidT'': (valid SemTarget) (evS, C_target', m_t') U)
-              by admit.
-            specialize (HsafeT m_s' m_t' j' _ _ _ SIM cd' Hmatch' CIH _ HvalidT'').
-            simpl in HsafeT.
-            pose proof (explicit_safety_schedule_irr _ _ _ _ _ _ _ _ _ Heq HsafeT).
-            eapply explicit_safety_thread_stepN with (U := U');
-            eauto.
-          simpl in HsafeT.
-          intros.
-          eapply HsafeT; eauto.
-          eapply CIH.
-          eapply MachStep_preserve_valid in HstepS.
-          assert (HvalidS': (valid SemSource) (evS, C_source''
-          eapply match_valid_equiv in HvalidT'. *)
-          
-
-          
+        + (* Step Plus case *)
+          destruct HstepT as [n HstepN].
+          pfold.
+          econstructor 2 with (y' := (tr, C_target', m_t')) (n:=n); eauto.
+          * clear CIH HsafeT HvalidT HvalidS HsafeS Hmatch' HstepS Hmatch.
+            generalize dependent m_t'.
+            generalize dependent C_target'.
+            generalize dependent m_t.
+            generalize dependent C_target.
+            induction n.
+            ** intros.
+               simpl in HstepN.
+               destruct HstepN as [? [? [? Heq]]].
+               inversion Heq; subst.
+               econstructor 2 with (_y := (tr, C_target', m_t')); simpl; eauto.
+               econstructor 1.
+               auto.
+            ** intros.
+               simpl in HstepN.
+               destruct HstepN as [C_target'' [m_t'' [HstepT' HstepN]]].
+               econstructor 2 with (_y := (tr, C_target'', m_t'')); simpl; eauto.
+          * intros.
+            simpl in H.
+            right.
+            eapply HsafeT; eauto.
+            intros.
+            eapply explicit_safety_trace_irr with (tr := evS).
+            eapply CIH.
+            simpl.
+            now eauto.
+        + (* Step Star case *)
+          eapply paco3_pfold; eauto.
+          destruct HstepT as [n HstepN].
+          destruct n.
+          * simpl in HstepN; inversion HstepN; subst.
+            econstructor 4; eauto.
+            eapply HsafeT; eauto.
+            intros.
+            eapply explicit_safety_trace_irr with (tr := evS).
+            eapply CIH.
+            simpl.
+            now eauto.
+          * econstructor 2 with (y' := (tr, C_target', m_t')) (n:=n); eauto.
+            (* this part here is exactly the same as the step plus case and I can 
+               probably factor into a lemma,
+               but right now I am just trying to get things to work *)
+            ** clear CIH HsafeT HvalidT HvalidS HsafeS Hmatch' HstepS Hmatch.
+               generalize dependent m_t'.
+               generalize dependent C_target'.
+               generalize dependent m_t.
+               generalize dependent C_target.
+               induction n.
+               *** intros.
+                   simpl in HstepN.
+                   destruct HstepN as [? [? [? Heq]]].
+                   inversion Heq; subst.
+                   econstructor 2 with (_y := (tr, C_target', m_t')); simpl; eauto.
+                   econstructor 1.
+                   auto.
+               *** intros.
+                   simpl in HstepN.
+                   destruct HstepN as [C_target'' [m_t'' [HstepT' HstepN]]].
+                   econstructor 2 with (_y := (tr, C_target'', m_t'')); simpl; eauto.
+            ** intros.
+               eapply HsafeT; eauto.
+               intros.
+               eapply explicit_safety_trace_irr with (tr := evS); eauto.
+               eapply CIH; eauto.
+      - (* external step case*)
+        destruct stS' as [[evS C_source'] m_s'].
+        simpl in Hstep.
+        pose proof Hstep as HstepS.
+        eapply (machine_diagram SIM) with (sge := Clight.globalenv p) (tge := the_ge) in Hstep;
+          eauto.
+        destruct Hstep as [C_target' [m_t' [cd' [j' [Hmatch' HstepT]]]]].
+        simpl in HstepT.
+        pfold.
+        econstructor 3 with (y' := (evS, C_target', m_t'));
+          eauto.
+        Unshelve. all:auto.
+    Qed.
         
     Lemma Clight_finite_branching:
       let ClightSem:= ClightSemantincsForMachines.ClightSem in 

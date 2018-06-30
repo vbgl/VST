@@ -688,6 +688,44 @@ Section Safety_Explicity_Safety.
            [eapply safety_equivalence21 | apply safety_equivalence22].
   Qed.
 
+  Require Import VST.concurrency.paco.src.paco.
+
+  (*Parametrized version*)
+  Inductive exp_safety_gen {_exp_safety} (x:X) (y:Y): Prop:=
+  | paco_halted_safety : halted x y -> exp_safety_gen x y
+  | paco_internal_safety y': int_step x y y'  ->
+                             (forall x',  valid x' y' -> _exp_safety x' y') ->
+                             exp_safety_gen x y
+  | paco_external_safety x' y': ext_step x y x' y' ->
+                                (forall x',  valid x' y' -> _exp_safety x' y') ->
+                                exp_safety_gen x y.
+  Definition paco_exp_safety := paco2 (@exp_safety_gen).
+
+
+
+  (*Show that the paco representation is correct. *)
+  Lemma exp_safety_paco_correct:
+    forall x y, exp_safety x y <-> paco_exp_safety bot2 x y.
+  Proof.
+    intros x y; split; generalize x y; clear x y.
+    - pcofix CO; intros x y HH.
+      pfold. inversion HH;
+               [ econstructor 1; eauto |
+                 econstructor 2; eauto |
+                 econstructor 3; eauto ]; intros x'' VAL'.
+    - cofix CO; intros x y HH.
+      inversion HH. inversion SIM;
+                      [ econstructor 1; eauto |
+                        econstructor 2; eauto |
+                        econstructor 3; eauto ]; intros x'' VAL'; eapply CO.
+      + specialize (LE _ _ (H0 _ VAL')).
+        destruct LE. 2: compute in *; tauto.
+        apply H1.
+      + specialize (LE _ _ (H0 _ VAL')).
+        destruct LE. 2: compute in *; tauto.
+        apply H1.
+  Qed.
+
   
   
 End  Safety_Explicity_Safety.
