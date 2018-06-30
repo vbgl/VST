@@ -17,7 +17,7 @@ Definition has_opttyp (v : option val) (t : option typ) :=
 
 Section safety.
   Context {G C M Z:Type}.
-  Context {genv_symb: G -> PTree.t block}.
+  Context {genv_symb: G -> injective_PTree block}.
   Context {Hrel: nat -> M -> M -> Prop}.
   Context (Hcore:@CoreSemantics C M).
   Variable (Hspec:external_specification M external_function Z).
@@ -187,7 +187,7 @@ End safety.
 
 Section dry_safety.
   Context {G C M Z:Type}.
-  Context {genv_symb: G -> PTree.t block}.
+  Context {genv_symb: G -> injective_PTree block}.
   Context (Hcore:@CoreSemantics C M).
   Variable (Hspec:external_specification M external_function Z).
   Definition dry_safeN := @safeN_ G C M Z genv_symb (fun n' m m' => True) Hcore Hspec.

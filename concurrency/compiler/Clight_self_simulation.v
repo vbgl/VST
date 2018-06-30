@@ -1,25 +1,29 @@
-Require Import Coqlib.
-Require Import Values.
-Require Import Integers.
-Require Import Maps.
-Require Import Memory.
-Require Import Events.
-Require Import Globalenvs.
-Require Import Ctypes.
-Require Import Cop.
-Require Import Clight.
-
-Require Import veric.Clight_core.
+Require Import compcert.lib.Coqlib.
+Require Import compcert.common.Values.
+Require Import compcert.lib.Integers.
+Require Import compcert.lib.Maps.
+Require Import compcert.common.Memory.
+Require Import compcert.common.Events.
+Require Import compcert.common.Globalenvs.
+Require Import compcert.cfrontend.Ctypes.
+Require Import compcert.cfrontend.Cop.
+Require Import compcert.cfrontend.Clight.
 
 Require Import VST.concurrency.compiler.self_simulation.
+Require Import VST.veric.Clight_core.
 
 Set Bullet Behavior "Strict Subproofs".
 
+Section ClightSelfSim.
+
+  Context (ge: genv).
   
   (*Separate state and memory*)
-  Definition core:= CC_core.
-  Definition state_to_memcore:=CC_state_to_CC_core.
-  Definition memcore_to_state:= CC_core_to_CC_state.
+  Definition core:= state. (* this contains a useless memory*)
+  Definition state_to_memcore st:=
+    (st, get_mem st).
+  Definition memcore_to_state (stm: state * mem):=
+  let (st,m):= stm in set_mem st m .
   Definition state_to_memcore_correct:
     forall c m, state_to_memcore (memcore_to_state c m) = (c,m)
   :=CC_core_CC_state_1.

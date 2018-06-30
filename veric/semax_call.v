@@ -1512,7 +1512,7 @@ reflexivity.
 rewrite Eef. subst tys. assumption.
 intros.
 specialize (H15 ret0 z').
-change ((ext_spec_post' Espec e x' (Genv.genv_symb psi) (opttyp_of_type retty) ret0 z' >=>
+change ((ext_spec_post' Espec e x' (genv_symb_injective psi) (opttyp_of_type retty) ret0 z' >=>
         juicy_mem_op
           (Q' ts x (make_ext_rval  (filter_genv psi) ret0) *
               (F0 (construct_rho (filter_genv psi) vx tx) *
