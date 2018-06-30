@@ -100,6 +100,7 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
     Qed.
 
 
+    (* Note, unused right now *)
     Lemma thread_stepN_schedule_irr:
       forall (tp : Asm.program)
         (asm_genv_safety : Asm_core.safe_genv the_ge),
@@ -126,88 +127,7 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
         rewrite <- Hsched;
           now auto.
     Qed.
-     
-    Lemma explicit_safety_thread_stepN:
-      forall (tp : Asm.program) tr
-        (asm_genv_safety : Asm_core.safe_genv the_ge),
-        let SemTarget:= @X86Sem tp asm_genv_safety in
-        forall  n U (c c':  OrdinalPool.t(Sem:=SemTarget)) m m'
-           (Hval: (valid SemTarget) (tr, c, m) U)
-           (HstepN: machine_semantics_lemmas.thread_stepN
-                      (AsmConcurSem (opt_init_mem_target tp)) (@the_ge tp) n U c m c' m')
-           (Hsafe:
-              forall U',
-                (valid SemTarget) (tr, c', m') U' ->
-                explicit_safety
-                     HybridMachine.DryHybridMachine.dryResources SemTarget
-                     (threadPool.OrdinalPool.OrdinalThreadPool(Sem:=SemTarget))
-                     HybridMachine.DryHybridMachine.DryHybridMachineSig
-                     U' tr c' m'),
-          explicit_safety HybridMachine.DryHybridMachine.dryResources SemTarget
-                          (threadPool.OrdinalPool.OrdinalThreadPool(Sem:=SemTarget))
-                          HybridMachine.DryHybridMachine.DryHybridMachineSig
-                          U tr c m.
-    Proof.
-      intros tp tr asm_genv_safety SemTarget n.
-      induction n; intros.
-      - simpl in HstepN; inversion HstepN; subst; eauto.
-      - simpl in HstepN.
-        destruct HstepN as [c'' [m'' [Hstep HstepN]]].
-        econstructor 2 with (y' := (tr, c'', m'')); eauto.
-        intros U' HvalidU'.
-        simpl in HvalidU'.        
-        inversion Hstep; inversion Htstep; subst.
-        clear Htstep Hinv.
-        pose proof Htid.
-        assert (Htid' : ThreadPool.containsThread
-                          (ThreadPool.updThread Htid (Krun c'0)
-                                                (permissions.getCurPerm m'0, (ThreadPool.getThreadR Htid)#2)) tid)
-          by(eapply ThreadPool.cntUpdate; eauto).
-        assert (Hhalt: @HybridMachineSig.threadHalted _ _ _ HybridMachine.DryHybridMachine.DryHybridMachineSig
-                                                      _ _ Htid'
-                       \/ ~ @HybridMachineSig.threadHalted _ _ _ HybridMachine.DryHybridMachine.DryHybridMachineSig
-                           _ _ Htid') by admit.
-        destruct Hhalt as [Hhalted | Hnothalted].
-        + assert (n = 0).
-          { destruct n; auto.
-            simpl in HstepN.
-            destruct HstepN as [? [? [Hcontra ?]]].
-            inversion Hcontra; subst.
-            inversion Htstep; subst.
-            rewrite HschedN0 in HschedN; inversion HschedN; subst.
-            inversion Hhalted; subst.
-            tactics.Tactics.pf_cleanup.
-            rewrite Hcode0 in Hcode1; inversion Hcode1; subst.
-            exfalso.
-            eapply event_semantics.ev_step_ax1 in Hcorestep0.
-            eapply core_semantics.corestep_not_halted with (q := c2);
-              now eauto.
-          } subst.
-          simpl in HstepN. inversion HstepN; subst.
-          simpl.
-          eapply Hsafe. simpl in HvalidU'.
-          now eauto.
-        + unfold valid, correct_schedule in HvalidU'.
-          destruct (schedPeek U') eqn:HschedU'.
-          * pose proof (HvalidU' _ Htid' c'0) as Heq.
-            rewrite ThreadPool.gssThreadCode in Heq.
-            specialize (Heq ltac:(reflexivity) Hnothalted).
-            destruct (Nat.eq_dec n0 tid); [subst | exfalso; now eauto].
-            rewrite <- HschedU' in HschedN.
-            eapply explicit_safety_schedule_irr with (U := U);
-              eauto.
-            eapply IHn; eauto.
-            unfold valid, correct_schedule.
-            rewrite HschedN HschedU'.
-            simpl.
-            now eauto.
-          * econstructor 1.
-            simpl.
-            unfold halted_machine. simpl.
-            rewrite HschedU'.
-            now auto.
-    Admitted.
-
+  
     Lemma explicit_safety_step':
       forall (p : Clight.program) (tp : Asm.program) (asm_genv_safety : Asm_core.safe_genv the_ge),
         let SemSource:= (ClightSemantincsForMachines.ClightSem (Clight.globalenv p)) in

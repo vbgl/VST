@@ -531,6 +531,7 @@ Section Safety_Explicity_Safety.
         Qed.        
   End TracesIrrelevant.
 
+  (* Note, unused right now *)
   Lemma explicit_safety_schedule_irr:
     forall U U' tr tp m,
       schedPeek U = schedPeek U' ->
