@@ -303,12 +303,6 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
         exploit_match.
         eapply Aself_simulation in H5.
         
-        rewrite Hcode in HH; inversion HH; subst.
-        inversion Hcorestep; subst.
-        
-        eapply mtch_target in l.
-        eapply H0 in l.
-      
     Admitted.
 
     Lemma machine_step_diagram:
