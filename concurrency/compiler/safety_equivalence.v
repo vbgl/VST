@@ -171,6 +171,95 @@ Section Csafe_KSafe.
     - econstructor 3; eauto.
     - econstructor 4; eauto.
   Qed.
+
+  (* MachStep that doesn't change the schedule,
+    Reduces the set of valid schedules... 
+   *)
+  Inductive has_unique_running tp:Prop :=
+  | HasUniqueRun i (cnti : ThreadPool.containsThread tp i) q:
+      ThreadPool.getThreadC cnti = Krun q ->
+      has_unique_running tp.
+  
+  Lemma schedPeek_Skip:
+    forall U tid
+      ( HschedN : schedPeek U = Some tid)
+      ( HschedS : schedSkip U = U),
+      False.
+  Proof.
+    intros. apply schedSkip_id in HschedS; subst.
+    inversion HschedN.
+  Qed.
+  
+  Lemma unique_Krun_update:
+    forall st tid,
+      unique_Krun st tid ->
+      forall (cnt: ThreadPool.containsThread st tid) c_new m_new cnt,
+        unique_Krun (ThreadPool.updThread(tid:=tid)(tp:=st) cnt (Krun c_new) m_new) tid.
+  Proof.
+    intros.
+    unfold unique_Krun in *.
+    intros.
+    destruct (Nat.eq_dec j tid).
+    - subst.
+      destruct (Nat.eq_dec tid tid); subst;
+        now auto.
+    - pose proof cnti as cnti'.
+      eapply ThreadPool.cntUpdate' in cnti'.
+      eapply (H _ cnti' q).
+      erewrite <- ThreadPool.gsoThreadCode with (cntj' := cnti) by eauto.
+      assumption.
+      intros Hcontra.
+      eapply H1.
+      eapply @threadHalt_update with (cnt := cnti');
+        now eauto.
+  Qed.
+      
+  Lemma unique_Krun_updateC:
+    forall st tid,
+      unique_Krun st tid ->
+      forall (cnt: ThreadPool.containsThread st tid) c_new  cnt,
+        unique_Krun (ThreadPool.updThreadC(tp:=st)(tid:=tid) cnt (Krun c_new)) tid.
+  Proof.
+    intros.
+    unfold unique_Krun in *.
+    intros.
+    destruct (Nat.eq_dec j tid).
+    - subst.
+      destruct (Nat.eq_dec tid tid); subst;
+        now auto.
+    - pose proof cnti as cnti'.
+      eapply ThreadPool.cntUpdateC' in cnti'.
+      eapply (H _ cnti' q).
+      erewrite ThreadPool.gsoThreadCC with (cntj' := cnti) by eauto.
+      assumption.
+      intros Hcontra.
+      eapply H1.
+      eapply @threadHalt_updateC with (cnt := cnti');
+        now eauto.
+  Qed.
+    
+  Lemma MachStep_preserve_valid:
+    forall U tr st tr' st' m m',
+      valid (tr, st, m) U -> 
+      MachStep (U,tr,st) m (U,tr',st') m' ->
+      has_unique_running st'.
+  Proof.
+    intros.
+    inversion H0; simpl in *; subst;
+      try solve[exfalso; eapply schedPeek_Skip; eauto].
+    - (*start*) inversion Htstep; subst.
+      eapply (HasUniqueRun _ _ ltac:(eapply ThreadPool.cntUpdate)).
+      eapply ThreadPool.gssThreadCode.
+    - (*resume*) inversion Htstep; subst.
+      
+      eapply (HasUniqueRun _ _ ltac:(eapply ThreadPool.cntUpdateC)).
+      eapply ThreadPool.gssThreadCC.
+    - (*step*)
+      (*this has to be proven for threadStep...*)
+      (*but sounds like an obvious, necessary, fact*)
+      admit. (*not defined*)
+      
+  Admitted.
     
   (* *)
   Lemma ksafe_csafe_equiv':
@@ -197,6 +286,7 @@ Section Csafe_KSafe.
           -- eapply IHn.
              unfold ksafe_kstep, cstate2kstate.
              assumption.
+             unfold valid, correct_schedule.
              admit. (* step preserves valid*)
         *  (* AngelStep *) simpl_state.
          eapply AngelSafe; simpl.
@@ -247,60 +337,7 @@ Section Csafe_KSafe.
         * eapply IHn.
           simpl.
 
-          (* MachStep that doesn't change the schedule,
-             Reduces the set of valid schedules... 
-           *)
-          Inductive has_unique_runing tp:Prop :=
-          | HasUniqueRun i (cnti : ThreadPool.containsThread tp i) q:
-              ThreadPool.getThreadC cnti = Krun q->
-              has_unique_runing tp.
-          Lemma schedPeek_Skip:
-              forall U tid
-                ( HschedN : schedPeek U = Some tid)
-                ( HschedS : schedSkip U = U),
-                False.
-            Proof.
-              intros. apply schedSkip_id in HschedS; subst.
-              inversion HschedN.
-            Qed.
-            Lemma unique_Krun_update:
-              forall st tid,
-                unique_Krun st tid ->
-                forall (cnt: ThreadPool.containsThread st tid) c_new m_new cnt,
-                  unique_Krun (ThreadPool.updThread(tid:=tid)(tp:=st) cnt (Krun c_new) m_new) tid.
-            Admitted.
-            
-            Lemma unique_Krun_updateC:
-              forall st tid,
-                unique_Krun st tid ->
-                forall (cnt: ThreadPool.containsThread st tid) c_new  cnt,
-                  unique_Krun (ThreadPool.updThreadC(tp:=st)(tid:=tid) cnt (Krun c_new)) tid.
-            Admitted.
-          Lemma MachStep_preserve_valid:
-            forall U tr st tr' st' m m',
-              valid (tr, st, m) U -> 
-              MachStep (U,tr,st) m (U,tr',st') m' ->
-              has_unique_runing st'.
-          Proof.
-            intros.
-            inversion H0; simpl in *; subst;
-              try solve[exfalso; eapply schedPeek_Skip; eauto].
-            - (*start*) inversion Htstep; subst.
-
-              eapply (HasUniqueRun _ _ ltac:(eapply ThreadPool.cntUpdate)).
-              eapply ThreadPool.gssThreadCode.
-            
-            - (*resume*) inversion Htstep; subst.
-              
-              eapply (HasUniqueRun _ _ ltac:(eapply ThreadPool.cntUpdateC)).
-              eapply ThreadPool.gssThreadCC.
-              
-            - (*step*)
-              (*this has to be proven for threadStep...*)
-              (*but sounds like an obvious, necessary, fact*)
-              admit. (*not defined*)
-           
-          Admitted.
+     
           
 
           
@@ -309,7 +346,7 @@ Section Csafe_KSafe.
           Lemma csafe_unique_running:
             forall U tr tp m n tid,
               schedPeek U = Some tid ->
-              has_unique_runing tp ->
+              has_unique_running tp ->
               valid (tr, tp, m) U ->
             csafe (U, tr, tp) m n ->
             forall U', valid (tr, tp, m) U' ->
@@ -372,7 +409,7 @@ Section Csafe_KSafe.
               schedPeek U' = Some tid' ->
               valid (tr, tp, m) U ->
               valid (tr, tp, m) U' ->
-              has_unique_runing tp ->
+              has_unique_running tp ->
               tid = tid'.
           Proof.
             unfold valid, correct_schedule; simpl.

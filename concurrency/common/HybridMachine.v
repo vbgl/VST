@@ -558,7 +558,7 @@ Module DryHybridMachine.
     Definition threadHalted: forall {tid0 ms},
         containsThread ms tid0 -> Prop:= @threadHalted'.
 
-    Lemma threadHalt_update:
+    Lemma threadHalt_updateC:
       forall i j, i <> j ->
                   forall tp cnt cnti c' cnt',
                     (@threadHalted j tp cnt) <->
@@ -568,6 +568,18 @@ Module DryHybridMachine.
         econstructor; eauto.
       erewrite <- (gsoThreadCC H); exact Hcode.
       erewrite (gsoThreadCC H); exact Hcode.
+    Qed.
+
+    Lemma threadHalt_update:
+      forall i j, i <> j ->
+             forall tp cnt cnti c' res' cnt',
+               (@threadHalted j tp cnt) <->
+               (@threadHalted j (@updThread _ _ _ i tp cnti c' res') cnt') .
+    Proof.
+      intros; split; intros HH; inversion HH; subst;
+        econstructor; eauto.
+      erewrite (gsoThreadCode H); exact Hcode.
+      erewrite <- (gsoThreadCode H); exact Hcode.
     Qed.
 
     Definition initial_machine pmap c := mkPool (Krun c) (pmap, empty_map).
@@ -707,6 +719,7 @@ Module DryHybridMachine.
                              syncstep_equal_run
                              syncstep_not_running
                              (@threadHalted)
+                             threadHalt_updateC
                              threadHalt_update
                              syncstep_equal_halted
 (*                             threadStep_not_unhalts*)

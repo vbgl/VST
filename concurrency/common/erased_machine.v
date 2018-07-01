@@ -283,7 +283,7 @@ Module BareMachine.
             exact Hcode.
     Qed.
 
-     Lemma threadHalt_update:
+     Lemma threadHalt_updateC:
       forall i j, i <> j ->
                   forall tp cnt cnti c' cnt',
                     (@threadHalted j tp cnt) <->
@@ -293,6 +293,18 @@ Module BareMachine.
         econstructor; eauto.
       erewrite <- (gsoThreadCC H); exact Hcode.
       erewrite (gsoThreadCC H); exact Hcode.
+    Qed.
+
+    Lemma threadHalt_update:
+      forall i j, i <> j ->
+             forall tp cnt cnti c' res' cnt',
+               (@threadHalted j tp cnt) <->
+               (@threadHalted j (@updThread _ _ _ i tp cnti c' res') cnt') .
+    Proof.
+      intros; split; intros HH; inversion HH; subst;
+        econstructor; eauto.
+      erewrite (gsoThreadCode H). exact Hcode.
+      erewrite <- (gsoThreadCode H); exact Hcode.
     Qed.
 
     Definition init_mach (_ : option unit) (m: mem)
@@ -319,7 +331,8 @@ Module BareMachine.
                                        syncstep_equal_run
                                        syncstep_not_running
                                        (@threadHalted)
-                                       threadHalt_update
+                                       (@threadHalt_updateC)
+                                       (@threadHalt_update)
                                        syncstep_equal_halted
 (*                                       threadStep_not_unhalts*)
                                        init_mach

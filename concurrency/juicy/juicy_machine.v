@@ -1469,7 +1469,7 @@ Qed.
       containsThread ms tid0 -> Prop:= @threadHalted'.
 
 
-  Lemma threadHalt_update:
+  Lemma threadHalt_updateC:
     forall i j, i <> j ->
       forall tp cnt cnti c' cnt',
         (@threadHalted j tp cnt) <->
@@ -1480,6 +1480,18 @@ Qed.
     [ erewrite <- (gsoThreadCC H) |  erewrite (gsoThreadCC H)]; exact Hthread.
   Qed.
 
+  Lemma threadHalt_update:
+    forall i j, i <> j ->
+           forall tp cnt cnti c' res' cnt',
+             (@threadHalted j tp cnt) <->
+             (@threadHalted j (@updThread _ _ _ i tp cnti c' res') cnt') .
+  Proof.
+    intros; split; intros HH; inversion HH; subst;
+      econstructor; eauto.
+    erewrite (gsoThreadCode H); exact Hthread.
+    erewrite <- (gsoThreadCode H); exact Hthread.
+  Qed.
+  
   Lemma syncstep_equal_halted:
     forall b i tp m cnti cmpt tp' m' tr,
       @syncStep b i tp m cnti cmpt tp' m' tr ->
@@ -1957,7 +1969,7 @@ Qed.
         (fun _ _ _ compat cnt m => m = install_perm compat cnt) (fun _ _ _ => add_block)
         (@threadStep)
         threadStep_equal_run syncStep syncstep_equal_run syncstep_not_running
-        (@threadHalted) threadHalt_update syncstep_equal_halted (*threadStep_not_unhalts*)
+        (@threadHalted) threadHalt_updateC threadHalt_update syncstep_equal_halted (*threadStep_not_unhalts*)
         init_mach.
 
   End JuicyMachineShell.

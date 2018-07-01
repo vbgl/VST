@@ -228,11 +228,17 @@ Module HybridMachineSig.
             forall {tid0 ms},
               containsThread ms tid0 -> Prop
                                          
-        ;  threadHalt_update:
+        ;  threadHalt_updateC:
              forall i j, i <> j ->
                     forall tp cnt cnti c' cnt',
                       (@threadHalted j tp cnt) <->
-                      (@threadHalted j (@updThreadC _ _ _ i tp cnti c') cnt') 
+                      (@threadHalted j (@updThreadC _ _ _ i tp cnti c') cnt')
+
+        ;  threadHalt_update:
+             forall i j, i <> j ->
+                    forall tp cnt cnti c' res' cnt',
+                      (@threadHalted j tp cnt) <->
+                      (@threadHalted j (@updThread _ _ _ i tp cnti c' res') cnt') 
                         
         ;  syncstep_equal_halted:
              forall b i tp m cnti cmpt tp' m' tr,
