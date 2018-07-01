@@ -227,16 +227,16 @@ Defined.
 Next Obligation.
   intros.
   inversion STEP; subst.
-  -  eapply (ev_step_elim CSs) in H; destruct H as [HH1 HH2];
+  -  eapply (ev_step_elim CSs) in H. (*destruct H as [HH1 HH2];
        split; eauto; intros.
      apply HH2 in H.
      destruct H as [cc' HH].
-     eexists; constructor; eauto.
-  -  eapply (ev_step_elim CSt) in H; destruct H as [HH1 HH2];
+     eexists; constructor; eauto.*) trivial.
+  -  eapply (ev_step_elim CSt) in H. (*destruct H as [HH1 HH2];
        split; eauto; intros.
      apply HH2 in H.
      destruct H as [cc' HH].
-     eexists; constructor; eauto.
+     eexists; constructor; eauto.*) trivial.
 Defined.
 
 Definition CoreSem_Sum (hb:option nat) (Sems Semt: Semantics): Semantics:=
