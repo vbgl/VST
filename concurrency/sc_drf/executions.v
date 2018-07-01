@@ -1683,7 +1683,8 @@ Module Executions.
         + erewrite gsoThreadRes with (cntj := cnt) in Hperm' by eauto.
           now eauto.
       - (** internal step case *)
-        destruct (ev_step_elim  _ _ _ _ _ _ Hcorestep) as [Helim _].
+        (*destruct (ev_step_elim  _ _ _ _ _ _ Hcorestep) as [Helim _].*)
+        assert (Helim:= ev_step_elim  _ _ _ _ _ _ Hcorestep).
         destruct (tid == tidn) eqn:Heq; move/eqP:Heq=>Heq; subst.
         + pf_cleanup.
           (* NOTE: this is decidable*)
@@ -2546,7 +2547,8 @@ Module Executions.
         + erewrite gsoThreadRes with (cntj := cnt) in Hperm' by eauto.
           now eauto.
       - (** internal step case *)
-        destruct (ev_step_elim _ _ _ _ _ _ Hcorestep) as [Helim _].
+        (*destruct (ev_step_elim _ _ _ _ _ _ Hcorestep) as [Helim _].*)
+        assert (Helim:=ev_step_elim _ _ _ _ _ _ Hcorestep).
         destruct (tid == tidn) eqn:Heq; move/eqP:Heq=>Heq; subst.
         + pf_cleanup.
           exfalso.

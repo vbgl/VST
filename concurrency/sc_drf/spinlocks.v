@@ -179,7 +179,7 @@ Module SpinLocks.
         inversion Htstep; subst.
         apply app_inv_head in H5.
         apply ev_step_elim in Hcorestep.
-        destruct Hcorestep as [Helim _].
+        (*destruct Hcorestep as [Helim _].*)rename Hcorestep into Helim.
         apply list_append_map_inv in H5.
         destruct H5 as (mpre & mpost & Hpre & Hevpost & Hev0).
         destruct mpost as [|mev mpost];
@@ -556,7 +556,7 @@ Module SpinLocks.
           (** Write case*)
           intros ofs' Hintv.
           pose proof (ev_step_elim _ _ _ _ _ _ Hcorestep) as Helim.
-          destruct Helim as [Helim _].
+          (*destruct Helim as [Helim _].*)
           (** By case analysis on whether [b] was a valid block or not*)
           destruct (valid_block_dec m b).
           { (** case [b] is a valid block in [m]*)
@@ -658,7 +658,7 @@ Module SpinLocks.
         + (** Read case*)
           intros ofs' Hintv.
           pose proof (ev_step_elim _ _ _ _ _ _ Hcorestep) as Helim.
-          destruct Helim as [Helim _].
+          (*destruct Helim as [Helim _].*)
           (** By case analysis on whether [b] was a valid block or not*)
           destruct (valid_block_dec m b).
           { (** case [b] is a valid block in [m]*)
