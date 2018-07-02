@@ -413,7 +413,7 @@ Module Parching <: ErasureSig.
       apply Concur.acc_coh; assumption.
     Qed.
 
-    Lemma MTCH_halted:
+(*    Lemma MTCH_halted:
       forall ds js i
         (cnt: containsThread  js i)
         (cnt': containsThread  ds i),
@@ -428,7 +428,7 @@ Module Parching <: ErasureSig.
      (* - assumption.*)
       - inversion H; subst. erewrite <- mtch_gtc. eassumption.
       - apply Hcant.
-    Qed.
+    Qed.*)
 
     Lemma MTCH_updLockS:
              forall js ds loc jres dres1 dres2,
@@ -4892,7 +4892,7 @@ inversion MATCH; subst.
     reflexivity.
   }
 
-*  (* step_halted *)
+(* *  (* step_halted *)
   exists ds.
   split; [|split].
   { assumption. }
@@ -4904,20 +4904,20 @@ inversion MATCH; subst.
     simpl; reflexivity.
     simpl. eapply MTCH_compat; eassumption; instantiate(1:=Htid').
     eapply MTCH_halted; eassumption.
-  }
+  }*)
 
 
 *  (* schedfail *)
   { exists ds.
     split;[|split]; try eassumption.
     exists nil; rewrite <- app_nil_end.
-    econstructor 7; try eassumption; try reflexivity.
+    econstructor 6; try eassumption; try reflexivity.
     unfold not; simpl; intros.
     apply Htid. inversion MATCH; apply mtch_cnt'; assumption.
     { eapply MTCH_compat; eassumption. } }
 
   Grab Existential Variables.
-  - simpl. apply mtch_cnt. assumption.
+(*  - simpl. apply mtch_cnt. assumption.*)
   - assumption.
   - assumption.
   - assumption.

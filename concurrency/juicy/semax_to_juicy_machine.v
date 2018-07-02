@@ -85,7 +85,7 @@ Proof.
   inversion step; try solve [exfalso; eauto].
   - now eapply JuicyMachine.suspend_step; eauto.
   - now eapply JuicyMachine.sync_step; eauto.
-  - now eapply JuicyMachine.halted_step; eauto.
+(*  - now eapply JuicyMachine.halted_step; eauto.*)
   - now eapply JuicyMachine.schedfail; eauto.
 Qed.
 
@@ -139,8 +139,8 @@ Proof.
   all: try congruence.
   all: eauto.
 
-  inversion Hhalted.
-  inversion Hcant.
+(*  inversion Hhalted.
+  inversion Hcant.*)
 
   intros E.
   hnf in uniq.

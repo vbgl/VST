@@ -428,10 +428,10 @@ Proof.
     eapply sync_step; auto.
     instantiate (1 := Hcmpt').
     eapply step_acqfail; eauto.
-  - eapply AngelSafe; [|intro; eapply IHn; eauto].
+(*  - eapply AngelSafe; [|intro; eapply IHn; eauto].
     hnf; simpl.
     subst; rewrite <- H4.
-    eapply halted_step; eauto.
+    eapply halted_step; eauto.*)
   - eapply AngelSafe; [|intro; eapply IHn; eauto].
     hnf; simpl.
     subst; rewrite <- H4.
@@ -696,7 +696,7 @@ Proof.
         try (inv Htstep; rewrite gssThreadCode in Hcode0; inv Hcode0);
         try match goal with H : sch = schedSkip sch |- _ =>
         symmetry in H; apply schedSkip_id in H; subst end; try discriminate; try contradiction.
-      inv Hhalted; contradiction. }
+(*      inv Hhalted; contradiction.*) }
   - inv Htstep.
     inversion H0.
     pose proof (mtch_gtc _ ctn (mtch_cnt _ ctn)) as Hc; rewrite Hcode in Hc; inv Hc.
@@ -901,7 +901,7 @@ Proof.
       { rewrite <- H6 in Hsafe.
         intro; eapply IHn; eauto.
         eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
-  - inv Hhalted; contradiction.
+(*  - inv Hhalted; contradiction.*)
   - subst; eapply AngelSafe.
     { simpl; rewrite <- H5.
       eapply schedfail; eauto; simpl.

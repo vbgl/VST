@@ -510,7 +510,7 @@ Ltac jmstep_inv :=
   | H : JuicyMachine.threadStep _ _ _ _ _           |- _ => inversion H
   | H : JuicyMachine.suspend_thread _ _ _ |- _ => inversion H
   | H : JuicyMachine.syncStep _ _ _ _ _ _           |- _ => inversion H
-  | H : JuicyMachine.threadHalted _                   |- _ => inversion H
+(*  | H : JuicyMachine.threadHalted _                   |- _ => inversion H*)
   | H : JuicyMachine.schedfail _         |- _ => inversion H
   end; try subst.
 
@@ -1170,8 +1170,8 @@ Section Preservation.
       getThread_inv; congruence.
 *
   jmstep_inv; getThread_inv; congruence.
-*
-  jmstep_inv; getThread_inv; congruence.
+(* *
+  jmstep_inv; getThread_inv; congruence.*)
 *
   contradiction Htid.
 Qed. (* Lemma preservation_Kinit *)
@@ -1338,8 +1338,8 @@ Qed. (* Lemma preservation_Kinit *)
           all: getThread_inv.
           all: congruence.
 
-        - (* not halted *)
-          jmstep_inv. contradiction.
+(*        - (* not halted *)
+          jmstep_inv. contradiction.*)
       }
       (* end of internal step *)
 
@@ -1472,8 +1472,8 @@ Qed. (* Lemma preservation_Kinit *)
           all: getThread_inv.
           all: congruence.
 
-        - (* not halted *)
-          jmstep_inv. contradiction.
+(*        - (* not halted *)
+          jmstep_inv. contradiction.*)
       } (* end of Krun (at_ex c) -> Kblocked c *)
     } (* end of Krun *)
 
