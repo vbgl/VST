@@ -1335,6 +1335,8 @@ Proof.
   (* set (func' := func) at 1; destruct func' eqn:Ef. *)
   econstructor.
   repeat split; eauto.
+  { do 2 eexists; eauto; simpl.
+    repeat split; auto; constructor. }
   intros n z.
   exists (initial_jm_ext z _ _ _ n H1 H0 H2).
   repeat split.
@@ -1544,6 +1546,8 @@ Proof.
   (* set (func' := func) at 1; destruct func' eqn:Ef. *)
   econstructor.
   repeat split; eauto.
+  { do 2 eexists; eauto; simpl.
+    repeat split; auto; constructor. }
   intro n.
   exists (initial_jm _ _ _ n H1 H0 H2).
   repeat split.
@@ -1782,7 +1786,8 @@ Lemma semax_prog_entry_point {CS: compspecs} V G prog b id_fun id_arg arg A P Q 
           (PTree.set id_arg arg (PTree.empty val))) in
 
   { q : corestate |
-    (forall jm, exists jm', core_semantics.initial_core
+    (forall jm, Val.inject (Mem.flat_inj (nextblock (m_dry jm))) arg arg ->
+      exists jm', core_semantics.initial_core
       (juicy_core_sem (cl_core_sem (globalenv prog))) h
       jm q jm' (Vptr b Ptrofs.zero) (arg :: nil)) /\
 
@@ -1822,6 +1827,8 @@ Proof.
     assert (b' = b) by congruence. subst b'. congruence.
   }
   eexists. split; simpl; eauto.
+  { do 2 eexists; eauto; simpl.
+    repeat split; auto; repeat constructor; auto. }
 
   intros jm ts a m_sat_Pa m_funassert.
 

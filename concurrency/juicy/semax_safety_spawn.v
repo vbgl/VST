@@ -353,6 +353,20 @@ clear - Initcore.
   }
   subst phi1'.
 
+  assert (val_inject (Mem.flat_inj (Mem.nextblock m)) b b) as Hinj.
+  { destruct fPRE as [Hvalid _].
+    destruct b; try constructor; simpl in Hvalid.
+    destruct (compatible_threadRes_cohere cnti (mem_compatible_forget compat)).
+    destruct (plt b (Mem.nextblock m)).
+    econstructor; [|symmetry; apply Ptrofs.add_zero].
+    unfold Mem.flat_inj; rewrite if_true; auto.
+    { specialize (all_coh0 (b, Ptrofs.unsigned i0)); spec all_coh0; auto.
+      rewrite m_phi_jm_ in jphi.
+      apply (resource_at_join _ _ _ (b, Ptrofs.unsigned i0)) in jphi.
+      rewrite all_coh0 in jphi.
+      rewrite Z.add_0_r in Hvalid; destruct (phi0 @ _) eqn: Hb; inv jphi.
+      apply join_to_bot_l in RJ; subst.
+      contradiction Hvalid; apply bot_identity. } }
   eexists.
   split.
   {
@@ -429,9 +443,10 @@ clear - Initcore.
       subst j.
       REWR.
       rewrite gssAddCode. 2:reflexivity.
+      split; auto.
       exists q_new.
       split.
-      destruct (Initcore (jm_ cnti compat)) as [? H]; apply H.
+      destruct (Initcore (jm_ cnti compat)) as [? [? [? ?]]]; auto.
 
       intros jm. REWR. rewrite gssAddRes. 2:reflexivity.
       specialize (Safety jm ts).
@@ -495,7 +510,7 @@ clear - Initcore.
         unfold canon.SEPx in *.
         simpl.
         rewrite seplog.sepcon_emp.
-        assumption.
+        destruct fPRE; assumption.
 
       * (* funnassert *)
         rewrite Ejm.
@@ -551,7 +566,9 @@ clear - Initcore.
       -- intros c' Ec'; specialize (safety c' Ec').
          apply jsafe_phi_bupd_age_to; auto. apply jsafe_phi_bupd_downward.
          unshelve erewrite gsoAddRes; auto. REWR.
-      -- destruct safety as (c_new & Einit & safety). exists c_new; split; auto.
+      -- destruct safety as (? & c_new & Einit & safety).
+         split; auto.
+         exists c_new; split; auto.
          unshelve erewrite gsoAddRes; auto. REWR.
          apply jsafe_phi_age_to; auto. apply jsafe_phi_downward, safety.
 

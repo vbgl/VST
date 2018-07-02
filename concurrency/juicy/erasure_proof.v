@@ -3542,6 +3542,7 @@ Module Parching <: ErasureSig.
         - inversion MATCH. erewrite <- mtch_gtc; eassumption.
         - reflexivity.
         - eassumption.
+        - eassumption.
         - move => b0 ofs0.
           rewrite virtue_spec11.
           rewrite virtue_spec21.
@@ -4698,7 +4699,7 @@ Here be dragons
         exists ds'.
         assert (DryHybridMachine.invariant ds').
         { eapply step_decay_invariant with (Hcompatible := MTCH_compat _ _ _ MATCH Hcmpt); auto.
-          destruct Hinitial; subst.
+          destruct Hinitial as (? & Harg & ?); subst.
           destruct (Mem.alloc _ _ _) eqn: Halloc.
           pose proof alloc_access_other _ _ _ _ _ Halloc as Haccess.
           unfold access_at in Haccess; simpl in Haccess.
@@ -4729,7 +4730,7 @@ Here be dragons
               inversion MATCH.
               symmetry; apply mtch_perm1. }
         split; auto; split.
-        - hnf in Hperm; destruct Hinitial; subst; auto.
+        - hnf in Hperm; destruct Hinitial as (? & ? & ?); subst; auto.
         - exists nil; rewrite <- app_nil_end.
           eapply (HybridMachineSig.start_step tid) with (Htid0 := @MTCH_cnt js tid ds MATCH Htid).
           + assumption.
@@ -4738,7 +4739,8 @@ Here be dragons
               - eapply MTCH_getThreadC. eassumption. eassumption.
               - reflexivity.
               - simpl in *.
-                destruct Hinitial; split; eauto.
+                destruct Hinitial as (? & ? & ?); split; eauto.
+                split; auto.
                 replace Htid with ctn by apply proof_irr.
                 remember (Concur.install_perm _ _) as m1.
                 apply mtch_install_perm with (ds := ds)(MATCH := MATCH) in Heqm1; hnf in Heqm1.
