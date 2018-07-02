@@ -223,36 +223,6 @@ Module HybridMachineSig.
              forall b i tp m cnt cmpt tp' m' tr,
                @syncStep b i tp m cnt cmpt tp' m' tr ->
                forall cntj q, ~ @getThreadC _ _ _ i tp cntj = Krun q
-                                                            
-        ; threadHalted:
-            forall {tid0 ms},
-              containsThread ms tid0 -> Prop
-                                         
-        ;  threadHalt_updateC:
-             forall i j, i <> j ->
-                    forall tp cnt cnti c' cnt',
-                      (@threadHalted j tp cnt) <->
-                      (@threadHalted j (@updThreadC _ _ _ i tp cnti c') cnt')
-
-        ;  threadHalt_update:
-             forall i j, i <> j ->
-                    forall tp cnt cnti c' res' cnt',
-                      (@threadHalted j tp cnt) <->
-                      (@threadHalted j (@updThread _ _ _ i tp cnti c' res') cnt') 
-                        
-        ;  syncstep_equal_halted:
-             forall b i tp m cnti cmpt tp' m' tr,
-               @syncStep b i tp m cnti cmpt tp' m' tr ->
-               forall j cnt cnt',
-                 (@threadHalted j tp cnt) <->
-                 (@threadHalted j tp' cnt')
-
-(*        ;  threadStep_not_unhalts:
-             forall g i tp m cnt cmpt tp' m' tr,
-               @threadStep g i tp m cnt cmpt tp' m' tr ->
-               forall j cnt cnt',
-                 (@threadHalted j tp cnt) ->
-                 (@threadHalted j tp' cnt') *)
 
         ; init_mach : option res -> mem -> thread_pool -> mem -> val -> list val -> Prop}.
 
@@ -367,15 +337,6 @@ Module HybridMachineSig.
           (Hcmpt: mem_compatible ms m)
           (Htstep: syncStep isCoarse Htid Hcmpt ms' m' ev),
           machine_step U tr ms m U' (tr ++ [:: external tid ev]) ms' m'
-    | halted_step:
-        forall tid U U' ms m tr
-          (HschedN: schedPeek U = Some tid)
-          (HschedS: schedSkip U = U')        (*Schedule Forward*)
-          (Htid: containsThread ms tid)
-          (Hcmpt: mem_compatible ms m)
-          (Hinv: invariant ms)
-          (Hhalted: threadHalted Htid),
-          machine_step U tr ms m U' tr ms m
     | schedfail :
         forall tid U U' ms m tr
           (HschedN: schedPeek U = Some tid)
@@ -444,7 +405,6 @@ Module HybridMachineSig.
     Definition unique_Krun tp i :=
       forall j cnti q, 
         @getThreadC _ _ _ j tp cnti = Krun q ->
-        ~ @threadHalted _ j tp cnti  ->
         eq_nat_dec i j.
 
     Lemma hybrid_initial_schedule: forall m m' main vals U p st n,
@@ -496,15 +456,6 @@ Module HybridMachineSig.
             (Hcmpt: mem_compatible ms m)
             (Htstep: syncStep isCoarse Htid Hcmpt ms' m' ev),
             external_step U tr ms m  U' (tr ++ [:: external tid ev]) ms' m'
-      | halted_step':
-          forall tid U U' ms m tr
-            (HschedN: schedPeek U = Some tid)
-            (HschedS: schedSkip U = U')        (*Schedule Forward*)
-            (Htid: containsThread ms tid)
-            (Hcmpt: mem_compatible ms m)
-            (Hinv: invariant ms)
-            (Hhalted: threadHalted Htid),
-            external_step U tr ms m  U' tr ms m
       | schedfail':
           forall tid U U' ms m tr
             (HschedN: schedPeek U = Some tid)
@@ -545,8 +496,7 @@ Module HybridMachineSig.
                  solve[econstructor 2 ; eauto]|
                  solve[econstructor 4 ; eauto]|
                  solve[econstructor 5 ; eauto]|
-                 solve[econstructor 6 ; eauto]|
-                 solve[econstructor 7 ; eauto]].
+                 solve[econstructor 6 ; eauto]].
       Qed.
 
       Set Printing Implicit.
@@ -709,10 +659,6 @@ Module HybridMachineSig.
         - subst.
           eapply AngelSafe; [|intro; eapply IHn0; eauto].
           erewrite cats0.
-          eapply halted_step; eauto.
-        - subst.
-          eapply AngelSafe; [|intro; eapply IHn0; eauto].
-          erewrite cats0.
           eapply schedfail; eauto.
       Qed.
 
@@ -758,8 +704,6 @@ Module HybridMachineSig.
           + setoid_rewrite List.app_nil_r.
             eapply suspend_step; eauto.
           + eapply sync_step; eauto.
-          + setoid_rewrite List.app_nil_r.
-            eapply halted_step; eauto.
           + setoid_rewrite List.app_nil_r.
             eapply schedfail; eauto.
       Qed.

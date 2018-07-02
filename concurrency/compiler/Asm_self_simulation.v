@@ -2,8 +2,13 @@ Require Import compcert.x86.Asm.
 
 Require Import VST.concurrency.compiler.self_simulation.
 
-Definition Asm_self_simulation tp:
-  self_simulation (Asm.semantics tp) _ State.
-(*ia32.Asm.get_mem*)
-Admitted.
+Require Import VST.concurrency.common.Asm_core.
 
+Section AsmSelfSim.
+
+  Context (ge:genv).
+  Lemma Asm_self_simulation:
+    self_simulation _ (Asm_core_sem ge).
+  Admitted.
+
+End AsmSelfSim.
