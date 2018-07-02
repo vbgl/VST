@@ -15,6 +15,7 @@ Require Import VST.concurrency.common.permissions.
 Require Import VST.concurrency.common.HybridMachineSig.
 Require Import VST.concurrency.common.ClightSemantincsForMachines.
 Require Import VST.concurrency.common.ClightMachine.
+Require Import VST.concurrency.common.dry_machine_lemmas.
 Require Import VST.concurrency.juicy.semax_to_juicy_machine.
 Require Import VST.veric.Clight_sim.
 Require Import VST.msl.eq_dec.
@@ -476,6 +477,10 @@ Proof.
   destruct 1; constructor; auto.
 Qed.
 
+Instance ClightAxioms : @CoreLanguage.SemAxioms (ClightSem ge).
+Proof.
+Admitted.
+
 Lemma CoreSafe_star: forall n U tr tp m tid (c : @semC (ClightSem ge)) c' tp' m' ev
   (HschedN: schedPeek U = Some tid)
   (Htid: containsThread tp tid)
@@ -512,13 +517,19 @@ Proof.
       econstructor; try apply H; eauto.
       apply restr_Cur; auto.
     + rewrite gssThreadRes; auto.
-    + admit. (* need to know that step preserved mem_compatible *)
-    + admit. (* ditto invariant *)
+    + erewrite <- (restr_Cur _ m1) in H by eauto.
+      eapply CoreLanguageDry.corestep_compatible, H; auto.
+    + apply ev_step_ax1 in H.
+      erewrite <- (restr_Cur _ m1) in H by eauto.
+      eapply CoreLanguageDry.corestep_invariant.
+      3: apply H.
+      all: auto.
     + apply gssThreadCode.
     + rewrite updThread_twice, gssThreadRes; auto.
   Unshelve.
   apply cntUpdate; auto.
-Admitted.
+  all: auto.
+Qed.
 
 Lemma CoreSafe_plus : forall n U tr tp m tid (c : @semC (ClightSem ge)) c' tp' m' ev m1
   (HschedN: schedPeek U = Some tid)
@@ -549,13 +560,18 @@ Proof.
     simpl; eauto.
   - auto.
   - rewrite gssThreadRes; auto.
-  - admit.
-  - admit.
+  - eapply CoreLanguageDry.corestep_compatible, H; auto.
+  - apply ev_step_ax1 in H.
+    eapply CoreLanguageDry.corestep_invariant.
+    3: apply H.
+    all: auto.
+    apply restrPermMap_irr; auto.
   - apply gssThreadCode.
   - rewrite updThread_twice, gssThreadRes; auto.
   Unshelve.
   apply cntUpdate; auto.
-Admitted.
+  auto.
+Qed.
 
 Opaque updThread updThreadC containsThread getThreadC getThreadR lockRes.
 
