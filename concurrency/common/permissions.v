@@ -637,6 +637,7 @@ Qed.
       joins r1 r2 ->
       permDisjoint (perm_of_res r1) (perm_of_res r2).
   Proof.
+(*
     intros.
     destruct H as [X H]; inversion H; simpl;
       try permDisj_solve.
@@ -724,7 +725,8 @@ Qed.
           try permDisj_solve.
 
       Restart.
-      
+      *)
+
       intros.
       
        Ltac join_sh_contradiction:=
