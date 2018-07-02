@@ -291,7 +291,6 @@ Module SimDefs.
   Notation "cnt '$' m '@'  'I'" := (getStepType cnt m Internal) (at level 80).
   Notation "cnt '$' m '@'  'E'" := (getStepType cnt m Concurrent) (at level 80).
   Notation "cnt '$' m '@'  'S'" := (getStepType cnt m Suspend) (at level 80).
-  Notation "cnt '$' m '@'  'H'" := (getStepType cnt m Halted) (at level 80).
 
   (** *** Simulations Diagrams *)
 
@@ -335,17 +334,6 @@ Module SimDefs.
       sim tpc' (trc ++ trc') mc' tpf' trf mf' [seq x <- xs | x != i] f' fg fp'
           (S fuelF).
 
-  Definition sim_halted_def :=
-    forall tpc trc tpf trf (mc mf : Mem.mem) fuelF
-      (xs : Sch) (f fg : memren) (fp : fpool tpc) (i : NatTID.tid)
-      (pff: containsThread tpf i)
-      (Hsim: sim tpc trc mc tpf trf mf xs f fg fp (S (S fuelF))),
-      let mrestr := restrPermMap (((compat_th _ _ (mem_compf Hsim)) pff).1) in
-      forall (Hhalt: pff$mrestr @ H),
-      exists tr',
-        (forall U, fmachine_step (i :: U, trf, tpf) mf (U, tr', tpf) mf) /\
-        sim tpc trc mc tpf trf mf xs f fg fp (S fuelF).
-
   Definition sim_fail_def :=
     forall tpc trc tpf trf (mc mf : Mem.mem) fuelF
       (xs : Sch) (f fg : memren) (fp : fpool tpc) (i : NatTID.tid)
@@ -384,7 +372,6 @@ Module SimProofs.
     Import event_semantics Events.
 
   Notation csafe := (HybridCoarseMachine.csafe).
-  Notation sim_halted_def := (@sim_halted_def _ _ initU).
   Notation sim_fail_def := (@sim_fail_def _ _ initU).
   Notation threadStep := (HybridMachineSig.threadStep).
   Notation cmachine_step := ((corestep (AsmContext.coarse_semantics initU))).
@@ -392,7 +379,6 @@ Module SimProofs.
   Notation "cnt '$' m '@'  'I'" := (getStepType cnt m Internal) (at level 80).
   Notation "cnt '$' m '@'  'E'" := (getStepType cnt m Concurrent) (at level 80).
   Notation "cnt '$' m '@'  'S'" := (getStepType cnt m Suspend) (at level 80).
-  Notation "cnt '$' m '@'  'H'" := (getStepType cnt m Halted) (at level 80).
 
   Notation internal_step := (internal_step).
   Notation internal_execution := (internal_execution).
@@ -810,10 +796,10 @@ Module SimProofs.
         now tauto.
     - destruct (at_external semSem s0 m') as [[? ?]|]; [tauto|].
         assert (Hhalted := core_inj_halted _ _ _ Hinj); auto.
-        split; intros [[[? ?] ?] |[? ?]]; subst;
-          try (left; split;
+        split; intros [? ?]; subst;
+          try (split;
                eexists; eapply Hhalted; now eauto);
-        try (right; split; [reflexivity|
+        try (split; [reflexivity|
                             intros i Hcontra; destruct (Hhalted i);
                             eapply H0; now eauto]).
   Qed.
@@ -847,29 +833,6 @@ Module SimProofs.
     ssromega.
   Qed.
 
-  
-  (** Proof of simulation of trivial halted step*)
-
-  Lemma sim_halted: sim_halted_def.
-  Proof.
-    unfold sim_halted_def.
-    intros.
-    pose proof (mem_compf Hsim) as Hcompf.
-    pose proof (invF Hsim) as HinvF.
-    unfold getStepType in Hhalt.
-    destruct (getThreadC pff) eqn:Hget; simpl in *;
-    try discriminate.
-    destruct (at_external semSem s (restrPermMap (proj1 ((mem_compf Hsim) i pff)))) eqn:Hext;
-      rewrite Hext in Hhalt; try discriminate.
-    destruct Hhalt as [[[? ?] _]|[Hcontra _]]; try discriminate.
-    exists trf.
-    split.
-    intros.
-    econstructor 6; simpl; eauto.
-    econstructor; eauto.
-    eapply sim_reduce;
-      now eauto.
-  Qed.
 
   Lemma sim_fail: sim_fail_def.
   Proof.
@@ -877,7 +840,7 @@ Module SimProofs.
     intros.
     exists trf.
     split.
-    intros. econstructor 7; simpl; eauto.
+    intros. econstructor 6; simpl; eauto.
     eapply (invF Hsim); eauto.
     eapply (mem_compf Hsim); eauto.
     eapply sim_reduce; eauto.
@@ -938,9 +901,6 @@ Module SimProofs.
                    destruct (at_external A B C) eqn:Hext
                  end);
             try discriminate.
-          destruct Hstep_internal as [[_ ?]|[? ?]]; [discriminate|].
-          eapply H0;
-            now eauto.
         }
         destruct Hstep_internal' as [Hstep_internal' Heq]; subst.
         destruct (internal_step_det Hstep_internal Hstep_internal'); subst;
@@ -976,9 +936,6 @@ Module SimProofs.
                                destruct (at_external A B C) eqn:Hext
                              end);
                         try discriminate.
-          destruct Hstep_internal as [[_ ?]|[? ?]]; [discriminate|].
-          eapply H0;
-            now eauto.
         }
         destruct Hstep_internal' as [Hstep_internal' Heq]; subst.
         destruct (internal_step_det Hstep_internal Hstep_internal'); subst;
@@ -1015,9 +972,6 @@ Module SimProofs.
                                destruct (at_external A B C) eqn:Hext
                              end);
                         try discriminate.
-          destruct Hstep_internal as [[_ ?]|[? ?]]; [discriminate|].
-          eapply H0;
-            now eauto.
         }
         destruct Hstep_internal' as [Hstep_internal' Heq]; subst.
         destruct (internal_step_det Hstep_internal Hstep_internal'); subst;
@@ -1097,8 +1051,6 @@ Module SimProofs.
              rewrite H in Hint; simpl in Hint
            | [H1: match ?Expr with _ => _ end = _,
                   H2: ?Expr = _ |- _] => rewrite H2 in H1
-           | [H: DryHybridMachine.threadHalted _ |- _] =>
-             inversion H; clear H; subst; simpl in *; Tactics.pf_cleanup;  simpl in *
            (*     | [H1: is_true (isSome (halted ?Sem ?C)),
                   H2: match at_external _ _ _ with _ => _ end = _ |- _] =>
              destruct (at_external_halted_excl Sem C) as [Hext | Hcontra];
@@ -1131,11 +1083,6 @@ Module SimProofs.
       subst mrestr.
       rewrite Hat_external in Hinternal.
       discriminate.
-    - destruct (at_external semSem c mrestr); [discriminate|].
-      destruct Hinternal as [[? ?]| [? Hcontra]]; [discriminate|].
-      exfalso.
-      eapply Hcontra;
-        now eauto.
   Qed.
 
   (** Starting from a well-defined state, an internal execution
@@ -2085,12 +2032,10 @@ Module SimProofs.
   Proof.
     intros. destruct n; simpl in HstepN. inversion HstepN; subst.
     inversion Hstep; subst; try inversion Htstep; auto.
-    inversion Hhalted; simpl in *; subst; auto.
     simpl in *; subst; auto.
     destruct HstepN as [tpc''' [mc''' [Hstep0 _]]].
     clear Hstep.
     inversion Hstep0; subst; try inversion Htstep; auto.
-    inversion Hhalted; simpl in *; subst; auto.
     simpl in *; subst; auto.
   Qed.
 
@@ -2225,15 +2170,6 @@ Module SimProofs.
       rewrite Hcode in Hinternal;
       simpl in Hinternal;
         by discriminate.
-      inversion Hhalted; subst.
-      Tactics.pf_cleanup.
-      rewrite Hcode in Hinternal. simpl in Hinternal.
-      destruct (at_external semSem c mrestr); [discriminate|].
-      destruct Hinternal as [[_ Hcontra] | [_ Hcontra]];
-        [discriminate|].
-      exfalso.
-      eapply Hcontra;
-        now eauto.
       exfalso;
         now eauto.
   Qed.
@@ -2669,14 +2605,6 @@ Module SimProofs.
         erewrite OrdinalPool.gssThreadRes.
         rewrite getCurPerm_correct;
           by auto.
-        (* halted step case *)
-        destruct (at_external semSem c (restrPermMap (proj1 (compat_th _ _ (mem_compf Hsim) pff)))) eqn:Hext;
-          rewrite Hext in Hinternal; [discriminate|].
-        destruct Hinternal as [[? Hcontra] | [_ Hcontra]];
-          try discriminate.
-        exfalso.
-        eapply Hcontra;
-          now eauto.
         }
         (** case k is another thread*)
         replace (OrdinalPool.getThreadR pffk') with (getThreadR pffk') by reflexivity.
@@ -2830,7 +2758,7 @@ Module SimProofs.
     apply ev_step_ax1 in Hcorestep.
     eapply corestep_not_at_external in Hcorestep.
     rewrite Hcorestep in Hsuspend.
-    destruct Hsuspend as [[_ ?]|[? _]]; discriminate.
+    destruct Hsuspend as [? _]; discriminate.
     inversion Hperm; subst.
     repeat (split; eauto).
   Qed.
@@ -3934,7 +3862,7 @@ Module SimProofs.
       apply ev_step_ax1 in Hcorestep.
       apply corestep_not_at_external in Hcorestep.
       rewrite Hcorestep in Hpop.
-      destruct Hpop as [[[? ?]|[? ?]]|[[? ?] | [? ?]]];
+      destruct Hpop as [[? ?]|[? ?]];
         discriminate.
     - subst.
       exists tp', tr0, m'; split; eauto.
@@ -5889,8 +5817,6 @@ into mcj' with an extension of the id injection (fij). *)
                      rewrite H in Hext; simpl in Hext
                  | [H: DryHybridMachine.install_perm _ _ _ _ _ _ |- _] =>
                    inversion H; subst
-                 | [H: DryHybridMachine.threadHalted _ |- _] =>
-                   inversion H; clear H; subst; Tactics.pf_cleanup
                  | [H: ev_step _ _ _ _ _ _ |- _] =>
                    eapply ev_step_ax1 in H;
                      eapply corestep_not_at_external in Hcorestep;
@@ -5903,7 +5829,7 @@ into mcj' with an extension of the id injection (fij). *)
             try (now (split; eexists; split; eauto)).
     destruct (at_external semSem c (restrPermMap (proj1 (compat_th _ _ Hcomp cnti))));
       [discriminate|].
-    destruct Hexternal as [[? ?] | [? ?]]; discriminate.
+    destruct Hexternal as [? ?]; discriminate.
   Qed.
     
 

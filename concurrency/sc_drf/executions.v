@@ -393,7 +393,6 @@ Module Executions.
       - exists [::]; erewrite cats0; econstructor 4; simpl; eauto.
       - exists [:: Events.external tid ev]; econstructor 5; simpl; eauto.
       - exists [::]; erewrite cats0; econstructor 6; simpl; eauto.
-      - exists [::]; erewrite cats0; econstructor 7; simpl; eauto.
     Qed.
 
     Lemma  multi_step_contra:
@@ -1146,7 +1145,6 @@ Module Executions.
             erewrite gsolockResRemLock;
               now auto.
       - split; assumption.
-      - subst tp'; auto.
       - subst tp'; auto.
     Qed.
 
@@ -4169,7 +4167,6 @@ Module Executions.
         now auto.      
       destruct (sync_step_det Htstep Htstep0) as [? [? ?]]; subst;
         now auto.
-      now auto.
       now auto.      
     Qed.
 

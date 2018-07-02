@@ -446,7 +446,6 @@ Module FineConcSafe.
         forall tp m i (cnti: containsThread tp i),
           getStepType cnti m Concurrent \/
           getStepType cnti m Internal \/
-          getStepType cnti m Halted \/
           getStepType cnti m Suspend.
       Proof.
         intros.
@@ -454,7 +453,7 @@ Module FineConcSafe.
         destruct (getThreadC cnti); try auto.
         destruct (at_external semSem s m) eqn:?; try auto.
         destruct (em (exists i0, halted semSem s i0)) as [Hhalted | Hnothalted].
-        right; right; left; now eauto.
+        right; right; now eauto.
         right; left; right; now eauto.
       Qed.
       
