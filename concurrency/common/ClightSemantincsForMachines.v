@@ -659,6 +659,7 @@ destruct (semantics_lemmas.alloc_access_inv _ _ _ _ _ H _ _ _ _ H2).
 destruct H3; congruence.
 destruct H3; auto.
 apply (semantics_lemmas.alloc_access_inv_None _ _ _ _ _ H _ _ _ H2).
+Opaque Mem.alloc.
 Qed.
 
 Lemma free_decay: forall m b lo hi m', Mem.free m b lo hi = Some m' -> decay m m'.

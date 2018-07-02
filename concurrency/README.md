@@ -1,7 +1,9 @@
 The paper "Compiler Correctness for Concurrency" (July 11, 2018)
 describes the Coq proofs in this directory (and subdirectories).
 
-It builds in Coq 8.8.0, by "make -kj7 concurrency" from the root directory.
+It builds in Coq 8.8.0, by "make -kj7 concurrency" from the VST root directory
+  (you will need the latest ssreflect installed, that is,
+   version 1.7.0 of the Mathematical Components library).
 
 ---------------------------------------
 The main theorem is in concurrency/main.v:
@@ -133,17 +135,10 @@ which mentions the following axioms, categorized into
     [R] Rdefinitions.R1
     [R} Rdefinitions.R0
     [R] Rdefinitions.R
-    [H] MemObsEq.EM : ClassicalFacts.excluded_middle (Nick)
     [H] ConcurCC_safe.ConcurCC_correct.ConcurrentCompilerCorrectness  (Santiago)
     [D] CC_correct.CompCert_compiler : program -> option Asm.program
     [H] Clight_safety.Clight_new_Clight_safety_gen  (William)
     [H] ConcurCC_safe.Clight_finite_branching  (Santiago)
-    [H] ClightSemantincsForMachines.CLN_step_decay (Andrew)
-    [H] ClightSemantincsForMachines.CLN_evsem_obligation_5 (Lennart)
-    [H] ClightSemantincsForMachines.CLN_evsem_obligation_4 (Lennart)
-    [H] ClightSemantincsForMachines.CLN_evsem_obligation_3 (Lennart)
-    [H] ClightSemantincsForMachines.CLN_evsem_obligation_2 (Lennart)
-    [H] ClightSemantincsForMachines.CLN_evsem_obligation_1 (Lennart)
     [H] ClightSemantincsForMachines.CLC_evsem_obligation_5 (Lennart)
     [H] ClightSemantincsForMachines.CLC_evsem_obligation_4 (Lennart)
     [H] ClightSemantincsForMachines.CLC_evsem_obligation_3 (Lennart)

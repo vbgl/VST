@@ -2826,7 +2826,6 @@ Module MemObsEq.
         congruence.
   Qed.
 
-  Axiom EM: ClassicalFacts.excluded_middle.
   Lemma pigeon_positive:
     forall (n m: positive) (f: positive -> option positive),
       (forall i, (i < n)%positive ->
@@ -2849,7 +2848,7 @@ Module MemObsEq.
         now eauto.
     - clear IHm.
       assert (Hmapped: (exists i, f i = Some m) \/ ~ (exists i, f i = Some m))
-        by (apply EM).
+        by (apply Classical_Prop.classic).
       destruct Hmapped as [Hmapped | Hunmapped].
       + destruct Hmapped as [i Hf].
         pose (g x := if Pos.eq_dec x i then Some last else if Pos.eq_dec x n then Some m else f x).
