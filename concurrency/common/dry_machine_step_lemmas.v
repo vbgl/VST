@@ -2053,10 +2053,7 @@ Module StepType.
     apply ev_step_ax1 in Hcorestep.
     assert (H1:= corestep_not_at_external semSem _ _ _ _ Hcorestep).
     rewrite H1.
-    split; [reflexivity |].
-    intros i0 Hcontra.
-    eapply corestep_not_halted in Hcorestep;
-      now eauto.
+    reflexivity.
     inversion Hresume; subst.
     Tactics.pf_cleanup;
       by rewrite Hcode.

@@ -795,13 +795,7 @@ Module SimProofs.
     - destruct (at_external semSem s0 m') as [[? ?]|];
         now tauto.
     - destruct (at_external semSem s0 m') as [[? ?]|]; [tauto|].
-        assert (Hhalted := core_inj_halted _ _ _ Hinj); auto.
-        split; intros [? ?]; subst;
-          try (split;
-               eexists; eapply Hhalted; now eauto);
-        try (split; [reflexivity|
-                            intros i Hcontra; destruct (Hhalted i);
-                            eapply H0; now eauto]).
+      split; auto.
   Qed.
 
   Lemma stepType_inj:
@@ -2758,7 +2752,7 @@ Module SimProofs.
     apply ev_step_ax1 in Hcorestep.
     eapply corestep_not_at_external in Hcorestep.
     rewrite Hcorestep in Hsuspend.
-    destruct Hsuspend as [? _]; discriminate.
+    discriminate.
     inversion Hperm; subst.
     repeat (split; eauto).
   Qed.
@@ -3862,7 +3856,7 @@ Module SimProofs.
       apply ev_step_ax1 in Hcorestep.
       apply corestep_not_at_external in Hcorestep.
       rewrite Hcorestep in Hpop.
-      destruct Hpop as [[? ?]|[? ?]];
+      destruct Hpop as [?|?];
         discriminate.
     - subst.
       exists tp', tr0, m'; split; eauto.
@@ -5829,7 +5823,7 @@ into mcj' with an extension of the id injection (fij). *)
             try (now (split; eexists; split; eauto)).
     destruct (at_external semSem c (restrPermMap (proj1 (compat_th _ _ Hcomp cnti))));
       [discriminate|].
-    destruct Hexternal as [? ?]; discriminate.
+    discriminate.
   Qed.
     
 

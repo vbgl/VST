@@ -452,10 +452,7 @@ Module FineConcSafe.
         unfold getStepType, ctlType.
         destruct (getThreadC cnti); try auto.
         destruct (at_external semSem s m) eqn:?; try auto.
-        destruct (em (exists i0, halted semSem s i0)) as [Hhalted | Hnothalted].
-        right; right; now eauto.
-        right; left; right; now eauto.
-      Qed.
+       Qed.
       
       (** Simulation between the two machines implies safety*)
       Lemma fine_safe_sched:
@@ -479,7 +476,7 @@ Module FineConcSafe.
         - (** By case analysis on the step type *)
           pose proof (getStepType_cases (restrPermMap (compat_th _ _ (SimDefs.mem_compf Hsim) cnti).1)
                                         cnti) as Htype.
-          destruct Htype as [Htype | [Htype | [Htype | Htype]]].
+          destruct Htype as [Htype | [Htype | Htype]].
           + assert (~ List.In i xs)
               by (eapply at_external_not_in_xs; eauto).
             pose proof (@SimProofs.sim_external _ _ _ sched em _ _ _ _ _ _ _ _ _ _ _ _ cnti H Hsim Htype) as Hsim'.
@@ -497,14 +494,6 @@ Module FineConcSafe.
             unfold corestep in Hstep.
             simpl in Hstep.
             econstructor 3; simpl; eauto.
-          + pose proof (@SimProofs.sim_halted _ _ sched _ _ _ _ _  _ _ _  _ _  _  _ cnti Hsim Htype) as Hsim'.
-            destruct Hsim' as (tr' & Hstep & Hsim'').
-            specialize (IHsched _ _ _ _ _ _ _ _ _ Hsim'').
-            specialize (Hstep sched).
-            unfold corestep in Hstep.
-            simpl in Hstep.
-            econstructor 3;
-              eauto.
           + pose proof (@SimProofs.sim_suspend _ _ _ sched em _ _ _ _ _ _ _  _ _ _ _ _ cnti Hsim Htype) as
                 (tpc' & trc' & mc' & tpf' & mf' & f' & fp' & tr' & Hstep & Hsim').
             specialize (IHsched _ _ _ _ _ _ _ _ _ Hsim').
