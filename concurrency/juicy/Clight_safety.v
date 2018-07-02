@@ -428,10 +428,10 @@ Proof.
     eapply sync_step; auto.
     instantiate (1 := Hcmpt').
     eapply step_acqfail; eauto.
-  - eapply AngelSafe; [|intro; eapply IHn; eauto].
+(*  - eapply AngelSafe; [|intro; eapply IHn; eauto].
     hnf; simpl.
     subst; rewrite <- H4.
-    eapply halted_step; eauto.
+    eapply halted_step; eauto.*)
   - eapply AngelSafe; [|intro; eapply IHn; eauto].
     hnf; simpl.
     subst; rewrite <- H4.
@@ -582,7 +582,7 @@ Axiom wrapper_args: forall l, In l (AST.regs_of_rpairs (Clight.loc_arguments' (m
         match l with Locations.R _ => True | Locations.S _ _ _ => False end.
 
 Lemma Clight_new_Clight_safety_gen:
-  forall n sch tr tp m tp' (Hglobals : Smallstep.globals_not_fresh (Clight.genv_genv ge) m),
+  forall n sch tr tp m tp',
   csafe
     (Sem := Clight_newSem ge)
     (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig)
@@ -602,7 +602,7 @@ Proof.
   - inv Htstep.
     inversion H0.
     pose proof (mtch_gtc _ ctn (mtch_cnt _ ctn)) as Hc; rewrite Hcode in Hc; inv Hc.
-    destruct Hinitial as [Hinit ?]; subst.
+    destruct Hinitial as (Hinit & Harg & ?); subst.
     unfold Clight_new.cl_initial_core in Hinit.
     destruct vf; try discriminate.
     destruct (Ptrofs.eq_dec _ _); try discriminate.
@@ -615,13 +615,11 @@ Proof.
       eapply start_step; eauto; econstructor; eauto.
       { eapply MTCH_install_perm, Hperm. }
       { split.
-        destruct (type_of_fundef_fun f) as (targs & tres & cc & ?).
-        assert (cc = AST.cc_default) by admit; subst.
         hnf in Hperm; subst.
         econstructor; eauto.
+        - admit.
+        - admit. (* globals_not_fresh *)
         - admit. (* Clight_new's initial_core doesn't currently require mem_wd *)
-        - repeat constructor.
-          admit. (* check that arg is valid if it's a pointer *)
         - admit. (* right number/type of args *)
         - admit. (* right number/type of args *)
         - apply lookup_wrapper.
@@ -664,7 +662,6 @@ Proof.
         constructor; eauto.
         admit.
         { admit. }
-      - admit. (* globals_not_fresh *)
       - rewrite !updThread_twice.
         apply MTCH_updThread; auto.
         + constructor; constructor; [simpl; auto|].
@@ -680,7 +677,6 @@ Proof.
       assert (ev = nil) by admit; subst.
       rewrite app_nil_r in Hsafe0.
       eapply IHn; eauto.
-      { admit. (* globals_not_fresh *) }
       { eapply csafe_restr, Hsafe0.
         destruct c; auto. }
       { rewrite updThread_twice.
@@ -700,7 +696,7 @@ Proof.
         try (inv Htstep; rewrite gssThreadCode in Hcode0; inv Hcode0);
         try match goal with H : sch = schedSkip sch |- _ =>
         symmetry in H; apply schedSkip_id in H; subst end; try discriminate; try contradiction.
-      inv Hhalted; contradiction. }
+(*      inv Hhalted; contradiction.*) }
   - inv Htstep.
     inversion H0.
     pose proof (mtch_gtc _ ctn (mtch_cnt _ ctn)) as Hc; rewrite Hcode in Hc; inv Hc.
@@ -736,7 +732,7 @@ Proof.
     rewrite app_nil_r.
     apply csafe_restr'.
     eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool));
-      [eapply IHn; [auto | eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto|] | auto].
+      [eapply IHn; [eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto|] | auto].
     constructor; auto; intros.
     + destruct (eq_dec tid0 tid).
       * subst; rewrite gssThreadCode, gssThreadCC.
@@ -768,7 +764,6 @@ Proof.
     + eapply MTCH_invariant; eauto.
     + rewrite <- H6 in Hsafe.
       eapply IHn.
-      { admit. (* globals_not_fresh *) }
       { eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
       apply MTCH_updThread; auto.
       * constructor; auto.
@@ -807,7 +802,6 @@ Proof.
         * erewrite <- mtch_gtr2; apply Hangel2. }
       { rewrite <- H6 in Hsafe.
         intro; eapply IHn.
-        { admit. (* globals_not_fresh *) }
         { eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
         apply MTCH_updLockSet, MTCH_updThread; auto.
         - constructor; constructor; auto.
@@ -830,8 +824,6 @@ Proof.
         * erewrite <- mtch_gtr2; apply Hangel2. }
       { rewrite <- H6 in Hsafe.
         intro; eapply IHn.
-        { admit. (* globals_not_fresh *) }
-        SearchAbout Smallstep.globals_not_fresh.
         { eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
         apply MTCH_updLockSet, MTCH_updThread; auto.
         - constructor; constructor; auto.
@@ -867,7 +859,6 @@ Proof.
         * rewrite <- mtch_locks; auto. }
       { rewrite <- H6 in Hsafe.
         intro; eapply IHn.
-        { admit. (* globals_not_fresh *) }
         { eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
         apply MTCH_updLockSet, MTCH_updThread; auto.
         * constructor; constructor; auto.
@@ -910,7 +901,7 @@ Proof.
       { rewrite <- H6 in Hsafe.
         intro; eapply IHn; eauto.
         eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
-  - inv Hhalted; contradiction.
+(*  - inv Hhalted; contradiction.*)
   - subst; eapply AngelSafe.
     { simpl; rewrite <- H5.
       eapply schedfail; eauto; simpl.
@@ -946,8 +937,7 @@ Lemma Clight_new_Clight_safety:
          initial_Clight_state)) init_mem n.
 Proof.
   intros.
-  eapply Clight_new_Clight_safety_gen; [|apply H|].
-  { admit. (* globals_not_fresh *) }
+  eapply Clight_new_Clight_safety_gen; [apply H|].
   constructor; auto; intros; simpl.
   constructor.
   unfold initial_corestate, initial_Clight_state in *.

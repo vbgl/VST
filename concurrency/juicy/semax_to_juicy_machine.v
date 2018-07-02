@@ -85,7 +85,7 @@ Proof.
   inversion step; try solve [exfalso; eauto].
   - now eapply JuicyMachine.suspend_step; eauto.
   - now eapply JuicyMachine.sync_step; eauto.
-  - now eapply JuicyMachine.halted_step; eauto.
+(*  - now eapply JuicyMachine.halted_step; eauto.*)
   - now eapply JuicyMachine.schedfail; eauto.
 Qed.
 
@@ -139,8 +139,8 @@ Proof.
   all: try congruence.
   all: eauto.
 
-  inversion Hhalted.
-  inversion Hcant.
+(*  inversion Hhalted.
+  inversion Hcant.*)
 
   intros E.
   hnf in uniq.
@@ -473,7 +473,7 @@ Section Safety.
     exists b; split; auto; simpl in *; clear s.
     specialize (Hinit _ H) as (? & Hinit); hnf in Hinit.
     destruct Hinit as [_ Hinit]; simpl in Hinit.
-    destruct Hinit; eauto.
+    destruct Hinit as (? & ? & ?); eexists; repeat split; auto; constructor.
   Qed.
 
   Lemma jmsafe_csafe n m tr sch s : jmsafe (globalenv prog) n (m, (tr, sch, s)) -> jm_csafe (sch, tr, s) m n.

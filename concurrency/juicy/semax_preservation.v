@@ -510,7 +510,7 @@ Ltac jmstep_inv :=
   | H : JuicyMachine.threadStep _ _ _ _ _           |- _ => inversion H
   | H : JuicyMachine.suspend_thread _ _ _ |- _ => inversion H
   | H : JuicyMachine.syncStep _ _ _ _ _ _           |- _ => inversion H
-  | H : JuicyMachine.threadHalted _                   |- _ => inversion H
+(*  | H : JuicyMachine.threadHalted _                   |- _ => inversion H*)
   | H : JuicyMachine.schedfail _         |- _ => inversion H
   end; try subst.
 
@@ -1047,11 +1047,11 @@ Section Preservation.
    simpl in Hinitial.
    pose proof safety as safety'.
    specialize (safety i cnti tt). rewr (getThreadC i tp cnti) in safety.
-   destruct safety as (c_new_ & E_c_new & safety).
+   destruct safety as (Hvalid & c_new_ & E_c_new & safety).
    substwith ctn Htid.
    substwith Htid cnti.
    setoid_rewrite Eci in Hcode; inv Hcode.
-   rewrite E_c_new in Hinitial; inv Hinitial.
+   rewrite E_c_new in Hinitial; destruct Hinitial as (Hinitial & ? & ?); subst.
       right.
 
       simpl JuicyMachine.add_block in *.
@@ -1129,7 +1129,7 @@ Section Preservation.
       - intros j cntj [].
         destruct (eq_dec i j) as [<-|ne].
         + REWR.
-          inv H.
+          inv Hinitial.
           apply safety.
           rewrite m_phi_jm_.
           REWR.
@@ -1138,6 +1138,13 @@ Section Preservation.
           destruct (getThreadC j tp cntj) eqn: Ej; try solve [erewrite gsoThreadRes; eauto].
           pose proof cntUpdate'(ThreadPool := OrdinalThreadPool) _ _ cnti cntj as cntj'.
           eapply unique_Krun_neq in Ej; try apply unique; auto; contradiction.
+          { destruct safety' as [Hvalid' ?].
+            split; [|erewrite gsoThreadRes; eauto].
+            destruct (alloc m' 0 0) eqn: Halloc.
+            simpl; apply nextblock_alloc in Halloc as ->.
+            eapply val_inject_incr, Hvalid'.
+            hnf in Hperm; subst; simpl.
+            apply flat_inj_incr, Ple_succ. }
       - intros j cntj.
         destruct (eq_dec i j) as [<-|ne]; REWR.
         specialize (wellformed j cntj). auto.
@@ -1163,8 +1170,8 @@ Section Preservation.
       getThread_inv; congruence.
 *
   jmstep_inv; getThread_inv; congruence.
-*
-  jmstep_inv; getThread_inv; congruence.
+(* *
+  jmstep_inv; getThread_inv; congruence.*)
 *
   contradiction Htid.
 Qed. (* Lemma preservation_Kinit *)
@@ -1331,8 +1338,8 @@ Qed. (* Lemma preservation_Kinit *)
           all: getThread_inv.
           all: congruence.
 
-        - (* not halted *)
-          jmstep_inv. contradiction.
+(*        - (* not halted *)
+          jmstep_inv. contradiction.*)
       }
       (* end of internal step *)
 
@@ -1421,7 +1428,9 @@ Qed. (* Lemma preservation_Kinit *)
                  ++ REWR.
               -- REWR.
               -- REWR.
-              -- destruct safety as (q_new & Einit & safety). exists q_new; split; auto.
+              -- destruct safety as (? & q_new & Einit & safety).
+                 split; auto.
+                 exists q_new; split; auto.
 
           + (* wellformed. *)
             intros i0 cnti0'.
@@ -1463,8 +1472,8 @@ Qed. (* Lemma preservation_Kinit *)
           all: getThread_inv.
           all: congruence.
 
-        - (* not halted *)
-          jmstep_inv. contradiction.
+(*        - (* not halted *)
+          jmstep_inv. contradiction.*)
       } (* end of Krun (at_ex c) -> Kblocked c *)
     } (* end of Krun *)
 
@@ -1621,7 +1630,9 @@ Qed. (* Lemma preservation_Kinit *)
              ++ apply (gThreadCR ctn).
           -- REWR.
           -- REWR.
-          -- destruct safety as (q_new & Einit & safety). exists q_new; split; auto. REWR.
+          -- destruct safety as (? & q_new & Einit & safety).
+              split; auto.
+              exists q_new; split; auto. REWR.
 
       + (* wellformed. *)
         intros i0 cnti0'.
@@ -1654,7 +1665,6 @@ Qed. (* Lemma preservation_Kinit *)
 
     (* thread[i] is in Kinit *)
     {
-      (* still unclear how to handle safety of Kinit states *)
       edestruct preservation_Kinit; eauto; [left | right]; apply state_bupd_intro'; auto.
     }
   Qed.

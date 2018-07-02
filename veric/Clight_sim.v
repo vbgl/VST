@@ -988,7 +988,7 @@ Proof.
 intros.
 simpl in H.
 rewrite if_true in H by auto.
-destruct H as [H ?]; subst.
+destruct H as [H []]; subst.
 destruct (@Genv.find_funct_ptr fundef type (@Genv.globalenv (Ctypes.fundef function) type prog) b) eqn:?; inv H.
 unfold initial_core; simpl.
 destruct (Mem.alloc m 0 0) as (m', b') eqn: Halloc.
@@ -998,7 +998,6 @@ exists (Callstate f nil (Clight.Kcall None main_handler empty_env (PTree.empty _
   { simpl.
     admit. }
   { admit. }
-  { constructor. }
   { constructor. }
   { constructor. }
   { admit. }
