@@ -33,6 +33,7 @@ Import CSL.
 
 Axiom semax_prog_rule :
   forall {Espec: OracleKind}{CS: compspecs},
+  @OK_ty Espec = unit -> 
   forall V G prog m h,
      @semax_prog Espec CS prog V G ->
      Genv.init_mem prog = Some m ->

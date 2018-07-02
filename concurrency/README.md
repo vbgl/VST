@@ -72,14 +72,15 @@ Translation into English:
 ---------------------------------------
 
 The last line of concurrency/main.v is 
-Print Assumptions CSL2FineBareAsm_safety,
+     Print Assumptions CSL2FineBareAsm_safety,
 which mentions the following axioms, categorized into
     [A] axioms of logic known to be consistent with CiC (and each other)
     [B] bugs in Coq's print_assumptions command; see Coq issue #7192
            https://github.com/coq/coq/issues/7192       
     [C] abstract parameters of CompCert, instantiated for any particular
           machine such as x86_32
-    [D] The CompCert compiler itself
+    [D] The CompCert compiler itself; this is external (and supplied
+         in our branch of the CompCert repo)
     [R] part of the axiomatization of the Real numbers, used by
         CompCert's "Flocq" floating-point library
     [H] holes in our proof

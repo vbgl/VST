@@ -1,4 +1,4 @@
-Require Import VST.sepcomp.semantics.
+Require Import VST.concurrency.common.core_semantics.
 
 Require Import VST.veric.base.
 Require Import VST.veric.Clight_new.
@@ -31,21 +31,24 @@ Definition dryspec : ext_spec unit :=
    forall {CS: compspecs} prog V G m,
      @semax_prog NullExtension.Espec CS prog V G ->
      Genv.init_mem prog = Some m ->
-     exists b, exists q,
+     exists b, exists q, exists m',
        Genv.find_symbol (Genv.globalenv prog) (prog_main prog) = Some b /\
-       initial_core (cl_core_sem)
-           0 (*additional temporary argument - TODO (Santiago): FIXME*)
-           (Build_genv (Genv.globalenv prog) (prog_comp_env prog))
- (Vptr b Ptrofs.zero) nil = Some q /\
+       initial_core  (cl_core_sem (globalenv prog))
+           0 m q m' (Vptr b Ptrofs.zero) nil /\
        forall n,
-        @dry_safeN _ _ _ _ (genv_symb_injective _ _) (coresem_extract_cenv cl_core_sem (prog_comp_env prog)) dryspec (Build_genv (Genv.globalenv prog) (prog_comp_env prog)) n tt q m.
+        @dry_safeN _ _ _ _ (genv_symb_injective) (coresem_extract_cenv  (cl_core_sem (globalenv prog)) (prog_comp_env prog)) dryspec (Build_genv (Genv.globalenv prog) (prog_comp_env prog)) n tt q m'.
 Proof.
  intros.
  destruct (@semax_prog_rule' NullExtension.Espec CS _ _ _ _ 
      0 (*additional temporary argument - TODO (Santiago): FIXME*)
      H H0) as [b [q [[H1 H2] H3]]].
- exists b, q.
+ destruct (H3 O tt) as [jmx [H4x [H5x [H6x [H7x _]]]]].
+ destruct (H2 jmx H4x) as [jmx' [H8x H8y]].
+ exists b, q, (m_dry jmx').
  split3; auto.
+ rewrite H4x in H8y. auto.
+ subst. simpl. clear H5x H6x H7x H8y.
+ forget (m_dry jmx) as m. clear jmx.
  intro n.
  specialize (H3 n tt).
  destruct H3 as [jm [? [? [? [? _]]]]].
@@ -56,7 +59,10 @@ Proof.
  { destruct (compcert_rmaps.RML.R.ghost_of (m_phi jm)); inv H5.
    eexists; constructor; constructor.
    instantiate (1 := (_, _)); constructor; simpl; constructor; auto.
-   constructor; auto. }
+   constructor; auto.
+   admit. (* William *)
+   admit. (* William *)
+ }
  clear - H4 J H6.
  revert jm q H4 J H6; induction n; simpl; intros. constructor.
  inv H6.
