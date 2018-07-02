@@ -15,6 +15,8 @@ Require Import VST.veric.res_predicates.
 (*IM using proof irrelevance!*)
 Require Import ProofIrrelevance.
 
+Require Import List. Import ListNotations.
+
 (* The concurrent machinery*)
 Require Import VST.concurrency.common.core_semantics.
 Require Import VST.concurrency.common.scheduler.
@@ -30,13 +32,13 @@ Require Import VST.veric.Clight_core.
 Require Import VST.veric.Clightcore_coop. 
 Require Import VST.sepcomp.event_semantics.
 Require Import VST.veric.Clight_sim.
-(*
-Fixpoint readtrace (T:list mem_event) :=
-  match T with
-    nil => True
-  | (E::Q) => match E with (Read b lo hi bytes) => readtrace Q | _ => False end
-  end.
-*)
+
+Lemma extcall_malloc_sem_inv: forall g v m t res m2 (E:Events.extcall_malloc_sem g v m t res m2),
+  exists m1 b (sz : ptrofs), v=[Vptrofs sz] /\ t= Events.E0 /\ res=Vptr b Ptrofs.zero /\
+                           Mem.alloc m (- size_chunk Mptr) (Ptrofs.unsigned sz) = (m1, b) /\
+                           Mem.store Mptr m1 b (- size_chunk Mptr) (Vptrofs sz) = Some m2. 
+Proof. intros.  inv E. exists m', b, sz. intuition. Qed.
+
 Inductive deref_locT (ty : type) (m : mem) (b : block) (ofs : ptrofs) : val -> list mem_event -> Prop :=
     deref_locT_value : forall (chunk : memory_chunk) bytes,
                       access_mode ty = By_value chunk ->
@@ -70,13 +72,7 @@ Qed.
 Lemma deref_locT_fun a m loc ofs v1 T1 (D1:deref_locT (typeof a) m loc ofs v1 T1)
       v2 T2 (D2:deref_locT (typeof a) m loc ofs v2 T2): (v1,T1)=(v2,T2). 
 Proof. inv D1; inv D2; try congruence. Qed.
-(*
-Lemma readtrace_evelim: forall T (HT:readtrace T) m m' (E: ev_elim m T m'), m'=m.
-Proof.                                                                      
-  induction T; simpl; intros; trivial.
-  destruct a; try contradiction. destruct E. eauto.
-Qed.
-*)
+
 Lemma deref_locT_elim  a m b ofs v T (D:deref_locT (typeof a) m b ofs v T):
        ev_elim m T m /\
        (forall mm mm' (E:ev_elim mm T mm'),
@@ -385,7 +381,7 @@ Proof.
     constructor; eassumption. }
 Qed. 
 
-Section ClightSEM.
+Section CLN_SEM.
   Definition F: Type := fundef.
   Definition V: Type := type.
   Definition G := genv.
@@ -609,6 +605,7 @@ Qed.
 
   Lemma CLN_msem : forall ge, msem (CLN_evsem ge) = CLN_memsem ge.
   Proof. auto. Qed.
+End CLN_SEM.
 
 Lemma storebytes_decay:
   forall m loc p vl m', Mem.storebytes m loc p vl = Some m' -> decay m m'.
@@ -754,19 +751,81 @@ Qed.
 
   Instance Clight_newSem ge : Semantics :=
     { semG := G; semC := C; semSem := CLN_evsem ge; the_ge := ge }.
- Section CLC_step.
-    Variable g: Clight.genv.
+
+  Inductive builtin_event: external_function -> mem -> list val -> list mem_event -> Prop :=
+  BE_malloc: forall m n m'' b m'
+         (ALLOC: Mem.alloc m (-size_chunk Mptr) (Ptrofs.unsigned n) = (m'', b))
+         (ALGN : (align_chunk Mptr | (-size_chunk Mptr)))
+         (ST: Mem.storebytes m'' b (-size_chunk Mptr) (encode_val Mptr (Vptrofs n)) = Some m'),
+         builtin_event EF_malloc m [Vptrofs n]
+               [Alloc b (-size_chunk Mptr) (Ptrofs.unsigned n);
+                Write b (-size_chunk Mptr) (encode_val Mptr (Vptrofs n))]
+| BE_free: forall m b lo bytes sz m'
+        (POS: Ptrofs.unsigned sz > 0)
+        (LB : Mem.loadbytes m b (Ptrofs.unsigned lo - size_chunk Mptr) (size_chunk Mptr) = Some bytes)
+        (FR: Mem.free m b (Ptrofs.unsigned lo - size_chunk Mptr) (Ptrofs.unsigned lo + Ptrofs.unsigned sz) = Some m')
+        (ALGN : (align_chunk Mptr | Ptrofs.unsigned lo - size_chunk Mptr))
+        (SZ : Vptrofs sz = decode_val Mptr bytes),
+        builtin_event EF_free m [Vptr b lo]
+              [Read b (Ptrofs.unsigned lo - size_chunk Mptr) (size_chunk Mptr) bytes;
+               Free [(b,Ptrofs.unsigned lo - size_chunk Mptr, Ptrofs.unsigned lo + Ptrofs.unsigned sz)]]
+| BE_memcpy: forall m al bsrc bdst sz bytes osrc odst m'
+        (AL: al = 1 \/ al = 2 \/ al = 4 \/ al = 8)
+        (POS : sz >= 0)
+        (DIV : (al | sz))
+        (OSRC : sz > 0 -> (al | Ptrofs.unsigned osrc))
+        (ODST: sz > 0 -> (al | Ptrofs.unsigned odst))
+        (RNG: bsrc <> bdst \/
+                Ptrofs.unsigned osrc = Ptrofs.unsigned odst \/
+                Ptrofs.unsigned osrc + sz <= Ptrofs.unsigned odst \/ Ptrofs.unsigned odst + sz <= Ptrofs.unsigned osrc)
+        (LB: Mem.loadbytes m bsrc (Ptrofs.unsigned osrc) sz = Some bytes)
+        (ST: Mem.storebytes m bdst (Ptrofs.unsigned odst) bytes = Some m'),
+        builtin_event (EF_memcpy sz al) m [Vptr bdst odst; Vptr bsrc osrc]
+              [Read bsrc (Ptrofs.unsigned osrc) sz bytes;
+               Write bdst (Ptrofs.unsigned odst) bytes]
+(*| BE_EFexternal: forall name sg m vargs,
+(*        I64Helpers.is_I64_helperS name sg ->*)
+         builtin_event (EF_external name sg) m vargs []
+| BE_EFbuiltin: forall name sg m vargs, (*is_I64_builtinS name sg ->*)
+         builtin_event (EF_builtin name sg) m vargs []*)
+| BE_other: forall ef m vargs,
+  match ef with EF_malloc | EF_free | EF_memcpy _ _ => False | _ => True end ->
+  builtin_event ef m vargs [].
+
+Lemma Vptrofs_inj : forall o1 o2, Vptrofs o1 = Vptrofs o2 ->
+  Ptrofs.unsigned o1 = Ptrofs.unsigned o2.
+Proof.
+  unfold Vptrofs; intros.
+  pose proof (Ptrofs.unsigned_range o1); pose proof (Ptrofs.unsigned_range o2).
+  destruct Archi.ptr64 eqn: H64.
+  - assert (Int64.unsigned (Ptrofs.to_int64 o1) = Int64.unsigned (Ptrofs.to_int64 o2)) by congruence.
+    unfold Ptrofs.to_int64 in *.
+    rewrite Ptrofs.modulus_eq64 in * by auto.
+    rewrite !Int64.unsigned_repr in * by (unfold Int64.max_unsigned; omega); auto.
+  - assert (Int.unsigned (Ptrofs.to_int o1) = Int.unsigned (Ptrofs.to_int o2)) by congruence.
+    unfold Ptrofs.to_int in *.
+    rewrite Ptrofs.modulus_eq32 in * by auto.
+    rewrite !Int.unsigned_repr in * by (unfold Int.max_unsigned; omega); auto.
+Qed.
+
+Lemma builtin_event_determ ef m vargs T1 (BE1: builtin_event ef m vargs T1) T2 (BE2: builtin_event ef m vargs T2): T1=T2.
+inversion BE1; inv BE2; try discriminate; try contradiction; simpl in *; trivial.
++ assert (Vptrofs n0 = Vptrofs n) as H by congruence.
+  rewrite H; rewrite (Vptrofs_inj _ _ H) in *.
+  rewrite ALLOC0 in ALLOC; inv ALLOC; trivial.
++ inv H5.
+  rewrite LB0 in LB; inv LB. rewrite <- SZ in SZ0. rewrite (Vptrofs_inj _ _ SZ0); trivial.
++ inv H3; inv H5.
+  rewrite LB0 in LB; inv LB; trivial.
+Qed.
+
+Section CLC_SEM.
+  Variable g: Clight.genv.
+    
+  Section CLC_step.
     Variable function_entryT: function -> list val -> mem -> env -> temp_env -> mem -> list mem_event -> Prop.
 
-    Inductive clc_evstep: state -> mem -> list mem_event -> state -> mem -> Prop :=(*
-                     |ASSIGN:  forall f a1 a2 k e le m loc ofs v2 v m' T1 T2 T3,
-                         eval_lvalueT g e le m a1 loc ofs T1 ->
-                  eval_exprT g e le m a2 v2 T2 ->
-                  sem_cast v2 (typeof a2) (typeof a1) m = Some v ->
-                  assign_locT g (typeof a1) m loc ofs v m' T3 ->
-                  clc_evstep g
-                    (Clight.State f (Sassign a1 a2) k e le m) m (T1++T2++T3)
-                    (Clight.State f Sskip k e le m') m'.*)
+    Inductive clc_evstep: state -> mem -> list mem_event -> state -> mem -> Prop :=
   | clc_evstep_assign: forall f a1 a2 k e le m loc ofs v2 v m' T1 T2 T3 mx mx',
       eval_lvalueT g e le m a1 loc ofs T1 ->
       eval_exprT g e le m a2 v2 T2 ->
@@ -788,13 +847,14 @@ Qed.
       type_of_fundef fd = Tfunction tyargs tyres cconv ->
       clc_evstep (Clight.State f (Scall optid a al) k e le mx) m 
         (T1++T2) (Clight.Callstate fd vargs (Clight.Kcall optid f e le k) mx') m
-(*
-  | clc_evstep_builtin: forall f optid ef tyargs al k e le m vargs t vres m',
-      eval_exprTlist g e le m al tyargs vargs T ->
-      external_call ef ge vargs m t vres m' ->
-      clc_evstep (Clight.State f (Sbuiltin optid ef tyargs al) k e le m)
-         t (Clight.State f Sskip k e (set_opttemp optid vres le) m')
-*)
+
+  | clc_evstep_builtin: forall f optid ef tyargs al k e le m vargs t vres m' T1 T2 mx mx',
+      eval_exprTlist g e le m al tyargs vargs T1 ->
+      builtin_event ef m vargs T2 ->
+      Events.external_call ef g vargs m t vres m' ->
+      clc_evstep (Clight.State f (Sbuiltin optid ef tyargs al) k e le mx) m
+                 (T1++T2) (Clight.State f Sskip k e (set_opttemp optid vres le) mx') m'
+    
   | clc_evstep_seq:  forall f s1 s2 k e le m mx mx',
       clc_evstep (Clight.State f (Ssequence s1 s2) k e le mx) m
         nil (Clight.State f s1 (Clight.Kseq s2 k) e le mx') m
@@ -898,6 +958,8 @@ Qed.
       apply assign_locT_ax1 in H2. eexists; econstructor; eauto. }
     { apply eval_exprT_ax1 in H0. apply eval_exprTlist_ax1 in H1.
       eexists; econstructor; eauto. }
+    { apply eval_exprTlist_ax1 in H. 
+      eexists; econstructor; eauto. }    
   Qed.
   
   Lemma clc_ax2
@@ -922,7 +984,18 @@ Qed.
       apply eval_exprTlist_ax2 in H1. destruct H1 as [T2 K2].
       eexists; eapply clc_evstep_call; eauto. }
     { apply eval_exprTlist_ax2 in H. destruct H as [T1 K1].
-      admit. }
+      assert (BE: exists T2, builtin_event ef m0 vargs T2).
+      { destruct ef; try solve [ exists nil; econstructor; eauto].
+        { (*EF_malloc*) inv H0. exploit Mem.store_valid_access_3; eauto. intros [_ ALGN].
+          apply Mem.store_storebytes in H1.
+          eexists. eapply BE_malloc; eauto. }
+        { (*EF_free*) inv H0. exploit Mem.load_valid_access; eauto. intros [_ ALGN].
+          exploit Mem.load_loadbytes; eauto. intros [bytes [LD X]].
+          eexists. eapply BE_free; eauto. }
+        { (*EF_memcpy*) inv H0.
+          eexists. eapply BE_memcpy; eauto. } } 
+      destruct BE as [T2 BE].
+      eexists; econstructor; eauto. }
     { apply eval_exprT_ax2 in H. destruct H as [T HT].
       eexists; econstructor; eauto. }
     { apply eval_exprT_ax2 in H. destruct H as [T HT].
@@ -931,7 +1004,7 @@ Qed.
       eexists; econstructor; eauto. }
     { apply Hfe in H; destruct H as [T HT].
       eexists. econstructor; eauto. }
-  Admitted.
+  Qed.
 
   Lemma clc_fun (HFe: forall f vargs m e1 le1 m1 T1 (FE1:function_entryT f vargs m e1 le1 m1 T1)
                              e2 le2 m2 T2 (FE2:function_entryT f vargs m e2 le2 m2 T2), T1=T2):
@@ -953,7 +1026,12 @@ Qed.
         exploit eval_exprT_fun. apply H17. apply H0. intros X; inv X.
         exploit eval_exprTlist_fun. apply H18. apply H1. intros X; inv X. trivial. }
       destruct H14; subst; congruence.
-      destruct H14; subst; congruence. } 
+      destruct H14; subst; congruence. }
+    { inv EX2.
+      { exploit eval_exprTlist_fun. apply H15. apply H. intros X; inv X.
+        exploit builtin_event_determ. apply H16. apply H0. congruence. }
+      destruct H12; congruence. 
+      destruct H12; congruence. }
     { inv EX2. trivial. contradiction. }
     { inv EX2. 
       exploit eval_exprT_fun. apply H13. apply H. congruence.
@@ -984,43 +1062,54 @@ Qed.
     { apply eval_exprT_elim in H0.
       apply eval_exprTlist_elim in H1.
       eapply ev_elim_app; eauto. }
-    { simpl. exists m'; split; trivial. }
-    { apply eval_exprT_elim in H.
-      eapply ev_elim_app; [ eassumption | simpl]. exists m'; split; trivial. }
-    { simpl. exists m'; split; trivial. }
-    { eauto. }
-  Qed. 
+    { apply eval_exprTlist_elim in H. eapply ev_elim_app; eauto. clear H.
+      inv H0.
+      { exploit extcall_malloc_sem_inv. apply H1. clear H1. intros [m1 [bb [sz [X [Ht [Hres [A STORE]]]]]]]; subst.
+        assert (HV: Vptrofs n = Vptrofs sz).
+        { clear -X. remember (Vptrofs n). remember  (Vptrofs sz).  clear Heqv Heqv0. inv X; trivial. }
+        rewrite (Vptrofs_inj _ _ HV) in *. rewrite HV in *. clear X.
+        rewrite A in ALLOC. inv ALLOC. apply Mem.store_storebytes in STORE.
+        rewrite ST in STORE. inv STORE.
+        econstructor; split. eassumption. econstructor; split. eassumption. reflexivity. }
+      {  inv H1. apply Mem.load_loadbytes in H2. destruct H2 as [bytes1 [LD V]]; subst.
+         rewrite LD in LB; inv LB. rewrite <- SZ in V. rewrite (Vptrofs_inj _ _ V) in *. clear V SZ.
+         rewrite FR in H8; inv H8.
+         econstructor. eassumption. econstructor. split. { simpl. rewrite FR. reflexivity. } reflexivity. }
+      { inv H1. rewrite H14 in LB; inv LB. rewrite ST in H15; inv H15.
+        econstructor. eassumption. econstructor; split. eassumption. reflexivity. }
+      admit. (*Here we need that onnly the three builtins are supported destruct ef; try solve [contradiction].*)
+  Admitted.
 End CLC_step.
 
-  Inductive function_entryT2 g (f: function) (vargs: list val) (m: mem) (e: env) (le: temp_env) (m': mem) (T:list mem_event): Prop :=
+  Inductive function_entryT2 (f: function) (vargs: list val) (m: mem) (e: env) (le: temp_env) (m': mem) (T:list mem_event): Prop :=
   | function_entry2_intro:
       list_norepet (var_names f.(fn_vars)) ->
       list_norepet (var_names f.(fn_params)) ->
       list_disjoint (var_names f.(fn_params)) (var_names f.(fn_temps)) ->
       alloc_variablesT g empty_env m f.(fn_vars) e m' T ->
       bind_parameter_temps f.(fn_params) vargs (create_undef_temps f.(fn_temps)) = Some le ->
-      function_entryT2 g f vargs m e le m' T. 
+      function_entryT2 f vargs m e le m' T. 
 
-  Lemma Hfe2_ax1 g f vargs m e le m1 T (FE: function_entryT2 g f vargs m e le m1 T):
+  Lemma Hfe2_ax1 f vargs m e le m1 T (FE: function_entryT2 f vargs m e le m1 T):
     function_entry2 g f vargs m e le m1.
   Proof. inv FE. apply alloc_variablesT_ax1 in H2. econstructor; eauto. Qed.
 
-  Lemma Hfe2_ax2 g f vargs m e le m1 (FE: function_entry2 g f vargs m e le m1):
-    exists T, function_entryT2 g f vargs m e le m1 T.
+  Lemma Hfe2_ax2 f vargs m e le m1 (FE: function_entry2 g f vargs m e le m1):
+    exists T, function_entryT2 f vargs m e le m1 T.
   Proof. inv FE. apply alloc_variablesT_ax2 in H2. destruct H2 as [T HT].
          eexists; econstructor; eauto.
   Qed.
 
-  Lemma Hfe2_fun g f vargs m e1 le1 m1 T1 (FE1: function_entryT2 g f vargs m e1 le1 m1 T1)
-        e2 le2 m2 T2 (FE2: function_entryT2 g f vargs m e2 le2 m2 T2): (e1,m1,T1)=(e2,m2,T2).
+  Lemma Hfe2_fun f vargs m e1 le1 m1 T1 (FE1: function_entryT2 f vargs m e1 le1 m1 T1)
+        e2 le2 m2 T2 (FE2: function_entryT2 f vargs m e2 le2 m2 T2): (e1,m1,T1)=(e2,m2,T2).
   Proof. inv FE1. inv FE2.
          exploit alloc_variablesT_fun. apply H7. apply H2. congruence.
   Qed.
   
-  Lemma Hfe2_ev_elim g f vargs m e le m1 T (FE: function_entryT2 g f vargs m e le m1 T): ev_elim m T m1.
+  Lemma Hfe2_ev_elim f vargs m e le m1 T (FE: function_entryT2 f vargs m e le m1 T): ev_elim m T m1.
   Proof. inv FE. eapply alloc_variablesT_elim. eassumption. Qed. 
 
-  Program Definition CLC_evsem g : @EvSem state := {| msem := CLC_memsem g; ev_step := clc_evstep g (function_entryT2 g) |}.
+  Program Definition CLC_evsem : @EvSem state := {| msem := CLC_memsem g; ev_step := clc_evstep function_entryT2 |}.
   Next Obligation. simpl. intros. unfold part_semantics2; simpl.
                    apply clc_ax1 in H. destruct H as [AE [t Ht]].
                    econstructor; simpl; trivial. apply Ht. apply Hfe2_ax1. Qed.
@@ -1032,11 +1121,12 @@ End CLC_step.
                    exploit Hfe2_fun. apply FE2. apply FE1. congruence. Qed.
   Next Obligation. simpl; intros. eapply clc_ev_elim; eauto. apply Hfe2_ev_elim. Qed.
 
-  Lemma CLC_msem : forall ge, msem (CLC_evsem ge) = CLC_memsem ge.
+  Lemma CLC_msem : msem CLC_evsem = CLC_memsem g.
   Proof. auto. Qed.
 
-  Instance ClightSem ge : Semantics :=
-    { semG := G; semC := state; semSem := CLC_evsem ge; the_ge := ge }.
+  Instance ClightSem : Semantics :=
+    { semG := G; semC := state; semSem := CLC_evsem; the_ge := g }.
+End CLC_SEM.
 
   (* extending Clight_sim to event semantics *)
 Inductive ev_star ge: state -> mem -> _ -> state -> mem -> Prop :=
@@ -1135,5 +1225,3 @@ Qed.
     (* based on Clight_sim.Clightnew_Clight_sim_eq_noOrder_SSplusConclusion *)
   Admitted.
 
-
-End ClightSEM.
