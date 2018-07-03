@@ -583,30 +583,7 @@ unfold match_thread_compiled.
               eauto.
             }
           * eapply thread_step_plus_from_corestep; eauto.
-            
-        + (*Reestablish the concur_match *)
-          simpl.
-          move H0 at bottom.
-          eapply Concur_update; eauto.
-          econstructor 1; eauto.
-          simpl in MATCH.
-          unfold match_thread_source; simpl.
-          constructor.
-          exact MATCH.
-        + (* Construct the step *)
-          exists 0; simpl.
-          do 2 eexists; split; [|reflexivity].
-          replace m2' with (HybridMachineSig.diluteMem m2') by reflexivity.
-          econstructor; eauto; simpl.
-          econstructor; eauto.
-          * simpl in *.
-            eapply H0.
-          * simpl. econstructor; eauto.
-          * simpl; repeat (f_equal; try eapply Axioms.proof_irr).
-        
-        
-        
-        admit. 
+        + admit. (* no step for assam *)
         
       - (* tid > hb *)
         pose proof (mtch_source _ _ _ _ _ _ H0 _ l Htid (contains12 H0 Htid)) as HH.
