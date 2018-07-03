@@ -47,7 +47,7 @@ Proof.
   unfold prog, semax_to_juicy_machine.prog in *.
   destruct (Genv.find_funct_ptr _ _); eauto.
   exfalso.
-  destruct Hinit as (? & ? & ? & ?); discriminate.
+  destruct Hinit as (? & ? & ? & ?); contradiction.
 Defined.
 
 (* Clight_new starts a step earlier than Clight, with a sequence of the initial call to main and
@@ -96,7 +96,9 @@ Proof.
   destruct (Hinit _ Hjm) as (? & ? & Hinit' & ?); subst.
   simpl in Hinit', Hf.
   unfold prog, semax_to_juicy_machine.prog in *.
-  rewrite Hf in Hinit'; inv Hinit'; auto.
+  rewrite Hf in Hinit'.
+  destruct (Clight.type_of_fundef f); try contradiction.
+  destruct Hinit' as (? & ? & ? & ?); subst; auto.
 Qed.
 
 Inductive match_ctl : ctl -> ctl -> Prop :=
