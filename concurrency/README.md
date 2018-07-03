@@ -113,7 +113,7 @@ which mentions the following axioms, categorized into
     [A] Classical_Prop.classic
     [R] Raxioms.archimed
     [B] SeparationLogicSoundness.SoundSeparationLogic.CSL.approx_func_ptr
-    [B] safety.X_dec : forall (X : Type) (x y : X), {x = y} + {x <> y}
+    [H] safety.X_dec : forall (X : Type) (x y : X), {x = y} + {x <> y}
     [R] Raxioms.Rplus_opp_r
     [R] Raxioms.Rplus_lt_compat_l
     [R] Raxioms.Rplus_comm

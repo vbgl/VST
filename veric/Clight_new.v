@@ -285,7 +285,7 @@ Definition cl_initial_core (ge: genv) (v: val) (args: list val) (q: corestate) :
                                  (map (fun x => Etempvar (fst x) (snd x))
                                       (params_of_types 2%positive
                                                        (params_of_fundef f)))) ::
-                          Kseq (Sloop Sskip Sskip) :: nil)
+                          (*Kseq (Sloop Sskip Sskip) ::*) nil)
         | _ => False end
       | _ => False end
     else False
