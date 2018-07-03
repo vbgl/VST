@@ -2201,6 +2201,7 @@ Module X86Inj.
           Hobs_eq Hcore_inj Hfg Hge_wd Hincr Hcorestep.
     destruct cc as [rs], cf as [rsF], cc' as [rs'].
     inv Hcorestep.
+    rename m1 into mc'.
     assert (Smallstep.at_external (part_semantics the_ge) (set_mem (State rsF m0) mf) = None) as Hext.
     { exploit core_inj_ext; eauto using core_inj_wd.
       simpl in *;rewrite H0; clear H0.
@@ -2217,7 +2218,7 @@ Module X86Inj.
       destruct (exec_instr_ren _ _ Hobs_eq Hcore_inj Hfg Hge_wd Hincr H9)
         as (f' & rsF' & mF' & Hexec' & Hrs_ren' & Hobs_eq' & Hincr' & Hsep
             & Hnextblocks & Hinverse & Hid_extend & Hunmapped).
-      exists (State rsF' m), mF', f'.
+      exists (State rsF' mF'), mF', f'.
       repeat match goal with
              | [ |- _ /\ _] =>
                split; simpl; eauto with renamings reg_renamings
@@ -2235,7 +2236,7 @@ Module X86Inj.
       destruct ef; try solve [intros []; subst;
         match goal with H : external_call ?ef _ _ _ _ _ _ |- _ =>
         assert (exists vres', external_call ef the_ge args' mf t0 vres' mf /\ val_obs f vres vres') as (? & ? & ?) by admit end;
-        eexists (State _ m), mf, f; split;
+        eexists (State _ mf), mf, f; split;
         [econstructor; eauto; eapply Asm.exec_step_builtin; eauto|];
       repeat match goal with
              | [ |- _ /\ _] =>
@@ -2649,10 +2650,8 @@ Qed.
       simpl in *.
     inv Hcorestep.
     inv H.
-    - destruct c'; inv H3.
-      eapply exec_instr_wd; eauto.
-    - destruct c'; inv H3.
-      exploit Hsafe; eauto.
+    - eapply exec_instr_wd; eauto.
+    - exploit Hsafe; eauto.
       destruct ef; try solve [intros []; subst; eauto with wd].
       intros []; subst; split; auto; split; eauto with wd.
       intros; simpl.
@@ -2667,10 +2666,10 @@ Qed.
       apply regset_wd_set_res...
       all: admit.
     - simpl in *.
-      rewrite H4 in H0.
+      rewrite H3 in H0.
       destruct (Ptrofs.eq_dec _ _); [|contradiction].
-      rewrite H5 in H0.
-      apply get_extcall_arguments_spec in H6; rewrite H6 in H0; discriminate.
+      rewrite H4 in H0.
+      apply get_extcall_arguments_spec in H5; rewrite H5 in H0; discriminate.
   Admitted.
 
   Section Inj.
