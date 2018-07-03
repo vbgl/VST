@@ -10232,8 +10232,19 @@ relation*)
       split.
       (** proof that the fine grained machine can step*)
       intros U.
-      assert (HargF: val_inject (Mem.flat_inj (Mem.nextblock mf)) v' v')
-        by admit.
+      (** the argument to the spawn function is well formed *)
+      assert (HargF: val_inject (Mem.flat_inj (Mem.nextblock mf)) v' v').
+      { inversion H1; subst; auto.
+        eapply (codomain_valid (weak_tsim_data (HsimWeak _ pfc pff))) in H.
+        erewrite restrPermMap_valid in H.
+        unfold Mem.flat_inj.
+        econstructor.
+        destruct (Coqlib.plt b0 (Mem.nextblock mf));
+          [reflexivity |
+           unfold Mem.valid_block in H;
+           now exfalso].
+        now rewrite Ptrofs.add_zero.
+      } 
       assert (HsyncStepF: syncStep false pff (mem_compf Hsim) tpf' mf
                                    (spawn (b2,Ptrofs.intval ofs) (Some (getThreadR pff, virtue1F)) (Some virtue2F)))
         by (eapply step_create;
@@ -12451,7 +12462,7 @@ relation*)
     Unshelve. all:eauto.
     eapply store_compatible; eauto. eapply (mem_compf Hsim).
     eapply store_compatible; eauto. eapply (mem_compf Hsim).
-Admitted.
+Qed.
 
 End SimProofs.
 
