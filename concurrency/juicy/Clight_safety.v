@@ -59,7 +59,7 @@ Definition initial_Clight_state : Clight.state :=
   Clight.State main_handler (Clight.Scall None (Clight.Etempvar 1%positive (Clight.type_of_fundef f))
              (map (fun x => Clight.Etempvar (fst x) (snd x))
              (Clight_new.params_of_types 2 (Clight_new.params_of_fundef f))))
-             ((*Clight.Kseq (Clight.Sloop Clight.Sskip Clight.Sskip) *) Clight.Kstop) Clight.empty_env
+             (Clight.Kseq (Clight.Sloop Clight.Sskip Clight.Sskip) Clight.Kstop) Clight.empty_env
              (Clight_new.temp_bindings 1 [Vptr (projT1 (spr CPROOF)) Ptrofs.zero]) init_mem.
 
 (*...And we should be able to construct an initial state from the Clight_new and mem.*)
@@ -667,14 +667,6 @@ Proof.
       destruct (eq_dec b0 b); [subst; erewrite AllocContentsUndef1 by eauto | erewrite AllocContentsOther1 by eauto].
       * constructor.
       * eapply memval_inject_incr, flat_inj_incr, Ple_succ; eauto.
-        apply .
-      SearchAbout inject_incr Mem.flat_inj.
-        apply inject_incr_flat.
-        replace ofs0 with (ofs0 + 0) at 2 by apply Z.add_0_r.
-        replace (Ptrofs.intval ofs) with (Ptrofs.intval ofs + 0) at 3 by apply Z.add_0_r.
-        apply Mem.setN_inj with (access := fun _ => True); intros; rewrite ?Z.add_0_r; auto.
-        apply encode_val_inject; constructor.
-    + admit.
   - inv Htstep.
     admit.
   - inv Htstep; auto.
@@ -720,25 +712,23 @@ Axiom wrapper_args: forall l, In l (AST.regs_of_rpairs (Clight.loc_arguments' (m
 (* These two lemmas are probably not true. We need to reconcile what Clight_new and Clight do
    after a thread finishes. *)
 Lemma match_body: forall body b v2 f,
-match_cont
-  (Clight_new.strip_skip
+  match_cont
+    (Clight_new.strip_skip
      [Clight_new.Kseq body; Clight_new.Kseq (Clight.Sreturn None);
      Clight_new.Kcall None f Clight.empty_env
-       (PTree.Node (PTree.Node PTree.Leaf (Some v2) PTree.Leaf)
-          (Some (Vptr b Ptrofs.zero)) PTree.Leaf)])
-  (strip_skip'
-     (CC.Kseq body (Clight.Kcall None f_wrapper (PTree.empty (block * Ctypes.type))
+       (PTree.Node (PTree.Node PTree.Leaf (Some v2) PTree.Leaf) (Some (Vptr b Ptrofs.zero))
+          PTree.Leaf); Clight_new.Kseq (Clight.Sloop Clight.Sskip Clight.Sskip)])
+    (strip_skip'
+     (CC.Kseq body
+        (Clight.Kcall None f_wrapper (PTree.empty (block * Ctypes.type))
            (PTree.empty val) Clight.Kstop))).
-Proof.
-simpl.
-intros.
 Admitted.
 
 Lemma match_ext: forall ef b v2 t0 tyres,
   match_states
   (Clight_new.ExtCall ef [v2] None Clight.empty_env
      (PTree.Node (PTree.Node PTree.Leaf (Some v2) PTree.Leaf) (Some (Vptr b Ptrofs.zero)) PTree.Leaf)
-     [])
+     [Clight_new.Kseq (Clight.Sloop Clight.Sskip Clight.Sskip)])
   (CC'.CC_core_Callstate (Ctypes.External ef (Ctypes.Tcons t0 Ctypes.Tnil) tyres AST.cc_default) 
      [v2]
      (Clight.Kcall None f_wrapper (PTree.empty (block * Ctypes.type)) (PTree.empty val) Clight.Kstop)).
