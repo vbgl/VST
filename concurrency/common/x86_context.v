@@ -652,16 +652,19 @@ Module X86SEMAxioms.
     Qed.
 
     Instance X86Axioms : CoreLanguage.SemAxioms :=
-      { corestep_det := corestep_det;
-        corestep_unchanged_on := corestep_unchanged_on;
+      { corestep_unchanged_on := corestep_unchanged_on;
         corestep_decay := corestep_decay;
         corestep_nextblock := corestep_nextblock;
         at_external_halted_excl := at_external_halted_excl;
-        initial_core_det := initial_core_det;
         initial_core_unchanged_on := initial_core_unchanged_on';
         initial_core_decay := initial_core_decay;
         initial_core_nextblock := initial_core_nextblock
       }.
-                                                    
+
+    Instance X86Det : CoreLanguage.SemDet :=
+      { corestep_det := corestep_det;
+        initial_core_det := initial_core_det
+      }.
+
   End X86Context.
 End X86SEMAxioms.

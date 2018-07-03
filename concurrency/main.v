@@ -14,6 +14,8 @@ Require Import VST.concurrency.compiler.sequential_compiler_correct.
 Require Import VST.concurrency.sc_drf.mem_obs_eq.
 Require Import VST.concurrency.sc_drf.x86_inj.
 Require Import VST.concurrency.sc_drf.x86_safe.
+Require Import VST.concurrency.sc_drf.executions.
+Require Import VST.concurrency.sc_drf.spinlocks.
 
 Require Import VST.concurrency.common.threadPool.
 Require Import VST.concurrency.common.erased_machine.
@@ -165,6 +167,8 @@ Qed.
     - apply CPROOF_initial_mem.
   Qed.
 
+  Notation sc_execution := (@Executions.fine_execution _ BareDilMem BareMachine.resources
+                                            BareMachine.BareMachineSig).
   Theorem CSL2FineBareAsm_safety:
     forall U,
     exists init_mem_target init_mem_target' init_thread_target,
@@ -176,14 +180,19 @@ Qed.
       machine_semantics.initial_machine (EHM (Genv.init_mem Asm_prog)) (Some tt) init_mem_target
                                         init_tp_target init_mem_target' Main_ptr nil /\
 
-      forall n,
+      (forall n,
         HybridMachineSig.HybridMachineSig.HybridFineMachine.fsafe
           (dilMem:= BareDilMem)
           (ThreadPool:=threadPool.OrdinalPool.OrdinalThreadPool
                          (resources:=BareMachine.resources)
                          (Sem:=SemTarget))
           (machineSig:= BareMachine.BareMachineSig)
-          init_tp_target (@HybridMachineSig.diluteMem BareDilMem init_mem_target') U n.
+          init_tp_target (@HybridMachineSig.diluteMem BareDilMem init_mem_target') U n) /\
+      (forall final_state final_mem tr,
+          sc_execution (U, [::], init_tp_target)
+                       (@HybridMachineSig.diluteMem BareDilMem init_mem_target')
+                       ([::], tr, final_state) final_mem ->
+          SpinLocks.spinlock_synchronized tr).
   Proof.
     intros U.
     destruct (CSL2CoarseAsm_safety U) as

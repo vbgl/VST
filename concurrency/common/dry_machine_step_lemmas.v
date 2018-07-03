@@ -374,7 +374,8 @@ Module StepLemmas.
     Section InternalSteps.
 
       Context {Sem : Semantics}
-              {SemAx : SemAxioms}.
+              {SemAx : SemAxioms}
+              {SemD : SemDet}.
 
       Notation schedule := (seq nat).
 
