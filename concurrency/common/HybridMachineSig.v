@@ -199,6 +199,11 @@ Module HybridMachineSig.
               containsThread ms tid0 -> mem_compatible ms m ->
               thread_pool -> mem -> seq mem_event -> Prop
 
+        ; threadStep_at_Krun:
+            forall i tp m cnt cmpt tp' m' tr,
+              @threadStep i tp m cnt cmpt tp' m' tr ->
+              (exists q, @getThreadC _ _ _ i tp cnt = Krun q)                                        
+                                                    
         ;  threadStep_equal_run:
              forall i tp m cnt cmpt tp' m' tr,
                @threadStep i tp m cnt cmpt tp' m' tr ->
