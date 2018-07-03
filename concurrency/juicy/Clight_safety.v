@@ -638,6 +638,18 @@ Definition mem_ok m := Smallstep.globals_not_fresh (Clight.genv_genv ge) m /\
   forall b ofs, memval_inject (Mem.flat_inj (Mem.nextblock m))
     (ZMap.get ofs (Mem.mem_contents m) # b) (ZMap.get ofs (Mem.mem_contents m) # b).
 
+Lemma mem_ok_wd: forall m, mem_ok m -> Mem.mem_wd m.
+Proof.
+  intros ? [].
+  constructor; unfold Mem.flat_inj; intros.
+  - destruct (plt _ _); inv H1; auto.
+    rewrite Z.add_0_r; auto.
+  - destruct (plt _ _); inv H1; auto.
+    apply Z.divide_0_r.
+  - destruct (plt _ _); inv H1; auto.
+    rewrite Z.add_0_r; auto.
+Qed.
+
 Lemma mem_ok_restr: forall m p Hlt, mem_ok m -> mem_ok (@restrPermMap p m Hlt).
 Proof.
   intros.
@@ -785,7 +797,7 @@ Proof.
         hnf in Hperm; subst.
         econstructor; eauto.
         - apply mem_ok_restr; auto.
-        - (*apply mem_ok_restr; auto.*) admit.
+        - apply mem_ok_wd, mem_ok_restr; auto.
         - apply lookup_wrapper.
         - apply wrapper_args.
         - auto. }
@@ -1137,7 +1149,7 @@ Proof.
   + eapply mem_compatible_updThreadC, MTCH_compat; eauto.
   + erewrite <- mtch_gtr2; eauto.
   + erewrite <- mtch_gtr2; eauto.
-Admitted.
+Qed.
 
 Lemma init_mem_ok: mem_ok init_mem.
 Admitted.
