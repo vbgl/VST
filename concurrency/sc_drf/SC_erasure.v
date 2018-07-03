@@ -2808,11 +2808,11 @@ Module SCErasure.
 
     (** Final erasure theorem from FineConc to SC*)
     Theorem sc_erasure:
-      forall n f arg tpsc tpf m m'
+      forall f arg tpsc tpf m m'
         (HinitSC: bare_init initU m (initU, [::], tpsc) m' f arg)
         (HinitF: tpf_init initU m (initU, [::], tpf) m' f arg)
-        (HsafeF: fsafe tpf (@diluteMem FineDilMem m') initU n),
-        sc_safe tpsc (@diluteMem BareDilMem m') initU n /\
+        (HsafeF: forall n, fsafe tpf (@diluteMem FineDilMem m') initU n),
+        (forall n, sc_safe tpsc (@diluteMem BareDilMem m') initU n) /\
         (forall tpf' mf' tr,
             fexecution (initU, [::], tpf) (@diluteMem FineDilMem m')
                            ([::], tr, tpf') mf' ->
@@ -2837,7 +2837,7 @@ Module SCErasure.
         intros.
         eapply memval_erasure_refl.
       }
-      split; first by (eapply fsafe_implies_scsafe; eauto).
+      split; first by (intros n; eapply fsafe_implies_scsafe; eauto).
       intros.
       eapply execution_sim with (trsc := [::]) in H; eauto.
       destruct H as (? & ? & ? & ?& ?& ? & Htrace_erasure).
@@ -2846,16 +2846,16 @@ Module SCErasure.
     Qed.
 
     Corollary init_fsafe_implies_scsafe:
-      forall n f arg tpsc tpf m m'
+      forall f arg tpsc tpf m m'
         (HinitSC: bare_init initU m (initU, [::], tpsc) m' f arg)
         (HinitF: tpf_init initU m (initU, [::], tpf) m' f arg)
-        (HsafeF: fsafe tpf (@diluteMem FineDilMem m') initU n),
-        sc_safe tpsc (@diluteMem BareDilMem m') initU n.
+        (HsafeF: forall n, fsafe tpf (@diluteMem FineDilMem m') initU n),
+        forall n, sc_safe tpsc (@diluteMem BareDilMem m') initU n.
     Proof.
       intros.
       exploit sc_erasure; eauto.
       intros (? & ?).
-      assumption.
+      now eauto.
     Qed.
 
   End SCErasure.

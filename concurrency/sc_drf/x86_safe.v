@@ -36,8 +36,10 @@ Require Import VST.concurrency.sc_drf.mem_obs_eq.
 Require Import VST.concurrency.sc_drf.x86_erasure.
 Require Import VST.concurrency.sc_drf.x86_inj.
 Require Import VST.concurrency.sc_drf.fineConc_safe.
+Require Import VST.concurrency.sc_drf.executions.
 Require Import VST.concurrency.sc_drf.SC_erasure.
 Require Import VST.concurrency.sc_drf.SC_spinlock_safe.
+Require Import VST.concurrency.sc_drf.spinlocks.
 
 Require Import Coqlib.
 Require Import VST.msl.Coqlib2.
@@ -379,7 +381,7 @@ Module X86Safe.
 
   Import AsmContext SCErasure X86Context X86SEMAxioms HybridMachine
          HybridMachineSig HybridCoarseMachine HybridFineMachine
-         FineConcSafe FineConcInitial.
+         FineConcSafe FineConcInitial Executions SpinLocks.
 
   Section X86Safe.
 
@@ -399,7 +401,15 @@ Module X86Safe.
     Existing Instance dryFineMach.
     Existing Instance bareMach.
 
-    
+    Notation fexecution := (@fine_execution _ FineDilMem DryHybridMachine.dryResources DryHybridMachine.DryHybridMachineSig).
+    Notation sc_execution := (@fine_execution _ BareDilMem BareMachine.resources BareMachine.BareMachineSig).
+    Notation fsafe := (@HybridFineMachine.fsafe DryHybridMachine.dryResources _
+                                                OrdinalPool.OrdinalThreadPool
+                                                DryHybridMachine.DryHybridMachineSig FineDilMem).
+    Notation sc_safe := (@HybridFineMachine.fsafe BareMachine.resources _
+                                                  OrdinalPool.OrdinalThreadPool
+                                                  BareMachine.BareMachineSig BareDilMem).
+
     Lemma x86SC_safe:
       forall Main_ptr init_thread_target new_mem_target,
         initial_core (event_semantics.msem semSem) 0 init_mem init_thread_target new_mem_target Main_ptr nil ->
@@ -418,55 +428,92 @@ Module X86Safe.
           let init_tp_bare := ThreadPool.mkPool
                                 (resources:=BareMachine.resources)
                                 (Krun init_thread_target) tt  in
-          forall n,
-            fsafe
-              (dilMem:= BareDilMem)
-              (ThreadPool:=threadPool.OrdinalPool.OrdinalThreadPool
-                             (resources:=erased_machine.BareMachine.resources)
-                             (Sem:=_))
-              (machineSig:= BareMachine.BareMachineSig)
-              init_tp_bare (@diluteMem BareDilMem new_mem_target) U n.
+          (forall n,
+              sc_safe
+              init_tp_bare (@diluteMem BareDilMem new_mem_target) U n) /\
+            (forall final_state final_mem tr,
+                sc_execution  (U, [::], init_tp_bare) (@diluteMem BareDilMem new_mem_target)
+                              ([::], tr, final_state) final_mem ->
+                spinlock_synchronized tr).
     Proof.
       intros.
       (** Fine to Erased safety *)
-      eapply init_fsafe_implies_scsafe with (m := init_mem) (f := Main_ptr) (arg := nil) (tpf := init_tpc_target); eauto.
-      econstructor; eauto.
-      simpl.
-      unfold BareMachine.init_mach.
-      exists init_thread_target.
-      split;
-        now eauto.
-      unfold tpf_init.
-      simpl.
-      split; auto.
-      unfold DryHybridMachine.init_mach.
-      eexists; split;
-        now eauto.
-      (** Coarse to Fine safety *)
-      eapply init_fine_safe with (f := Main_ptr) (arg := nil); eauto.
-      intros sched tpc mem' n0 Htpc.
-      destruct Htpc as [_ Hinit_tpc].
-      simpl in Hinit_tpc.
-      unfold DryHybridMachine.init_mach in Hinit_tpc.
-      destruct Hinit_tpc as [c_new [Hinit_core_new ?]].
-      simpl in Hcsafe.
-      specialize (Hcsafe n0 sched).
-      unfold init_tpc_target in Hcsafe.
-      simpl in Hcsafe.
-      assert (Heq: c_new = init_thread_target /\ mem' = new_mem_target)
-        by (eapply initial_core_det with (args := nil); eauto). 
-      destruct Heq; subst c_new mem'.
-      assert (tpc = OrdinalPool.mkPool (Krun init_thread_target) (new_perm_target, empty_map)).
-      { subst.
+      assert (HscSafe:
+                 (forall n,
+                    fsafe init_tpc_target (@diluteMem FineDilMem new_mem_target) U n) /\
+                (forall n,
+                    sc_safe
+                      init_tp_bare (@diluteMem BareDilMem new_mem_target) U n) /\
+                (forall tpf' mf' tr,
+                    fexecution (U, [::], init_tpc_target) (@diluteMem FineDilMem new_mem_target)
+                               ([::], tr, tpf') mf' ->
+                    exists tpsc' msc' tr',
+                       sc_execution (U, [::], init_tp_bare) (@diluteMem BareDilMem new_mem_target)
+                                   ([::], tr', tpsc') msc' /\
+                       ThreadPoolErasure.threadPool_erasure tpf' tpsc' /\
+                       MemErasure.mem_erasure mf' msc' /\
+                       TraceErasure.trace_erasure tr tr')).
+      { (** Coarse to Fine safety *)
+        assert (forall n : nat, fsafe init_tpc_target (@diluteMem FineDilMem new_mem_target) U n).
+        { intros n.
+          eapply init_fine_safe with (f := Main_ptr) (arg := nil); eauto.
+          intros sched tpc mem' n1 Htpc.
+          destruct Htpc as [_ Hinit_tpc].
+          simpl in Hinit_tpc.
+          unfold DryHybridMachine.init_mach in Hinit_tpc.
+          destruct Hinit_tpc as [c_new [Hinit_core_new ?]].
+          simpl in Hcsafe.
+          specialize (Hcsafe n1 sched).
+          unfold init_tpc_target in Hcsafe.
+          simpl in Hcsafe.
+          assert (Heq: c_new = init_thread_target /\ mem' = new_mem_target)
+            by (eapply initial_core_det with (args := nil); eauto). 
+          destruct Heq; subst c_new mem'.
+          assert (tpc = OrdinalPool.mkPool (Krun init_thread_target) (new_perm_target, empty_map)).
+          { subst.
+            simpl.
+            unfold new_perm_target.
+            eapply f_equal2; try reflexivity.
+          }
+          subst; now eauto.
+          econstructor; eauto.
+          simpl.
+          eexists; now eauto.
+          now econstructor. }
+        split; eauto.
+        eapply sc_erasure with (m := init_mem) (f := Main_ptr) (arg := nil)
+                               (tpf := init_tpc_target); eauto.
+        econstructor; eauto.
         simpl.
-        unfold new_perm_target.
-        eapply f_equal2; try reflexivity.
+        unfold BareMachine.init_mach.
+        exists init_thread_target.
+        split;
+          now eauto.
+        unfold tpf_init.
+        simpl.
+        split; auto.
+        unfold DryHybridMachine.init_mach.
+        eexists; split;
+          now eauto.
+
       }
-      subst; now eauto.
-      econstructor; eauto.
-      simpl.
-      eexists; now eauto.
-      now econstructor.
+      destruct HscSafe as [Hfsafe [HscSafe Hexec]].
+      split; eauto.
+      intros final_state final_mem tr HSCexec.
+      eapply @fsafe_execution with (tr := [::]) in Hfsafe.
+      destruct Hfsafe as [tpf' [mf' [trf' HexecF]]].
+      destruct (Hexec _ _ _ HexecF) as [tpsc' [msc' [tr' [HexecSC' [_ [_ Htr_erasure]]]]]].
+      eapply fine_execution_multi_step in HexecF.
+      simpl in HexecF.
+      pose proof (@bare_execution_det _ X86Axioms _ _ _ _ _ _ HSCexec HexecSC') as Heq.
+      destruct Heq as [Heq1 Heq2].
+      inversion Heq1; subst.
+      simpl in Htr_erasure.
+      eapply fineConc_spinlock in HexecF; eauto.
+      eapply SpinLocksSC.trace_erasure_spinlock_synchronized;
+        eauto.
+      auto.
+      Unshelve. auto.
     Qed.
 
   End X86Safe.
