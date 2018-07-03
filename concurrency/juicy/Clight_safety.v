@@ -16,6 +16,7 @@ Require Import VST.concurrency.common.HybridMachineSig.
 Require Import VST.concurrency.common.ClightSemantincsForMachines.
 Require Import VST.concurrency.common.ClightMachine.
 Require Import VST.concurrency.common.dry_machine_lemmas.
+Require Import VST.concurrency.juicy.semax_simlemmas.
 Require Import VST.concurrency.juicy.semax_to_juicy_machine.
 Require Import VST.veric.Clight_sim.
 Require Import VST.msl.eq_dec.
@@ -631,29 +632,83 @@ Proof.
   unfold Clight.type_of_function; eauto.
 Qed.
 
-Definition mem_ok m := Smallstep.globals_not_fresh (Clight.genv_genv ge) m /\ Mem.mem_wd m.
+Definition mem_ok m := Smallstep.globals_not_fresh (Clight.genv_genv ge) m /\
+  (* Mem.mem_wd m isn't sufficient, because there may be values that aren't currently readable
+    but will still be used later *)
+  forall b ofs, memval_inject (Mem.flat_inj (Mem.nextblock m))
+    (ZMap.get ofs (Mem.mem_contents m) # b) (ZMap.get ofs (Mem.mem_contents m) # b).
 
-(* This isn't true - restrPermMap may expose a value that isn't well-defined. *)
 Lemma mem_ok_restr: forall m p Hlt, mem_ok m -> mem_ok (@restrPermMap p m Hlt).
 Proof.
   intros.
   destruct H as [? Hwd]; split.
   - unfold Smallstep.globals_not_fresh.
     rewrite restrPermMap_nextblock; auto.
-  - unfold Mem.mem_wd, Mem.inject_neutral in *.
-    rewrite restrPermMap_nextblock.
-    destruct Hwd; unfold Mem.flat_inj in *; constructor; intros.
-    + destruct (plt _ _); inv H0.
-      rewrite Z.add_0_r; auto.
-    + destruct (plt _ _); inv H0.
-      apply Z.divide_0_r.
-Admitted.
+  - rewrite restrPermMap_nextblock, restrPermMap_mem_contents; auto.
+Qed.
 
 Lemma mem_ok_step: forall st m st' m' (Hmem: mem_ok m),
   MachStep(Sem := Clight_newSem ge)
     (ThreadPool:= OrdinalPool.OrdinalThreadPool)
     (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig) st m st' m' -> mem_ok m'.
-Admitted.
+Proof.
+  induction 2; auto.
+  - inv Htstep.
+    hnf in Hperm; subst.
+    destruct Hinitial as (? & ? & ?); subst.
+    destruct (Mem.alloc _ _ _) eqn: Halloc.
+    destruct Hmem; split.
+    + unfold Smallstep.globals_not_fresh.
+      erewrite Mem.nextblock_alloc, restrPermMap_nextblock by eauto.
+      etransitivity; eauto.
+      apply Ple_succ.
+    + intros.
+      erewrite Mem.nextblock_alloc, restrPermMap_nextblock by eauto.
+      destruct (eq_dec b0 b); [subst; erewrite AllocContentsUndef1 by eauto | erewrite AllocContentsOther1 by eauto].
+      * constructor.
+      * eapply memval_inject_incr, flat_inj_incr, Ple_succ; eauto.
+        apply .
+      SearchAbout inject_incr Mem.flat_inj.
+        apply inject_incr_flat.
+        replace ofs0 with (ofs0 + 0) at 2 by apply Z.add_0_r.
+        replace (Ptrofs.intval ofs) with (Ptrofs.intval ofs + 0) at 3 by apply Z.add_0_r.
+        apply Mem.setN_inj with (access := fun _ => True); intros; rewrite ?Z.add_0_r; auto.
+        apply encode_val_inject; constructor.
+    + admit.
+  - inv Htstep.
+    admit.
+  - inv Htstep; auto.
+    + destruct Hmem as [? Hwd]; split.
+      * unfold Smallstep.globals_not_fresh.
+        erewrite Mem.nextblock_store, restrPermMap_nextblock; eauto.
+      * intros.
+        erewrite Mem.nextblock_store, restrPermMap_nextblock, Mem.store_mem_contents by eauto.
+        destruct (eq_dec b0 b); [subst; rewrite PMap.gss | rewrite PMap.gso; auto].
+        replace ofs0 with (ofs0 + 0) at 2 by apply Z.add_0_r.
+        replace (Ptrofs.intval ofs) with (Ptrofs.intval ofs + 0) at 3 by apply Z.add_0_r.
+        apply Mem.setN_inj with (access := fun _ => True); intros; rewrite ?Z.add_0_r; auto.
+        apply encode_val_inject; constructor.
+    + destruct Hmem as [? Hwd]; split.
+      * unfold Smallstep.globals_not_fresh.
+        erewrite Mem.nextblock_store, restrPermMap_nextblock; eauto.
+      * intros.
+        erewrite Mem.nextblock_store, restrPermMap_nextblock, Mem.store_mem_contents by eauto.
+        destruct (eq_dec b0 b); [subst; rewrite PMap.gss | rewrite PMap.gso; auto].
+        replace ofs0 with (ofs0 + 0) at 2 by apply Z.add_0_r.
+        replace (Ptrofs.intval ofs) with (Ptrofs.intval ofs + 0) at 3 by apply Z.add_0_r.
+        apply Mem.setN_inj with (access := fun _ => True); intros; rewrite ?Z.add_0_r; auto.
+        apply encode_val_inject; constructor.
+    + destruct Hmem as [? Hwd]; split.
+      * unfold Smallstep.globals_not_fresh.
+        erewrite Mem.nextblock_store, restrPermMap_nextblock; eauto.
+      * intros.
+        erewrite Mem.nextblock_store, restrPermMap_nextblock, Mem.store_mem_contents by eauto.
+        destruct (eq_dec b0 b); [subst; rewrite PMap.gss | rewrite PMap.gso; auto].
+        replace ofs0 with (ofs0 + 0) at 2 by apply Z.add_0_r.
+        replace (Ptrofs.intval ofs) with (Ptrofs.intval ofs + 0) at 2 by apply Z.add_0_r.
+        apply Mem.setN_inj with (access := fun _ => True); intros; rewrite ?Z.add_0_r; auto.
+        apply encode_val_inject; constructor.
+Qed.
 
 (* spawn handler *)
 Parameter b_wrapper: block.
