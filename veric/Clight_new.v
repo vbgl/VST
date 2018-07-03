@@ -269,22 +269,26 @@ Definition params_of_fundef (f: fundef) : list type :=
   | External _ t _ _ => typelist2list t
   end.
 
-Definition cl_initial_core (ge: genv) (v: val) (args: list val) : option corestate :=
+Definition cl_initial_core (ge: genv) (v: val) (args: list val) (q: corestate) : Prop :=
   match v with
     Vptr b i =>
     if Ptrofs.eq_dec i Ptrofs.zero then
       match Genv.find_funct_ptr ge b with
         Some f =>
-        Some (State empty_env (temp_bindings 1%positive (v::args))
+        match type_of_fundef f with Tfunction targs _ cc_default =>
+        Clight.val_casted_list args targs /\
+        Val.has_type_list args (Ctypes.typlist_of_typelist targs) /\
+        q = State empty_env (temp_bindings 1%positive (v::args))
                     (Kseq (Scall None
                                  (Etempvar 1%positive (type_of_fundef f))
                                  (map (fun x => Etempvar (fst x) (snd x))
                                       (params_of_types 2%positive
                                                        (params_of_fundef f)))) ::
-                          Kseq (Sloop Sskip Sskip) :: nil))
-      | _ => None end
-    else None
-  | _ => None
+                          Kseq (Sloop Sskip Sskip) :: nil)
+        | _ => False end
+      | _ => False end
+    else False
+  | _ => False
 end.
 
 Lemma cl_corestep_not_at_external:
@@ -315,7 +319,7 @@ Program Definition cl_core_sem (ge: genv):
   @CoreSemantics corestate mem :=
   @Build_CoreSemantics _ _
     (*deprecated cl_init_mem*)
-    (fun _ m c m' v args => cl_initial_core ge v args = Some c /\ Mem.arg_well_formed args m /\ m' = fst (Mem.alloc m 0 0))
+    (fun _ m c m' v args => cl_initial_core ge v args c /\ Mem.arg_well_formed args m /\ m' = fst (Mem.alloc m 0 0))
     (fun c _ => cl_at_external c)
     (fun ret c _ => cl_after_external ret c)
     (fun _ _ => False)

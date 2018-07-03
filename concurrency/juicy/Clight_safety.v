@@ -479,6 +479,57 @@ Qed.
 
 Instance ClightAxioms : @CoreLanguage.SemAxioms (ClightSem ge).
 Proof.
+  constructor.
+  - repeat intro.
+    inv H; inv H0.
+(*    inv H; inv H1;
+      match goal with H : _ = Clight.set_mem c m, H' : _ = Clight.set_mem c m |- _ =>
+        rewrite <- H in H'; inv H' end.*)
+    admit.
+  - intros.
+    apply memsem_lemmas.mem_step_obeys_cur_write; auto.
+    eapply corestep_mem; eauto.
+  - admit. (* proved for CLN *)
+  - intros.
+    apply mem_forward_nextblock, memsem_lemmas.mem_step_forward.
+    eapply corestep_mem; eauto.
+  - intros; simpl.
+    destruct q; auto.
+    right; repeat intro.
+    inv H.
+  - intros.
+    inv H; inv H0.
+    inv H; inv H1.
+    rewrite H11 in H0; inv H0.
+    assert (f0 = f2) by admit (* wrapper *); subst.
+    rewrite H22 in H10; inv H10; auto.
+  - intros.
+    inv Hstep.
+    inv H; simpl.
+    apply memsem_lemmas.mem_step_obeys_cur_write; auto.
+    eapply mem_step_alloc; eauto.
+  - intros.
+    inv H.
+    inv H0; simpl.
+    split; intros.
+    + eapply Mem.valid_block_alloc_inv in H10; eauto.
+      destruct H10; [subst | contradiction].
+      right; intro.
+      destruct ((Mem.mem_access m1) # stk ofs k) eqn: Haccess; auto.
+      eapply memsem_lemmas.alloc_access_inv in Haccess; eauto.
+      destruct Haccess; [omega|].
+      destruct H10 as [? Haccess].
+      rewrite Mem.nextblock_noaccess in Haccess; [discriminate|].
+      apply Mem.alloc_result in H9; subst; auto.
+    + destruct ((Mem.mem_access m1) # b ofs k) eqn: Haccess.
+      * eapply memsem_lemmas.alloc_access_inv in Haccess; eauto.
+        destruct Haccess; [omega | tauto].
+      * eapply memsem_lemmas.alloc_access_inv_None; eauto.
+  - intros.
+    inv H.
+    inv H0; simpl.
+    erewrite Mem.nextblock_alloc with (m1 := m)(m2 := m1) by eauto.
+    apply Ple_succ.
 Admitted.
 
 Lemma CoreSafe_star: forall n U tr tp m tid (c : @semC (ClightSem ge)) c' tp' m' ev
@@ -597,8 +648,19 @@ Axiom lookup_wrapper: Genv.find_funct_ptr (Clight.genv_genv ge) b_wrapper = Some
 Axiom wrapper_args: forall l, In l (AST.regs_of_rpairs (Clight.loc_arguments' (map Ctypes.typ_of_type (map snd (Clight.fn_params f_wrapper))))) ->
         match l with Locations.R _ => True | Locations.S _ _ _ => False end.
 
+Definition mem_ok m := Smallstep.globals_not_fresh (Clight.genv_genv ge) m /\ Mem.mem_wd m.
+
+Lemma mem_ok_restr: forall m p Hlt, mem_ok m -> mem_ok (@restrPermMap p m Hlt).
+Admitted.
+
+Lemma mem_ok_step: forall st m st' m' (Hmem: mem_ok m),
+  MachStep(Sem := ClightSem ge)
+    (ThreadPool:= OrdinalPool.OrdinalThreadPool(Sem:=ClightSem ge))
+    (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig) st m st' m' -> mem_ok m'.
+Admitted.
+
 Lemma Clight_new_Clight_safety_gen:
-  forall n sch tr tp m tp',
+  forall n sch tr tp m tp' (Hmem: mem_ok m),
   csafe
     (Sem := Clight_newSem ge)
     (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig)
@@ -634,8 +696,8 @@ Proof.
         hnf in Hperm; subst.
         econstructor; eauto.
         - admit.
-        - admit. (* globals_not_fresh *)
-        - admit. (* Clight_new's initial_core doesn't currently require mem_wd *)
+        - apply mem_ok_restr; auto.
+        - apply mem_ok_restr; auto.
         - admit. (* right number/type of args *)
         - admit. (* right number/type of args *)
         - apply lookup_wrapper.
