@@ -26,10 +26,10 @@ End cardinality.
 *)
 Section filtered_konig.
   Variable X: Type.
-  Axiom X_dec: forall x y:X, {x=y} + {x<>y}.
   Variable Filter: X -> Prop.
   Variable R: X->X->Prop.
-  Axiom  preservation :  forall P P', Filter P -> R P P' -> Filter P'.
+  Hypothesis em: forall P, P \/ ~ P.
+  Hypothesis  preservation :  forall P P', Filter P -> R P P' -> Filter P'.
 
   (* From the relation R, we derive a, dependently typed relation 
      RR for all elements satyisfying the predicate Filter*)
@@ -82,14 +82,14 @@ Section filtered_konig.
                 - constructor 2 => //.
                 - move: IHn=> [[]i [] A B| A].
                   + constructor; exists i; split =>//; auto.
-                  + destruct (X_dec (f n) x).
+                  + destruct (em (eq (f n) x)).
                     * left; exists n; split=> //.
                     * right=> i ineq.
                       { destruct (Nat.eq_dec i n).
                         - subst i => //.
                         - apply: A=>//.
                           destruct (le_lt_dec n i) as [HH|HH]; move: HH=> /leP // /leP ineq2.
-                        contradict n1. move: ineq=> /leP ineq.
+                          contradict n0. move: ineq=> /leP ineq.
                         omega.
                       }
               Qed.
@@ -263,10 +263,12 @@ Section Safety.
   Context (ST:Type)(SCH:Type).
   Context (STEP:ST->SCH->ST->SCH-> Prop).
   Context (valid: ST-> SCH -> Prop).
-
-  Axiom schedule_dec:
-    forall (U U':SCH), {U=U'} + {U<>U'}.
-
+  Hypothesis em: forall P, P \/ ~ P.
+  
+  Lemma schedule_dec:
+    forall (U U':SCH), (U=U') \/ (U<>U').
+  Proof. intros; eapply em. Qed.
+  
   Inductive ksafe (st:ST) U: nat -> Prop :=
   |sft0: ksafe st U 0
   |sft_step: forall n st' U', STEP st U st' U' -> (forall U'', valid st' U'' -> ksafe st' U'' n) -> ksafe st U (S n).
@@ -276,6 +278,7 @@ Section Safety.
 
   (*The proof relies on the sets of states: SST's*)
   Definition SST:= ST -> Prop.
+  
   Definition is_in (st:ST)(P:SST):= P st.
   (*Notation enth:= (List.nth_error).*)
   Infix "\In":= (is_in) (at level 20, right associativity).
@@ -286,6 +289,7 @@ Section Safety.
               (forall x', P' x' -> exists x y, R x x' y /\ P x /\ valid x y) ->
               SStep R valid P P'.
   Definition SST_step : SST -> SST -> Prop := SStep (fun st st' U => exists U', STEP st U st' U') valid.
+  Hypothesis  preservation : forall P0 P' : SST, finite P0 -> SST_step P0 P' -> finite P'.
 
   (*Instantiating koning's variables *)
   Definition SsafeN:= konig.safeN SST SST_step.
@@ -387,7 +391,7 @@ Section Safety.
     forall P, (finite P) ->
          ( forall n : nat, safeN (ST -> Prop) SST_step n P) ->
          Ssafe P.
-  Proof. by move => EM FIN P FINP; apply: ( filtered_konigsafe _ finite). Qed.
+  Proof. intros; eapply filtered_konigsafe; eauto. Qed.
 
   Lemma finite_Ssafe_safe:
     (forall P : Prop, P \/ ~ P) ->

@@ -732,8 +732,16 @@ Context (finit_branch_kstep:(forall x : kstate,
         finite_on_x
           (possible_image
              (fun (x0 : kstate) (y : schedule) (x' : kstate) =>
-              exists y' : schedule, kstep x0 y x' y') valid x))).
-  
+                exists y' : schedule, kstep x0 y x' y') valid x))).
+
+
+Lemma finite_state_preservation:
+  forall P0 P' : SST kstate,
+    konig.finite P0 -> SST_step kstate schedule kstep valid P0 P' -> konig.finite P'.
+Proof.
+  (* This should follow from finitebranching, lifted to sets *)
+Admitted.
+    
 Lemma csafe_safety_trick:
   forall tr tp m,
        (forall U : schedule, valid (tr, tp,m) U) ->
@@ -742,6 +750,7 @@ Lemma csafe_safety_trick:
 Proof.
   intros ??????.
   eapply ksafe_safe; eauto.
+  - eapply finite_state_preservation.
   - exact classic.
   - eapply csafe_ksafe_equiv_trick; eauto.
 Qed.
@@ -753,6 +762,7 @@ Lemma csafe_safety:
 Proof.
   intros ??????.
   eapply ksafe_safe'; eauto.
+  - eapply finite_state_preservation.
   - exact classic.
   - eapply csafe_ksafe_equiv; eauto.
 Qed.
