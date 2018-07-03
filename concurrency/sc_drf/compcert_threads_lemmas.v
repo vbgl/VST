@@ -10232,6 +10232,8 @@ relation*)
       split.
       (** proof that the fine grained machine can step*)
       intros U.
+      assert (HargF: val_inject (Mem.flat_inj (Mem.nextblock mf)) v' v')
+        by admit.
       assert (HsyncStepF: syncStep false pff (mem_compf Hsim) tpf' mf
                                    (spawn (b2,Ptrofs.intval ofs) (Some (getThreadR pff, virtue1F)) (Some virtue2F)))
         by (eapply step_create;
@@ -12449,7 +12451,7 @@ relation*)
     Unshelve. all:eauto.
     eapply store_compatible; eauto. eapply (mem_compf Hsim).
     eapply store_compatible; eauto. eapply (mem_compf Hsim).
-Qed.
+Admitted.
 
 End SimProofs.
 
