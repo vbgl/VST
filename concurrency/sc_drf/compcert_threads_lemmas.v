@@ -56,6 +56,7 @@ Module SimDefs.
   Section SimDefs.
   Context {asmSem : Semantics}
           {semAxioms : SemAxioms}
+          {semDet : SemDet}
           {CI: CoreInj}
           {initU : seq nat}.
 
@@ -355,6 +356,7 @@ Module SimProofs.
   Section SimProofs.
     Context {asmSem : Semantics}
             {semAxioms : SemAxioms}
+            {semDet : SemDet}
             {CI: CoreInj}
             {initU : seq nat}.
 

@@ -390,7 +390,8 @@ Module X86Safe.
             {Hsafe: Asm_core.safe_genv (@the_ge the_program)}.
     
     Instance X86Sem : Semantics := @X86Sem the_program Hsafe.
-    Instance X86Axioms : CoreLanguage.SemAxioms := @X86Axioms U the_program Hsafe.
+    Instance X86Axioms : CoreLanguage.SemAxioms := @X86Axioms the_program Hsafe.
+    Instance X86Det : CoreLanguage.SemDet := @X86Det U the_program Hsafe.
     Existing Instance X86CoreErasure.X86Erasure.
     Existing Instance X86Inj.X86Inj.
     (* We don't really have an instance for that, it would require to prove that
@@ -505,7 +506,7 @@ Module X86Safe.
       destruct (Hexec _ _ _ HexecF) as [tpsc' [msc' [tr' [HexecSC' [_ [_ Htr_erasure]]]]]].
       eapply fine_execution_multi_step in HexecF.
       simpl in HexecF.
-      pose proof (@bare_execution_det _ X86Axioms _ _ _ _ _ _ HSCexec HexecSC') as Heq.
+      pose proof (@bare_execution_det _ X86Det _ _ _ _ _ _ HSCexec HexecSC') as Heq.
       destruct Heq as [Heq1 Heq2].
       inversion Heq1; subst.
       simpl in Htr_erasure.

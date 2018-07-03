@@ -16,6 +16,7 @@ Require Import VST.concurrency.common.HybridMachineSig.
 Require Import VST.concurrency.common.ClightSemantincsForMachines.
 Require Import VST.concurrency.common.ClightMachine.
 Require Import VST.concurrency.common.dry_machine_lemmas.
+Require Import VST.concurrency.juicy.semax_simlemmas.
 Require Import VST.concurrency.juicy.semax_to_juicy_machine.
 Require Import VST.veric.Clight_sim.
 Require Import VST.msl.eq_dec.
@@ -58,7 +59,7 @@ Definition initial_Clight_state : Clight.state :=
   Clight.State main_handler (Clight.Scall None (Clight.Etempvar 1%positive (Clight.type_of_fundef f))
              (map (fun x => Clight.Etempvar (fst x) (snd x))
              (Clight_new.params_of_types 2 (Clight_new.params_of_fundef f))))
-             (Clight.Kseq (Clight.Sloop Clight.Sskip Clight.Sskip) Clight.Kstop) Clight.empty_env
+             ((*Clight.Kseq (Clight.Sloop Clight.Sskip Clight.Sskip)*) Clight.Kstop) Clight.empty_env
              (Clight_new.temp_bindings 1 [Vptr (projT1 (spr CPROOF)) Ptrofs.zero]) init_mem.
 
 (*...And we should be able to construct an initial state from the Clight_new and mem.*)
@@ -482,12 +483,6 @@ Qed.
 Instance ClightAxioms : @CoreLanguage.SemAxioms (ClightSem ge).
 Proof.
   constructor.
-  - repeat intro.
-    inv H; inv H0.
-(*    inv H; inv H1;
-      match goal with H : _ = Clight.set_mem c m, H' : _ = Clight.set_mem c m |- _ =>
-        rewrite <- H in H'; inv H' end.*)
-    admit.
   - intros.
     apply memsem_lemmas.mem_step_obeys_cur_write; auto.
     eapply corestep_mem; eauto.
@@ -499,12 +494,6 @@ Proof.
     destruct q; auto.
     right; repeat intro.
     inv H.
-  - intros.
-    inv H; inv H0.
-    inv H; inv H1.
-    rewrite H11 in H0; inv H0.
-    assert (f0 = f2) by admit (* wrapper *); subst.
-    rewrite H22 in H10; inv H10; auto.
   - intros.
     inv Hstep.
     inv H; simpl.
@@ -643,23 +632,94 @@ Proof.
   unfold Clight.type_of_function; eauto.
 Qed.
 
+Definition mem_ok m := Smallstep.globals_not_fresh (Clight.genv_genv ge) m /\
+  (* Mem.mem_wd m isn't sufficient, because there may be values that aren't currently readable
+    but will still be used later *)
+  forall b ofs, memval_inject (Mem.flat_inj (Mem.nextblock m))
+    (ZMap.get ofs (Mem.mem_contents m) # b) (ZMap.get ofs (Mem.mem_contents m) # b).
+
+Lemma mem_ok_wd: forall m, mem_ok m -> Mem.mem_wd m.
+Proof.
+  intros ? [].
+  constructor; unfold Mem.flat_inj; intros.
+  - destruct (plt _ _); inv H1; auto.
+    rewrite Z.add_0_r; auto.
+  - destruct (plt _ _); inv H1; auto.
+    apply Z.divide_0_r.
+  - destruct (plt _ _); inv H1; auto.
+    rewrite Z.add_0_r; auto.
+Qed.
+
+Lemma mem_ok_restr: forall m p Hlt, mem_ok m -> mem_ok (@restrPermMap p m Hlt).
+Proof.
+  intros.
+  destruct H as [? Hwd]; split.
+  - unfold Smallstep.globals_not_fresh.
+    rewrite restrPermMap_nextblock; auto.
+  - rewrite restrPermMap_nextblock, restrPermMap_mem_contents; auto.
+Qed.
+
+Lemma mem_ok_step: forall st m st' m' (Hmem: mem_ok m),
+  MachStep(Sem := Clight_newSem ge)
+    (ThreadPool:= OrdinalPool.OrdinalThreadPool)
+    (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig) st m st' m' -> mem_ok m'.
+Proof.
+  induction 2; auto.
+  - inv Htstep.
+    hnf in Hperm; subst.
+    destruct Hinitial as (? & ? & ?); subst.
+    destruct (Mem.alloc _ _ _) eqn: Halloc.
+    destruct Hmem; split.
+    + unfold Smallstep.globals_not_fresh.
+      erewrite Mem.nextblock_alloc, restrPermMap_nextblock by eauto.
+      etransitivity; eauto.
+      apply Ple_succ.
+    + intros.
+      erewrite Mem.nextblock_alloc, restrPermMap_nextblock by eauto.
+      destruct (eq_dec b0 b); [subst; erewrite AllocContentsUndef1 by eauto | erewrite AllocContentsOther1 by eauto].
+      * constructor.
+      * eapply memval_inject_incr, flat_inj_incr, Ple_succ; eauto.
+  - inv Htstep.
+    admit.
+  - inv Htstep; auto.
+    + destruct Hmem as [? Hwd]; split.
+      * unfold Smallstep.globals_not_fresh.
+        erewrite Mem.nextblock_store, restrPermMap_nextblock; eauto.
+      * intros.
+        erewrite Mem.nextblock_store, restrPermMap_nextblock, Mem.store_mem_contents by eauto.
+        destruct (eq_dec b0 b); [subst; rewrite PMap.gss | rewrite PMap.gso; auto].
+        replace ofs0 with (ofs0 + 0) at 2 by apply Z.add_0_r.
+        replace (Ptrofs.intval ofs) with (Ptrofs.intval ofs + 0) at 3 by apply Z.add_0_r.
+        apply Mem.setN_inj with (access := fun _ => True); intros; rewrite ?Z.add_0_r; auto.
+        apply encode_val_inject; constructor.
+    + destruct Hmem as [? Hwd]; split.
+      * unfold Smallstep.globals_not_fresh.
+        erewrite Mem.nextblock_store, restrPermMap_nextblock; eauto.
+      * intros.
+        erewrite Mem.nextblock_store, restrPermMap_nextblock, Mem.store_mem_contents by eauto.
+        destruct (eq_dec b0 b); [subst; rewrite PMap.gss | rewrite PMap.gso; auto].
+        replace ofs0 with (ofs0 + 0) at 2 by apply Z.add_0_r.
+        replace (Ptrofs.intval ofs) with (Ptrofs.intval ofs + 0) at 3 by apply Z.add_0_r.
+        apply Mem.setN_inj with (access := fun _ => True); intros; rewrite ?Z.add_0_r; auto.
+        apply encode_val_inject; constructor.
+    + destruct Hmem as [? Hwd]; split.
+      * unfold Smallstep.globals_not_fresh.
+        erewrite Mem.nextblock_store, restrPermMap_nextblock; eauto.
+      * intros.
+        erewrite Mem.nextblock_store, restrPermMap_nextblock, Mem.store_mem_contents by eauto.
+        destruct (eq_dec b0 b); [subst; rewrite PMap.gss | rewrite PMap.gso; auto].
+        replace ofs0 with (ofs0 + 0) at 2 by apply Z.add_0_r.
+        replace (Ptrofs.intval ofs) with (Ptrofs.intval ofs + 0) at 2 by apply Z.add_0_r.
+        apply Mem.setN_inj with (access := fun _ => True); intros; rewrite ?Z.add_0_r; auto.
+        apply encode_val_inject; constructor.
+Admitted.
+
 (* spawn handler *)
 Parameter b_wrapper: block.
 Parameter f_wrapper: Clight.function.
 Axiom lookup_wrapper: Genv.find_funct_ptr (Clight.genv_genv ge) b_wrapper = Some (Ctypes.Internal f_wrapper).
 Axiom wrapper_args: forall l, In l (AST.regs_of_rpairs (Clight.loc_arguments' (map Ctypes.typ_of_type (map snd (Clight.fn_params f_wrapper))))) ->
         match l with Locations.R _ => True | Locations.S _ _ _ => False end.
-
-Definition mem_ok m := Smallstep.globals_not_fresh (Clight.genv_genv ge) m /\ Mem.mem_wd m.
-
-Lemma mem_ok_restr: forall m p Hlt, mem_ok m -> mem_ok (@restrPermMap p m Hlt).
-Admitted.
-
-Lemma mem_ok_step: forall st m st' m' (Hmem: mem_ok m),
-  MachStep(Sem := Clight_newSem ge)
-    (ThreadPool:= OrdinalPool.OrdinalThreadPool)
-    (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig) st m st' m' -> mem_ok m'.
-Admitted.
 
 (* These two lemmas are probably not true. We need to reconcile what Clight_new and Clight do
    after a thread finishes. *)
@@ -669,7 +729,7 @@ Lemma match_body: forall body b v2 f,
      [Clight_new.Kseq body; Clight_new.Kseq (Clight.Sreturn None);
      Clight_new.Kcall None f Clight.empty_env
        (PTree.Node (PTree.Node PTree.Leaf (Some v2) PTree.Leaf) (Some (Vptr b Ptrofs.zero))
-          PTree.Leaf); Clight_new.Kseq (Clight.Sloop Clight.Sskip Clight.Sskip)])
+          PTree.Leaf)])
     (strip_skip'
      (CC.Kseq body
         (Clight.Kcall None f_wrapper (PTree.empty (block * Ctypes.type))
@@ -680,7 +740,7 @@ Lemma match_ext: forall ef b v2 t0 tyres,
   match_states
   (Clight_new.ExtCall ef [v2] None Clight.empty_env
      (PTree.Node (PTree.Node PTree.Leaf (Some v2) PTree.Leaf) (Some (Vptr b Ptrofs.zero)) PTree.Leaf)
-     [Clight_new.Kseq (Clight.Sloop Clight.Sskip Clight.Sskip)])
+     [])
   (CC'.CC_core_Callstate (Ctypes.External ef (Ctypes.Tcons t0 Ctypes.Tnil) tyres AST.cc_default) 
      [v2]
      (Clight.Kcall None f_wrapper (PTree.empty (block * Ctypes.type)) (PTree.empty val) Clight.Kstop)).
@@ -737,7 +797,7 @@ Proof.
         hnf in Hperm; subst.
         econstructor; eauto.
         - apply mem_ok_restr; auto.
-        - apply mem_ok_restr; auto.
+        - apply mem_ok_wd, mem_ok_restr; auto.
         - apply lookup_wrapper.
         - apply wrapper_args.
         - auto. }
