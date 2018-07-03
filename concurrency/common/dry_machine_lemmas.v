@@ -1065,7 +1065,7 @@ Module CoreLanguageDry.
    (** [mem_compatible] is preserved by coresteps*)
   Lemma decay_compatible:
     forall (tp : t)  (m m' : mem) i
-      (pf : containsThread tp i) (c c': semC)
+      (pf : containsThread tp i) (c': semC)
       (Hinv: invariant tp)
       (Hcompatible : mem_compatible tp m)
       (Hdecay: decay (restrPermMap (DryHybridMachine.compat_th _ _ Hcompatible pf).1) m')
