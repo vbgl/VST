@@ -303,14 +303,8 @@ Proof.
        id_fun _y b A P' Q' NEP' NEQ' 0 semaxprog as HEP.
 
   subst ge.
-  rewrite <-make_tycontext_s_find_id in HEP.
-  spec HEP. auto.
-
-  spec HEP. {
-    unfold A.
-    rewrite <-Eid.
-    apply make_tycontext_s_find_id.
-  }
+  spec HEP; [auto |].
+  specialize (HEP Eid).
 
   (*
   spec HEP. {
@@ -511,7 +505,19 @@ clear - Initcore.
         simpl.
         rewrite seplog.sepcon_emp.
         destruct fPRE; assumption.
-
+      * (* Q approx false *)
+        clear - l00 l0 Ejm Heq_Q. intro. intros ? ? ? ? ?.
+        hnf. hnf in Heq_Q. specialize (Heq_Q ts).
+       simpl in Heq_Q.
+       pose proof (equal_f (equal_f Heq_Q (b, f_with_x)) rho). simpl in H2. clear Heq_Q.
+       match type of H2 with (?A = ?B) => assert (app_pred B a') end.
+       split; auto.
+       assert (level (m_phi jm) = n). rewrite Ejm. apply level_age_to.
+       change  (@res LocksAndResources) with rmap. rewrite l0. omega.
+       rewrite H3 in H. apply necR_level in H0. omega.
+       rewrite <- H2 in H3. 
+       clear - H3. destruct H3.
+      destruct H0. destruct H0. auto.
       * (* funnassert *)
         rewrite Ejm.
         apply funassert_pures_eq with Phi.

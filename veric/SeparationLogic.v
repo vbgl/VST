@@ -832,7 +832,7 @@ Definition main_pre (prog: program) : list Type -> globals -> environ -> mpred :
 (fun nil gv => globvars2pred gv (prog_vars prog)).
 
 Definition main_post (prog: program) : list Type -> (ident->val) -> environ->mpred :=
-  (fun nil _ _ => TT).
+  (fun nil _ _ => FF).
 
 
 Definition main_spec' (prog: program) 
@@ -1108,7 +1108,7 @@ Definition semax_prog
   @semax_func Espec V G C (prog_funct prog) G /\
   match_globvars (prog_vars prog) V = true /\
   match initial_world.find_id prog.(prog_main) G with
-  | Some s => exists post, s = main_spec' prog post
+  | Some s => s = main_spec prog
   | None => False
   end.
 
