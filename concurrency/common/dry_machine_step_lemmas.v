@@ -239,7 +239,7 @@ Module StepLemmas.
     intros.
     inversion Hstep; simpl in *; subst;
       try (inversion Htstep; eauto).
-    (*inversion Hhalted; subst;*) eauto.
+    now eauto.
   Qed.
 
   Lemma step_containsThread :
@@ -360,7 +360,6 @@ Module StepLemmas.
     exists U1'; econstructor 4; simpl; eauto.
     exists U1'; econstructor 5; simpl; eauto.
     exists U1'; econstructor 6; simpl; eauto.
-    (*exists U1'; econstructor 7; simpl; eauto.*)(*No halted*)
   Qed.
 
   End StepLemmas.
@@ -2017,15 +2016,15 @@ Module StepType.
     Existing Instance DryHybridMachineSig.
   
   Inductive StepType : Type :=
-    Internal | Concurrent | Halted | Suspend.
+    Internal | Concurrent | Suspend.
 
   Definition ctlType (code : @threadPool.ctl semC) (m : Mem.mem) (st : StepType) : Prop :=
     match code with
     | Kinit _ _ => st = Internal
     | Krun c =>
-      match at_external semSem c m with (*TODO: erm is that Mem.empty here right?*)
-      | None => ((exists i, halted semSem c i) /\ st = Halted) \/
-                (st = Internal /\ (forall i, ~ halted semSem c i))
+      match at_external semSem c m with
+      | None => (* ((exists i, halted semSem c i) /\ st = Halted) \/ *)
+                st = Internal
       | Some _ => st = Suspend
       end
     | Kblocked c => st = Concurrent
@@ -2038,7 +2037,7 @@ Module StepType.
   Notation "cnt '$' m '@'  'I'" := (getStepType cnt m Internal) (at level 80).
   Notation "cnt '$' m '@'  'E'" := (getStepType cnt m Concurrent) (at level 80).
   Notation "cnt '$' m '@'  'S'" := (getStepType cnt m Suspend) (at level 80).
-  Notation "cnt '$' m '@'  'H'" := (getStepType cnt m Halted) (at level 80).
+  (* Notation "cnt '$' m '@'  'H'" := (getStepType cnt m Halted) (at level 80). *)
 
   Lemma internal_step_type :
     forall  i tp tp' m m' (cnt : containsThread tp i)
@@ -2054,10 +2053,7 @@ Module StepType.
     apply ev_step_ax1 in Hcorestep.
     assert (H1:= corestep_not_at_external semSem _ _ _ _ Hcorestep).
     rewrite H1.
-    right. split; [reflexivity |].
-    intros i0 Hcontra.
-    eapply corestep_not_halted in Hcorestep;
-      now eauto.
+    reflexivity.
     inversion Hresume; subst.
     Tactics.pf_cleanup;
       by rewrite Hcode.
@@ -2082,7 +2078,7 @@ Module StepType.
     try rewrite gssThreadCode in Hcontra;
     try rewrite gssThreadCC in Hcontra; unfold ctlType in Hcontra;
     repeat destruct (at_external _ _ _); try discriminate;
-    destruct Hcontra as [[]|[]]; discriminate.
+    destruct Hcontra as [? ?]; discriminate.
   Qed.
 
   Lemma internal_execution_result_type:
@@ -2145,16 +2141,6 @@ Module StepType.
                rewrite H in Hint; simpl in Hint
            | [H1: match ?Expr with _ => _ end = _,
                   H2: ?Expr = _ |- _] => rewrite H2 in H1
-                                                       (*
-           | [H: DryHybridMachine.threadHalted _ |- _] =>
-             inversion H; clear H; subst; simpl in *; Tactics.pf_cleanup;  simpl in *)
-      (*     | [H1: is_true (isSome (halted ?Sem ?C)),
-                  H2: match at_external _ _ _ with _ => _ end = _ |- _] =>
-             destruct (at_external_halted_excl Sem C) as [Hext | Hcontra];
-               [rewrite Hext in H2;
-                 destruct (halted Sem C) eqn:Hh;
-                 [discriminate | by exfalso] |
-                rewrite Hcontra in H1; by exfalso]*)
            end; try discriminate; try (exfalso; by auto).
 
   Opaque getThreadC updThreadC containsThread updThread updLockSet addThread remLockSet getThreadR lockSet.
@@ -2192,7 +2178,6 @@ Module StepType.
     - eapply ev_step_ax1 in Hcorestep.
       eapply corestep_invariant; simpl; eauto.
     - now apply updThreadC_invariant.
-   (* - auto. *)(*No thread halted*)
   Qed.
 
   Lemma fmachine_step_compatible:
@@ -2211,7 +2196,7 @@ Module StepType.
     eapply start_compatible in Htstep; eauto.
     eapply StepLemmas.mem_compatible_setMaxPerm; eauto.
     destruct (at_external semSem c mrestr) eqn:?; try discriminate.
-    destruct Hinternal as [[? Hhalted]|[_ ?]]; try discriminate.
+    destruct Hinternal as [_ ?]; try discriminate.
     eapply StepLemmas.mem_compatible_setMaxPerm; eauto.
     eapply corestep_compatible;simpl;
       now eauto.
@@ -2254,7 +2239,6 @@ Module StepType.
              by eauto);
     try (erewrite gsoThreadLock;
            by eauto).
-    (*reflexivity.*)
   Qed.
 
   Opaque lockRes.
@@ -2273,7 +2257,6 @@ Module StepType.
      extensionality addr;
       try (by rewrite gsoThreadCLPool);
       try (by rewrite gsoThreadLPool).
-    (*reflexivity.*)
   Qed.
 
   Lemma fmachine_step_disjoint_val :

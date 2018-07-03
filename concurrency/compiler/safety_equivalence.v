@@ -208,10 +208,10 @@ Section Csafe_KSafe.
       eapply (H _ cnti' q).
       erewrite <- ThreadPool.gsoThreadCode with (cntj' := cnti) by eauto.
       assumption.
-      intros Hcontra.
+(*      intros Hcontra.
       eapply H1.
       eapply @threadHalt_update with (cnt := cnti');
-        now eauto.
+        now eauto. *)
   Qed.
       
   Lemma unique_Krun_updateC:
@@ -232,10 +232,10 @@ Section Csafe_KSafe.
       eapply (H _ cnti' q).
       erewrite ThreadPool.gsoThreadCC with (cntj' := cnti) by eauto.
       assumption.
-      intros Hcontra.
+      (* intros Hcontra.
       eapply H1.
       eapply @threadHalt_updateC with (cnt := cnti');
-        now eauto.
+        now eauto. *)
   Qed.
     
   Lemma MachStep_preserve_valid:
@@ -393,8 +393,8 @@ Section Csafe_KSafe.
                   rewrite <- H0; eauto. 
                 * rewrite <- H6; econstructor 6; subst; simpl in *; subst; eauto.
                   rewrite <- H0; eauto. 
-                * rewrite <- H6; econstructor 7; subst; simpl in *; subst; eauto.
-                  rewrite <- H0; eauto. 
+               (* * rewrite <- H6; econstructor 7; subst; simpl in *; subst; eauto.
+                  rewrite <- H0; eauto.  *)
           Qed.
           
 
@@ -418,15 +418,11 @@ Section Csafe_KSafe.
               destruct (schedPeek U'); inversion H0; subst.
             unfold unique_Krun in *.
             inversion H3.
-            assert (HH: ~ threadHalted cnti).
+(*            assert (HH: ~ threadHalted cnti).
             { clear. unfold threadHalted. destruct Machine; simpl; clear.
               admit. (*threads don't halt... for now*)
               
-            }
-            
-            specialize (H1 _ _ _ H4 HH).
-            specialize (H2 _ _ _ H4 HH).
-            clear - H1 H2.
+            }*)
             admit.
             (**)
           Admitted.
@@ -545,7 +541,7 @@ Section Safety_Explicity_Safety.
            (HybridMachineSig.Events.external tid ev :: nil)).
             econstructor 4; eauto.
           - exists tr2. econstructor 5; eauto.
-          - exists tr2. econstructor 6; eauto.
+          (* - exists tr2. econstructor 6; eauto. *)
         Qed.
         
         Lemma explicit_safety_trace_irr: forall U tr tr' tp m,
@@ -602,8 +598,8 @@ Section Safety_Explicity_Safety.
            econstructor 2 |
            econstructor 3 |
            |
-           econstructor 5 |
-           econstructor 6];
+           econstructor 5 (*|
+           econstructor 6*)];
           try (rewrite <- H); eauto.
       rewrite <- H9.
       econstructor 4; try (rewrite <- H); eauto.
@@ -633,7 +629,7 @@ Section Safety_Explicity_Safety.
     - constructor 2; econstructor 3; eauto.
     - constructor 2; econstructor 4; eauto.
     - constructor 2; econstructor 5; eauto.
-    - constructor 2; econstructor 6; eauto.
+   (* - constructor 2; econstructor 6; eauto. *)
   Qed.
   
    (*BUT, this is basically the same safety!!! *)

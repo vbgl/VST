@@ -2270,10 +2270,6 @@ Module SCErasure.
     Notation threadStepE := (@threadStep BareMachine.resources _ OrdinalPool.OrdinalThreadPool
                                          BareMachine.BareMachineSig).
 
-    Notation threadHaltedF := (@threadHalted DryHybridMachine.dryResources _ OrdinalPool.OrdinalThreadPool
-                                             DryHybridMachine.DryHybridMachineSig).
-    Notation threadHaltedE := (@threadHalted BareMachine.resources _ OrdinalPool.OrdinalThreadPool
-                                             BareMachine.BareMachineSig).
     
     Notation fstep := (corestep (@fine_semantics _ initU)).
     Notation scstep := (corestep (@bare_semantics _ initU)).
@@ -2284,8 +2280,7 @@ Module SCErasure.
     Notation fexecution := (@fine_execution _ FineDilMem DryHybridMachine.dryResources).
     Notation sc_execution := (@fine_execution _ BareDilMem BareMachine.resources).
     
-    (** ** Simulation for syncStep, startStep, resumeStep, suspendStep,
-  and haltedStep *)
+    (** ** Simulation for syncStep, startStep, resumeStep, suspendStep *)
     Hint Resolve mem_erasure_restr : erased.
     
     Lemma syncStep_erase:
@@ -2552,29 +2547,6 @@ Module SCErasure.
       - eapply erased_updThreadC;
           now eauto.
     Qed.
-
-    Lemma haltStep_erasure:
-      forall tp1 tp1' i
-        (HerasePool: threadPool_erasure tp1 tp1')
-        (cnti: containsThread tp1 i)
-        (cnti': containsThread tp1' i)
-        (Hstep: threadHalted cnti),
-        threadHalted cnti'.
-    Proof.
-      intros.
-      inversion HerasePool as [Hnum Hthreads].
-      specialize (Hthreads _ cnti cnti').
-      inversion Hstep; subst.
-      pf_cleanup.
-      rewrite Hcode in Hthreads.
-      destruct (getThreadC cnti') eqn:?;
-               simpl in Hthreads;
-        try by exfalso.
-      assert (halted semSem s i0)
-        by (eapply halted_erase; eauto).
-      econstructor;
-        now eauto.
-    Qed.
     
     Lemma threadStep_erase:
       forall tp1 tp1' m1 m1' tp2 m2 i ev
@@ -2684,13 +2656,6 @@ Module SCErasure.
         eapply sync_step; eauto.
         simpl in *; subst.
         split...
-      - eapply haltStep_erasure with (cnti' := H) in Hhalted; eauto.
-        exists tp1', m1', tr1'.
-        split. econstructor 6; simpl; eauto.
-        simpl in *; subst.
-        split...
-        simpl in *;
-          now subst.
       - assert (~ containsThread tp1' tid).
         { intros Hcontra.
           destruct HerasePool as [Hnum _].
@@ -2701,7 +2666,7 @@ Module SCErasure.
         }
         exists tp1', m1',tr1'.
         split.
-        econstructor 7; simpl; eauto.
+        econstructor 6; simpl; eauto.
         simpl in *; subst.
         split; now eauto.
     Qed.
