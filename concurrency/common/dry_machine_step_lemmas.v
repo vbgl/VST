@@ -240,7 +240,6 @@ Module StepLemmas.
     inversion Hstep; simpl in *; subst;
       try (inversion Htstep; eauto).
     (*inversion Hhalted; subst;*) eauto.
-    assumption.
   Qed.
 
   Lemma step_containsThread :
@@ -361,7 +360,7 @@ Module StepLemmas.
     exists U1'; econstructor 4; simpl; eauto.
     exists U1'; econstructor 5; simpl; eauto.
     exists U1'; econstructor 6; simpl; eauto.
-    exists U1'; econstructor 7; simpl; eauto.
+    (*exists U1'; econstructor 7; simpl; eauto.*)(*No halted*)
   Qed.
 
   End StepLemmas.
@@ -2146,8 +2145,9 @@ Module StepType.
                rewrite H in Hint; simpl in Hint
            | [H1: match ?Expr with _ => _ end = _,
                   H2: ?Expr = _ |- _] => rewrite H2 in H1
+                                                       (*
            | [H: DryHybridMachine.threadHalted _ |- _] =>
-             inversion H; clear H; subst; simpl in *; Tactics.pf_cleanup;  simpl in *
+             inversion H; clear H; subst; simpl in *; Tactics.pf_cleanup;  simpl in *)
       (*     | [H1: is_true (isSome (halted ?Sem ?C)),
                   H2: match at_external _ _ _ with _ => _ end = _ |- _] =>
              destruct (at_external_halted_excl Sem C) as [Hext | Hcontra];
@@ -2192,7 +2192,7 @@ Module StepType.
     - eapply ev_step_ax1 in Hcorestep.
       eapply corestep_invariant; simpl; eauto.
     - now apply updThreadC_invariant.
-    - auto.
+   (* - auto. *)(*No thread halted*)
   Qed.
 
   Lemma fmachine_step_compatible:
@@ -2254,7 +2254,7 @@ Module StepType.
              by eauto);
     try (erewrite gsoThreadLock;
            by eauto).
-    reflexivity.
+    (*reflexivity.*)
   Qed.
 
   Opaque lockRes.
@@ -2273,7 +2273,7 @@ Module StepType.
      extensionality addr;
       try (by rewrite gsoThreadCLPool);
       try (by rewrite gsoThreadLPool).
-    reflexivity.
+    (*reflexivity.*)
   Qed.
 
   Lemma fmachine_step_disjoint_val :
