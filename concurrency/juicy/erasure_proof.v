@@ -4744,7 +4744,7 @@ Here be dragons
                 replace Htid with ctn by apply proof_irr.
                 remember (Concur.install_perm _ _) as m1.
                 apply mtch_install_perm with (ds := ds)(MATCH := MATCH) in Heqm1; hnf in Heqm1.
-                rewrite Heqm1 in e0; rewrite e0; simpl.
+                rewrite Heqm1 in e; rewrite e; simpl.
                 replace Htid with ctn by apply proof_irr; reflexivity.
               - eassumption.
               - replace Htid with ctn by apply proof_irr; reflexivity.
