@@ -2141,13 +2141,6 @@ Module StepType.
                rewrite H in Hint; simpl in Hint
            | [H1: match ?Expr with _ => _ end = _,
                   H2: ?Expr = _ |- _] => rewrite H2 in H1
-      (*     | [H1: is_true (isSome (halted ?Sem ?C)),
-                  H2: match at_external _ _ _ with _ => _ end = _ |- _] =>
-             destruct (at_external_halted_excl Sem C) as [Hext | Hcontra];
-               [rewrite Hext in H2;
-                 destruct (halted Sem C) eqn:Hh;
-                 [discriminate | by exfalso] |
-                rewrite Hcontra in H1; by exfalso]*)
            end; try discriminate; try (exfalso; by auto).
 
   Opaque getThreadC updThreadC containsThread updThread updLockSet addThread remLockSet getThreadR lockSet.

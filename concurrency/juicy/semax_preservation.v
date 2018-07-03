@@ -1051,9 +1051,14 @@ Section Preservation.
    substwith ctn Htid.
    substwith Htid cnti.
    setoid_rewrite Eci in Hcode; inv Hcode.
-   rewrite E_c_new in Hinitial; destruct Hinitial as (Hinitial & ? & ?); subst.
-      right.
-
+   assert (c_new_ = c_new). {
+     destruct Hinitial. clear - E_c_new H.
+    hnf in E_c_new,H. destruct vf; try contradiction. if_tac in H; try contradiction.
+     destruct (Genv.find_funct_ptr ge b); try contradiction.
+     destruct (type_of_fundef f); try contradiction.
+     decompose [and] E_c_new. decompose [and] H. congruence.
+  } subst c_new_.
+   destruct Hinitial as (Hinitial & ? & ?); subst.
       simpl JuicyMachine.add_block in *.
       unfold add_block in *.
       assert (mem_compatible_with (updThread i tp cnti (Krun c_new) (getThreadR i tp cnti))
@@ -1092,6 +1097,7 @@ Section Preservation.
             { eapply semantics_lemmas.alloc_access_inv_None in Haccess; eauto.
               setoid_rewrite Haccess; auto. } }
       assert (B : rmap_bound (Mem.nextblock m) Phi) by apply compat.
+      right.  (* ? *)
       apply state_invariant_c with (mcompat := Hcmpt'); auto.
       - intro; simpl.
         pose proof (lock_coh loc) as lock_coh'.
@@ -1129,7 +1135,7 @@ Section Preservation.
       - intros j cntj [].
         destruct (eq_dec i j) as [<-|ne].
         + REWR.
-          inv Hinitial.
+(*          inv Hinitial. *)
           apply safety.
           rewrite m_phi_jm_.
           REWR.

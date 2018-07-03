@@ -989,21 +989,23 @@ intros.
 simpl in H.
 rewrite if_true in H by auto.
 destruct H as [H []]; subst.
-destruct (@Genv.find_funct_ptr fundef type (@Genv.globalenv (Ctypes.fundef function) type prog) b) eqn:?; inv H.
+destruct (@Genv.find_funct_ptr fundef type (@Genv.globalenv (Ctypes.fundef function) type prog) b) eqn:?;
+ try solve [inv H].
+destruct (type_of_fundef f) eqn:Hf; inv H.
+destruct H3 as [? [? ?]].
+destruct (typlist_of_typelist t) eqn:?Htypelist; try contradiction. clear H2.
+destruct t; inv Htypelist. 
 unfold initial_core; simpl.
 destruct (Mem.alloc m 0 0) as (m', b') eqn: Halloc.
 exists (Callstate f nil (Clight.Kcall None main_handler empty_env (PTree.empty _) Kstop) m'); split.
 { split; auto; econstructor; eauto.
-  { admit. }
   { simpl.
     admit. }
   { admit. }
   { constructor. }
-  { constructor. }
   { admit. }
   { contradiction. } }
 intro.
-(*specialize (H0 n).
 remember (State empty_env
           (PTree.Node PTree.Leaf (Some (Vptr b Ptrofs.zero)) PTree.Leaf)
           (Kseq
@@ -1017,17 +1019,18 @@ remember (Clight_core.CC_core_State Clight_core.empty_function
            (Clight_core.params_of_types 2 (Clight_core.params_of_fundef f))))
      (Clight.Kseq (Sloop Sskip Sskip) Kstop) empty_env
      (PTree.Node PTree.Leaf (Some (Vptr b Ptrofs.zero)) PTree.Leaf)) as q'.
-assert (match_states q q'). {
+clear H.
+assert (H: match_states q q'). {
  subst q q'. constructor. simpl. auto. simpl.
   constructor. simpl. constructor. simpl. constructor.
 }
-clear Heqq Heqq' f Heqo.
+clear Heqq Heqq' Heqo.
 simpl in H0.
  unfold dry_safeN in *.
 forget (Genv.globalenv prog) as ge.
 clear - H0 H.
-
 specialize (H0 n).
+(*
 revert q q' H m H0; 
 induction (lt_wf n) as [n _ IH].
 intros.
@@ -1035,6 +1038,8 @@ destruct n; [ constructor |].
 inv H0.
 *
  specialize (IH n). spec IH; [omega|].
+  pose proof (Clightnew_Clight_sim_eq_noOrder_SSplusConclusion _ _ _ _ _ H2 _ H).
+
  destruct (Clightnew_Clight_sim_eq_noOrder_SSplusConclusion 
                 _ _ _ _ _ H2 _ H)
  as [qq [? ?]].
@@ -1095,5 +1100,5 @@ destruct ret, lid; inv H6; apply H4.
 *
  inv H1.
 Qed.*)
-Admitted.
+Abort.  (* We don't need this lemma at the moment. *)
 

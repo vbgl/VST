@@ -15,6 +15,7 @@ Require Import VST.concurrency.common.permissions.
 Require Import VST.concurrency.common.HybridMachineSig.
 Require Import VST.concurrency.common.ClightSemantincsForMachines.
 Require Import VST.concurrency.common.ClightMachine.
+Require Import VST.concurrency.common.dry_machine_lemmas.
 Require Import VST.concurrency.juicy.semax_to_juicy_machine.
 Require Import VST.veric.Clight_sim.
 Require Import VST.msl.eq_dec.
@@ -46,7 +47,7 @@ Proof.
   unfold prog, semax_to_juicy_machine.prog in *.
   destruct (Genv.find_funct_ptr _ _); eauto.
   exfalso.
-  destruct Hinit as (? & ? & ? & ?); discriminate.
+  destruct Hinit as (? & ? & ? & ?); contradiction.
 Defined.
 
 (* Clight_new starts a step earlier than Clight, with a sequence of the initial call to main and
@@ -95,7 +96,9 @@ Proof.
   destruct (Hinit _ Hjm) as (? & ? & Hinit' & ?); subst.
   simpl in Hinit', Hf.
   unfold prog, semax_to_juicy_machine.prog in *.
-  rewrite Hf in Hinit'; inv Hinit'; auto.
+  rewrite Hf in Hinit'.
+  destruct (Clight.type_of_fundef f); try contradiction.
+  destruct Hinit' as (? & ? & ? & ?); subst; auto.
 Qed.
 
 Inductive match_ctl : ctl -> ctl -> Prop :=
@@ -476,6 +479,61 @@ Proof.
   destruct 1; constructor; auto.
 Qed.
 
+Instance ClightAxioms : @CoreLanguage.SemAxioms (ClightSem ge).
+Proof.
+  constructor.
+  - repeat intro.
+    inv H; inv H0.
+(*    inv H; inv H1;
+      match goal with H : _ = Clight.set_mem c m, H' : _ = Clight.set_mem c m |- _ =>
+        rewrite <- H in H'; inv H' end.*)
+    admit.
+  - intros.
+    apply memsem_lemmas.mem_step_obeys_cur_write; auto.
+    eapply corestep_mem; eauto.
+  - admit. (* proved for CLN *)
+  - intros.
+    apply mem_forward_nextblock, memsem_lemmas.mem_step_forward.
+    eapply corestep_mem; eauto.
+  - intros; simpl.
+    destruct q; auto.
+    right; repeat intro.
+    inv H.
+  - intros.
+    inv H; inv H0.
+    inv H; inv H1.
+    rewrite H11 in H0; inv H0.
+    assert (f0 = f2) by admit (* wrapper *); subst.
+    rewrite H22 in H10; inv H10; auto.
+  - intros.
+    inv Hstep.
+    inv H; simpl.
+    apply memsem_lemmas.mem_step_obeys_cur_write; auto.
+    eapply mem_step_alloc; eauto.
+  - intros.
+    inv H.
+    inv H0; simpl.
+    split; intros.
+    + eapply Mem.valid_block_alloc_inv in H10; eauto.
+      destruct H10; [subst | contradiction].
+      right; intro.
+      destruct ((Mem.mem_access m1) # stk ofs k) eqn: Haccess; auto.
+      eapply memsem_lemmas.alloc_access_inv in Haccess; eauto.
+      destruct Haccess; [omega|].
+      destruct H10 as [? Haccess].
+      rewrite Mem.nextblock_noaccess in Haccess; [discriminate|].
+      apply Mem.alloc_result in H9; subst; auto.
+    + destruct ((Mem.mem_access m1) # b ofs k) eqn: Haccess.
+      * eapply memsem_lemmas.alloc_access_inv in Haccess; eauto.
+        destruct Haccess; [omega | tauto].
+      * eapply memsem_lemmas.alloc_access_inv_None; eauto.
+  - intros.
+    inv H.
+    inv H0; simpl.
+    erewrite Mem.nextblock_alloc with (m1 := m)(m2 := m1) by eauto.
+    apply Ple_succ.
+Admitted.
+
 Lemma CoreSafe_star: forall n U tr tp m tid (c : @semC (ClightSem ge)) c' tp' m' ev
   (HschedN: schedPeek U = Some tid)
   (Htid: containsThread tp tid)
@@ -512,13 +570,19 @@ Proof.
       econstructor; try apply H; eauto.
       apply restr_Cur; auto.
     + rewrite gssThreadRes; auto.
-    + admit. (* need to know that step preserved mem_compatible *)
-    + admit. (* ditto invariant *)
+    + erewrite <- (restr_Cur _ m1) in H by eauto.
+      eapply CoreLanguageDry.corestep_compatible, H; auto.
+    + apply ev_step_ax1 in H.
+      erewrite <- (restr_Cur _ m1) in H by eauto.
+      eapply CoreLanguageDry.corestep_invariant.
+      3: apply H.
+      all: auto.
     + apply gssThreadCode.
     + rewrite updThread_twice, gssThreadRes; auto.
   Unshelve.
   apply cntUpdate; auto.
-Admitted.
+  all: auto.
+Qed.
 
 Lemma CoreSafe_plus : forall n U tr tp m tid (c : @semC (ClightSem ge)) c' tp' m' ev m1
   (HschedN: schedPeek U = Some tid)
@@ -549,13 +613,18 @@ Proof.
     simpl; eauto.
   - auto.
   - rewrite gssThreadRes; auto.
-  - admit.
-  - admit.
+  - eapply CoreLanguageDry.corestep_compatible, H; auto.
+  - apply ev_step_ax1 in H.
+    eapply CoreLanguageDry.corestep_invariant.
+    3: apply H.
+    all: auto.
+    apply restrPermMap_irr; auto.
   - apply gssThreadCode.
   - rewrite updThread_twice, gssThreadRes; auto.
   Unshelve.
   apply cntUpdate; auto.
-Admitted.
+  auto.
+Qed.
 
 Opaque updThread updThreadC containsThread getThreadC getThreadR lockRes.
 
@@ -581,8 +650,19 @@ Axiom lookup_wrapper: Genv.find_funct_ptr (Clight.genv_genv ge) b_wrapper = Some
 Axiom wrapper_args: forall l, In l (AST.regs_of_rpairs (Clight.loc_arguments' (map Ctypes.typ_of_type (map snd (Clight.fn_params f_wrapper))))) ->
         match l with Locations.R _ => True | Locations.S _ _ _ => False end.
 
+Definition mem_ok m := Smallstep.globals_not_fresh (Clight.genv_genv ge) m /\ Mem.mem_wd m.
+
+Lemma mem_ok_restr: forall m p Hlt, mem_ok m -> mem_ok (@restrPermMap p m Hlt).
+Admitted.
+
+Lemma mem_ok_step: forall st m st' m' (Hmem: mem_ok m),
+  MachStep(Sem := Clight_newSem ge)
+    (ThreadPool:= OrdinalPool.OrdinalThreadPool)
+    (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig) st m st' m' -> mem_ok m'.
+Admitted.
+
 Lemma Clight_new_Clight_safety_gen:
-  forall n sch tr tp m tp',
+  forall n sch tr tp m tp' (Hmem: mem_ok m),
   csafe
     (Sem := Clight_newSem ge)
     (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig)
@@ -595,18 +675,21 @@ Lemma Clight_new_Clight_safety_gen:
     (sch, tr, tp') m n.
 Proof.
   induction n; intros; [constructor|].
-  inv H; simpl in *; [constructor; auto |
-    inv Hstep; simpl in *; try (apply schedSkip_id in HschedS; subst); try discriminate |
-    inv Hstep; simpl in *; try match goal with H : sch = schedSkip sch |- _ =>
-      symmetry in H; apply schedSkip_id in H; subst end; try discriminate].
+  inv H; simpl in *; [constructor; auto | ..];
+    pose proof (mem_ok_step _ _ _ _ Hmem Hstep) as Hmem';
+    [inv Hstep; simpl in *; try (apply schedSkip_id in HschedS; subst); try discriminate |
+     inv Hstep; simpl in *; try match goal with H : sch = schedSkip sch |- _ =>
+       symmetry in H; apply schedSkip_id in H; subst end; try discriminate].
   - inv Htstep.
     inversion H0.
     pose proof (mtch_gtc _ ctn (mtch_cnt _ ctn)) as Hc; rewrite Hcode in Hc; inv Hc.
     destruct Hinitial as (Hinit & Harg & ?); subst.
     unfold Clight_new.cl_initial_core in Hinit.
-    destruct vf; try discriminate.
-    destruct (Ptrofs.eq_dec _ _); try discriminate.
-    destruct (Genv.find_funct_ptr _ b) eqn: Hb; inv Hinit.
+    destruct vf; try contradiction.
+    destruct (Ptrofs.eq_dec _ _); try contradiction.
+    destruct (Genv.find_funct_ptr _ b) eqn: Hb; try contradiction.
+    destruct (Clight.type_of_fundef f) eqn: Hty; try contradiction.
+    destruct Hinit as (? & ? & ? & ?); subst.
     destruct (Mem.alloc _ _ _) eqn: Halloc.
     eapply CoreSafe.
     { hnf; simpl.
@@ -617,11 +700,8 @@ Proof.
       { split.
         hnf in Hperm; subst.
         econstructor; eauto.
-        - admit.
-        - admit. (* globals_not_fresh *)
-        - admit. (* Clight_new's initial_core doesn't currently require mem_wd *)
-        - admit. (* right number/type of args *)
-        - admit. (* right number/type of args *)
+        - apply mem_ok_restr; auto.
+        - apply mem_ok_restr; auto.
         - apply lookup_wrapper.
         - apply wrapper_args.
         - auto. }
@@ -633,17 +713,19 @@ Proof.
     inv Hsafe; simpl in *.
     { unfold halted_machine in H1; simpl in H1.
       rewrite HschedN in H1; discriminate. }
+    pose proof (mem_ok_step _ _ _ _ Hmem' Hstep) as Hmem''.
     inv Hstep; simpl in *; rewrite HschedN in HschedN0; inv HschedN0;
       try (inv Htstep; rewrite gssThreadCode in Hcode0; inv Hcode0);
       try (apply schedSkip_id in HschedS; subst); try discriminate.
-    apply app_inv_head in H9; subst.
+    apply app_inv_head in H11; subst.
     pose proof (ev_step_ax1 _ _ _ _ _ _ Hcorestep) as Hstep; inv Hstep.
     { (* internal step *)
-      inv H11; [|inv H1].
-      inv H6; simpl in *.
-      rewrite Hb in H16; inv H16.
-      assert (vargs = [arg]); subst.
-      { admit. (* cl_initial_core doesn't enforce that we provide the right number of arguments *) }
+      inv H13; [|inv H1].
+      inv H8; simpl in *.
+      rewrite Hb in H18; inv H18.
+      simpl in Hty; rewrite Hty in H19; inv H19.
+      inv H14; try contradiction; simpl in *.
+      destruct H3, tyl; try contradiction; simpl in *.
       eapply CoreSafe with (m'0 := m'1), csafe_reduce; [| eapply IHn; eauto | auto].
       - hnf; simpl.
         rewrite <- H5.
@@ -658,7 +740,7 @@ Proof.
         hnf; simpl.
         instantiate (1 := Clight.State _ _ _ _ _ _).
         apply Clight.step_internal_function.
-        apply list_norepet_app in H18 as (? & ? & ?).
+(*        apply list_norepet_app in H18 as (? & ? & ?).
         constructor; eauto.
         admit.
         { admit. }
@@ -910,7 +992,7 @@ Proof.
       - eapply MTCH_invariant; eauto.
       - eapply MTCH_compat; eauto. }
     { intro; eapply IHn; eauto.
-      eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
+      eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }*)
 Admitted.
 
 Transparent getThreadC.
@@ -937,14 +1019,17 @@ Lemma Clight_new_Clight_safety:
          initial_Clight_state)) init_mem n.
 Proof.
   intros.
-  eapply Clight_new_Clight_safety_gen; [apply H|].
+  eapply Clight_new_Clight_safety_gen; [|apply H|].
+  { admit. }
   constructor; auto; intros; simpl.
   constructor.
   unfold initial_corestate, initial_Clight_state in *.
   destruct f_main as [? Hf]; destruct spr as (b & q & [? Hinit] & s); simpl in *.
   destruct (s O tt) as (jm & Hjm & _).
   specialize (Hinit _ Hjm) as (? & ? & Hinit & ?); subst; simpl in *.
-  destruct (Genv.find_funct_ptr _ b); inv Hinit.
+  destruct (Genv.find_funct_ptr _ b); try contradiction.
+  destruct (Clight.type_of_fundef f) eqn: Hty; try contradiction.
+  destruct Hinit as (? & ? & ? & ?); subst.
   inv Hf.
   constructor; simpl; auto.
   repeat constructor.
