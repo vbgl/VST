@@ -51,6 +51,7 @@ Module Executions.
       {Sem : Semantics}
       {initU : seq.seq nat}
       {SemAx : CoreLanguage.SemAxioms}
+      {SemD : CoreLanguage.SemDet}
       {DilMem : DiluteMem}
       {Res: Resources}.
     
@@ -4024,7 +4025,8 @@ Module Executions.
     Context
       {Sem : Semantics}
       {initU : seq.seq nat}
-      {SemAx : CoreLanguage.SemAxioms}.
+      {SemAx : CoreLanguage.SemAxioms}
+      {SemD : CoreLanguage.SemDet}.
 
     Existing Instance BareMachine.resources.
     Existing Instance HybridFineMachine.scheduler.

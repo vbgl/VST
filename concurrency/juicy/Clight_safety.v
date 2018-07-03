@@ -482,12 +482,6 @@ Qed.
 Instance ClightAxioms : @CoreLanguage.SemAxioms (ClightSem ge).
 Proof.
   constructor.
-  - repeat intro.
-    inv H; inv H0.
-(*    inv H; inv H1;
-      match goal with H : _ = Clight.set_mem c m, H' : _ = Clight.set_mem c m |- _ =>
-        rewrite <- H in H'; inv H' end.*)
-    admit.
   - intros.
     apply memsem_lemmas.mem_step_obeys_cur_write; auto.
     eapply corestep_mem; eauto.
@@ -499,12 +493,6 @@ Proof.
     destruct q; auto.
     right; repeat intro.
     inv H.
-  - intros.
-    inv H; inv H0.
-    inv H; inv H1.
-    rewrite H11 in H0; inv H0.
-    assert (f0 = f2) by admit (* wrapper *); subst.
-    rewrite H22 in H10; inv H10; auto.
   - intros.
     inv Hstep.
     inv H; simpl.
@@ -643,16 +631,22 @@ Proof.
   unfold Clight.type_of_function; eauto.
 Qed.
 
-(* spawn handler *)
-Parameter b_wrapper: block.
-Parameter f_wrapper: Clight.function.
-Axiom lookup_wrapper: Genv.find_funct_ptr (Clight.genv_genv ge) b_wrapper = Some (Ctypes.Internal f_wrapper).
-Axiom wrapper_args: forall l, In l (AST.regs_of_rpairs (Clight.loc_arguments' (map Ctypes.typ_of_type (map snd (Clight.fn_params f_wrapper))))) ->
-        match l with Locations.R _ => True | Locations.S _ _ _ => False end.
-
 Definition mem_ok m := Smallstep.globals_not_fresh (Clight.genv_genv ge) m /\ Mem.mem_wd m.
 
+(* This isn't true - restrPermMap may expose a value that isn't well-defined. *)
 Lemma mem_ok_restr: forall m p Hlt, mem_ok m -> mem_ok (@restrPermMap p m Hlt).
+Proof.
+  intros.
+  destruct H as [? Hwd]; split.
+  - unfold Smallstep.globals_not_fresh.
+    rewrite restrPermMap_nextblock; auto.
+  - unfold Mem.mem_wd, Mem.inject_neutral in *.
+    rewrite restrPermMap_nextblock.
+    destruct Hwd; unfold Mem.flat_inj in *; constructor; intros.
+    + destruct (plt _ _); inv H0.
+      rewrite Z.add_0_r; auto.
+    + destruct (plt _ _); inv H0.
+      apply Z.divide_0_r.
 Admitted.
 
 Lemma mem_ok_step: forall st m st' m' (Hmem: mem_ok m),
@@ -660,6 +654,13 @@ Lemma mem_ok_step: forall st m st' m' (Hmem: mem_ok m),
     (ThreadPool:= OrdinalPool.OrdinalThreadPool)
     (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig) st m st' m' -> mem_ok m'.
 Admitted.
+
+(* spawn handler *)
+Parameter b_wrapper: block.
+Parameter f_wrapper: Clight.function.
+Axiom lookup_wrapper: Genv.find_funct_ptr (Clight.genv_genv ge) b_wrapper = Some (Ctypes.Internal f_wrapper).
+Axiom wrapper_args: forall l, In l (AST.regs_of_rpairs (Clight.loc_arguments' (map Ctypes.typ_of_type (map snd (Clight.fn_params f_wrapper))))) ->
+        match l with Locations.R _ => True | Locations.S _ _ _ => False end.
 
 (* These two lemmas are probably not true. We need to reconcile what Clight_new and Clight do
    after a thread finishes. *)
