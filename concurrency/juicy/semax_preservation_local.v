@@ -842,7 +842,13 @@ Proof.
         omega.
         apply jsafe_phi_bupd_downward.
         assumption.
-      * destruct safej as (q_new & Einit & safej). exists q_new; split; auto.
+      * destruct safej as (Harg & q_new & Einit & safej); split.
+        { destruct stepi as (stepi & _).
+          apply (corestep_mem (msem (ClightSemantincsForMachines.CLN_evsem ge))), mem_step_nextblock'
+            in stepi; simpl in stepi.
+          eapply val_inject_incr, Harg.
+          apply flat_inj_incr; auto. }
+        exists q_new; split; auto.
         unfold tp'', tp'.
         REWR.
         REWR.

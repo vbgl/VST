@@ -1296,15 +1296,16 @@ Proof.
   intros until m.
   pose proof I; intros.
   destruct H0 as [? [AL [HGG [[? ?] [GV ?]]]]].
-  assert (H4': exists post, In (prog_main prog, main_spec' prog post) G). {
+  destruct (find_id (prog_main prog) G) as [fspec|] eqn:Hfind; try contradiction.
+  assert (H4': exists post, In (prog_main prog, main_spec' prog post) G /\ fspec = main_spec' prog post). {
     destruct (find_id (prog_main prog) G) eqn:?.
     apply find_id_e in Heqo. destruct H4 as [post ?]. exists post.
-    subst. auto. contradiction.
+    subst. split; auto. inv Hfind. auto. inv Hfind.
   } clear H4. rename H4' into H4.
   assert ({ f | In (prog_main prog, f) (prog_funct prog)}).
   forget (prog_main prog) as id.
   assert (H4': In id (map fst G)). {
-    destruct H4 as [? H4].
+    destruct H4 as [? [H4 _]].
   apply in_map_fst in H4. auto.
   }
   pose proof (match_fdecs_in _ _ _ H4' H2).
@@ -1322,34 +1323,8 @@ Proof.
 
   pose proof I.
   destruct EXx as [b [? ?]]; auto.
-  exists b.
-  unfold core_semantics.initial_core, juicy_core_sem.
-  unfold j_initial_core, core_semantics.initial_core, cl_core_sem, cl_initial_core.
-  rewrite if_true by auto.
-  simpl (_ = Some _).
-  unfold fundef in *; rewrite H7.
-  (* unfold is_Internal in HInt. *)
-  (* rewrite H6 in HInt. *)
-  (* rewrite H7 in HInt. *)
-  (* destruct f as [func | ]; [ | exfalso; discriminate ]. *)
-  (* set (func' := func) at 1; destruct func' eqn:Ef. *)
-  econstructor.
-  repeat split; eauto.
-  intros n z.
-  exists (initial_jm_ext z _ _ _ n H1 H0 H2).
-  repeat split.
-  - simpl.
-    rewrite inflate_initial_mem_level.
-    unfold initial_core_ext. rewrite level_make_rmap; auto.
-
-  - unfold initial_jm_ext; simpl.
-    unfold inflate_initial_mem; rewrite ghost_of_make_rmap.
-    unfold initial_core_ext; rewrite ghost_of_make_rmap.
-    reflexivity.
-
-  - specialize (H3 (globalenv prog) (prog_contains_prog_funct _ H0)).
-    destruct H4 as [post H4].
-    assert (E: type_of_fundef f = Tfunction Tnil tint cc_default). {
+  assert (E: type_of_fundef f = Tfunction Tnil tint cc_default). {
+    destruct H4 as [post [? ?]].
       destruct (match_fdecs_exists_Gfun
                   prog G (prog_main prog)
                   (main_spec' prog post))
@@ -1370,8 +1345,39 @@ Proof.
       subst fd.
       auto.
     }
+  exists b.
+  unfold core_semantics.initial_core, juicy_core_sem.
+  unfold j_initial_core, core_semantics.initial_core, cl_core_sem, cl_initial_core.
+  eexists.
+  unfold fundef in *.
+  change (Genv.globalenv prog) with (genv_genv (globalenv prog)) in *.
+  rewrite H6, H7.
+  rewrite if_true by auto.
+  (* unfold is_Internal in HInt. *)
+  (* rewrite H6 in HInt. *)
+  (* rewrite H7 in HInt. *)
+  (* destruct f as [func | ]; [ | exfalso; discriminate ]. *)
+  (* set (func' := func) at 1; destruct func' eqn:Ef. *)
+  repeat split; eauto.
+  {
+    intros. eexists; split. reflexivity.
+    rewrite E.  
+    repeat split; eauto; try solve [constructor].
+  }
+  intros n z.
+  exists (initial_jm_ext z _ _ _ n H1 H0 H2).
+  repeat split.
+  - simpl.
+    rewrite inflate_initial_mem_level.
+    unfold initial_core_ext. rewrite level_make_rmap; auto.
 
-    rewrite E in *.
+  - unfold initial_jm_ext; simpl.
+    unfold inflate_initial_mem; rewrite ghost_of_make_rmap.
+    unfold initial_core_ext; rewrite ghost_of_make_rmap.
+    reflexivity.
+
+  - specialize (H3 (globalenv prog) (prog_contains_prog_funct _ H0)).
+    destruct H4 as [post H4].
     unfold temp_bindings. simpl length. simpl typed_params. simpl type_of_params.
     pattern n at 1; replace n with (level (m_phi (initial_jm_ext z prog m G n H1 H0 H2))).
     pose (rho1 := mkEnviron (filter_genv (globalenv prog)) (Map.empty (block * type))
@@ -1399,7 +1405,6 @@ Proof.
       unfold normal_ret_assert; simpl.
       extensionality rho'.
       normalize.
-(*      unfold main_post. rewrite TT_sepcon_TT. *)
       unfold post'.
       apply pred_ext.
          normalize. intro rv. do 2 apply exp_right with rv; auto.
@@ -1443,11 +1448,12 @@ Proof.
       destruct a; destruct g; simpl in *; auto. destruct H2; auto.
       }
       forget (prog_funct prog) as fs.
+      destruct H4 as [H4 _].
       clear - H4 H8 H2.
       fold (main_spec prog).
       forget (main_spec prog) as fd.
       revert G H2 H4 H8; induction fs; intros; inv H2.
-      inv H4.
+      contradiction H4.
       simpl in *.
       destruct (ident_eq i main). subst. rewrite PTree.gss.
       destruct H4. inv H; auto.
@@ -1459,7 +1465,6 @@ Proof.
       destruct H4; try congruence.
       inv H8.
       eapply IHfs; eauto.
-(*      inv H8; eauto. *)
     + intros.
       intros ? ?.
       split; apply derives_imp; auto.
@@ -1610,7 +1615,8 @@ Lemma semax_prog_entry_point {CS: compspecs} V G prog b id_fun id_arg arg A P Q 
           (PTree.set id_arg arg (PTree.empty val))) in
 
   { q : corestate |
-    (forall jm, exists jm', core_semantics.initial_core
+    (forall jm, Val.inject (Mem.flat_inj (nextblock (m_dry jm))) arg arg ->
+      exists jm', core_semantics.initial_core
       (juicy_core_sem (cl_core_sem (globalenv prog))) h
       jm q jm' (Vptr b Ptrofs.zero) (arg :: nil)) /\
 
@@ -1649,10 +1655,6 @@ Proof.
     if_tac [_|?] in H. rewrite Eb in H. auto. tauto.
     assert (b' = b) by congruence. subst b'. congruence.
   }
-  eexists. split; simpl; eauto.
-
-  intros jm ts a m_sat_Pa m_funassert.
-
   assert (Ef : type_of_fundef f = Tfunction (Tcons (Tpointer Tvoid noattr) Tnil) (tptr Tvoid) cc_default). {
     (* I think this can be proved using believe_internal / believe_external ? *)
     destruct Believe as [BE|BI].
@@ -1680,6 +1682,20 @@ Proof.
       unfold type_of_function.
       destruct fu as [? ? [ | [] [ | [] ]] ? ?]; simpl in *; congruence.
   }
+  rewrite Ef.
+  eexists. split.
+  intros. eexists; repeat split; eauto.
+  repeat constructor.
+  {clear - arg_p.
+   destruct arg; try contradiction. apply val_casted_int_ptr; reflexivity.
+   apply val_casted_ptr_ptr. }
+  { clear - arg_p. destruct arg; try contradiction; simpl in *.
+      unfold Tptr. destruct Archi.ptr64; try contradiction; auto.
+      unfold Tptr. destruct Archi.ptr64; auto.
+  }
+  { unfold arg_well_formed. constructor; auto. }
+
+  intros jm ts a m_sat_Pa m_funassert.
 
   assert (Pf : params_of_fundef f = Tpointer Tvoid noattr :: nil).
   { clear -Ef.
@@ -1708,12 +1724,9 @@ Proof.
        _ _ b id_fun);
     try apply H3; try eassumption; auto.
 
-  (* classify_fun *)
-  rewrite Ef. reflexivity.
-
   (* tc_expr *)
   simpl.
-  rewrite Ef. reflexivity.
+  reflexivity.
 
   (* tc_exprlist *)
   rewrite Pf. now constructor.

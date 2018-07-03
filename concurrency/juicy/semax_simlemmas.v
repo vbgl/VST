@@ -56,6 +56,15 @@ Require Import VST.concurrency.juicy.semax_invariant.
 
 Set Bullet Behavior "Strict Subproofs".
 
+Lemma flat_inj_incr : forall b b', (b <= b')%positive ->
+  inject_incr (Mem.flat_inj b) (Mem.flat_inj b').
+Proof.
+  unfold Mem.flat_inj; repeat intro.
+  if_tac in H0; inv H0.
+  if_tac; auto.
+  eapply Plt_Ple_trans in H1; eauto; contradiction.
+Qed.
+
 (** Lemmas common to both parts of the progress/preservation simulation results *)
 
 Lemma lock_coherence_align lset Phi m b ofs :
@@ -813,6 +822,7 @@ Definition thread_safety {Z} (Jspec : juicy_ext_spec Z) m ge (tp : jstate ge) PH
         (* same quantification as in Kblocked *)
         jsafe_phi_bupd Jspec ge n ora c' (getThreadR cnti)
     | Kinit v1 v2 =>
+      val_inject (Mem.flat_inj (Mem.nextblock m)) v2 v2 /\
       exists q_new,
       cl_initial_core ge v1 (v2 :: nil) = Some q_new /\
       jsafe_phi Jspec ge n ora q_new (getThreadR cnti)

@@ -1442,7 +1442,7 @@ Section Progress.
     (* thread[i] is in Kinit *)
     {
       specialize (safety i cnti tt). rewrite Eci in safety.
-      destruct safety as (q_new & Einit & safety).
+      destruct safety as (? & q_new & Einit & safety).
       eexists(* ; split *).
       - constructor.
         apply JuicyMachine.start_step with (tid := i) (Htid := cnti).
@@ -1450,7 +1450,8 @@ Section Progress.
         + eapply JuicyMachine.StartThread with (c_new := q_new)(Hcmpt := mem_compatible_forget compat).
           * apply Eci.
           * simpl; reflexivity.
-          * simpl; eauto.
+          * repeat split; eauto.
+            repeat constructor; auto.
           * reflexivity.
           * reflexivity.
     }

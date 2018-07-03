@@ -687,7 +687,9 @@ Proof.
       -- apply jsafe_phi_age_to; auto. apply jsafe_phi_downward. assumption.
       -- intros c' Ec'; specialize (safety c' Ec'). apply jsafe_phi_bupd_age_to; auto.
          apply jsafe_phi_bupd_downward. assumption.
-      -- destruct safety as (q_new & Einit & safety). exists q_new; split; auto.
+      -- destruct safety as (? & q_new & Einit & safety).
+         split; [erewrite Mem.nextblock_store by eauto; auto|].
+         exists q_new; split; auto.
          apply jsafe_phi_age_to; auto. apply jsafe_phi_downward, safety.
 
   + (* well_formedness *)

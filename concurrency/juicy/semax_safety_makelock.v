@@ -832,7 +832,9 @@ Proof.
       * edestruct (unique_Krun_neq(ge := ge) i j); eauto.
       * apply jsafe_phi_age_to; auto. apply jsafe_phi_downward. assumption.
       * intros ? Hc'; apply jsafe_phi_bupd_age_to; auto. apply jsafe_phi_bupd_downward. auto.
-      * destruct safety as (q_new & Einit & safety). exists q_new; split; auto.
+      * destruct safety as (? & q_new & Einit & safety).
+        split; [erewrite Mem.nextblock_store by eauto; auto|].
+        exists q_new; split; auto.
         apply jsafe_phi_age_to; auto. apply jsafe_phi_downward, safety. }
 
   - (* threads_wellformed *)

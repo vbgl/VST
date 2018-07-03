@@ -13,6 +13,14 @@ Proof. intros.
     eapply core_semantics.mem_step_alloc; eassumption. eassumption.
 Qed.
 
+Lemma assign_loc_mem_step g t m b z v m' (A:assign_loc g t m b z v m'):
+    mem_step m m'.
+Proof.
+  inv A.
+  { simpl in H0. eapply mem_step_storebytes. eapply Mem.store_storebytes; eauto. }
+  { eapply mem_step_storebytes; eauto. }
+Qed.
+
 Lemma bind_parameters_mem_step: forall cenv e m pars vargs m'
       (M: bind_parameters cenv e m pars vargs m'), core_semantics.mem_step m m'.
 Proof. intros.
@@ -29,6 +37,20 @@ Lemma CLC_corestep_mem:
   forall (g : genv) c (m : mem) c'  (m' : mem),
     core_semantics.corestep (cl_core_sem g) c m c' m' ->
     core_semantics.mem_step m m'.
+Proof. simpl; intros. inv H; simpl in *. unfold step2 in H0.
+  remember (set_mem c' m') as C'. remember (set_mem c m) as C.
+  generalize dependent m'. generalize dependent c'. 
+  generalize dependent m. generalize dependent c. 
+  induction H0; unfold set_mem; simpl; intros;
+  symmetry in HeqC; symmetry in HeqC';
+    destruct c; inv HeqC; destruct c'; inv HeqC'; try solve [apply mem_step_refl].
+  { eapply assign_loc_mem_step; eauto. }
+  { simpl in H1. admit. (* Events.external_call mem_step. ??*) }
+  { eapply mem_step_freelist; eauto. }
+  { eapply mem_step_freelist; eauto. }
+  { eapply mem_step_freelist; eauto. }
+  { inv H. eapply alloc_variables_mem_step; eauto. }
+  { inv H1. }
 Admitted.
 
 
