@@ -244,7 +244,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
       pose proof (@contains12 _ _ _ _ _ _ H) as CNT12.
       pose proof (@contains21 _ _ _ _ _ _ H) as CNT21.
       inversion H; simpl.
-      split; intros H0 ? ? ? ? ?.
+      split; intros H0 ? ? ? ?.
       - destruct (Compare_dec.lt_eq_lt_dec j hb) as [[?|?]|?].  
         + specialize (mtch_target0 j l (CNT21 _ cnti) cnti).
     Admitted.
@@ -362,8 +362,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
         eapply Aself_simulation in H5; eauto.
         destruct H5 as (c2' & f' & t' & m2' & (CoreStep & MATCH & is_ext & inject_incr)).
 
-        (*Try this *)
-        eapply Asm_event.asm_ev_ax2 in CoreStep.
+        eapply Asm_event.asm_ev_ax2 in CoreStep; try eapply Asm_genv_safe.
         destruct CoreStep as (?&?); eauto.
          
         (* contains.*)
@@ -394,9 +393,62 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
             eapply H0.
           * simpl. econstructor; eauto.
           * simpl; repeat (f_equal; try eapply Axioms.proof_irr).
-        + eapply Asm_genv_safe.
-      - admit. (*Compiler case*)
-      - 
+
+            
+      - (*  tid = hb*)
+        pose proof (mtch_compiled _ _ _ _ _ _ H0 _ e Htid (contains12 H0 Htid)) as HH.
+        destruct HH as (cd0 & H1 & ?).
+        subst.
+
+        (* This takes three styeps*)
+        
+        admit. (*Compiler case*)
+
+        
+      - (* tid > hb *)
+        pose proof (mtch_source _ _ _ _ _ _ H0 _ l Htid (contains12 H0 Htid)) as HH.
+        simpl in *.
+        exploit_match.
+        destroy_ev_step_sum; simpl in *.
+        simpl.
+        eapply (event_semantics.ev_step_ax1 (@semSem CSem)) in H2; eauto.
+        replace Hcmpt with (memcompat1 cd mu st1 m1 st2 m2 H0) in H2
+          by eapply Axioms.proof_irr.
+        
+        eapply Cself_simulation in H5; eauto.
+        destruct H5 as (c2' & f' & t' & m2' & (CoreStep & MATCH & is_ext & inject_incr)).
+        
+        eapply (event_semantics.ev_step_ax2 (@semSem CSem)) in CoreStep.
+        destruct CoreStep as (?&?); eauto.
+         
+        (* contains.*)
+        pose proof (@contains12  _ _ _ _ _ _  H0 _ Htid) as Htid'.
+
+        (* Construct the new thread pool *)
+        exists (updThread Htid' (Krun (SState Clight.state Asm.state c2'))
+           (getCurPerm m2', snd (getThreadR Htid'))).
+        (* new memory is given by the self_simulation. *)
+        exists m2', cd, f'. split; [|left].
+        
+        + (*Reestablish the concur_match *)
+          simpl.
+          move H0 at bottom.
+          eapply Concur_update; eauto.
+          econstructor 1; eauto.
+          simpl in MATCH.
+          unfold match_thread_source; simpl.
+          constructor.
+          exact MATCH.
+        + (* Construct the step *)
+          exists 0; simpl.
+          do 2 eexists; split; [|reflexivity].
+          replace m2' with (HybridMachineSig.diluteMem m2') by reflexivity.
+          econstructor; eauto; simpl.
+          econstructor; eauto.
+          * simpl in *.
+            eapply H0.
+          * simpl. econstructor; eauto.
+          * simpl; repeat (f_equal; try eapply Axioms.proof_irr).
     Admitted.
 
     Lemma machine_step_diagram:

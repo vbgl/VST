@@ -41,8 +41,9 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
     Asm.entry_point (@the_ge p).
 
   Notation valid Sem:=
-    (valid dryResources Sem OrdinalPool.OrdinalThreadPool DryHybridMachineSig).
+    (valid dryResources Sem OrdinalPool.OrdinalThreadPool).
 
+  
 
   Definition opt_init_mem_source (p : Clight.program):=
       (Genv.init_mem (Ctypes.program_of_program p)).
@@ -361,7 +362,7 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
       - econstructor; eauto.
       - eapply H.
         unfold safety_equivalence.valid, correct_schedule; simpl.
-        intros ?????.
+        intros ????.
         simpl in cnti.
         unfold OrdinalPool.containsThread in cnti; simpl in cnti.
         clear - cnti.
@@ -377,7 +378,7 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
         * assert ((valid SemTarget) (tr, tp, m) (cons 0 nil) ).
           { subst tp; auto.
           unfold safety_equivalence.valid, correct_schedule; simpl.
-          intros ?????.
+          intros ????.
           simpl in cnti.
           unfold OrdinalPool.containsThread in cnti; simpl in cnti.
           clear - cnti.
