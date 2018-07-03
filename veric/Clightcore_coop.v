@@ -38,12 +38,11 @@ Lemma CLC_corestep_mem:
     core_semantics.corestep (cl_core_sem g) c m c' m' ->
     core_semantics.mem_step m m'.
 Proof. simpl; intros. inv H; simpl in *. unfold step2 in H0.
-  remember (set_mem c' m') as C'. remember (set_mem c m) as C.
-  generalize dependent m'. generalize dependent c'. 
-  generalize dependent m. generalize dependent c. 
+  remember (set_mem c m) as C.
+  generalize dependent m. generalize dependent c.
   induction H0; unfold set_mem; simpl; intros;
-  symmetry in HeqC; symmetry in HeqC';
-    destruct c; inv HeqC; destruct c'; inv HeqC'; try solve [apply mem_step_refl].
+  symmetry in HeqC;
+    destruct c; inv HeqC; try solve [apply mem_step_refl].
   { eapply assign_loc_mem_step; eauto. }
   { simpl in H1. admit. (* Events.external_call mem_step. ??*) }
   { eapply mem_step_freelist; eauto. }

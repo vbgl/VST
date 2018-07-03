@@ -35,9 +35,9 @@ Proof.
   inv H0.
   inv H.
   inv H0.
-  - rewrite H1 in H6; inv H6.
-  - rewrite H1 in H6; inv H6.
-  - rewrite H1 in H6; inv H6.
+  - rewrite H1 in H5; inv H5.
+  - rewrite H1 in H5; inv H5.
+  - rewrite H1 in H5; inv H5.
 Qed.
 
 (*Program Definition Asm_core_sem (ge : genv) :

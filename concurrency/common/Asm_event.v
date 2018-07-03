@@ -461,15 +461,15 @@ Qed.
 
 Inductive asm_ev_step ge: state -> mem -> list mem_event -> state -> mem -> Prop :=
   | exec_step_internal:
-      forall b ofs f i rs m1 m rs' m1' m' T,
+      forall b ofs f i rs m1 m rs' m' T,
       rs PC = Vptr b ofs ->
       Genv.find_funct_ptr ge b = Some (Internal f) ->
       find_instr (Ptrofs.unsigned ofs) f.(fn_code) = Some i ->
       exec_instr ge f i rs m = Next rs' m' ->
       drf_instr ge (fn_code f) i rs m = Some T ->
-      asm_ev_step ge (State rs m1) m T (State rs' m1') m'
+      asm_ev_step ge (State rs m1) m T (State rs' m') m'
   | exec_step_builtin:
-      forall b ofs f ef args res rs m1 m vargs t T1 T2 vres rs' m1' m',
+      forall b ofs f ef args res rs m1 m vargs t T1 T2 vres rs' m',
       rs PC = Vptr b ofs ->
       Genv.find_funct_ptr ge b = Some (Internal f) ->
       find_instr (Ptrofs.unsigned ofs) f.(fn_code) = Some (Pbuiltin ef args res) ->
@@ -481,7 +481,7 @@ Inductive asm_ev_step ge: state -> mem -> list mem_event -> state -> mem -> Prop
       rs' = nextinstr_nf
              (set_res res vres
                (undef_regs (map preg_of (destroyed_by_builtin ef)) rs)) ->
-      asm_ev_step ge (State rs m1) m (T1++T2) (State rs' m1') m'.
+      asm_ev_step ge (State rs m1) m (T1++T2) (State rs' m') m'.
 
 Lemma asm_ev_ax1 g (Hsafe : safe_genv g) (*(HFD: helper_functions_declared g hf)*):
   forall c m T c' m' (EStep:asm_ev_step g c m T c' m'), 
@@ -699,7 +699,7 @@ Proof.
  assert (m1'=m2') by congruence. subst m2'. eauto.
 Qed.
 
-Lemma asm_ev_elim_strong g (Hsafe : safe_genv g): forall c m T c' m' (Estep: asm_ev_step g c m T c' m'),
+(*Lemma asm_ev_elim_strong g (Hsafe : safe_genv g): forall c m T c' m' (Estep: asm_ev_step g c m T c' m'),
       ev_elim m T m' /\ (forall mm mm', ev_elim mm T mm' -> exists cc', asm_ev_step g c mm T cc' mm').
 Proof.
   induction 1; intros; try contradiction.
@@ -1256,7 +1256,7 @@ Proof.
     intros ?? Hmm; rewrite app_nil_r in Hmm.
     destruct (EVS _ _ Hmm); subst.
     eexists (State _ m1); econstructor 2; try eassumption; [constructor; auto | ..]; eauto.
-Qed.
+Qed.*)
 
 Program Definition Asm_EvSem (ge : genv) (Hsafe : safe_genv ge) : @EvSem state.
 Proof.
@@ -1264,7 +1264,7 @@ eapply Build_EvSem with (msem := Asm_mem_sem ge Hsafe (*hf*)) (ev_step:=asm_ev_s
 + intros. eapply asm_ev_ax1; try eassumption. (*helper_functions declared*)
 + eapply asm_ev_ax2; eassumption.
 + eapply asm_ev_fun; eassumption.
-+ eapply asm_ev_elim_strong; eassumption.
++ eapply asm_ev_elim; eassumption.
 Defined.
 
 End ASM_EV.
