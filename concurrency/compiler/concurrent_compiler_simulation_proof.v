@@ -94,13 +94,14 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
         compose_meminj (compose_meminj j1 j2) j3 = j ->
         compiler_match_padded cd j s1 m1 s4 m4.
 
-  Context (hb: nat).
-  Definition SemTop: Semantics:= (HybridSem (Some hb)).
-  Definition SemBot: Semantics:= (HybridSem (Some (S hb))).
   
   Section CompileOneThread.
     Import OrdinalPool.
 
+    Context (hb: nat).
+    Definition SemTop: Semantics:= (HybridSem (Some hb)).
+    Definition SemBot: Semantics:= (HybridSem (Some (S hb))).
+    
     Inductive match_state2match_thread
               {sem1 sem2: Semantics}
               (SState: @semC sem1 -> state_sum (@semC CSem) (@semC AsmSem))
@@ -1208,12 +1209,20 @@ unfold match_thread_compiled.
   
   Section CompileNThreads.
     
-    Variable index: nat -> Type.
-    Variable match_state: forall n,
-        index n ->
+    Definition nth_index:= list (option compiler_index).
+    Inductive match_state:
+      forall n,
+      nth_index ->
         Values.Val.meminj ->
-        ThreadPool (Some 0) -> Memory.Mem.mem -> ThreadPool (Some n) -> Memory.Mem.mem -> Prop.
-    
+        ThreadPool (Some 0) -> Memory.Mem.mem -> ThreadPool (Some n) -> Memory.Mem.mem -> Prop:=
+    | refl_match: forall j tp m,
+        match_state 0 nil j tp m tp m
+    | step_match_state:
+        forall n ocd ils jn jSn tp0 m0 tpn mn tpSn mSn,
+          match_state n ils jn tp0 m0 tpn mn ->
+          concur_match n ocd jSn tpn mn tpSn mSn ->
+          match_state (S n) (cons ocd ils) (compose_meminj jn jSn) tp0 m0 tpSn mSn.
+          
     Lemma compile_n_threads:
       forall n m,
         HybridMachine_simulation.HybridMachine_simulation_properties
