@@ -311,45 +311,65 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
     
     (* This lemma is only used when updating non compiled threads *)
     Lemma Concur_update:
-      forall (st1 : t) (m1 m' : mem) (tid : nat) (Htid : containsThread st1 tid)
-        c1 (cd cd' : option compiler_index) (st2 : t) 
+      forall (st1: ThreadPool.t) (m1 m1' : mem) (tid : nat) (Htid : ThreadPool.containsThread st1 tid)
+        c1 (cd cd' : option compiler_index) (st2 : ThreadPool.t) 
         (mu : meminj) (m2 : mem)
         c2
-        (f' : meminj) (m2' : mem) (Htid' : containsThread st2 tid),
+        (f' : meminj) (m2' : mem) (Htid' : ThreadPool.containsThread st2 tid)
+        (mcompat1: mem_compatible st1 m1)
+        (mcompat2: mem_compatible st2 m2),
+        core_semantics.mem_step
+          (restrPermMap (proj1 (mcompat1 tid Htid))) m1' ->
+        core_semantics.mem_step
+          (restrPermMap (proj1 (mcompat2 tid Htid'))) m2' ->
+        invariant st1 ->
+        invariant st2 ->
         concur_match cd mu st1 m1 st2 m2 ->
-        individual_match cd' tid f' c1 m' c2 m2' ->
+        individual_match cd' tid f' c1 m1' c2 m2' ->
         self_simulation.is_ext mu (Mem.nextblock m1) f' (Mem.nextblock m2) ->
         concur_match cd' f'
                      (updThread Htid c1
-                                (getCurPerm m', snd (getThreadR Htid))) m'
+                                (getCurPerm m1', snd (getThreadR Htid))) m1'
                      (updThread Htid' c2
                                 (getCurPerm m2', snd (getThreadR Htid'))) m2'.
     Proof.
-      
-      (*There is probably a relation missing from m1 m' m2 m2' *)
-      (* Probably it's mem_step* which is provable from where this lemma is used. *)
     Admitted.
 
     (*This lemma is used when the compiled thread steps*)
+    Inductive mem_step_star 
+  : mem -> mem -> Prop :=
+    mem_star_refl : forall m, mem_step_star m m
+  | mem_star_step : forall m1 m2 m3,
+                core_semantics.mem_step m1 m2 ->
+                mem_step_star m2 m3 -> mem_step_star m1 m3.
+    
     Lemma Concur_update_compiled:
-              forall (st1 : t) (m1 m' : mem) (Htid : containsThread st1 hb) 
-                     (st2 : t) (mu : meminj) (m2 : mem) (cd0 : compiler_index),
-                concur_match (Some cd0) mu st1 m1 st2 m2 ->
-                forall (s' : Clight.state) (j1' : meminj) (cd' : Injindex compiler_sim)
-                       (j2' : meminj) (s4' : Asm.state) (j3' : meminj) (m4' : mem)
-                       (Htid' : containsThread st2 hb),
-                  match_thread_compiled cd' (compose_meminj (compose_meminj j1' j2') j3')
-                                        (Krun (SState Clight.state Asm.state s')) m'
-                                        (Krun (TState Clight.state Asm.state s4')) m4' ->
-                  concur_match (Some cd') (compose_meminj (compose_meminj j1' j2') j3')
-                               (updThread Htid (Krun (SState Clight.state Asm.state s'))
-                                          (getCurPerm m', snd (getThreadR Htid))) m'
-                               (updThread Htid' (Krun (TState Clight.state Asm.state s4'))
-                                          (getCurPerm m4', snd (getThreadR Htid'))) m4'.
-            Proof.
+      forall (st1 : ThreadPool.t) (m1 m1' : mem) (Htid : ThreadPool.containsThread st1 hb) 
+        (st2 : ThreadPool.t) (mu : meminj) (m2 : mem) (cd0 : compiler_index),
+        concur_match (Some cd0) mu st1 m1 st2 m2 ->
+        forall (s' : Clight.state) (j1' : meminj) (cd' : Injindex compiler_sim)
+          (j2' : meminj) (s4' : Asm.state) (j3' : meminj) (m2' : mem)
+          (Htid' : containsThread st2 hb)
+        (mcompat1: mem_compatible st1 m1)
+        (mcompat2: mem_compatible st2 m2),
+        core_semantics.mem_step
+          (restrPermMap (proj1 (mcompat1 hb Htid))) m1' ->
+        mem_step_star
+          (restrPermMap (proj1 (mcompat2 hb Htid'))) m2' ->
+        invariant st1 ->
+        invariant st2 ->
+        match_thread_compiled cd' (compose_meminj (compose_meminj j1' j2') j3')
+                              (Krun (SState Clight.state Asm.state s')) m1'
+                              (Krun (TState Clight.state Asm.state s4')) m2' ->
+        concur_match (Some cd') (compose_meminj (compose_meminj j1' j2') j3')
+                     (updThread Htid (Krun (SState Clight.state Asm.state s'))
+                                (getCurPerm m1', snd (getThreadR Htid))) m1'
+                     (updThread Htid' (Krun (TState Clight.state Asm.state s4'))
+                                (getCurPerm m2', snd (getThreadR Htid'))) m2'.
+    Proof.
       (*There is probably a relation missing from m1 m' m2 m2' *)
-              (* Probably it's mem_step* which is provable from where this lemma is used. *)
-            Admitted.
+      (* Probably it's mem_step which is provable from where this lemma is used. *)
+    Admitted.
             
 
     
@@ -375,8 +395,8 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
               {state : Type}
               (step : state -> mem -> state -> mem -> Prop)
       : state -> mem -> state -> mem -> Prop :=
-      star_refl : forall s m, corestep_star step s m s m
-    | star_step : forall (s1 : state) m1 (s2 : state) m2
+      corestar_refl : forall s m, corestep_star step s m s m
+    | corestar_step : forall (s1 : state) m1 (s2 : state) m2
                     (s3 : state) m3,
         step s1 m1 s2 m2 ->
         corestep_star step s2 m2 s3 m3 ->
@@ -494,7 +514,17 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
         + (*Reestablish the concur_match *)
           simpl.
           move H0 at bottom.
+          
           eapply Concur_update; eauto.
+          { eapply core_semantics.corestep_mem in H2.
+            eapply H2. }
+          { eapply Asm_event.asm_ev_ax1 in H1.
+            (* This is the step constructed bellow *)
+            admit.
+          }
+          { apply H0. }
+
+          (*The compiler match*)
           econstructor 2; eauto.
           simpl in MATCH.
           unfold match_thread_target; simpl.
@@ -534,6 +564,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
         (* (1) Clight step *)
         destroy_ev_step_sum. subst m'0 t0 s.
         eapply (event_semantics.ev_step_ax1 (@semSem CSem)) in H3; eauto.
+        assert (original_CoreStep:=H3).
         replace Hcmpt with (memcompat1 (Some cd0) mu st1 m1 st2 m2 H0) in H3
           by eapply Axioms.proof_irr.
         
@@ -567,7 +598,15 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
           
             simpl in *.
             eapply Concur_update_compiled; eauto.
-
+            
+            { eapply (core_semantics.corestep_mem (Clightcore_coop.CLC_memsem  Clight_g)).
+              eauto.
+            }
+            { (* This is the step constructed bellow *)
+              admit.
+            }
+            { apply H0. }
+            
             (* match_thread_compiled *)
             {
 unfold match_thread_compiled.
@@ -583,7 +622,7 @@ unfold match_thread_compiled.
               eauto.
             }
           * eapply thread_step_plus_from_corestep; eauto.
-        + admit. (* no step for assam *)
+        + admit. (* no step for assam (CompCert sttuter) *)
         
       - (* tid > hb *)
         pose proof (mtch_source _ _ _ _ _ _ H0 _ l Htid (contains12 H0 Htid)) as HH.
@@ -614,6 +653,13 @@ unfold match_thread_compiled.
           simpl.
           move H0 at bottom.
           eapply Concur_update; eauto.
+          { eapply core_semantics.corestep_mem in H2.
+            eapply H2. }
+          { (* This is the step constructed bellow *)
+            admit.
+          }
+          { apply H0. }
+          
           econstructor 1; eauto.
           simpl in MATCH.
           unfold match_thread_source; simpl.
@@ -646,8 +692,12 @@ unfold match_thread_compiled.
                 concur_match cd' mu' st1' m1' st2' m2' /\
                 machine_semantics.machine_step (HybConcSem (Some (S hb)) m) tge U tr st2 m2 U' tr' st2'
                                                m2'.
-        Proof.
-        Admitted.
+    Proof.
+      intros.
+      inversion H; subst.
+      inversion Htstep; subst.
+      destruct (Compare_dec.lt_eq_lt_dec tid hb) as [[?|?]|?].  
+    Admitted.
 
         
         Lemma initial_diagram:
