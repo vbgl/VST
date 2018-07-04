@@ -694,7 +694,19 @@ unfold match_thread_compiled.
               (seq.cat tr (Events.external tid ev :: nil)) st2' m2'.
     Proof.
       intros.
-      
+      inversion H1.
+      - (*Acquire*)
+        admit.
+      - (*Release*)
+        admit.
+      - (*ReleaseCreate/Spawn*)
+        admit.
+      - (*Make Lock*)
+        admit.
+      - (*Free Lock*)
+        admit.
+      - (*AcquireFail*)
+        admit.
     Admitted.
     
     Lemma machine_step_diagram:
