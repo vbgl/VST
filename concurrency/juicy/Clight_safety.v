@@ -1105,10 +1105,11 @@ Proof.
       inv H10.
       rewrite Cop.cast_val_casted in H12 by auto; inv H12.
       rewrite app_nil_r in Hsafe0.
-      eapply IHn; auto.
+      eapply IHn.
       2:{ eapply csafe_restr, Hsafe0.
         destruct c; auto. }
-      2:{ rewrite updThread_twice.
+      { auto. }
+      { rewrite updThread_twice.
         apply MTCH_updThread; auto.
         + constructor; simpl.
           apply match_ext.
@@ -1119,7 +1120,6 @@ Proof.
         + simpl.
           rewrite gssThreadRes; simpl.
           erewrite mtch_gtr2; eauto. }
-       admit.
      }
     { inv Hstep; simpl in *; rewrite HschedN in HschedN0; inv HschedN0;
         try (inv Htstep; rewrite gssThreadCode in Hcode0; inv Hcode0);
@@ -1155,8 +1155,7 @@ Proof.
     rewrite app_nil_r.
     apply csafe_restr'.
     eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool));
-      [eapply IHn; auto; [ |eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto|] | auto].
-    admit.
+      [eapply IHn; [ |eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto|] | auto]; auto.
     constructor; auto; intros.
     + destruct (eq_dec tid0 tid).
       * subst; rewrite gssThreadCode, gssThreadCC.
@@ -1187,9 +1186,9 @@ Proof.
       intro; extensionality ofs; auto.
     + eapply MTCH_invariant; eauto.
     + rewrite <- H6 in Hsafe.
-      eapply IHn; auto.
+      eapply IHn.
       2:{ eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
-      admit.
+      { auto. }
       apply MTCH_updThread; auto.
       * constructor; auto.
       * erewrite <- mtch_gtr2; eauto.
@@ -1208,7 +1207,7 @@ Proof.
     { rewrite app_nil_r; rewrite <- H5 in Hsafe.
       intro; eapply IHn; auto.
       2:{ eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
-      admit.
+      { auto. }
       apply MTCH_updThreadC; auto.
       constructor; constructor; auto. }
   - inv Htstep; inversion H0; pose proof (mtch_gtc _ Htid (mtch_cnt _ Htid)) as Hc;
@@ -1228,8 +1227,8 @@ Proof.
         * erewrite <- mtch_gtr2; apply Hangel2. }
       { rewrite <- H6 in Hsafe.
         intro; eapply IHn; auto.
-       2:{ eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
-       admit.
+        2:{ eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
+        { auto. }
         apply MTCH_updLockSet, MTCH_updThread; auto.
         - constructor; constructor; auto.
         - apply computeMap_ext; auto.
@@ -1252,7 +1251,7 @@ Proof.
       { rewrite <- H6 in Hsafe.
         intro; eapply IHn; auto.
         2:{ eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
-        admit.
+        { auto. }
         apply MTCH_updLockSet, MTCH_updThread; auto.
         - constructor; constructor; auto.
         - apply computeMap_ext; auto.
@@ -1270,7 +1269,7 @@ Proof.
         intro; eapply IHn; auto.
         2:{ eapply (csafe_trace(ThreadPool := OrdinalPool.OrdinalThreadPool)),
             (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
-        admit.
+        { auto. }
         apply MTCH_addThread; auto.
         apply MTCH_updThread; auto.
         - constructor; constructor; auto.
@@ -1289,7 +1288,7 @@ Proof.
       { rewrite <- H6 in Hsafe.
         intro; eapply IHn; auto.
         2:{ eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
-        admit.
+        { auto. }
         apply MTCH_updLockSet, MTCH_updThread; auto.
         * constructor; constructor; auto.
         * intros; simpl.
@@ -1308,7 +1307,7 @@ Proof.
       { rewrite <- H6 in Hsafe.
         intro; eapply IHn; auto.
         2:{ eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
-        admit.
+        { auto. }
         apply MTCH_remLockSet, MTCH_updThread; auto.
         * constructor; constructor; auto.
         * intros; simpl.
@@ -1332,8 +1331,8 @@ Proof.
       { rewrite <- H6 in Hsafe.
         intro; eapply IHn; auto.
         2:eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto.
-        2: auto.
-         admit.
+        { auto. }
+        auto.
        }
 (*  - inv Hhalted; contradiction.*)
   - subst; eapply AngelSafe.
@@ -1345,8 +1344,8 @@ Proof.
       - eapply MTCH_compat; eauto. }
     { intro; eapply IHn; auto.
       2: eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto.
-       2:auto.
-      admit.
+      { auto. }
+      auto.
     }
   Unshelve.
   all: auto.
@@ -1378,15 +1377,14 @@ Proof.
   + eapply mem_compatible_updThreadC, MTCH_compat; eauto.
   + erewrite <- mtch_gtr2; eauto.
   + erewrite <- mtch_gtr2; eauto.
-Admitted.
-
-Search ThreadPool.t.
-
+Qed.
 
 Definition init_threadpool := 
    @initial_machine (Clight_newSem ge)
      (@OrdinalPool.OrdinalThreadPool dryResources (Clight_newSem ge))
      (getCurPerm init_mem) (initial_corestate CPROOF).
+
+Transparent getThreadC.
 
 Lemma init_mem_ok: mem_ok init_threadpool init_mem.
 Proof.
@@ -1416,9 +1414,26 @@ Proof.
            eapply Genv.find_var_info_not_fresh; eauto.
       * intros.
         eapply Genv.find_funct_ptr_not_fresh; eauto.
+  - simpl.
+    unfold initial_corestate; simpl.
+    destruct spr as (q & ? & [? Hinit] & s); simpl.
+    destruct (s O tt) as (jm & Hjm & _).
+    specialize (Hinit _ Hjm) as (? & ? & Hinit & _).
+    unfold Clight_new.cl_initial_core in Hinit; simpl in Hinit.
+    destruct (Genv.find_funct_ptr _ _) eqn: Hfind; [|contradiction].
+    destruct (Clight.type_of_fundef f); try contradiction.
+    destruct Hinit as (? & ? & ? & ?); subst; simpl; repeat split.
+    + unfold Clight.empty_env; repeat intro.
+      rewrite PTree.gempty in H; discriminate.
+    + clear - Hfind.
+      destruct CPROOF; simpl in *.
+      destruct (Genv.init_mem CSL_prog) eqn: Hmem; [simpl | contradiction].
+      repeat intro.
+      destruct i; simpl in H; try (rewrite PTree.gleaf in H; discriminate).
+      inv H; simpl.
+      eapply Genv.find_funct_ptr_not_fresh; eauto.
+    + repeat constructor.
 Qed.
-
-Transparent getThreadC.
 
 Lemma Clight_new_Clight_safety:
   (forall sch n,
