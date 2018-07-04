@@ -881,10 +881,10 @@ Module X86Inj.
   Qed.
 
   Lemma mem_valid_alloc:
-    forall m sz m' b f
+    forall m m' b lo hi f
       (Hdomain: domain_memren f m)
       (Hvalid_mem: valid_mem m)
-      (Halloc: Mem.alloc m 0 sz = (m', b)),
+      (Halloc: Mem.alloc m lo hi = (m', b)),
       valid_mem m' /\
       (exists f', ren_domain_incr f f' /\ domain_memren f' m').
   Proof.
@@ -2232,16 +2232,10 @@ Module X86Inj.
       eapply eval_builtin_args_ren in H9 as (args' & ? & ?); eauto.
       (* We need Hsafe to give us that external calls behave the same even
          on injected arguments. *)
-      destruct ef; try solve [intros []; subst;
-        match goal with H : external_call ?ef _ _ _ _ _ _ |- _ =>
-        assert (exists vres', external_call ef the_ge args' mf t0 vres' mf /\ val_obs f vres vres') as (? & ? & ?) by admit end;
-        eexists (State _ m), mf, f; split;
-        [econstructor; eauto; eapply Asm.exec_step_builtin; eauto|];
-      repeat match goal with
-             | [ |- _ /\ _] =>
-               split; simpl; eauto with renamings reg_renamings val_renamings; try contradiction
-             end; apply regset_ren_set; try apply val_obs_offset_ptr; eauto with renamings reg_renamings val_renamings];
-             intros _.
+      destruct ef;
+               try (intros (_ & _ & Hcontra);
+                    now exfalso);
+               intros _.
       + (* EF_malloc case*)
         pose proof H10 as Hext_call.
         simpl in H10.
@@ -2418,7 +2412,7 @@ Module X86Inj.
       destruct (Ptrofs.eq_dec _ _); [|contradiction].
       rewrite H6 in H0.
       apply get_extcall_arguments_spec in H8; rewrite H8 in H0; discriminate.
-  Admitted.
+  Qed.
 
   (** Coresteps maintain well-definedness *)
 
@@ -2482,9 +2476,9 @@ Module X86Inj.
   Qed.
 
   Lemma free_wd_domain :
-  forall (m m' : mem) b sz (f : memren),
+  forall (m m' : mem) b lo hi (f : memren),
     domain_memren f m ->
-    Mem.free m b 0 sz = Some m' ->
+    Mem.free m b lo hi = Some m' ->
     valid_mem m ->
     valid_mem m' /\ domain_memren f m'.
 Proof.
@@ -2653,25 +2647,92 @@ Qed.
       eapply exec_instr_wd; eauto.
     - destruct c'; inv H3.
       exploit Hsafe; eauto.
-      destruct ef; try solve [intros []; subst; eauto with wd].
-      intros []; subst; split; auto; split; eauto with wd.
-      intros; simpl.
-      apply regset_wd_set...
-      apply valid_val_offset_ptr...
-      rewrite gso_undef_regs.
-      auto.
-      (* ? *)
-      admit.
-      simpl; intro X; decompose [or] X; congruence.
-      apply regset_wd_undef...
-      apply regset_wd_set_res...
-      all: admit.
+      destruct ef; try (intros (? & ? &?) ; exfalso; now auto).
+      + (* EF_malloc case*) 
+        intros.
+        simpl in H9.
+        inversion H9; subst.
+        pose proof H1 as Halloc.
+        eapply mem_valid_alloc in H1; eauto.
+        destruct H1 as [Hvalid' [f' [Hincr' Hren']]].
+        eapply store_wd_domain in H2; eauto.
+        destruct H2.
+        assert (Hvalid_b0: valid_val f' (Vptr b0 Ptrofs.zero)).
+        { eapply Mem.valid_new_block in Halloc.
+          unfold valid_val.
+          destruct (Hren' b0) as [? ?].
+          specialize (H3 Halloc).
+          destruct (f' b0); [eexists | exfalso]; now eauto. }
+        split; eauto.
+        split; [eexists; eauto | intros ].
+        eapply X86WD.regset_wd_domain with (f1 := f'); eauto.
+        apply regset_wd_set...
+        apply valid_val_offset_ptr...
+        rewrite gso_undef_regs.
+        apply regset_wd_set_res...
+        eapply X86WD.regset_wd_undef...
+        eapply X86WD.regset_wd_incr;
+          eauto.
+        simpl. intros Hcontra.
+        repeat match goal with
+               | [H: ?A \/ ?B |- _] =>
+                 destruct H; try discriminate
+               end; auto.
+        eapply X86WD.regset_wd_undef...
+        apply regset_wd_set_res...
+        eapply X86WD.regset_wd_undef...
+        eapply X86WD.regset_wd_incr;
+          eauto.
+      + (* EF_free case*)
+        intros _.
+        simpl in H9.
+        inversion H9; subst.
+        pose proof H2 as Hfree.
+        pose proof H as Hload.
+        eapply free_wd_domain in Hfree; eauto.
+        destruct Hfree.
+        split; eauto.
+        split; [eexists; eauto using ren_domain_incr_refl |].
+        intros.
+        apply regset_wd_set...
+        apply valid_val_offset_ptr...
+        rewrite gso_undef_regs.
+        apply regset_wd_set_res...
+        simpl. intros Hcontra.
+        repeat match goal with
+               | [H: ?A \/ ?B |- _] =>
+                 destruct H; try discriminate
+               end; auto.
+        eapply X86WD.regset_wd_undef...
+      + (* EF_memcpy case*) 
+        intros.
+        simpl in H9.
+        inversion H9; subst.
+        eapply valid_mem_loadbytes in H12; eauto.
+        eapply storebytes_wd_domain in H13; eauto.
+        destruct H13.
+        split; eauto.
+        split.
+        exists f; split; eauto using ren_domain_incr_refl.
+        intros.
+        eapply X86WD.regset_wd_domain with (f1 := f'); eauto.
+        apply regset_wd_set...
+        apply valid_val_offset_ptr...
+        rewrite gso_undef_regs.
+        apply regset_wd_set_res...
+        simpl. intros Hcontra.
+        repeat match goal with
+               | [H: ?A \/ ?B |- _] =>
+                 destruct H; try discriminate
+               end; auto.
+        eapply X86WD.regset_wd_undef...
+        apply regset_wd_set_res...
     - simpl in *.
       rewrite H4 in H0.
       destruct (Ptrofs.eq_dec _ _); [|contradiction].
       rewrite H5 in H0.
       apply get_extcall_arguments_spec in H6; rewrite H6 in H0; discriminate.
-  Admitted.
+  Qed.
 
   Section Inj.
 

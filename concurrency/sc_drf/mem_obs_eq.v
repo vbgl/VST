@@ -1316,6 +1316,104 @@ Module MemoryWD.
     eapply Mem.store_valid_block_1; eauto.
   Qed.
 
+  Transparent  Mem.storebytes.
+  Lemma valid_val_storebytes:
+    forall v m m' b ofs mv
+      (Hmem: mem_wd.val_valid v m)
+      (Hstore: Mem.storebytes m b ofs mv = Some m'),
+      mem_wd.val_valid v m'.
+  Proof.
+    intros.
+    destruct v; simpl; auto.
+    eapply Mem.storebytes_valid_block_1; eauto.
+  Qed.
+
+
+  Lemma storebytes_wd_domain:
+    forall (m m' : mem) mv b ofs f
+      (Hdomain: domain_memren f m)
+      (Hmval_wd: valid_memval_list f mv)
+      (Hstore: Mem.storebytes m b ofs mv = Some m')
+      (Hmem_wd: valid_mem m),
+      valid_mem m' /\ domain_memren f m'.
+  Proof.
+    intros.
+    unfold valid_mem in *.
+    destruct mv.
+    - unfold Mem.storebytes in Hstore.
+      destruct (Mem.range_perm_dec m b ofs (ofs + Z.of_nat (length [::]))); try discriminate.
+      inv Hstore.
+      unfold domain_memren, mem_wd.val_valid, Mem.valid_block in *. simpl.
+      split; eauto.
+      intros.
+      eapply Hmem_wd with (ofs := ofs0); eauto.
+      rewrite <- H0.
+      destruct (Pos.eq_dec b b0); subst.
+      rewrite Maps.PMap.gss.
+      reflexivity.
+      rewrite Maps.PMap.gso;
+        now eauto.
+    - split.
+      { intros b0 Hvalid ofs0 mv0 Hget; subst.
+        eapply Mem.storebytes_valid_block_2 in Hvalid; eauto.
+        rewrite (Mem.storebytes_mem_contents _ _ _ _ _ Hstore).
+        destruct (Pos.eq_dec b b0) as [Heq | Hneq].
+        - (*case it's the same block*)
+          subst.
+          rewrite Maps.PMap.gss.
+          destruct (Intv.In_dec ofs0
+                                (ofs,
+                                 (ofs + Z.of_nat (length (m0 ::mv)))%Z)).
+          
+          + apply Mem.setN_in with (c:= (Mem.mem_contents m) # b0) in i.
+            destruct (ZMap.get ofs0
+                               (Mem.setN (m0 :: mv) ofs (Mem.mem_contents m) # b0));
+              simpl; auto.
+            
+            Lemma In_valid_memval_list:
+            forall f mvs mv,
+              valid_memval_list f mvs ->
+              In mv mvs ->
+              valid_memval f mv.
+          Proof.
+            induction mvs; intros.
+            - simpl in H0.
+              now exfalso.
+            - simpl in H0.
+              inv H.
+              destruct H0; subst;
+                now eauto.
+          Qed.
+          
+          eapply In_valid_memval_list in Hmval_wd; eauto.
+          simpl in Hmval_wd.
+          eapply wd_val_valid; eauto.
+          unfold domain_memren in *.
+          intros b.
+          split; intros Hb;
+            [eapply Mem.storebytes_valid_block_2 in Hb; eauto|
+             eapply Mem.storebytes_valid_block_1; eauto];
+          eapply Hdomain; eauto.
+        + apply Intv.range_notin in n.
+          erewrite Mem.setN_outside by eauto.
+          specialize (Hmem_wd _ Hvalid ofs0 _ ltac:(reflexivity)).
+          destruct (ZMap.get ofs0 (Mem.mem_contents m) # b0); auto.
+          eapply valid_val_storebytes; eauto.
+          simpl.
+          zify; omega.
+      - erewrite Maps.PMap.gso by eauto.
+        specialize (Hmem_wd _ Hvalid ofs0 _ ltac:(reflexivity)).
+        destruct (ZMap.get ofs0 (Mem.mem_contents m) # b0); subst; auto.
+        eapply valid_val_storebytes; eauto. }
+    { split.
+      intros. eapply Mem.storebytes_valid_block_2 in H; eauto.
+      eapply Hdomain; auto.
+      intros. eapply Mem.storebytes_valid_block_1; eauto.
+      apply Hdomain; auto.
+    }
+  Qed.
+
+  
   (** Well-definedeness is preserved through storing of a well-defined value *)
   Lemma store_wd_domain:
     forall (m m' : mem) (chunk : memory_chunk) (v : val) b ofs f
@@ -1392,6 +1490,32 @@ Module MemoryWD.
     exploit Mem.load_result; eauto. intro. rewrite H.
     eapply decode_val_wd; eauto.
     apply getN_wd; auto.
+  Qed.
+
+  Transparent Mem.loadbytes.
+  Lemma valid_mem_loadbytes:
+    forall m b ofs sz mv f
+      (Hwd: valid_mem m)
+      (Hsz: sz >= 0)
+      (Hdomain: domain_memren f m)
+      (Hload: Mem.loadbytes m b ofs sz = Some mv),
+      valid_memval_list f mv.
+  Proof.
+    intros.
+    unfold Mem.loadbytes in Hload.
+    destruct (Mem.range_perm_dec m b ofs (ofs+sz) Cur Readable);
+      [|discriminate].
+    inv Hload.
+    unfold Mem.range_perm in r.
+    assert (Hsz': sz > 0 \/ sz = 0)
+      by omega.
+    destruct Hsz'.
+    - specialize (r ofs ltac:(omega)).
+      eapply Mem.perm_valid_block in r.
+      eapply getN_wd; eauto.
+    - subst.
+      simpl.
+      econstructor.
   Qed.
 
   Lemma loadv_wd:

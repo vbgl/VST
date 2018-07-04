@@ -636,14 +636,144 @@ Proof.
   unfold Clight.type_of_function; eauto.
 Qed.
 
-Definition mem_ok m := Smallstep.globals_not_fresh (Clight.genv_genv ge) m /\
-  (* Mem.mem_wd m isn't sufficient, because there may be values that aren't currently readable
-    but will still be used later *)
-  mem_wd2 m.
+Definition MachStateDry := @MachState dryResources (Clight_newSem ge)
+       (@OrdinalPool.OrdinalThreadPool dryResources (Clight_newSem ge)).
+(*
+SearchHead (MachState -> _).
+Print Val.inject.
+Definition flat_inject (v: memval)
+*)
 
-Lemma mem_ok_wd: forall m, mem_ok m -> Mem.mem_wd m.
+
+Definition threadpool_of (st: MachStateDry) :=    match st with (_, _, tp) => tp end.
+
+Section CTL_OK.
+  Variable nextb : block.
+
+Definition block_ok (b: block) := Plt b nextb.
+
+Definition val_ok (v: val) : Prop := 
+ match v with
+ | Vptr b _ => block_ok b
+ | _ => True
+ end.
+
+Definition venv_ok (ve: Clight.env) :=
+  forall i bt, PTree.get i ve = Some bt -> block_ok (fst bt).
+
+Definition tenv_ok (te: Clight.temp_env) :=
+  forall i (v: val), PTree.get i te = Some v -> val_ok v.
+
+Definition cont'_ok (k: Clight_new.cont') := 
+ match k with
+ | Clight_new.Kcall _ _ ve te => venv_ok ve /\ tenv_ok te
+ | _ => True
+ end.
+
+Definition cont_ok (k: Clight_new.cont) := Forall cont'_ok k.
+
+Definition corestate_ok (q: Clight_new.corestate) : Prop :=
+ match q with
+ | Clight_new.State ve te k => venv_ok ve /\ tenv_ok te /\ cont_ok k
+ | Clight_new.ExtCall f vl _ ve te k => Forall val_ok vl /\ venv_ok ve /\ tenv_ok te /\ cont_ok k
+ end.
+
+Definition ctl_ok (c: @ctl Clight_new.corestate) : Prop :=
+ match c with
+ | Krun q => corestate_ok q 
+ | Kblocked q => corestate_ok q
+ | Kresume q v => corestate_ok q /\ val_ok v
+ | Kinit v1 v2 => val_ok v1 /\ val_ok v2
+ end.
+End CTL_OK.
+
+Section ALLOC_OK.
+Variable nextb: positive.
+Variable nextb': positive.
+Variable LESS:  (nextb <= nextb')%positive.
+
+Lemma alloc_block_ok: forall b, block_ok nextb b -> block_ok nextb' b.
 Proof.
-  intros ? [].
+intros.
+red in H|-*. eapply Pos.lt_le_trans; eauto.
+Qed.
+
+Lemma alloc_val_ok: forall v, val_ok nextb v -> val_ok nextb' v.
+Proof.
+intros; destruct v; auto.
+red in H|-*. eapply alloc_block_ok; eauto.
+Qed.
+
+Lemma alloc_venv_ok: forall ve, venv_ok nextb ve -> venv_ok nextb' ve.
+Proof.
+intros.
+red in H|-*; intros.
+eapply alloc_block_ok; eauto.
+Qed.
+
+Lemma alloc_tenv_ok: forall te, tenv_ok nextb te -> tenv_ok nextb' te.
+Proof.
+intros.
+red in H|-*; intros.
+eapply alloc_val_ok; eauto.
+Qed.
+
+Lemma alloc_cont'_ok: forall k, cont'_ok nextb k -> cont'_ok nextb' k.
+Proof.
+destruct k; simpl; auto.
+intros [? ?]; split.
+eapply alloc_venv_ok; eauto.
+eapply alloc_tenv_ok; eauto.
+Qed.
+
+Lemma alloc_cont_ok: forall k, cont_ok nextb k -> cont_ok nextb' k.
+Proof.
+intros.
+red in H|-*.
+revert H; apply Forall_impl.
+apply alloc_cont'_ok.
+Qed.
+
+Lemma alloc_corestate_ok: forall q, corestate_ok nextb q -> corestate_ok nextb' q.
+Proof.
+destruct q; simpl.
+intros [? [? ?]]; split; [|split].
+eapply alloc_venv_ok; eauto.
+eapply alloc_tenv_ok; eauto.
+eapply alloc_cont_ok; eauto.
+intros [? [? [? ?]]]; split; [|split; [|split]].
+revert H; apply Forall_impl.
+apply alloc_val_ok.
+eapply alloc_venv_ok; eauto.
+eapply alloc_tenv_ok; eauto.
+eapply alloc_cont_ok; eauto.
+Qed.
+
+Lemma alloc_ctl_ok: forall c, ctl_ok nextb c -> ctl_ok nextb' c.
+Proof.
+destruct c; simpl; intros;
+try solve [eapply alloc_corestate_ok; eauto].
+destruct H; split.
+eapply alloc_corestate_ok; eauto.
+eapply alloc_val_ok; eauto.
+destruct H; split;
+eapply alloc_val_ok; eauto.
+Qed.
+
+End ALLOC_OK.
+
+Definition dryThreadPool := @ThreadPool.t dryResources (Clight_newSem ge)
+                                  (@OrdinalPool.OrdinalThreadPool dryResources (Clight_newSem ge)).
+
+Definition mem_ok (tp: dryThreadPool) m := 
+   Smallstep.globals_not_fresh (Clight.genv_genv ge) m /\
+   mem_wd2 m /\
+  (forall i (CT: containsThread tp i),
+      ctl_ok (Mem.nextblock m) (getThreadC CT)).
+
+Lemma mem_ok_wd: forall tp m, mem_ok tp m -> Mem.mem_wd m.
+Proof.
+  intros ? ? [? [? _]].
   constructor; unfold Mem.flat_inj; intros.
   - destruct (plt _ _); inv H1; auto.
     rewrite Z.add_0_r; auto.
@@ -653,7 +783,7 @@ Proof.
     rewrite Z.add_0_r; auto.
 Qed.
 
-Lemma mem_ok_restr: forall m p Hlt, mem_ok m -> mem_ok (@restrPermMap p m Hlt).
+Lemma mem_ok_restr: forall tp m p Hlt, mem_ok tp m -> mem_ok tp (@restrPermMap p m Hlt).
 Proof.
   intros.
   destruct H as [? Hwd]; split.
@@ -662,38 +792,480 @@ Proof.
   - unfold mem_wd2 in *; rewrite restrPermMap_nextblock, restrPermMap_mem_contents; auto.
 Qed.
 
-Lemma mem_ok_step: forall st m st' m' (Hmem: mem_ok m),
-  MachStep(Sem := Clight_newSem ge)
-    (ThreadPool:= OrdinalPool.OrdinalThreadPool)
-    (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig) st m st' m' -> mem_ok m'.
+Lemma ctl_ok_updThread:
+  forall nextb (ms: dryThreadPool) tid c r
+  (H: containsThread ms tid),
+  ctl_ok nextb c ->
+  (forall i (CT: containsThread ms i), ctl_ok nextb (getThreadC CT)) ->
+  (forall i (CT: containsThread (updThread H c r) i), 
+       ctl_ok nextb (getThreadC CT)).
 Proof.
-  induction 2; auto.
-  - inv Htstep.
+intros.
+specialize (H1 i).
+destruct (eq_dec tid i).
+subst i.
+specialize (H1 H).
+pose proof (@gssThreadCode _ _ _ _ ms H _ _ CT). rewrite H2; auto.
+destruct (containsThread_dec_ i ms).
+specialize (H1 c0).
+pose proof (@gsoThreadCode _ _ _ _ _ _ n _ c0 _ _ CT).
+rewrite H2; auto.
+hnf.
+contradiction n0.
+Qed.
+
+Lemma ctl_ok_updLockSet:
+  forall nextb (ms: dryThreadPool) tid x r
+  (H: containsThread ms tid),
+  (forall i (CT: containsThread ms i), ctl_ok nextb (getThreadC CT)) ->
+  (forall i (CT: containsThread (updLockSet ms x r) i), 
+       ctl_ok nextb (getThreadC CT)).
+Proof.
+intros.
+pose proof (cntUpdateL' _ _ CT). specialize (H0 i H1).
+replace (getThreadC CT) with (getThreadC H1); auto.
+symmetry; apply gLockSetCode.
+Qed.
+
+
+Lemma ctl_ok_remLockSet:
+  forall nextb (ms: dryThreadPool) tid x
+  (H: containsThread ms tid),
+  (forall i (CT: containsThread ms i), ctl_ok nextb (getThreadC CT)) ->
+  (forall i (CT: containsThread (remLockSet ms x) i), 
+       ctl_ok nextb (getThreadC CT)).
+Proof.
+intros.
+pose proof (cntRemoveL' _ CT). specialize (H0 i H1).
+replace (getThreadC CT) with (getThreadC H1); auto.
+symmetry; apply gRemLockSetCode.
+Qed.
+
+Lemma ctl_ok_updThreadC:
+  forall nextb (ms: dryThreadPool) tid c
+  (H: containsThread ms tid),
+  ctl_ok nextb c ->
+  (forall i (CT: containsThread ms i), ctl_ok nextb (getThreadC CT)) ->
+  (forall i (CT: containsThread (updThreadC H c) i), 
+       ctl_ok nextb (getThreadC CT)).
+Proof.
+intros.
+specialize (H1 i).
+destruct (eq_dec tid i).
+subst i.
+specialize (H1 H).
+pose proof (@gssThreadCC _ _ _ _ ms H _ CT). rewrite H2; auto.
+destruct (containsThread_dec_ i ms).
+specialize (H1 c0).
+pose proof (@gsoThreadCC _ _ _ _ _ _ n _ c0 _ CT).
+rewrite <- H2; auto.
+hnf.
+contradiction n0.
+Qed.
+
+Lemma ctl_ok_addThread:
+  forall nextb (ms: dryThreadPool) tid v1 v2 r
+  (H: containsThread ms tid),
+  val_ok nextb v1 ->
+  val_ok nextb v2 ->
+  (forall i (CT: containsThread ms i), ctl_ok nextb (getThreadC CT)) ->
+  (forall i (CT: containsThread (addThread ms v1 v2 r) i), 
+       ctl_ok nextb (getThreadC CT)).
+Proof.
+intros.
+specialize (H2 i).
+pose proof (cntAdd' _ _ _ CT).
+destruct H3.
+destruct H3.
+specialize (H2 H3).
+replace (getThreadC CT) with (getThreadC H3); auto.
+symmetry; apply gsoAddCode. subst i.
+pose proof (@gssAddCode _ _ _ ms v1 v2 r (latestThread ms) (eq_refl _) CT).
+rewrite H3. split; auto.
+Qed.
+
+Lemma set_tenv_ok:
+  forall nextb i (v: val) te, val_ok nextb v -> tenv_ok nextb te ->
+            tenv_ok nextb (PTree.set i v te).
+Proof.
+intros.
+hnf in H0|-*.
+intros.
+destruct (eq_dec i i0).
+subst. rewrite PTree.gss in H1. inv H1. auto.
+rewrite PTree.gso in H1 by auto.
+apply H0 in H1. auto.
+Qed.
+
+Lemma eval_expr_ok:
+  forall (m : mem) (ve : Clight.env) (te : Clight.temp_env)
+  (a : Clight.expr) (v : val) (T : list mem_event),
+@Smallstep.globals_not_fresh Clight.fundef type (Clight.genv_genv ge) m ->
+mem_wd2 m ->
+venv_ok (Mem.nextblock m) ve ->
+tenv_ok (Mem.nextblock m) te ->
+eval_exprT ge ve te m a v T -> 
+val_ok (Mem.nextblock m) v
+ with eval_lvalue_ok:
+  forall (m : mem) (ve : Clight.env) (te : Clight.temp_env)
+  (a : Clight.expr) (v : block) ofs (T : list mem_event),
+@Smallstep.globals_not_fresh Clight.fundef type (Clight.genv_genv ge) m ->
+mem_wd2 m ->
+venv_ok (Mem.nextblock m) ve ->
+tenv_ok (Mem.nextblock m) te ->
+eval_lvalueT ge ve te m a v ofs T -> 
+block_ok (Mem.nextblock m) v.
+Admitted.
+
+Lemma mem_ok_goto:
+ forall (k : Clight_new.cont) (lbl : Clight.label)
+       (s' : Clight.statement) (nextb : block),
+   cont_ok nextb k ->
+   forall (s : Clight.statement) (k' : Clight_new.cont),
+   Clight_new.find_label lbl s
+     (Clight_new.Kseq s' :: Clight_new.call_cont k) = 
+    Some k' -> cont_ok nextb k'.
+Proof.
+intros.
+change (Clight_new.Kseq s' :: Clight_new.call_cont k) with
+  ([Clight_new.Kseq s'] ++ Clight_new.call_cont k) in H0.
+assert (Forall (cont'_ok nextb) [Clight_new.Kseq s'] ).
+repeat constructor.
+remember [Clight_new.Kseq s'] as al.
+clear Heqal.
+revert al k' H1 H0.
+induction s; simpl; intros; try discriminate.
+-
+change (Clight_new.Kseq s2 :: al ++ Clight_new.call_cont k)
+  with ((Clight_new.Kseq s2 :: al) ++ Clight_new.call_cont k) in H0.
+destruct (Clight_new.find_label lbl s1
+         ((Clight_new.Kseq s2 :: al) ++ Clight_new.call_cont k)) eqn:?; inv H0.
+apply IHs1 in Heqo; auto.
+repeat constructor; auto.
+apply IHs2 in H3; auto.
+-
+destruct (Clight_new.find_label lbl s1 (al ++ Clight_new.call_cont k)) eqn:?; inv H0.
+apply IHs1 in Heqo; auto.
+apply IHs2 in H3; auto.
+-
+change  (Clight_new.Kseq Clight.Scontinue
+          :: Clight_new.Kloop1 s1 s2 :: al ++ Clight_new.call_cont k)
+ with  ((Clight_new.Kseq Clight.Scontinue
+          :: Clight_new.Kloop1 s1 s2 :: al) ++ Clight_new.call_cont k) in H0.
+destruct ((Clight_new.Kseq Clight.Scontinue
+          :: Clight_new.Kloop1 s1 s2 :: al) ++ Clight_new.call_cont k) eqn:?; inv H0.
+destruct (Clight_new.find_label lbl s1 []) eqn:?; inv H3.
+simpl in Heql. inv Heql.
+change (Clight_new.Kloop2 s1 s2 :: al ++ Clight_new.call_cont k) with
+ ((Clight_new.Kloop2 s1 s2 :: al) ++ Clight_new.call_cont k) in H2.
+apply IHs2 in H2; auto.
+repeat constructor; auto.
+simpl in Heql. inv Heql.
+change (Clight_new.find_label lbl s1
+         (Clight_new.Kseq Clight.Scontinue
+          :: Clight_new.Kloop1 s1 s2 :: al ++ Clight_new.call_cont k))
+  with (Clight_new.find_label lbl s1
+         ((Clight_new.Kseq Clight.Scontinue
+          :: Clight_new.Kloop1 s1 s2 :: al) ++ Clight_new.call_cont k)) in H3.
+destruct  ((Clight_new.Kseq Clight.Scontinue
+          :: Clight_new.Kloop1 s1 s2 :: al) ++ Clight_new.call_cont k) eqn:?; inv H3.
+simpl in Heql; inv Heql.
+simpl in Heql; inv Heql.
+destruct (Clight_new.find_label lbl s1
+         (Clight_new.Kseq Clight.Scontinue
+          :: Clight_new.Kloop1 s1 s2 :: al ++ Clight_new.call_cont k)) eqn:?; inv H2.
+change  (Clight_new.Kseq Clight.Scontinue
+          :: Clight_new.Kloop1 s1 s2 :: al ++ Clight_new.call_cont k)
+ with ( (Clight_new.Kseq Clight.Scontinue
+          :: Clight_new.Kloop1 s1 s2 :: al) ++ Clight_new.call_cont k) in Heqo.
+apply IHs1 in Heqo; auto.
+repeat constructor; auto.
+change (Clight_new.Kloop2 s1 s2 :: al ++ Clight_new.call_cont k) with
+  ((Clight_new.Kloop2 s1 s2 :: al) ++ Clight_new.call_cont k) in H3.
+apply IHs2 in H3; auto.
+repeat constructor; auto.
+- admit.
+- 
+  destruct (AST.ident_eq lbl l). subst.
+  inv H0. repeat constructor; auto.
+  apply sublist.Forall_app.
+  split; auto.
+  revert H. clear.
+  induction k; simpl; intros. constructor. inv H. destruct a; auto.
+  eapply IHs; eauto.
+Admitted.
+
+Lemma mem_ok_threadStep: 
+    forall
+       (ms : dryThreadPool) (m : mem) (tid : nat) 
+       (m' : mem) (ev : list mem_event)
+      (Hmem : mem_ok ms m)
+      (Htid : containsThread ms tid)
+      (Hcmpt : mem_compatible ms m)
+      (c c': Clight_new.corestate)
+      (Hcode : getThreadC Htid = Krun c)
+      (Hcorestep : cl_evstep ge c (restrPermMap (proj1 (Hcmpt tid Htid))) ev c' m'),
+     mem_ok (updThread Htid (Krun c') (getCurPerm m', snd (getThreadR Htid))) m'.
+Proof.
+ intros.
+ assert (Smallstep.globals_not_fresh (Clight.genv_genv ge) m /\
+             mem_wd2 m' /\ 
+             corestate_ok (Mem.nextblock m') c' /\
+             (Mem.nextblock m <= Mem.nextblock m')%positive /\
+             (forall (i : nat) (CT : containsThread ms i),
+                ctl_ok (Mem.nextblock m) (getThreadC CT))).
+ 2:{
+    destruct H as [? [? [? [? ?]]]].
+    split;[ | split]; auto.
+    clear - H2 H. red in H|-*. eapply Pos.le_trans; eauto.
+    assert (forall (i : nat) (CT : containsThread ms i),
+     ctl_ok (Mem.nextblock m') (getThreadC CT)).
+    intros. eapply alloc_ctl_ok; eauto.
+    revert H4.
+    eapply ctl_ok_updThread. auto.
+ }
+ destruct Hmem as [? [? ?]].
+  assert (mem_wd2 m' /\ 
+     corestate_ok (Mem.nextblock m') c' /\ 
+     (Mem.nextblock m <= Mem.nextblock m')%positive); [ |intuition].
+  specialize (H1 _ Htid).
+  rewrite Hcode in H1. clear Hcode. simpl in H1.  
+  remember (proj1 (Hcmpt tid Htid)) as P. clear HeqP.
+  remember (fst (getThreadR Htid)) as u. clear Hequ.
+  clear - Hcorestep H H0 H1.
+  remember (restrPermMap P) as m0.
+  assert (Smallstep.globals_not_fresh (Clight.genv_genv ge) m0 /\
+             mem_wd2 m0 /\
+               corestate_ok (Mem.nextblock m0) c).
+  subst m0. clear -H H0 H1. split;[|split]; auto.
+  replace (Mem.nextblock m) with (Mem.nextblock m0)
+         by (subst m0; reflexivity).
+  clear - H2 Hcorestep. rename m0 into m.
+  revert H2.
+ induction Hcorestep; intros [? [? ?]]. 
+* (* assign *)
+  admit.
+* (* set *)
+   destruct H2 as [? [? ?]]. inv H4.
+   repeat split;  auto.
+   2: apply Pos.le_refl.
+   apply set_tenv_ok; auto.
+   eapply eval_expr_ok; eauto.
+* (* call_internal *)
+  admit.
+*  (* call_external *)
+  admit.
+* (* seq *)
+  apply IHHcorestep. split; [|split]; auto.
+  destruct H1 as [? [? ?]];  split; [|split]; auto.
+  repeat constructor. inv H3; auto.
+* (* skip *)
+  apply IHHcorestep. split; [|split]; auto.
+  simpl in H1. destruct H1 as [? [? ?]]. split; [|split]; auto. inv H3. auto.
+* (* continue *)
+  apply IHHcorestep. split; [|split]; auto.
+  simpl in H1. destruct H1 as [? [? ?]]. split; [|split]; auto. inv H3.
+  clear - H7.
+  induction k. constructor.
+  inv H7.
+  specialize (IHk H2).
+  destruct a; auto. simpl in *. repeat constructor. auto.
+  repeat constructor. simpl in *. constructor.
+* (* break *)
+  apply IHHcorestep. split; [|split]; auto.
+  simpl in H1. destruct H1 as [? [? ?]]. split; [|split]; auto. inv H3.
+  clear - H7.
+  induction k. constructor.
+  inv H7.
+  specialize (IHk H2).
+  destruct a; auto. simpl in *. repeat constructor. auto.
+  repeat constructor.
+* (* ifthenelse *)
+  split; auto.
+  split.
+   2: apply Pos.le_refl.
+  destruct H3 as [? [? ?]]. split;[ |split]; auto.
+  constructor. constructor. inv H5; auto.
+* (* for *)
+  split; auto.
+  split.
+   2: apply Pos.le_refl.
+  destruct H1 as [? [? ?]]. split;[ |split]; auto.
+  repeat constructor.
+  inv H3. auto.
+* (* loop2 *)
+  split; auto.
+  split.
+   2: apply Pos.le_refl.
+  destruct H1 as [? [? ?]]. split;[ |split]; auto.
+  repeat constructor.
+  inv H3. auto.
+* (* return *)
+  admit.
+* (* switch *)
+  admit.
+* (* label *)
+  apply IHHcorestep. split; [|split]; auto.
+  simpl in H1. destruct H1 as [? [? ?]]. split; [|split]; auto. inv H3.
+  constructor; auto.
+* (* goto *)
+  split; auto.
+  split.
+   2: apply Pos.le_refl.
+  destruct H2 as [? [? ?]]. split; [|split]; auto.
+  inv H4.
+  eapply mem_ok_goto; eauto.
+Admitted.
+
+Lemma mem_ok_step: forall st m st' m' (Hmem: mem_ok (threadpool_of st) m),
+  MachStep(Sem := Clight_newSem ge)
+      (ThreadPool:= OrdinalPool.OrdinalThreadPool)
+      (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig) 
+      st m st' m' -> 
+    mem_ok (threadpool_of st') m'.
+Proof.
+intros.
+hnf in H. destruct st as [[sch tr] tp]. destruct st' as [[sch' tr'] tp'].
+  simpl in H.
+  induction H; auto; simpl threadpool_of in *.
+  - (* start_thread *)
+     inv Htstep.
     hnf in Hperm; subst.
     destruct Hinitial as (? & ? & ?); subst.
     destruct (Mem.alloc _ _ _) eqn: Halloc.
-    destruct Hmem; split.
+    destruct Hmem as [H1 [H2 H2']]; split; [|split].
     + unfold Smallstep.globals_not_fresh.
       erewrite Mem.nextblock_alloc, restrPermMap_nextblock by eauto.
       etransitivity; eauto.
       apply Ple_succ.
-    + eapply mem_wd2_alloc; eauto.
-  - inv Htstep.
-    admit.
-  - inv Htstep; auto.
-    + eapply mem_ok_restr in Hmem as [? Hwd]; split.
+    + intros.
+      hnf; intros; erewrite Mem.nextblock_alloc, restrPermMap_nextblock by eauto.
+      destruct (eq_dec b0 b); [subst; erewrite AllocContentsUndef1 by eauto | erewrite AllocContentsOther1 by eauto].
+      * constructor.
+      * eapply memval_inject_incr, flat_inj_incr, Ple_succ; auto.
+    + intros. simpl. simpl in Halloc. simpl in CT.
+        pose proof (Mem.nextblock_alloc _ _ _ _ _ Halloc). simpl in H3.
+        clear - Hcode H Halloc H3 H2'.
+        revert i CT.
+        assert (H2x: forall (i : nat) (CT : containsThread ms i),
+             ctl_ok (Mem.nextblock m0) (getThreadC CT)). {
+             intros. eapply alloc_ctl_ok. 2: eapply H2'; eauto. rewrite H3.
+             apply Pos.lt_le_incl. apply Pos.lt_succ_diag_r.
+         } clear H2'.
+        generalize H2x; apply ctl_ok_updThread.
+        specialize (H2x tid ctn). rewrite Hcode in H2x. 
+        set  (nextb := Mem.nextblock m0) in *; clearbody nextb.
+        clear - H H2x.
+        hnf in H. destruct vf; try contradiction.
+        destruct (Ptrofs.eq_dec i Ptrofs.zero);  try contradiction.
+        destruct (Genv.find_funct_ptr (Clight.genv_genv ge) b); try contradiction.
+        destruct (Clight.type_of_fundef f); try contradiction.
+        destruct H as [? [? [? ?]]]. subst.
+        unfold ctl_ok. unfold corestate_ok.
+        split; [|split].
+        hnf; intros. rewrite PTree.gempty in H. inv H.
+        unfold Clight.temp_bindings.
+          destruct H2x.
+          repeat apply set_tenv_ok; auto.
+        hnf; intros. rewrite PTree.gempty in H3. inv H3.
+        repeat constructor.
+  - (* resume_thread *)
+    destruct Hmem as [Hmem1 [Hmem2 Hmem3]].
+    split; [|split]; auto.
+    inv Htstep.
+    inv Hafter_external.
+    clear - Hcode H0 Hmem3.
+    generalize Hmem3; apply ctl_ok_updThreadC.
+    specialize (Hmem3 _ ctn). rewrite Hcode in Hmem3.
+    destruct Hmem3.   
+    simpl. destruct c; inv H0; destruct lid; simpl in H; inv H3; simpl; auto.
+    intuition. apply set_tenv_ok; auto.
+    intuition.
+  - (* threadStep *)
+   inv Htstep. simpl in *. hnf in c,c'.
+    eapply mem_ok_threadStep; eauto.
+  - (* suspend_thread *)
+    destruct Hmem as [Hmem1 [Hmem2 Hmem3]].
+    split; [|split]; auto.
+    inv Htstep.
+    clear - Hcode Hmem3.
+    generalize Hmem3; apply ctl_ok_updThreadC.
+    specialize (Hmem3 _ ctn). rewrite Hcode in Hmem3.
+    apply Hmem3.
+  - (* isCoarse *)
+     inv Htstep; auto.
+    + destruct Hmem as [? [Hwd H2']]; split; [|split].
       * unfold Smallstep.globals_not_fresh.
-        erewrite Mem.nextblock_store; eauto.
-      * eapply mem_wd2_store; eauto; simpl; auto.
-    + eapply mem_ok_restr in Hmem as [? Hwd]; split.
+        erewrite Mem.nextblock_store, restrPermMap_nextblock; eauto.
+      * intros; hnf; intros.
+        erewrite Mem.nextblock_store, restrPermMap_nextblock, Mem.store_mem_contents by eauto.
+        destruct (eq_dec b0 b); [subst; rewrite PMap.gss | rewrite PMap.gso; auto].
+        replace ofs0 with (ofs0 + 0) at 2 by apply Z.add_0_r.
+        replace (Ptrofs.intval ofs) with (Ptrofs.intval ofs + 0) at 3 by apply Z.add_0_r.
+        apply Mem.setN_inj with (access := fun _ => True); intros; rewrite ?Z.add_0_r; auto.
+        apply encode_val_inject; constructor.
+      * apply Mem.nextblock_store in Hstore. simpl in Hstore. rewrite Hstore in *.
+         eapply ctl_ok_updLockSet with (tid:=tid).
+         apply cntUpdate; auto.
+         generalize H2'; apply ctl_ok_updThread.
+         specialize (H2' _ Htid). rewrite Hcode in H2'. clear - H2'.
+         split; auto. hnf. auto.
+    + destruct Hmem as [? [Hwd H2']]; split; [|split].
       * unfold Smallstep.globals_not_fresh.
-        erewrite Mem.nextblock_store; eauto.
-      * eapply mem_wd2_store; eauto; simpl; auto.
-    + eapply mem_ok_restr in Hmem as [? Hwd]; split.
+        erewrite Mem.nextblock_store, restrPermMap_nextblock; eauto.
+      * intros; hnf; intros.
+        erewrite Mem.nextblock_store, restrPermMap_nextblock, Mem.store_mem_contents by eauto.
+        destruct (eq_dec b0 b); [subst; rewrite PMap.gss | rewrite PMap.gso; auto].
+        replace ofs0 with (ofs0 + 0) at 2 by apply Z.add_0_r.
+        replace (Ptrofs.intval ofs) with (Ptrofs.intval ofs + 0) at 3 by apply Z.add_0_r.
+        apply Mem.setN_inj with (access := fun _ => True); intros; rewrite ?Z.add_0_r; auto.
+        apply encode_val_inject; constructor.
+      * apply Mem.nextblock_store in Hstore. simpl in Hstore. rewrite Hstore in *.
+         eapply ctl_ok_updLockSet with (tid:=tid).
+         apply cntUpdate; auto.
+         generalize H2'; apply ctl_ok_updThread.
+         specialize (H2' _ Htid). rewrite Hcode in H2'. clear - H2'.
+         split; auto. hnf. auto.
+    + (* CREATE *)
+       destruct Hmem as [? [Hwd H2']]; split; [|split]; auto.
+       assert (block_ok (Mem.nextblock m') b /\ val_ok (Mem.nextblock m') arg). {
+             specialize (H2' _ Htid). rewrite Hcode in H2'.
+        simpl in H2'. clear - H2' Hat_external. inv Hat_external.
+         destruct c; inv H0. simpl in H2'. destruct H2' as [? _].
+          inv H. inv H3. split; auto.
+       }
+      apply ctl_ok_addThread with (tid:=tid).
+      apply cntUpdate. auto.
+      destruct H0;  auto.
+      destruct H0;  auto.
+         generalize H2'; apply ctl_ok_updThread.
+         specialize (H2' _ Htid). rewrite Hcode in H2'. clear - H2'.
+      split; auto. simpl. auto.
+    + (* MKLOCK *)
+       destruct Hmem as [? [Hwd H2']]; split; [|split].
       * unfold Smallstep.globals_not_fresh.
-        erewrite Mem.nextblock_store; eauto.
-      * eapply mem_wd2_store; eauto; simpl; auto.
-Admitted.
+        erewrite Mem.nextblock_store, restrPermMap_nextblock; eauto.
+      * intros; hnf; intros.
+        erewrite Mem.nextblock_store, restrPermMap_nextblock, Mem.store_mem_contents by eauto.
+        destruct (eq_dec b0 b); [subst; rewrite PMap.gss | rewrite PMap.gso; auto].
+        replace ofs0 with (ofs0 + 0) at 2 by apply Z.add_0_r.
+        replace (Ptrofs.intval ofs) with (Ptrofs.intval ofs + 0) at 2 by apply Z.add_0_r.
+        apply Mem.setN_inj with (access := fun _ => True); intros; rewrite ?Z.add_0_r; auto.
+        apply encode_val_inject; constructor.
+      * apply Mem.nextblock_store in Hstore. simpl in Hstore. rewrite Hstore in *.
+         eapply ctl_ok_updLockSet with (tid:=tid).
+         apply cntUpdate; auto.
+         generalize H2'; apply ctl_ok_updThread.
+         specialize (H2' _ Htid). rewrite Hcode in H2'. clear - H2'.
+         split; auto. hnf. auto.
+    + (* FREE_LOCK *)
+       destruct Hmem as [? [Hwd H2']]; split; [|split]; auto.
+         eapply ctl_ok_remLockSet with (tid:=tid).
+         apply cntUpdate; auto.
+         generalize H2'; apply ctl_ok_updThread.
+         specialize (H2' _ Htid). rewrite Hcode in H2'. clear - H2'.
+         split; auto. hnf. auto.
+Qed.
 
 (* spawn handler *)
 Notation tvoidptr := (Tpointer Tvoid noattr).
@@ -751,7 +1323,7 @@ Proof.
 Qed.
 
 Lemma Clight_new_Clight_safety_gen:
-  forall n sch tr tp m tp' (Hmem: mem_ok m),
+  forall n sch tr tp m tp' (Hmem: mem_ok tp m),
   csafe
     (Sem := Clight_newSem ge)
     (machineSig:= HybridMachine.DryHybridMachine.DryHybridMachineSig)
@@ -765,7 +1337,7 @@ Lemma Clight_new_Clight_safety_gen:
 Proof.
   induction n; intros; [constructor|].
   inv H; simpl in *; [constructor; auto | ..];
-    pose proof (mem_ok_step _ _ _ _ Hmem Hstep) as Hmem';
+    pose proof (mem_ok_step (sch,tr,tp) _ _ _ Hmem Hstep) as Hmem';
     [inv Hstep; simpl in *; try (apply schedSkip_id in HschedS; subst); try discriminate |
      inv Hstep; simpl in *; try match goal with H : sch = schedSkip sch |- _ =>
        symmetry in H; apply schedSkip_id in H; subst end; try discriminate].
@@ -789,9 +1361,11 @@ Proof.
       { split.
         hnf in Hperm; subst.
         destruct lookup_wrapper.
+        assert (mem_ok tp (restrPermMap (proj1 (compat_th tp m Hcmpt ctn))))
+               by (apply mem_ok_restr; auto).
         econstructor; eauto.
-        - apply mem_ok_restr; auto.
-        - apply mem_ok_wd, mem_ok_restr; auto.
+        - destruct H6; auto.
+        - eapply mem_ok_wd; destruct H6; eauto.
         - auto. }
       { eapply MTCH_invariant; eauto. } }
     simpl.
@@ -801,7 +1375,11 @@ Proof.
     inv Hsafe; simpl in *.
     { unfold halted_machine in H1; simpl in H1.
       rewrite HschedN in H1; discriminate. }
-    pose proof (mem_ok_step _ _ _ _ Hmem' Hstep) as Hmem''.
+      match type of Hstep with MachStep ?st _ _ _ => 
+         assert (HmemUpd: mem_ok (threadpool_of st) m0) by auto
+      end.
+      pose proof (mem_ok_step _ _ _ _ HmemUpd Hstep) as Hmem''.
+       clear HmemUpd.
     inv Hstep; simpl in *; rewrite HschedN in HschedN0; inv HschedN0;
       try (inv Htstep; rewrite gssThreadCode in Hcode0; inv Hcode0);
       try (apply schedSkip_id in HschedS; subst); try discriminate.
@@ -884,9 +1462,10 @@ Proof.
       inv H10.
       rewrite Cop.cast_val_casted in H12 by auto; inv H12.
       rewrite app_nil_r in Hsafe0.
-      eapply IHn; eauto.
-      { eapply csafe_restr, Hsafe0.
+      eapply IHn.
+      2:{ eapply csafe_restr, Hsafe0.
         destruct c; auto. }
+      { auto. }
       { rewrite updThread_twice.
         apply MTCH_updThread; auto.
         + constructor; simpl.
@@ -897,7 +1476,8 @@ Proof.
           apply getCurPerm_correct.
         + simpl.
           rewrite gssThreadRes; simpl.
-          erewrite mtch_gtr2; eauto. } }
+          erewrite mtch_gtr2; eauto. }
+     }
     { inv Hstep; simpl in *; rewrite HschedN in HschedN0; inv HschedN0;
         try (inv Htstep; rewrite gssThreadCode in Hcode0; inv Hcode0);
         try match goal with H : sch = schedSkip sch |- _ =>
@@ -932,7 +1512,7 @@ Proof.
     rewrite app_nil_r.
     apply csafe_restr'.
     eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool));
-      [eapply IHn; auto; [eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto|] | auto].
+      [eapply IHn; [ |eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto|] | auto]; auto.
     constructor; auto; intros.
     + destruct (eq_dec tid0 tid).
       * subst; rewrite gssThreadCode, gssThreadCC.
@@ -963,8 +1543,9 @@ Proof.
       intro; extensionality ofs; auto.
     + eapply MTCH_invariant; eauto.
     + rewrite <- H6 in Hsafe.
-      eapply IHn; auto.
-      { eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
+      eapply IHn.
+      2:{ eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
+      { auto. }
       apply MTCH_updThread; auto.
       * constructor; auto.
       * erewrite <- mtch_gtr2; eauto.
@@ -982,7 +1563,8 @@ Proof.
       - eapply MTCH_invariant; eauto. }
     { rewrite app_nil_r; rewrite <- H5 in Hsafe.
       intro; eapply IHn; auto.
-      { eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
+      2:{ eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
+      { auto. }
       apply MTCH_updThreadC; auto.
       constructor; constructor; auto. }
   - inv Htstep; inversion H0; pose proof (mtch_gtc _ Htid (mtch_cnt _ Htid)) as Hc;
@@ -1002,7 +1584,8 @@ Proof.
         * erewrite <- mtch_gtr2; apply Hangel2. }
       { rewrite <- H6 in Hsafe.
         intro; eapply IHn; auto.
-        { eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
+        2:{ eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
+        { auto. }
         apply MTCH_updLockSet, MTCH_updThread; auto.
         - constructor; constructor; auto.
         - apply computeMap_ext; auto.
@@ -1024,7 +1607,8 @@ Proof.
         * erewrite <- mtch_gtr2; apply Hangel2. }
       { rewrite <- H6 in Hsafe.
         intro; eapply IHn; auto.
-        { eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
+        2:{ eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
+        { auto. }
         apply MTCH_updLockSet, MTCH_updThread; auto.
         - constructor; constructor; auto.
         - apply computeMap_ext; auto.
@@ -1040,8 +1624,9 @@ Proof.
         * erewrite <- mtch_gtr2; apply Hangel2. }
       { rewrite <- H6 in Hsafe.
         intro; eapply IHn; auto.
-        { eapply (csafe_trace(ThreadPool := OrdinalPool.OrdinalThreadPool)),
+        2:{ eapply (csafe_trace(ThreadPool := OrdinalPool.OrdinalThreadPool)),
             (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
+        { auto. }
         apply MTCH_addThread; auto.
         apply MTCH_updThread; auto.
         - constructor; constructor; auto.
@@ -1059,7 +1644,8 @@ Proof.
         * rewrite <- mtch_locks; auto. }
       { rewrite <- H6 in Hsafe.
         intro; eapply IHn; auto.
-        { eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
+        2:{ eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
+        { auto. }
         apply MTCH_updLockSet, MTCH_updThread; auto.
         * constructor; constructor; auto.
         * intros; simpl.
@@ -1077,7 +1663,8 @@ Proof.
         * erewrite restrPermMap_irr; eauto. }
       { rewrite <- H6 in Hsafe.
         intro; eapply IHn; auto.
-        { eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
+        2:{ eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
+        { auto. }
         apply MTCH_remLockSet, MTCH_updThread; auto.
         * constructor; constructor; auto.
         * intros; simpl.
@@ -1099,8 +1686,11 @@ Proof.
         * erewrite restrPermMap_irr; eauto.
         * erewrite restrPermMap_irr; eauto. }
       { rewrite <- H6 in Hsafe.
-        intro; eapply IHn; eauto.
-        eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
+        intro; eapply IHn; auto.
+        2:eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto.
+        { auto. }
+        auto.
+       }
 (*  - inv Hhalted; contradiction.*)
   - subst; eapply AngelSafe.
     { simpl; rewrite <- H5.
@@ -1109,8 +1699,11 @@ Proof.
         intro; contradiction Htid; apply mtch_cnt'; auto.
       - eapply MTCH_invariant; eauto.
       - eapply MTCH_compat; eauto. }
-    { intro; eapply IHn; eauto.
-      eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto. }
+    { intro; eapply IHn; auto.
+      2: eapply (csafe_reduce(ThreadPool := OrdinalPool.OrdinalThreadPool)); eauto.
+      { auto. }
+      auto.
+    }
   Unshelve.
   all: auto.
   + apply cntUpdate; auto.
@@ -1143,25 +1736,61 @@ Proof.
   + erewrite <- mtch_gtr2; eauto.
 Qed.
 
-Lemma init_mem_ok: mem_ok init_mem.
+Definition init_threadpool := 
+   @initial_machine (Clight_newSem ge)
+     (@OrdinalPool.OrdinalThreadPool dryResources (Clight_newSem ge))
+     (getCurPerm init_mem) (initial_corestate CPROOF).
+
+Transparent getThreadC.
+
+Lemma init_mem_ok: mem_ok init_threadpool init_mem.
 Proof.
   unfold mem_ok, init_mem, semax_to_juicy_machine.init_mem, init_mem_not_none, CSL_init_mem_not_none,
     semax_initial.init_m, ge, prog.
-  destruct CPROOF; simpl.
-  destruct (Genv.init_mem CSL_prog) eqn: Hinit; try contradiction; simpl.
-  split.
-  - unfold Smallstep.globals_not_fresh; simpl.
+  split; [|split].
+  - destruct CPROOF; simpl.
+     destruct (Genv.init_mem CSL_prog) eqn: Hinit; try contradiction; simpl.
+    unfold Smallstep.globals_not_fresh; simpl.
     erewrite Genv.init_mem_genv_next by eauto.
     apply Ple_refl.
-  - unfold Genv.init_mem in Hinit.
+  - destruct CPROOF; simpl.
+     destruct (Genv.init_mem CSL_prog) eqn: Hinit; try contradiction; simpl.
+     unfold Genv.init_mem in Hinit.
     eapply mem_wd2_alloc_globals; eauto.
-    + unfold mem_wd2; simpl; intros.
+    + unfold mem_wd'; simpl; intros.
       rewrite PMap.gi, ZMap.gi; constructor.
-    + admit. (* Is this designed incorrectly? Why should the genv be valid wrt
-                the memory before allocating globals? *)
-Admitted.
-
-Transparent getThreadC.
+    + constructor.
+      * unfold isGlobalBlock; intro.
+        rewrite orb_true_iff.
+        unfold genv2blocksBool; simpl.
+        intros [|].
+        -- destruct (Genv.invert_symbol _ _) eqn: Hsym; [|discriminate].
+           apply Genv.invert_find_symbol in Hsym.
+           eapply Genv.find_symbol_not_fresh; eauto.
+        -- destruct (Genv.find_var_info _ _) eqn: Hsym; [|discriminate].
+           eapply Genv.find_var_info_not_fresh; eauto.
+      * intros.
+        eapply Genv.find_funct_ptr_not_fresh; eauto.
+  - simpl.
+    unfold initial_corestate; simpl.
+    destruct spr as (q & ? & [? Hinit] & s); simpl.
+    destruct (s O tt) as (jm & Hjm & _).
+    specialize (Hinit _ Hjm) as (? & ? & Hinit & _).
+    unfold Clight_new.cl_initial_core in Hinit; simpl in Hinit.
+    destruct (Genv.find_funct_ptr _ _) eqn: Hfind; [|contradiction].
+    destruct (Clight.type_of_fundef f); try contradiction.
+    destruct Hinit as (? & ? & ? & ?); subst; simpl; repeat split.
+    + unfold Clight.empty_env; repeat intro.
+      rewrite PTree.gempty in H; discriminate.
+    + clear - Hfind.
+      destruct CPROOF; simpl in *.
+      destruct (Genv.init_mem CSL_prog) eqn: Hmem; [simpl | contradiction].
+      repeat intro.
+      destruct i; simpl in H; try (rewrite PTree.gleaf in H; discriminate).
+      inv H; simpl.
+      eapply Genv.find_funct_ptr_not_fresh; eauto.
+    + repeat constructor.
+Qed.
 
 Lemma Clight_new_Clight_safety:
   (forall sch n,
