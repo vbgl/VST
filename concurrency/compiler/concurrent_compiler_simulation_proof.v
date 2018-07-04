@@ -94,13 +94,14 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
         compose_meminj (compose_meminj j1 j2) j3 = j ->
         compiler_match_padded cd j s1 m1 s4 m4.
 
-  Context (hb: nat).
-  Definition SemTop: Semantics:= (HybridSem (Some hb)).
-  Definition SemBot: Semantics:= (HybridSem (Some (S hb))).
   
   Section CompileOneThread.
     Import OrdinalPool.
 
+    Context (hb: nat).
+    Definition SemTop: Semantics:= (HybridSem (Some hb)).
+    Definition SemBot: Semantics:= (HybridSem (Some (S hb))).
+    
     Inductive match_state2match_thread
               {sem1 sem2: Semantics}
               (SState: @semC sem1 -> state_sum (@semC CSem) (@semC AsmSem))
@@ -311,45 +312,65 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
     
     (* This lemma is only used when updating non compiled threads *)
     Lemma Concur_update:
-      forall (st1 : t) (m1 m' : mem) (tid : nat) (Htid : containsThread st1 tid)
-        c1 (cd cd' : option compiler_index) (st2 : t) 
+      forall (st1: ThreadPool.t) (m1 m1' : mem) (tid : nat) (Htid : ThreadPool.containsThread st1 tid)
+        c1 (cd cd' : option compiler_index) (st2 : ThreadPool.t) 
         (mu : meminj) (m2 : mem)
         c2
-        (f' : meminj) (m2' : mem) (Htid' : containsThread st2 tid),
+        (f' : meminj) (m2' : mem) (Htid' : ThreadPool.containsThread st2 tid)
+        (mcompat1: mem_compatible st1 m1)
+        (mcompat2: mem_compatible st2 m2),
+        core_semantics.mem_step
+          (restrPermMap (proj1 (mcompat1 tid Htid))) m1' ->
+        core_semantics.mem_step
+          (restrPermMap (proj1 (mcompat2 tid Htid'))) m2' ->
+        invariant st1 ->
+        invariant st2 ->
         concur_match cd mu st1 m1 st2 m2 ->
-        individual_match cd' tid f' c1 m' c2 m2' ->
+        individual_match cd' tid f' c1 m1' c2 m2' ->
         self_simulation.is_ext mu (Mem.nextblock m1) f' (Mem.nextblock m2) ->
         concur_match cd' f'
                      (updThread Htid c1
-                                (getCurPerm m', snd (getThreadR Htid))) m'
+                                (getCurPerm m1', snd (getThreadR Htid))) m1'
                      (updThread Htid' c2
                                 (getCurPerm m2', snd (getThreadR Htid'))) m2'.
     Proof.
-      
-      (*There is probably a relation missing from m1 m' m2 m2' *)
-      (* Probably it's mem_step* which is provable from where this lemma is used. *)
     Admitted.
 
     (*This lemma is used when the compiled thread steps*)
+    Inductive mem_step_star 
+  : mem -> mem -> Prop :=
+    mem_star_refl : forall m, mem_step_star m m
+  | mem_star_step : forall m1 m2 m3,
+                core_semantics.mem_step m1 m2 ->
+                mem_step_star m2 m3 -> mem_step_star m1 m3.
+    
     Lemma Concur_update_compiled:
-              forall (st1 : t) (m1 m' : mem) (Htid : containsThread st1 hb) 
-                     (st2 : t) (mu : meminj) (m2 : mem) (cd0 : compiler_index),
-                concur_match (Some cd0) mu st1 m1 st2 m2 ->
-                forall (s' : Clight.state) (j1' : meminj) (cd' : Injindex compiler_sim)
-                       (j2' : meminj) (s4' : Asm.state) (j3' : meminj) (m4' : mem)
-                       (Htid' : containsThread st2 hb),
-                  match_thread_compiled cd' (compose_meminj (compose_meminj j1' j2') j3')
-                                        (Krun (SState Clight.state Asm.state s')) m'
-                                        (Krun (TState Clight.state Asm.state s4')) m4' ->
-                  concur_match (Some cd') (compose_meminj (compose_meminj j1' j2') j3')
-                               (updThread Htid (Krun (SState Clight.state Asm.state s'))
-                                          (getCurPerm m', snd (getThreadR Htid))) m'
-                               (updThread Htid' (Krun (TState Clight.state Asm.state s4'))
-                                          (getCurPerm m4', snd (getThreadR Htid'))) m4'.
-            Proof.
+      forall (st1 : ThreadPool.t) (m1 m1' : mem) (Htid : ThreadPool.containsThread st1 hb) 
+        (st2 : ThreadPool.t) (mu : meminj) (m2 : mem) (cd0 : compiler_index),
+        concur_match (Some cd0) mu st1 m1 st2 m2 ->
+        forall (s' : Clight.state) (j1' : meminj) (cd' : Injindex compiler_sim)
+          (j2' : meminj) (s4' : Asm.state) (j3' : meminj) (m2' : mem)
+          (Htid' : containsThread st2 hb)
+        (mcompat1: mem_compatible st1 m1)
+        (mcompat2: mem_compatible st2 m2),
+        core_semantics.mem_step
+          (restrPermMap (proj1 (mcompat1 hb Htid))) m1' ->
+        mem_step_star
+          (restrPermMap (proj1 (mcompat2 hb Htid'))) m2' ->
+        invariant st1 ->
+        invariant st2 ->
+        match_thread_compiled cd' (compose_meminj (compose_meminj j1' j2') j3')
+                              (Krun (SState Clight.state Asm.state s')) m1'
+                              (Krun (TState Clight.state Asm.state s4')) m2' ->
+        concur_match (Some cd') (compose_meminj (compose_meminj j1' j2') j3')
+                     (updThread Htid (Krun (SState Clight.state Asm.state s'))
+                                (getCurPerm m1', snd (getThreadR Htid))) m1'
+                     (updThread Htid' (Krun (TState Clight.state Asm.state s4'))
+                                (getCurPerm m2', snd (getThreadR Htid'))) m2'.
+    Proof.
       (*There is probably a relation missing from m1 m' m2 m2' *)
-              (* Probably it's mem_step* which is provable from where this lemma is used. *)
-            Admitted.
+      (* Probably it's mem_step which is provable from where this lemma is used. *)
+    Admitted.
             
 
     
@@ -375,8 +396,8 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
               {state : Type}
               (step : state -> mem -> state -> mem -> Prop)
       : state -> mem -> state -> mem -> Prop :=
-      star_refl : forall s m, corestep_star step s m s m
-    | star_step : forall (s1 : state) m1 (s2 : state) m2
+      corestar_refl : forall s m, corestep_star step s m s m
+    | corestar_step : forall (s1 : state) m1 (s2 : state) m2
                     (s3 : state) m3,
         step s1 m1 s2 m2 ->
         corestep_star step s2 m2 s3 m3 ->
@@ -439,6 +460,11 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
                 (Smallstep.set_mem s1 m1) t s2 ->
             (corestep_plus _ (core_semantics.corestep (Asm_core.Asm_core_sem Asm_g)))
               s1 m1 s2 (Smallstep.get_mem s2).
+           (* This in principle is not provable. We should get it somehow from the simulation.
+              Possibly, by showing that the (internal) Clight step has no traces and allo
+              external function calls have traces, so the "matching" Asm execution must be
+              all internal steps (because otherwise the traces wouldn't match).
+            *)
           Admitted.
         
         
@@ -494,7 +520,17 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
         + (*Reestablish the concur_match *)
           simpl.
           move H0 at bottom.
+          
           eapply Concur_update; eauto.
+          { eapply core_semantics.corestep_mem in H2.
+            eapply H2. }
+          { eapply Asm_event.asm_ev_ax1 in H1.
+            (* This is the step constructed bellow *)
+            admit.
+          }
+          { apply H0. }
+
+          (*The compiler match*)
           econstructor 2; eauto.
           simpl in MATCH.
           unfold match_thread_target; simpl.
@@ -534,6 +570,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
         (* (1) Clight step *)
         destroy_ev_step_sum. subst m'0 t0 s.
         eapply (event_semantics.ev_step_ax1 (@semSem CSem)) in H3; eauto.
+        assert (original_CoreStep:=H3).
         replace Hcmpt with (memcompat1 (Some cd0) mu st1 m1 st2 m2 H0) in H3
           by eapply Axioms.proof_irr.
         
@@ -567,7 +604,15 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
           
             simpl in *.
             eapply Concur_update_compiled; eauto.
-
+            
+            { eapply (core_semantics.corestep_mem (Clightcore_coop.CLC_memsem  Clight_g)).
+              eauto.
+            }
+            { (* This is the step constructed bellow *)
+              admit.
+            }
+            { apply H0. }
+            
             (* match_thread_compiled *)
             {
 unfold match_thread_compiled.
@@ -583,7 +628,7 @@ unfold match_thread_compiled.
               eauto.
             }
           * eapply thread_step_plus_from_corestep; eauto.
-        + admit. (* no step for assam *)
+        + admit. (* no step for assam (CompCert sttuter) *)
         
       - (* tid > hb *)
         pose proof (mtch_source _ _ _ _ _ _ H0 _ l Htid (contains12 H0 Htid)) as HH.
@@ -614,6 +659,13 @@ unfold match_thread_compiled.
           simpl.
           move H0 at bottom.
           eapply Concur_update; eauto.
+          { eapply core_semantics.corestep_mem in H2.
+            eapply H2. }
+          { (* This is the step constructed bellow *)
+            admit.
+          }
+          { apply H0. }
+          
           econstructor 1; eauto.
           simpl in MATCH.
           unfold match_thread_source; simpl.
@@ -631,12 +683,442 @@ unfold match_thread_compiled.
           * simpl; repeat (f_equal; try eapply Axioms.proof_irr).
     Admitted.
 
+
+    (** *Diagrams for machine steps*)
+
+    Lemma acquire_step_diagram:
+          forall (U : list nat) (tr : HybridMachineSig.event_trace) (st1 : ThreadPool (Some hb))
+            (m1 m1' : mem) (tid : nat) (st2 : ThreadPool (Some (S hb))) (m2 : mem)
+            (Htid : ThreadPool.containsThread st1 tid) (c : semC) (b : block)
+            (ofs : Integers.Ptrofs.int) (virtueThread : delta_map * delta_map)
+            (newThreadPerm : access_map * access_map) (pmap : lock_info)
+            (Hcmpt: mem_compatible st1 m1)
+          (Hlt': permMapLt
+           (setPermBlock (Some Writable) b (Integers.Ptrofs.intval ofs)
+              (snd (ThreadPool.getThreadR Htid)) LKSIZE_nat) (getMaxPerm m1)),
+            core_semantics.at_external (core_semantics.csem (event_semantics.msem semSem))
+                   c (restrPermMap (fst (ssrfun.pair_of_and (Hcmpt tid Htid)))) =
+                 Some (LOCK, (Vptr b ofs :: nil)%list) ->
+            Mem.load AST.Mint32 (restrPermMap (snd (ssrfun.pair_of_and (Hcmpt tid Htid)))) b
+                     (Integers.Ptrofs.intval ofs) = Some (Vint Integers.Int.one) ->
+             Mem.range_perm (restrPermMap (snd (ssrfun.pair_of_and (Hcmpt tid Htid)))) b
+              (Integers.Ptrofs.intval ofs) (BinInt.Z.add (Integers.Ptrofs.intval ofs) LKSIZE)
+              Cur Readable ->
+             Mem.store AST.Mint32 (restrPermMap Hlt') b (Integers.Ptrofs.intval ofs)
+             (Vint Integers.Int.zero) = Some m1' ->
+            ThreadPool.lockRes st1 (b, Integers.Ptrofs.intval ofs) = Some pmap ->
+            permMapJoin (fst pmap) (fst (ThreadPool.getThreadR Htid)) (fst newThreadPerm) ->
+            permMapJoin (snd pmap) (snd (ThreadPool.getThreadR Htid)) (snd newThreadPerm) ->
+            exists (st2' : ThreadPool.t) (m2' : mem) (cd' : option compiler_index) (mu' : meminj),
+              concur_match cd' mu'
+                           (ThreadPool.updLockSet (ThreadPool.updThread Htid (Kresume c Vundef) newThreadPerm)
+                                                  (b, Integers.Ptrofs.intval ofs) (empty_map, empty_map)) m1' st2' m2' /\
+              HybridMachineSig.external_step(scheduler:=HybridMachineSig.HybridCoarseMachine.scheduler)
+                                            U tr st2 m2 (HybridMachineSig.schedSkip U)
+                                            (seq.cat tr
+                                                     (Events.external tid
+                                                                      (Events.acquire (b, Integers.Ptrofs.intval ofs) (Some virtueThread)) :: nil)) st2'
+                                            m2'.
+        Proof.
+        Admitted.
+
+        Lemma release_step_diagram:
+          forall (U : list nat) (tr : HybridMachineSig.event_trace)
+                 (st1 : ThreadPool (Some hb)) (m1 m1' : mem) 
+                 (tid : nat) (cd : option compiler_index)
+                 (st2 : ThreadPool (Some (S hb))) (mu : meminj) 
+                 (m2 : mem) (Htid : ThreadPool.containsThread st1 tid)
+                 (c : semC) (b : block) (ofs : Integers.Ptrofs.int)
+                 (virtueThread : PTree.t
+                                   (BinNums.Z -> option (option permission)) *
+                                 PTree.t
+                                   (BinNums.Z -> option (option permission)))
+                 (virtueLP : PMap.t (BinNums.Z -> option permission) *
+                             PMap.t (BinNums.Z -> option permission))
+                 (rmap : lock_info) (newThreadPerm : access_map * access_map),
+            HybridMachineSig.schedPeek U = Some tid ->
+            forall Hcmpt : mem_compatible st1 m1,
+              concur_match cd mu st1 m1 st2 m2 ->
+              forall
+                Hlt' : permMapLt
+                         (setPermBlock (Some Writable) b
+                                       (Integers.Ptrofs.intval ofs)
+                                       (snd (ThreadPool.getThreadR Htid)) LKSIZE_nat)
+                         (getMaxPerm m1),
+                bounded_maps.sub_map (fst virtueThread) (snd (getMaxPerm m1)) /\
+                bounded_maps.sub_map (snd virtueThread) (snd (getMaxPerm m1)) ->
+                bounded_maps.map_empty_def (fst virtueLP) /\
+                bounded_maps.map_empty_def (snd virtueLP) /\
+                bounded_maps.sub_map (snd (fst virtueLP)) (snd (getMaxPerm m1)) /\
+                bounded_maps.sub_map (snd (snd virtueLP)) (snd (getMaxPerm m1)) ->
+                invariant st1 ->
+                ThreadPool.getThreadC Htid = Kblocked c ->
+                core_semantics.at_external
+                  (core_semantics.csem (event_semantics.msem semSem)) c
+                  (restrPermMap (fst (ssrfun.pair_of_and (Hcmpt tid Htid)))) =
+                Some (UNLOCK, (Vptr b ofs :: nil)%list) ->
+                Mem.load AST.Mint32
+                         (restrPermMap (snd (ssrfun.pair_of_and (Hcmpt tid Htid)))) b
+                         (Integers.Ptrofs.intval ofs) = Some (Vint Integers.Int.zero) ->
+                Mem.range_perm
+                  (restrPermMap (snd (ssrfun.pair_of_and (Hcmpt tid Htid)))) b
+                  (Integers.Ptrofs.intval ofs)
+                  (BinInt.Z.add (Integers.Ptrofs.intval ofs) LKSIZE) Cur Readable ->
+                Mem.store AST.Mint32 (restrPermMap Hlt') b
+                          (Integers.Ptrofs.intval ofs) (Vint Integers.Int.one) = 
+                Some m1' ->
+                ThreadPool.lockRes st1 (b, Integers.Ptrofs.intval ofs) =
+                Some rmap ->
+                (forall (b0 : BinNums.positive) (ofs0 : BinNums.Z),
+                    (fst rmap) !! b0 ofs0 = None /\ (snd rmap) !! b0 ofs0 = None) ->
+                permMapJoin (fst newThreadPerm) (fst virtueLP)
+                            (fst (ThreadPool.getThreadR Htid)) ->
+                permMapJoin (snd newThreadPerm) (snd virtueLP)
+                            (snd (ThreadPool.getThreadR Htid)) ->
+                exists
+                  (st2' : t) (m2' : mem) (cd' : option compiler_index) 
+                  (mu' : meminj),
+                  concur_match cd' mu'
+                               (ThreadPool.updLockSet
+                                  (ThreadPool.updThread Htid (Kresume c Vundef)
+                                                        (computeMap (fst (ThreadPool.getThreadR Htid))
+                                                                    (fst virtueThread),
+                                                         computeMap (snd (ThreadPool.getThreadR Htid))
+                                                                    (snd virtueThread))) (b, Integers.Ptrofs.intval ofs)
+                                  virtueLP) m1' st2' m2' /\
+                  HybridMachineSig.external_step
+                    (scheduler:=HybridMachineSig.HybridCoarseMachine.scheduler)
+                    U tr st2 m2 (HybridMachineSig.schedSkip U)
+                                                 (seq.cat tr
+                                                          (Events.external tid
+                                                                           (Events.release (b, Integers.Ptrofs.intval ofs)
+                                                                                           (Some virtueLP)) :: nil)) st2' m2'.
+        Admitted.
+
+        Lemma Create_step_diagram:
+          forall (U : list nat) (tr : HybridMachineSig.event_trace)
+                 (st1 : ThreadPool (Some hb)) (m1' : mem) 
+                 (tid : nat) (cd : option compiler_index)
+                 (st2 : ThreadPool (Some (S hb))) (mu : meminj) 
+                 (m2 : mem) (Htid : ThreadPool.containsThread st1 tid)
+                 (c : semC) (b : block) (ofs : Integers.Ptrofs.int) 
+                 (arg : val)
+                 (virtue1
+                    virtue2 : PTree.t (BinNums.Z -> option (option permission)) *
+                              PTree.t (BinNums.Z -> option (option permission)))
+                 (threadPerm' newThreadPerm : access_map * access_map),
+            HybridMachineSig.schedPeek U = Some tid ->
+            forall Hcmpt : mem_compatible st1 m1',
+              concur_match cd mu st1 m1' st2 m2 ->
+              bounded_maps.sub_map (fst virtue2) (snd (getMaxPerm m1')) /\
+              bounded_maps.sub_map (snd virtue2) (snd (getMaxPerm m1')) ->
+              bounded_maps.sub_map (fst virtue1) (snd (getMaxPerm m1')) /\
+              bounded_maps.sub_map (snd virtue1) (snd (getMaxPerm m1')) ->
+              invariant st1 ->
+              ThreadPool.getThreadC Htid = Kblocked c ->
+              Val.inject (Mem.flat_inj (Mem.nextblock m1')) arg arg ->
+              core_semantics.at_external
+                (core_semantics.csem (event_semantics.msem semSem)) c
+                (restrPermMap (fst (ssrfun.pair_of_and (Hcmpt tid Htid)))) =
+              Some (CREATE, (Vptr b ofs :: arg :: nil)%list) ->
+              permMapJoin (fst newThreadPerm) (fst threadPerm')
+                          (fst (ThreadPool.getThreadR Htid)) ->
+              permMapJoin (snd newThreadPerm) (snd threadPerm')
+                          (snd (ThreadPool.getThreadR Htid)) ->
+              exists
+                (st2' : t) (m2' : mem) (cd' : option compiler_index) 
+                (mu' : meminj),
+                concur_match cd' mu'
+                             (ThreadPool.addThread
+                                (ThreadPool.updThread Htid (Kresume c Vundef) threadPerm')
+                                (Vptr b ofs) arg newThreadPerm) m1' st2' m2' /\
+                HybridMachineSig.external_step
+                  (scheduler:=HybridMachineSig.HybridCoarseMachine.scheduler)
+                  U tr st2 m2 (HybridMachineSig.schedSkip U)
+                                               (seq.cat tr
+                                                        (Events.external tid
+                                                                         (Events.spawn (b, Integers.Ptrofs.intval ofs)
+                                                                                       (Some (ThreadPool.getThreadR Htid, virtue1))
+                                                                                       (Some virtue2)) :: nil)) st2' m2'.
+        Proof.
+          intros U tr st1 m1' tid cd st2 mu m2 Htid c b ofs arg virtue1 virtue2 threadPerm' newThreadPerm.
+        Admitted.
+
+
+        Lemma make_step_diagram:
+          forall (U : list nat) (tr : HybridMachineSig.event_trace)
+                 (st1 : ThreadPool (Some hb)) (m1 m1' : mem) 
+                 (tid : nat) (cd : option compiler_index)
+                 (st2 : ThreadPool (Some (S hb))) (mu : meminj) 
+                 (m2 : mem) (Htid : ThreadPool.containsThread st1 tid)
+                 (c : semC) (b : block) (ofs : Integers.Ptrofs.int)
+                 (pmap_tid' : access_map * access_map),
+            concur_match cd mu st1 m1 st2 m2 ->
+            forall Hcmpt : mem_compatible st1 m1,
+              HybridMachineSig.schedPeek U = Some tid ->
+              invariant st1 ->
+              ThreadPool.getThreadC Htid = Kblocked c ->
+              core_semantics.at_external
+                (core_semantics.csem (event_semantics.msem semSem)) c
+                (restrPermMap (fst (ssrfun.pair_of_and (Hcmpt tid Htid)))) =
+              Some (MKLOCK, (Vptr b ofs :: nil)%list) ->
+              Mem.store AST.Mint32
+                        (restrPermMap (fst (ssrfun.pair_of_and (Hcmpt tid Htid)))) b
+                        (Integers.Ptrofs.intval ofs) (Vint Integers.Int.zero) =
+              Some m1' ->
+              Mem.range_perm
+                (restrPermMap (fst (ssrfun.pair_of_and (Hcmpt tid Htid)))) b
+                (Integers.Ptrofs.intval ofs)
+                (BinInt.Z.add (Integers.Ptrofs.intval ofs) LKSIZE) Cur Writable ->
+              setPermBlock (Some Nonempty) b (Integers.Ptrofs.intval ofs)
+                           (fst (ThreadPool.getThreadR Htid)) LKSIZE_nat = 
+              fst pmap_tid' ->
+              setPermBlock (Some Writable) b (Integers.Ptrofs.intval ofs)
+                           (snd (ThreadPool.getThreadR Htid)) LKSIZE_nat = 
+              snd pmap_tid' ->
+              ThreadPool.lockRes st1 (b, Integers.Ptrofs.intval ofs) = None ->
+              exists
+                (st2' : t) (m2' : mem) (cd' : option compiler_index) 
+                (mu' : meminj),
+                concur_match cd' mu'
+                             (ThreadPool.updLockSet
+                                (ThreadPool.updThread Htid (Kresume c Vundef) pmap_tid')
+                                (b, Integers.Ptrofs.intval ofs) (empty_map, empty_map))
+                             m1' st2' m2' /\
+                HybridMachineSig.external_step
+                  (scheduler:=HybridMachineSig.HybridCoarseMachine.scheduler)
+                  U tr st2 m2 (HybridMachineSig.schedSkip U)
+                  (seq.cat tr
+                           (Events.external tid
+                                            (Events.mklock (b, Integers.Ptrofs.intval ofs)) :: nil))
+                  st2' m2'.
+        Proof.
+        Admitted.
+
+        Lemma free_step_diagram:
+          forall (U : list nat) (tr : HybridMachineSig.event_trace)
+                 (st1 : ThreadPool (Some hb)) (m1' : mem) 
+                 (tid : nat) (cd : option compiler_index)
+                 (st2 : ThreadPool (Some (S hb))) (mu : meminj) 
+                 (m2 : mem) (Htid : ThreadPool.containsThread st1 tid)
+                 (c : semC) (b : block) (ofs : Integers.Ptrofs.int)
+                 (pmap_tid' : access_map * access_map)
+                 (pdata : nat -> option permission) (rmap : lock_info),
+            concur_match cd mu st1 m1' st2 m2 ->
+            forall Hcmpt : mem_compatible st1 m1',
+              HybridMachineSig.schedPeek U = Some tid ->
+              bounded_maps.bounded_nat_func' pdata LKSIZE_nat ->
+              invariant st1 ->
+              ThreadPool.getThreadC Htid = Kblocked c ->
+              core_semantics.at_external
+                (core_semantics.csem (event_semantics.msem semSem)) c
+                (restrPermMap (fst (ssrfun.pair_of_and (Hcmpt tid Htid)))) =
+              Some (FREE_LOCK, (Vptr b ofs :: nil)%list) ->
+              ThreadPool.lockRes st1 (b, Integers.Ptrofs.intval ofs) =
+              Some rmap ->
+              (forall (b0 : BinNums.positive) (ofs0 : BinNums.Z),
+                  (fst rmap) !! b0 ofs0 = None /\ (snd rmap) !! b0 ofs0 = None) ->
+              Mem.range_perm
+                (restrPermMap (snd (ssrfun.pair_of_and (Hcmpt tid Htid)))) b
+                (Integers.Ptrofs.intval ofs)
+                (BinInt.Z.add (Integers.Ptrofs.intval ofs) LKSIZE) Cur Writable ->
+              setPermBlock None b (Integers.Ptrofs.intval ofs)
+                           (snd (ThreadPool.getThreadR Htid)) LKSIZE_nat = 
+              snd pmap_tid' ->
+              (forall i : nat,
+                  BinInt.Z.le 0 (BinInt.Z.of_nat i) /\
+                  BinInt.Z.lt (BinInt.Z.of_nat i) LKSIZE ->
+                  Mem.perm_order'' (pdata (S i)) (Some Writable)) ->
+              setPermBlock_var pdata b (Integers.Ptrofs.intval ofs)
+                               (fst (ThreadPool.getThreadR Htid)) LKSIZE_nat = 
+              fst pmap_tid' ->
+              exists
+                (st2' : t) (m2' : mem) (cd' : option compiler_index) 
+                (mu' : meminj),
+                concur_match cd' mu'
+                             (ThreadPool.remLockSet
+                                (ThreadPool.updThread Htid (Kresume c Vundef) pmap_tid')
+                                (b, Integers.Ptrofs.intval ofs)) m1' st2' m2' /\
+                HybridMachineSig.external_step
+                  (scheduler:=HybridMachineSig.HybridCoarseMachine.scheduler)
+                  U tr st2 m2
+                  (HybridMachineSig.schedSkip U)
+                  (seq.cat tr
+                           (Events.external tid
+                                            (Events.freelock (b, Integers.Ptrofs.intval ofs))
+                                                                         :: nil)) st2' m2'.
+        Proof.
+        Admitted.
+
+        Lemma acquire_fail_step_diagram:
+          forall (U : list nat) (tr : HybridMachineSig.event_trace)
+                 (st1' : ThreadPool (Some hb)) (m1' : mem) 
+                 (tid : nat) (cd : option compiler_index)
+                 (st2 : ThreadPool (Some (S hb))) (mu : meminj) 
+                 (m2 : mem) (Htid : ThreadPool.containsThread st1' tid)
+                 (b : block) (ofs : Integers.Ptrofs.int) 
+                 (c : semC) (Hcmpt : mem_compatible st1' m1'),
+            concur_match cd mu st1' m1' st2 m2 ->
+            HybridMachineSig.schedPeek U = Some tid ->
+            core_semantics.at_external
+              (core_semantics.csem (event_semantics.msem semSem)) c
+              (restrPermMap (fst (ssrfun.pair_of_and (Hcmpt tid Htid)))) =
+            Some (LOCK, (Vptr b ofs :: nil)%list) ->
+            Mem.load AST.Mint32
+                     (restrPermMap (snd (ssrfun.pair_of_and (Hcmpt tid Htid)))) b
+                     (Integers.Ptrofs.intval ofs) = Some (Vint Integers.Int.zero) ->
+            Mem.range_perm
+              (restrPermMap (snd (ssrfun.pair_of_and (Hcmpt tid Htid)))) b
+              (Integers.Ptrofs.intval ofs)
+              (BinInt.Z.add (Integers.Ptrofs.intval ofs) LKSIZE) Cur Readable ->
+            ThreadPool.getThreadC Htid = Kblocked c ->
+            invariant st1' ->
+            exists
+              (st2' : t) (m2' : mem) (cd' : option compiler_index) 
+              (mu' : meminj),
+              concur_match cd' mu' st1' m1' st2' m2' /\
+              HybridMachineSig.external_step
+                (scheduler:=HybridMachineSig.HybridCoarseMachine.scheduler)
+                U tr st2 m2
+                (HybridMachineSig.schedSkip U)
+                (seq.cat tr
+                         (Events.external tid
+                                          (Events.failacq (b, Integers.Ptrofs.intval ofs)) :: nil))
+                st2' m2'.
+        Proof.
+        Admitted.
+        
+    Lemma external_step_diagram:
+      forall (U : list nat) (tr : HybridMachineSig.event_trace) (st1 : ThreadPool.t) 
+        (m1 : mem) (st1' : ThreadPool.t) (m1' : mem) (tid : nat) (ev : Events.sync_event),
+      forall (cd : option compiler_index) (st2 : ThreadPool.t) (mu : meminj) (m2 : mem),
+        concur_match cd mu st1 m1 st2 m2 ->
+        forall (Htid : ThreadPool.containsThread st1 tid) (Hcmpt : mem_compatible st1 m1),
+          HybridMachineSig.schedPeek U = Some tid ->
+          syncStep true Htid Hcmpt st1' m1' ev ->
+          exists (st2' : t) (m2' : mem) (cd' : option compiler_index) 
+            (mu' : meminj),
+            concur_match cd' mu' st1' m1' st2' m2' /\
+            HybridMachineSig.external_step
+              (scheduler:=HybridMachineSig.HybridCoarseMachine.scheduler) U tr st2 m2 (HybridMachineSig.schedSkip U)
+              (seq.cat tr (Events.external tid ev :: nil)) st2' m2'.
+    Proof.
+      intros.
+      inversion H1; subst.
+      - (*Acquire*)
+        eapply acquire_step_diagram; eauto.
+      - (*Release*)
+        eapply release_step_diagram; eauto.
+      - (*Create/Spawn*)
+        eapply Create_step_diagram; eauto.
+      - (*Make Lock*)
+        eapply make_step_diagram; eauto.
+      - (*Free Lock*)
+        eapply free_step_diagram; eauto.
+      - (*AcquireFail*)
+        eapply acquire_fail_step_diagram; eauto.
+    Qed.
+
+
+    
+    Lemma start_step_diagram:
+      forall (m : option mem) (tge : HybridMachineSig.G) 
+        (U : list nat) (st1 : ThreadPool (Some hb)) 
+        (m1 : mem) (tr' : HybridMachineSig.event_trace)
+        (st1' : ThreadPool (Some hb)) (m' : mem)
+        (cd : option compiler_index) (st2 : ThreadPool (Some (S hb)))
+        (mu : meminj) (m2 : mem) (tid : nat)
+        (Htid : ThreadPool.containsThread st1 tid),
+        concur_match cd mu st1 m1 st2 m2 ->
+        HybridMachineSig.schedPeek U = Some tid ->
+        HybridMachineSig.start_thread m1 Htid st1' m' ->
+        exists
+          (st2' : ThreadPool (Some (S hb))) (m2' : mem) 
+          (cd' : option compiler_index) (mu' : meminj),
+          concur_match cd' mu' st1' (HybridMachineSig.diluteMem m') st2'
+                       m2' /\
+          machine_semantics.machine_step(HybConcSem (Some (S hb)) m) tge
+                                        U tr' st2 m2 (HybridMachineSig.yield
+                                                        (Scheduler:=HybridMachineSig.HybridCoarseMachine.scheduler)
+                                                        U) tr' st2' m2'.
+    Proof.
+    Admitted.
+
+    
+    Lemma resume_step_diagram:
+      forall (m : option mem) (tge : HybridMachineSig.G) 
+        (U : list nat) (st1 : ThreadPool (Some hb))
+        (tr' : HybridMachineSig.event_trace)
+        (st1' : ThreadPool (Some hb)) (m1' : mem)
+        (cd : option compiler_index) (st2 : ThreadPool (Some (S hb)))
+        (mu : meminj) (m2 : mem) (tid : nat)
+        (Htid : ThreadPool.containsThread st1 tid),
+        concur_match cd mu st1 m1' st2 m2 ->
+        HybridMachineSig.schedPeek U = Some tid ->
+        HybridMachineSig.resume_thread m1' Htid st1' ->
+        exists
+          (st2' : ThreadPool (Some (S hb))) (m2' : mem) 
+          (cd' : option compiler_index) (mu' : meminj),
+          concur_match cd' mu' st1' m1' st2' m2' /\
+          machine_semantics.machine_step (HybConcSem (Some (S hb)) m) tge
+                                         U tr' st2 m2
+                                         (HybridMachineSig.yield(Scheduler:=HybridMachineSig.HybridCoarseMachine.scheduler)
+                                                                U) tr' st2' m2'.
+    Proof.
+      admit.  (* Easy since there is no changes to memory. *)
+    Admitted.
+
+    
+    
+    
+    Lemma suspend_step_diagram:
+      forall (m : option mem) (tge : HybridMachineSig.G) 
+        (U : list nat) (st1 : ThreadPool (Some hb))
+        (tr' : HybridMachineSig.event_trace)
+        (st1' : ThreadPool (Some hb)) (m1' : mem)
+        (cd : option compiler_index) (st2 : ThreadPool (Some (S hb)))
+        (mu : meminj) (m2 : mem) (tid : nat)
+        (Htid : ThreadPool.containsThread st1 tid),
+        concur_match cd mu st1 m1' st2 m2 ->
+        HybridMachineSig.schedPeek U = Some tid ->
+        HybridMachineSig.suspend_thread m1' Htid st1' ->
+        exists
+          (st2' : ThreadPool (Some (S hb))) (m2' : mem) 
+          (cd' : option compiler_index) (mu' : meminj),
+          concur_match cd' mu' st1' m1' st2' m2' /\
+          machine_semantics.machine_step (HybConcSem (Some (S hb)) m) tge
+                                         U tr' st2 m2 (HybridMachineSig.schedSkip U) tr' st2' m2'.
+    Proof.
+      admit. (* Easy  since there is no changes to memory. *)
+    Admitted.
+
+    Lemma schedfail_step_diagram:
+      forall (m : option mem) (tge : HybridMachineSig.G) 
+        (U : list nat) (tr' : HybridMachineSig.event_trace)
+        (st1' : ThreadPool (Some hb)) (m1' : mem)
+        (st2 : ThreadPool (Some (S hb))) (m2 : mem) 
+        (tid : nat),
+        HybridMachineSig.schedPeek U = Some tid ->
+        ~ ThreadPool.containsThread st1' tid ->
+        HybridMachineSig.invariant st1' ->
+        HybridMachineSig.mem_compatible st1' m1' ->
+        exists
+          (st2' : ThreadPool (Some (S hb))) (m2' : mem) 
+          (cd' : option compiler_index) (mu' : meminj),
+          concur_match cd' mu' st1' m1' st2' m2' /\
+          machine_semantics.machine_step (HybConcSem (Some (S hb)) m) tge
+                                         U tr' st2 m2 (HybridMachineSig.schedSkip U) tr' st2' m2'.
+    Proof.
+      admit.
+      (* Easy  since there is no changes to memory. *)
+    Admitted.
+    
     Lemma machine_step_diagram:
-          forall (m : option mem) (sge tge : HybridMachineSig.G) (U : list nat)
-                 (tr : HybridMachineSig.event_trace) (st1 : ThreadPool (Some hb)) 
-                 (m1 : mem) (U' : list nat) (tr' : HybridMachineSig.event_trace)
-                 (st1' : ThreadPool (Some hb)) (m1' : mem),
-            machine_semantics.machine_step (HybConcSem (Some hb) m) sge U tr st1 m1 U' tr' st1' m1' ->
+      forall (m : option mem) (sge tge : HybridMachineSig.G) (U : list nat)
+        (tr : HybridMachineSig.event_trace) (st1 : ThreadPool (Some hb)) 
+        (m1 : mem) (U' : list nat) (tr' : HybridMachineSig.event_trace)
+        (st1' : ThreadPool (Some hb)) (m1' : mem),
+        machine_semantics.machine_step (HybConcSem (Some hb) m) sge U tr st1 m1 U' tr' st1' m1' ->
             forall (cd : option compiler_index) (st2 : ThreadPool (Some (S hb))) 
                    (mu : meminj) (m2 : mem),
               concur_match cd mu st1 m1 st2 m2 ->
@@ -646,33 +1128,50 @@ unfold match_thread_compiled.
                 concur_match cd' mu' st1' m1' st2' m2' /\
                 machine_semantics.machine_step (HybConcSem (Some (S hb)) m) tge U tr st2 m2 U' tr' st2'
                                                m2'.
-        Proof.
-        Admitted.
-
+    Proof.
+      intros.
+      simpl in H.
+      inversion H; subst.
+      - (* Start thread. *)
+        eapply start_step_diagram; eauto.
         
-        Lemma initial_diagram:
-          forall (m : option mem) (s_mem s_mem' : mem) (main : val) (main_args : list val)
-                 (s_mach_state : ThreadPool (Some hb)) (r1 : option res),
-            machine_semantics.initial_machine (HybConcSem (Some hb) m) r1 s_mem s_mach_state s_mem'
-                                              main main_args ->
-            exists
-              (j : meminj) (cd : option compiler_index) (t_mach_state : ThreadPool (Some (S hb))) 
-              (t_mem t_mem' : mem) (r2 : option res),
-              machine_semantics.initial_machine (HybConcSem (Some (S hb)) m) r2 t_mem t_mach_state
-                                                t_mem' main main_args /\ concur_match cd j s_mach_state s_mem' t_mach_state t_mem'.
-        Proof.
-          intros m.
+      - (* resume thread. *)
+        eapply resume_step_diagram; eauto.
           
-        simpl; unfold HybridMachineSig.init_machine''.
-        intros ? ? ? ? ? ? (?&?).
-        destruct r1; try solve[inversion H0].
-        simpl in H0.
-        destruct H0 as (init_thread&?&?); simpl in *.
-        unfold initial_core_sum in *.
-        destruct init_thread; destruct H0 as (LT&H0); simpl in LT.
-        + admit. (*identical start!*)
-        + admit. (*should follow from compiler simulation*)
-        Admitted.
+      - (* suspend thread. *)
+        eapply suspend_step_diagram; eauto.
+        
+      - (* sync step. *)
+        simpl in *.
+        eapply external_step_diagram; eauto.
+      - (*schedfail. *)
+        eapply schedfail_step_diagram; eauto.
+    Qed.
+
+    
+    Lemma initial_diagram:
+      forall (m : option mem) (s_mem s_mem' : mem) (main : val) (main_args : list val)
+        (s_mach_state : ThreadPool (Some hb)) (r1 : option res),
+        machine_semantics.initial_machine (HybConcSem (Some hb) m) r1 s_mem s_mach_state s_mem'
+                                          main main_args ->
+        exists
+          (j : meminj) (cd : option compiler_index) (t_mach_state : ThreadPool (Some (S hb))) 
+          (t_mem t_mem' : mem) (r2 : option res),
+          machine_semantics.initial_machine (HybConcSem (Some (S hb)) m) r2 t_mem t_mach_state
+                                            t_mem' main main_args /\ concur_match cd j s_mach_state s_mem' t_mach_state t_mem'.
+    Proof.
+      intros m.
+      
+      simpl; unfold HybridMachineSig.init_machine''.
+      intros ? ? ? ? ? ? (?&?).
+      destruct r1; try solve[inversion H0].
+      simpl in H0.
+      destruct H0 as (init_thread&?&?); simpl in *.
+      unfold initial_core_sum in *.
+      destruct init_thread; destruct H0 as (LT&H0); simpl in LT.
+      + admit. (*identical start!*)
+      + admit. (*should follow from compiler simulation*)
+    Admitted.
     
     Lemma compile_one_thread:
       forall m,
@@ -710,13 +1209,21 @@ unfold match_thread_compiled.
   
   Section CompileNThreads.
     
- Variable index: nat -> Type.
- Variable match_state: forall n,
-     index n ->
-     Values.Val.meminj ->
-     ThreadPool (Some 0) -> Memory.Mem.mem -> ThreadPool (Some n) -> Memory.Mem.mem -> Prop.
- 
-  Lemma compile_n_threads:
+    Definition nth_index:= list (option compiler_index).
+    Inductive match_state:
+      forall n,
+      nth_index ->
+        Values.Val.meminj ->
+        ThreadPool (Some 0) -> Memory.Mem.mem -> ThreadPool (Some n) -> Memory.Mem.mem -> Prop:=
+    | refl_match: forall j tp m,
+        match_state 0 nil j tp m tp m
+    | step_match_state:
+        forall n ocd ils jn jSn tp0 m0 tpn mn tpSn mSn,
+          match_state n ils jn tp0 m0 tpn mn ->
+          concur_match n ocd jSn tpn mn tpSn mSn ->
+          match_state (S n) (cons ocd ils) (compose_meminj jn jSn) tp0 m0 tpSn mSn.
+          
+    Lemma compile_n_threads:
       forall n m,
         HybridMachine_simulation.HybridMachine_simulation_properties
           (HybConcSem (Some 0) m)
@@ -790,6 +1297,7 @@ Module Concurrent_correctness (CC_correct: CompCert_correctness).
     apply CC_correct.simpl_clight_semantic_preservation in H.
     unfold ClightMachine.ClightMachine.DMS.ClightConcurSem, HybridMachineSig.HybridMachineSig.ConcurMachineSemantics, ClightMachine.ClightMachine.DMS.ClightMachine, HybridMachineSig.HybridMachineSig.HybridCoarseMachine.HybridCoarseMachine.
     econstructor.
+    
     
   Admitted.
 End Concurrent_correctness.

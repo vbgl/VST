@@ -95,7 +95,9 @@ Qed.
        (ThreadPool:= threadPool.OrdinalPool.OrdinalThreadPool(Sem:=SemTarget))
        (HybridMachine:=@bareMach SemTarget)
        (machineSig:= BareMachine.BareMachineSig) m).
-  
+
+  Context {SW : spawn_wrapper CPROOF}.
+
   Lemma CSL2CoarseAsm_safety:
     forall U,
     exists init_mem_target init_mem_target' init_thread_target,

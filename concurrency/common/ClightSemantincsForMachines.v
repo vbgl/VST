@@ -1077,8 +1077,9 @@ Section CLC_SEM.
          econstructor. eassumption. econstructor. split. { simpl. rewrite FR. reflexivity. } reflexivity. }
       { inv H1. rewrite H14 in LB; inv LB. rewrite ST in H15; inv H15.
         econstructor. eassumption. econstructor; split. eassumption. reflexivity. }
-      admit. (*Here we need that onnly the three builtins are supported destruct ef; try solve [contradiction].*)
+      admit. (*Here we need that only the three builtins are supported destruct ef; try solve [contradiction].*)
   Admitted.
+
 End CLC_step.
 
   Inductive function_entryT2 (f: function) (vargs: list val) (m: mem) (e: env) (le: temp_env) (m': mem) (T:list mem_event): Prop :=
@@ -1123,6 +1124,61 @@ End CLC_step.
 
   Lemma CLC_msem : msem CLC_evsem = CLC_memsem g.
   Proof. auto. Qed.
+
+  Lemma CLC_step_decay: forall c m tr c' m',
+      event_semantics.ev_step (CLC_evsem) c m tr c' m' ->
+      decay m m'.
+Proof.
+intros.
+induction H; try apply decay_refl; auto.
+- inv H2.
+  unfold Mem.storev in H4.
+  apply Mem.store_storebytes in H4.
+  eapply storebytes_decay; eauto.
+  eapply storebytes_decay; eauto.
+- admit. (* builtins *)
+- revert m H.
+  induction (blocks_of_env g e); intros.
+  inv H.
+  apply decay_refl.
+  simpl in H. destruct a; destruct p.
+  destruct (Mem.free m b z0 z) eqn:?H; inv H.
+  apply IHl in H2.
+  apply decay_trans with m0; auto.
+  eapply Mem.valid_block_free_1; eauto.
+  clear - H0.
+  eapply free_decay; eauto.
+- clear - H1.
+  revert m H1.
+  induction (blocks_of_env g e); intros.
+  inv H1.
+  apply decay_refl.
+  simpl in H1. destruct a; destruct p.
+  destruct (Mem.free m b z0 z) eqn:?H; inv H1.
+  apply IHl in H2.
+  apply decay_trans with m0; auto.
+  eapply Mem.valid_block_free_1; eauto.
+  clear - H.
+  eapply free_decay; eauto.
+- revert m H0.
+  induction (blocks_of_env g e); intros.
+  inv H0.
+  apply decay_refl.
+  simpl in H0. destruct a; destruct p.
+  destruct (Mem.free m b z0 z) eqn:?H; inv H0.
+  apply IHl in H3.
+  apply decay_trans with m0; auto.
+  eapply Mem.valid_block_free_1; eauto.
+  clear - H1.
+  eapply free_decay; eauto.
+- inv H.
+  clear - H3.
+  induction H3.
+  apply decay_refl.
+  apply decay_trans with m1; auto.
+  eapply Mem.valid_block_alloc; eauto.
+  eapply alloc_decay; eauto.
+Admitted.
 
   Instance ClightSem : Semantics :=
     { semG := G; semC := state; semSem := CLC_evsem; the_ge := g }.
