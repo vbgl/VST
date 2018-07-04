@@ -19,6 +19,7 @@ Require Import VST.concurrency.common.ClightMachine.
 Require Import VST.concurrency.common.dry_machine_lemmas.
 Require Import VST.concurrency.juicy.semax_simlemmas.
 Require Import VST.concurrency.juicy.semax_to_juicy_machine.
+Require Import VST.concurrency.juicy.mem_wd2.
 Require Import VST.veric.Clight_sim.
 Require Import VST.msl.eq_dec.
 Require Import BinNums.
@@ -766,10 +767,7 @@ Definition dryThreadPool := @ThreadPool.t dryResources (Clight_newSem ge)
 
 Definition mem_ok (tp: dryThreadPool) m := 
    Smallstep.globals_not_fresh (Clight.genv_genv ge) m /\
-  (* Mem.mem_wd m isn't sufficient, because there may be values that aren't currently readable
-    but will still be used later *)
-  (forall b ofs, memval_inject (Mem.flat_inj (Mem.nextblock m))
-    (ZMap.get ofs (Mem.mem_contents m) # b) (ZMap.get ofs (Mem.mem_contents m) # b)) /\
+   mem_wd2 m /\
   (forall i (CT: containsThread tp i),
       ctl_ok (Mem.nextblock m) (getThreadC CT)).
 
@@ -791,7 +789,7 @@ Proof.
   destruct H as [? Hwd]; split.
   - unfold Smallstep.globals_not_fresh.
     rewrite restrPermMap_nextblock; auto.
-  - rewrite restrPermMap_nextblock, restrPermMap_mem_contents; auto.
+  - unfold mem_wd2 in *; rewrite restrPermMap_nextblock, restrPermMap_mem_contents; auto.
 Qed.
 
 Lemma mem_ok_step: forall st m st' m' (Hmem: mem_ok (threadpool_of st) m),
@@ -816,7 +814,7 @@ hnf in H. destruct st as [[sch tr] tp]. destruct st' as [[sch' tr'] tp'].
       etransitivity; eauto.
       apply Ple_succ.
     + intros.
-      erewrite Mem.nextblock_alloc, restrPermMap_nextblock by eauto.
+      hnf; intros; erewrite Mem.nextblock_alloc, restrPermMap_nextblock by eauto.
       destruct (eq_dec b0 b); [subst; erewrite AllocContentsUndef1 by eauto | erewrite AllocContentsOther1 by eauto].
       * constructor.
       * eapply memval_inject_incr, flat_inj_incr, Ple_succ; auto.
@@ -854,7 +852,7 @@ hnf in H. destruct st as [[sch tr] tp]. destruct st' as [[sch' tr'] tp'].
     + destruct Hmem as [? [Hwd H2']]; split; [|split].
       * unfold Smallstep.globals_not_fresh.
         erewrite Mem.nextblock_store, restrPermMap_nextblock; eauto.
-      * intros.
+      * intros; hnf; intros.
         erewrite Mem.nextblock_store, restrPermMap_nextblock, Mem.store_mem_contents by eauto.
         destruct (eq_dec b0 b); [subst; rewrite PMap.gss | rewrite PMap.gso; auto].
         replace ofs0 with (ofs0 + 0) at 2 by apply Z.add_0_r.
@@ -866,7 +864,7 @@ hnf in H. destruct st as [[sch tr] tp]. destruct st' as [[sch' tr'] tp'].
     + destruct Hmem as [? [Hwd H2']]; split; [|split].
       * unfold Smallstep.globals_not_fresh.
         erewrite Mem.nextblock_store, restrPermMap_nextblock; eauto.
-      * intros.
+      * intros; hnf; intros.
         erewrite Mem.nextblock_store, restrPermMap_nextblock, Mem.store_mem_contents by eauto.
         destruct (eq_dec b0 b); [subst; rewrite PMap.gss | rewrite PMap.gso; auto].
         replace ofs0 with (ofs0 + 0) at 2 by apply Z.add_0_r.
@@ -881,7 +879,7 @@ hnf in H. destruct st as [[sch tr] tp]. destruct st' as [[sch' tr'] tp'].
        destruct Hmem as [? [Hwd H2']]; split; [|split].
       * unfold Smallstep.globals_not_fresh.
         erewrite Mem.nextblock_store, restrPermMap_nextblock; eauto.
-      * intros.
+      * intros; hnf; intros.
         erewrite Mem.nextblock_store, restrPermMap_nextblock, Mem.store_mem_contents by eauto.
         destruct (eq_dec b0 b); [subst; rewrite PMap.gss | rewrite PMap.gso; auto].
         replace ofs0 with (ofs0 + 0) at 2 by apply Z.add_0_r.
@@ -892,6 +890,24 @@ hnf in H. destruct st as [[sch tr] tp]. destruct st' as [[sch' tr'] tp'].
          admit.
     + (* FREE_LOCK *)
         admit.
+(* ALTERNATE: 
+    + eapply mem_wd2_alloc; eauto.
+  - inv Htstep.
+    admit.
+  - inv Htstep; auto.
+    + eapply mem_ok_restr in Hmem as [? Hwd]; split.
+      * unfold Smallstep.globals_not_fresh.
+        erewrite Mem.nextblock_store; eauto.
+      * eapply mem_wd2_store; eauto; simpl; auto.
+    + eapply mem_ok_restr in Hmem as [? Hwd]; split.
+      * unfold Smallstep.globals_not_fresh.
+        erewrite Mem.nextblock_store; eauto.
+      * eapply mem_wd2_store; eauto; simpl; auto.
+    + eapply mem_ok_restr in Hmem as [? Hwd]; split.
+      * unfold Smallstep.globals_not_fresh.
+        erewrite Mem.nextblock_store; eauto.
+      * eapply mem_wd2_store; eauto; simpl; auto.
+*)
 Admitted.
 
 (* spawn handler *)
@@ -1374,7 +1390,23 @@ Definition init_threadpool :=
 
 Lemma init_mem_ok: mem_ok init_threadpool init_mem.
 Proof.
-  
+  unfold mem_ok, init_mem, semax_to_juicy_machine.init_mem, init_mem_not_none, CSL_init_mem_not_none,
+    semax_initial.init_m, ge, prog.
+  split; [|split].
+  - destruct CPROOF; simpl.
+     destruct (Genv.init_mem CSL_prog) eqn: Hinit; try contradiction; simpl.
+    unfold Smallstep.globals_not_fresh; simpl.
+    erewrite Genv.init_mem_genv_next by eauto.
+    apply Ple_refl.
+  - destruct CPROOF; simpl.
+     destruct (Genv.init_mem CSL_prog) eqn: Hinit; try contradiction; simpl.
+     unfold Genv.init_mem in Hinit.
+    eapply mem_wd2_alloc_globals; eauto.
+    + unfold mem_wd2; simpl; intros.
+      rewrite PMap.gi, ZMap.gi; constructor.
+    + admit. (* Is this designed incorrectly? Why should the genv be valid wrt
+                the memory before allocating globals? *)
+ - admit.
 Admitted.
 
 Transparent getThreadC.
