@@ -820,19 +820,28 @@ hnf in H. destruct st as [[sch tr] tp]. destruct st' as [[sch' tr'] tp'].
       * eapply memval_inject_incr, flat_inj_incr, Ple_succ; auto.
     + intros. simpl. simpl in Halloc. simpl in CT.
         pose proof (Mem.nextblock_alloc _ _ _ _ _ Halloc). simpl in H3.
-        clear - Halloc H3 H2'.
+      destruct (eq_dec i tid).
+      * subst; rewrite gssThreadCode; simpl.
         admit.
-(*
-        eapply alloc_ctl_ok; try apply H2'.
-       apply Pos.lt_le_incl. apply Pos.lt_succ_diag_r.
-*)
+      * unshelve erewrite gsoThreadCode; auto.
+        eapply alloc_ctl_ok; eauto.
+        rewrite H3; apply Ple_succ.
   - (* resume_thread *)
     destruct Hmem as [Hmem1 [Hmem2 Hmem3]].
     split; [|split]; auto.
     inv Htstep.
     inv Hafter_external.
-    clear - H0 Hmem3.
-     admit.
+    clear - Hcode H0 Hmem3.
+    intros; destruct (eq_dec i tid); [|erewrite <- gsoThreadCC; auto].
+    subst; rewrite gssThreadCC; simpl.
+    specialize (Hmem3 _ ctn); rewrite Hcode in Hmem3.
+    destruct c; inv H0.
+    destruct lid; inv H1; simpl in *; try tauto.
+    destruct Hmem3 as [(? & ? & Hte & ?) _].
+    repeat split; auto.
+    repeat intro.
+    destruct (eq_dec i0 i); [subst; rewrite PTree.gss in H2 | rewrite PTree.gso in H2; eauto].
+    inv H2; simpl; auto.
   - (* threadStep *)
     inv Htstep.
     unfold diluteMem. unfold DilMem.
@@ -846,8 +855,10 @@ hnf in H. destruct st as [[sch tr] tp]. destruct st' as [[sch' tr'] tp'].
     split; [|split]; auto.
     inv Htstep.
     clear - Hcode Hmem3.
-     admit.
-  - (* isCoarse *)
+    intros; destruct (eq_dec i tid); [|erewrite <- gsoThreadCC; auto].
+    subst; rewrite gssThreadCC; simpl.
+    specialize (Hmem3 _ ctn); rewrite Hcode in Hmem3; auto.
+  - (* syncStep *)
      inv Htstep; auto.
     + destruct Hmem as [? [Hwd H2']]; split; [|split].
       * unfold Smallstep.globals_not_fresh.
@@ -860,7 +871,7 @@ hnf in H. destruct st as [[sch tr] tp]. destruct st' as [[sch' tr'] tp'].
         apply Mem.setN_inj with (access := fun _ => True); intros; rewrite ?Z.add_0_r; auto.
         apply encode_val_inject; constructor.
       * apply Mem.nextblock_store in Hstore. simpl in Hstore. rewrite Hstore in *.
-         admit.
+        admit.
     + destruct Hmem as [? [Hwd H2']]; split; [|split].
       * unfold Smallstep.globals_not_fresh.
         erewrite Mem.nextblock_store, restrPermMap_nextblock; eauto.
