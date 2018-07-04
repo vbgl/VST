@@ -677,6 +677,26 @@ unfold match_thread_compiled.
           * simpl; repeat (f_equal; try eapply Axioms.proof_irr).
     Admitted.
 
+    
+    Lemma external_step_diagram:
+      forall (U : list nat) (tr : HybridMachineSig.event_trace) (st1 : ThreadPool.t) 
+        (m1 : mem) (st1' : ThreadPool.t) (m1' : mem) (tid : nat) (ev : Events.sync_event),
+      forall (cd : option compiler_index) (st2 : ThreadPool.t) (mu : meminj) (m2 : mem),
+        concur_match cd mu st1 m1 st2 m2 ->
+        forall (Htid : ThreadPool.containsThread st1 tid) (Hcmpt : mem_compatible st1 m1),
+          HybridMachineSig.schedPeek U = Some tid ->
+          syncStep true Htid Hcmpt st1' m1' ev ->
+          exists (st2' : t) (m2' : mem) (cd' : option compiler_index) 
+            (mu' : meminj),
+            concur_match cd' mu' st1' m1' st2' m2' /\
+            HybridMachineSig.external_step
+              (scheduler:=HybridMachineSig.HybridCoarseMachine.scheduler) U tr st2 m2 (HybridMachineSig.schedSkip U)
+              (seq.cat tr (Events.external tid ev :: nil)) st2' m2'.
+    Proof.
+      intros.
+      
+    Admitted.
+    
     Lemma machine_step_diagram:
           forall (m : option mem) (sge tge : HybridMachineSig.G) (U : list nat)
                  (tr : HybridMachineSig.event_trace) (st1 : ThreadPool (Some hb)) 
@@ -694,9 +714,24 @@ unfold match_thread_compiled.
                                                m2'.
     Proof.
       intros.
+      simpl in H.
       inversion H; subst.
-      inversion Htstep; subst.
-      destruct (Compare_dec.lt_eq_lt_dec tid hb) as [[?|?]|?].  
+      - (* Start thread. *)
+        admit.
+        (* easy since the initial cahnges to the memory should be a mem_step_Star*)
+        
+      - (* resume thread. *)
+        admit.  (* trivial since there is no changes to memory. *)
+      - (* suspend thread. *)
+        admit. (* trivial since there is no changes to memory. *)
+      - (* sync step. *)
+        simpl in *.
+
+        
+      - (*schedfail. *)
+        admit.
+        (* trivial since there is no changes to memory. *)
+      
     Admitted.
 
         
