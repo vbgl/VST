@@ -662,7 +662,7 @@ Definition venv_ok (ve: Clight.env) :=
   forall i bt, PTree.get i ve = Some bt -> block_ok (fst bt).
 
 Definition tenv_ok (te: Clight.temp_env) :=
-  forall i v, PTree.get i te = Some v -> val_ok v.
+  forall i (v: val), PTree.get i te = Some v -> val_ok v.
 
 Definition cont'_ok (k: Clight_new.cont') := 
  match k with
@@ -792,6 +792,125 @@ Proof.
   - unfold mem_wd2 in *; rewrite restrPermMap_nextblock, restrPermMap_mem_contents; auto.
 Qed.
 
+Lemma ctl_ok_updThread:
+  forall nextb (ms: dryThreadPool) tid c r
+  (H: containsThread ms tid),
+  ctl_ok nextb c ->
+  (forall i (CT: containsThread ms i), ctl_ok nextb (getThreadC CT)) ->
+  (forall i (CT: containsThread (updThread H c r) i), 
+       ctl_ok nextb (getThreadC CT)).
+Proof.
+intros.
+specialize (H1 i).
+destruct (eq_dec tid i).
+subst i.
+specialize (H1 H).
+pose proof (@gssThreadCode _ _ _ _ ms H _ _ CT). rewrite H2; auto.
+destruct (containsThread_dec_ i ms).
+specialize (H1 c0).
+pose proof (@gsoThreadCode _ _ _ _ _ _ n _ c0 _ _ CT).
+rewrite H2; auto.
+hnf.
+contradiction n0.
+Qed.
+
+Lemma ctl_ok_updLockSet:
+  forall nextb (ms: dryThreadPool) tid x r
+  (H: containsThread ms tid),
+  (forall i (CT: containsThread ms i), ctl_ok nextb (getThreadC CT)) ->
+  (forall i (CT: containsThread (updLockSet ms x r) i), 
+       ctl_ok nextb (getThreadC CT)).
+Proof.
+intros.
+pose proof (cntUpdateL' _ _ CT). specialize (H0 i H1).
+replace (getThreadC CT) with (getThreadC H1); auto.
+symmetry; apply gLockSetCode.
+Qed.
+
+
+Lemma ctl_ok_remLockSet:
+  forall nextb (ms: dryThreadPool) tid x
+  (H: containsThread ms tid),
+  (forall i (CT: containsThread ms i), ctl_ok nextb (getThreadC CT)) ->
+  (forall i (CT: containsThread (remLockSet ms x) i), 
+       ctl_ok nextb (getThreadC CT)).
+Proof.
+intros.
+pose proof (cntRemoveL' _ CT). specialize (H0 i H1).
+replace (getThreadC CT) with (getThreadC H1); auto.
+symmetry; apply gRemLockSetCode.
+Qed.
+
+Lemma ctl_ok_updThreadC:
+  forall nextb (ms: dryThreadPool) tid c
+  (H: containsThread ms tid),
+  ctl_ok nextb c ->
+  (forall i (CT: containsThread ms i), ctl_ok nextb (getThreadC CT)) ->
+  (forall i (CT: containsThread (updThreadC H c) i), 
+       ctl_ok nextb (getThreadC CT)).
+Proof.
+intros.
+specialize (H1 i).
+destruct (eq_dec tid i).
+subst i.
+specialize (H1 H).
+pose proof (@gssThreadCC _ _ _ _ ms H _ CT). rewrite H2; auto.
+destruct (containsThread_dec_ i ms).
+specialize (H1 c0).
+pose proof (@gsoThreadCC _ _ _ _ _ _ n _ c0 _ CT).
+rewrite <- H2; auto.
+hnf.
+contradiction n0.
+Qed.
+
+Lemma ctl_ok_addThread:
+  forall nextb (ms: dryThreadPool) tid v1 v2 r
+  (H: containsThread ms tid),
+  val_ok nextb v1 ->
+  val_ok nextb v2 ->
+  (forall i (CT: containsThread ms i), ctl_ok nextb (getThreadC CT)) ->
+  (forall i (CT: containsThread (addThread ms v1 v2 r) i), 
+       ctl_ok nextb (getThreadC CT)).
+Proof.
+intros.
+specialize (H2 i).
+pose proof (cntAdd' _ _ _ CT).
+destruct H3.
+destruct H3.
+specialize (H2 H3).
+replace (getThreadC CT) with (getThreadC H3); auto.
+symmetry; apply gsoAddCode. subst i.
+pose proof (@gssAddCode _ _ _ ms v1 v2 r (latestThread ms) (eq_refl _) CT).
+rewrite H3. split; auto.
+Qed.
+
+Lemma set_tenv_ok:
+  forall nextb i (v: val) te, val_ok nextb v -> tenv_ok nextb te ->
+            tenv_ok nextb (PTree.set i v te).
+Proof.
+intros.
+hnf in H0|-*.
+intros.
+destruct (eq_dec i i0).
+subst. rewrite PTree.gss in H1. inv H1. auto.
+rewrite PTree.gso in H1 by auto.
+apply H0 in H1. auto.
+Qed.
+
+Lemma mem_ok_threadStep:
+  forall (CPROOF : CSL_proof)
+    (ms : dryThreadPool) (m : mem) (tid : nat) (m' : mem) (ev : list mem_event)
+   (Htid : containsThread ms tid)
+   (th : forall (tid : nat) (cnt : containsThread ms tid),
+     permMapLt (fst (getThreadR cnt)) (getMaxPerm m) /\
+     permMapLt (snd (getThreadR cnt)) (getMaxPerm m))
+   c c'
+   (Hcode : getThreadC Htid = Krun c)
+   (p : permMapLt (fst (getThreadR Htid)) (getMaxPerm m))
+   (Hcorestep : cl_evstep ge c (restrPermMap p) ev c' m'),
+  mem_ok (updThread Htid (Krun c') (getCurPerm m', snd (getThreadR Htid))) m'.
+Admitted.
+
 Lemma mem_ok_step: forall st m st' m' (Hmem: mem_ok (threadpool_of st) m),
   MachStep(Sem := Clight_newSem ge)
       (ThreadPool:= OrdinalPool.OrdinalThreadPool)
@@ -820,19 +939,42 @@ hnf in H. destruct st as [[sch tr] tp]. destruct st' as [[sch' tr'] tp'].
       * eapply memval_inject_incr, flat_inj_incr, Ple_succ; auto.
     + intros. simpl. simpl in Halloc. simpl in CT.
         pose proof (Mem.nextblock_alloc _ _ _ _ _ Halloc). simpl in H3.
-        clear - Halloc H3 H2'.
-        admit.
-(*
-        eapply alloc_ctl_ok; try apply H2'.
-       apply Pos.lt_le_incl. apply Pos.lt_succ_diag_r.
-*)
+        clear - Hcode H Halloc H3 H2'.
+        revert i CT.
+        assert (H2x: forall (i : nat) (CT : containsThread ms i),
+             ctl_ok (Mem.nextblock m0) (getThreadC CT)). {
+             intros. eapply alloc_ctl_ok. 2: eapply H2'; eauto. rewrite H3.
+             apply Pos.lt_le_incl. apply Pos.lt_succ_diag_r.
+         } clear H2'.
+        generalize H2x; apply ctl_ok_updThread.
+        specialize (H2x tid ctn). rewrite Hcode in H2x. 
+        set  (nextb := Mem.nextblock m0) in *; clearbody nextb.
+        clear - H H2x.
+        hnf in H. destruct vf; try contradiction.
+        destruct (Ptrofs.eq_dec i Ptrofs.zero);  try contradiction.
+        destruct (Genv.find_funct_ptr (Clight.genv_genv ge) b); try contradiction.
+        destruct (Clight.type_of_fundef f); try contradiction.
+        destruct H as [? [? [? ?]]]. subst.
+        unfold ctl_ok. unfold corestate_ok.
+        split; [|split].
+        hnf; intros. rewrite PTree.gempty in H. inv H.
+        unfold Clight.temp_bindings.
+          destruct H2x.
+          repeat apply set_tenv_ok; auto.
+        hnf; intros. rewrite PTree.gempty in H3. inv H3.
+        repeat constructor.
   - (* resume_thread *)
     destruct Hmem as [Hmem1 [Hmem2 Hmem3]].
     split; [|split]; auto.
     inv Htstep.
     inv Hafter_external.
-    clear - H0 Hmem3.
-     admit.
+    clear - Hcode H0 Hmem3.
+    generalize Hmem3; apply ctl_ok_updThreadC.
+    specialize (Hmem3 _ ctn). rewrite Hcode in Hmem3.
+    destruct Hmem3.   
+    simpl. destruct c; inv H0; destruct lid; simpl in H; inv H3; simpl; auto.
+    intuition. apply set_tenv_ok; auto.
+    intuition.
   - (* threadStep *)
     inv Htstep.
     unfold diluteMem. unfold DilMem.
@@ -840,13 +982,16 @@ hnf in H. destruct st as [[sch tr] tp]. destruct st' as [[sch' tr'] tp'].
     destruct Hcmpt as [th lp blocks]. simpl in Hcorestep.
     destruct (th tid Htid).
     replace (proj1 (conj p p0)) with p in Hcorestep by apply Axioms.proof_irr.
-    admit.
+    clear - Htid th Hcode Hcorestep.
+    eapply mem_ok_threadStep; eauto.
   - (* suspend_thread *)
     destruct Hmem as [Hmem1 [Hmem2 Hmem3]].
     split; [|split]; auto.
     inv Htstep.
     clear - Hcode Hmem3.
-     admit.
+    generalize Hmem3; apply ctl_ok_updThreadC.
+    specialize (Hmem3 _ ctn). rewrite Hcode in Hmem3.
+    apply Hmem3.
   - (* isCoarse *)
      inv Htstep; auto.
     + destruct Hmem as [? [Hwd H2']]; split; [|split].
@@ -860,7 +1005,11 @@ hnf in H. destruct st as [[sch tr] tp]. destruct st' as [[sch' tr'] tp'].
         apply Mem.setN_inj with (access := fun _ => True); intros; rewrite ?Z.add_0_r; auto.
         apply encode_val_inject; constructor.
       * apply Mem.nextblock_store in Hstore. simpl in Hstore. rewrite Hstore in *.
-         admit.
+         eapply ctl_ok_updLockSet with (tid:=tid).
+         apply cntUpdate; auto.
+         generalize H2'; apply ctl_ok_updThread.
+         specialize (H2' _ Htid). rewrite Hcode in H2'. clear - H2'.
+         split; auto. hnf. auto.
     + destruct Hmem as [? [Hwd H2']]; split; [|split].
       * unfold Smallstep.globals_not_fresh.
         erewrite Mem.nextblock_store, restrPermMap_nextblock; eauto.
@@ -872,9 +1021,26 @@ hnf in H. destruct st as [[sch tr] tp]. destruct st' as [[sch' tr'] tp'].
         apply Mem.setN_inj with (access := fun _ => True); intros; rewrite ?Z.add_0_r; auto.
         apply encode_val_inject; constructor.
       * apply Mem.nextblock_store in Hstore. simpl in Hstore. rewrite Hstore in *.
-         admit.
+         eapply ctl_ok_updLockSet with (tid:=tid).
+         apply cntUpdate; auto.
+         generalize H2'; apply ctl_ok_updThread.
+         specialize (H2' _ Htid). rewrite Hcode in H2'. clear - H2'.
+         split; auto. hnf. auto.
     + (* CREATE *)
-         admit.
+       destruct Hmem as [? [Hwd H2']]; split; [|split]; auto.
+       assert (block_ok (Mem.nextblock m') b /\ val_ok (Mem.nextblock m') arg). {
+             specialize (H2' _ Htid). rewrite Hcode in H2'.
+        simpl in H2'. clear - H2' Hat_external. inv Hat_external.
+         destruct c; inv H0. simpl in H2'. destruct H2' as [? _].
+          inv H. inv H3. split; auto.
+       }
+      apply ctl_ok_addThread with (tid:=tid).
+      apply cntUpdate. auto.
+      destruct H0;  auto.
+      destruct H0;  auto.
+         generalize H2'; apply ctl_ok_updThread.
+         specialize (H2' _ Htid). rewrite Hcode in H2'. clear - H2'.
+      split; auto. simpl. auto.
     + (* MKLOCK *)
        destruct Hmem as [? [Hwd H2']]; split; [|split].
       * unfold Smallstep.globals_not_fresh.
@@ -887,28 +1053,19 @@ hnf in H. destruct st as [[sch tr] tp]. destruct st' as [[sch' tr'] tp'].
         apply Mem.setN_inj with (access := fun _ => True); intros; rewrite ?Z.add_0_r; auto.
         apply encode_val_inject; constructor.
       * apply Mem.nextblock_store in Hstore. simpl in Hstore. rewrite Hstore in *.
-         admit.
+         eapply ctl_ok_updLockSet with (tid:=tid).
+         apply cntUpdate; auto.
+         generalize H2'; apply ctl_ok_updThread.
+         specialize (H2' _ Htid). rewrite Hcode in H2'. clear - H2'.
+         split; auto. hnf. auto.
     + (* FREE_LOCK *)
-        admit.
-(* ALTERNATE: 
-    + eapply mem_wd2_alloc; eauto.
-  - inv Htstep.
-    admit.
-  - inv Htstep; auto.
-    + eapply mem_ok_restr in Hmem as [? Hwd]; split.
-      * unfold Smallstep.globals_not_fresh.
-        erewrite Mem.nextblock_store; eauto.
-      * eapply mem_wd2_store; eauto; simpl; auto.
-    + eapply mem_ok_restr in Hmem as [? Hwd]; split.
-      * unfold Smallstep.globals_not_fresh.
-        erewrite Mem.nextblock_store; eauto.
-      * eapply mem_wd2_store; eauto; simpl; auto.
-    + eapply mem_ok_restr in Hmem as [? Hwd]; split.
-      * unfold Smallstep.globals_not_fresh.
-        erewrite Mem.nextblock_store; eauto.
-      * eapply mem_wd2_store; eauto; simpl; auto.
-*)
-Admitted.
+       destruct Hmem as [? [Hwd H2']]; split; [|split]; auto.
+         eapply ctl_ok_remLockSet with (tid:=tid).
+         apply cntUpdate; auto.
+         generalize H2'; apply ctl_ok_updThread.
+         specialize (H2' _ Htid). rewrite Hcode in H2'. clear - H2'.
+         split; auto. hnf. auto.
+Qed.
 
 (* spawn handler *)
 Notation tvoidptr := (Tpointer Tvoid noattr).
