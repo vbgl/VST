@@ -792,6 +792,14 @@ Proof.
   - unfold mem_wd2 in *; rewrite restrPermMap_nextblock, restrPermMap_mem_contents; auto.
 Qed.
 
+Lemma val_inject_ok: forall b v, val_inject (Mem.flat_inj b) v v ->
+  val_ok b v.
+Proof.
+  unfold Mem.flat_inj; intros.
+  inv H; simpl; auto.
+  destruct (plt _ _); inv H3; auto.
+Qed.
+
 Lemma mem_ok_step: forall st m st' m' (Hmem: mem_ok (threadpool_of st) m),
   MachStep(Sem := Clight_newSem ge)
       (ThreadPool:= OrdinalPool.OrdinalThreadPool)
@@ -822,8 +830,30 @@ hnf in H. destruct st as [[sch tr] tp]. destruct st' as [[sch' tr'] tp'].
         pose proof (Mem.nextblock_alloc _ _ _ _ _ Halloc). simpl in H3.
       destruct (eq_dec i tid).
       * subst; rewrite gssThreadCode; simpl.
-        admit.
-      * unshelve erewrite gsoThreadCode; auto.
+        hnf in H.
+        destruct vf; try contradiction.
+        destruct (Ptrofs.eq_dec i Ptrofs.zero); try contradiction.
+        destruct (Genv.find_funct_ptr _ _) eqn: Hfind; try contradiction.
+        destruct (Clight.type_of_fundef f); try contradiction.
+        destruct H as (? & ? & ? & ?); subst; simpl; repeat split.
+        -- unfold Clight.empty_env; repeat intro.
+           rewrite PTree.gempty in H; discriminate.
+        -- clear - H0 H1 Hfind Halloc.
+           repeat intro.
+           erewrite Mem.nextblock_alloc, restrPermMap_nextblock by eauto.
+           destruct i; simpl in H; try (rewrite PTree.gleaf in H; discriminate).
+           destruct i; simpl in H; try (rewrite PTree.gleaf in H; discriminate).
+           inv H; inv H0.
+           eapply alloc_val_ok, val_inject_ok; eauto.
+           rewrite restrPermMap_nextblock; apply Ple_succ.
+           inv H; simpl.
+           eapply alloc_block_ok, Genv.genv_defs_range.
+           { etransitivity; [apply H1 | apply Ple_succ]. }
+           unfold Genv.find_funct_ptr, Genv.find_def in Hfind.
+           destruct ((Genv.genv_defs _) ! _); try discriminate.
+           destruct g; inv Hfind; eauto.
+        -- repeat constructor.
+      * unshelve erewrite gsoThreadCode; eauto.
         eapply alloc_ctl_ok; eauto.
         rewrite H3; apply Ple_succ.
   - (* resume_thread *)
@@ -871,7 +901,10 @@ hnf in H. destruct st as [[sch tr] tp]. destruct st' as [[sch' tr'] tp'].
         apply Mem.setN_inj with (access := fun _ => True); intros; rewrite ?Z.add_0_r; auto.
         apply encode_val_inject; constructor.
       * apply Mem.nextblock_store in Hstore. simpl in Hstore. rewrite Hstore in *.
-        admit.
+        intros; unshelve erewrite gLockSetCode.
+        { eapply cntUpdateL'; eauto. }
+        destruct (eq_dec i tid); [subst; rewrite gssThreadCode | unshelve erewrite gsoThreadCode; auto].
+        specialize (H2' _ Htid); rewrite Hcode in H2'; simpl in *; split; auto.
     + destruct Hmem as [? [Hwd H2']]; split; [|split].
       * unfold Smallstep.globals_not_fresh.
         erewrite Mem.nextblock_store, restrPermMap_nextblock; eauto.
@@ -883,9 +916,22 @@ hnf in H. destruct st as [[sch tr] tp]. destruct st' as [[sch' tr'] tp'].
         apply Mem.setN_inj with (access := fun _ => True); intros; rewrite ?Z.add_0_r; auto.
         apply encode_val_inject; constructor.
       * apply Mem.nextblock_store in Hstore. simpl in Hstore. rewrite Hstore in *.
-         admit.
+        intros; unshelve erewrite gLockSetCode.
+        { eapply cntUpdateL'; eauto. }
+        destruct (eq_dec i tid); [subst; rewrite gssThreadCode | unshelve erewrite gsoThreadCode; auto].
+        specialize (H2' _ Htid); rewrite Hcode in H2'; simpl in *; split; auto.
     + (* CREATE *)
-         admit.
+      destruct Hmem as [? [Hwd H2']]; split; [|split]; auto.
+      intros.
+      destruct (cntAdd' _ _ _ CT) as [[]|].
+      * unshelve erewrite gsoAddCode; auto.
+        destruct (eq_dec i tid); [|unshelve erewrite gsoThreadCode; auto].
+        subst; rewrite gssThreadCode; simpl.
+        specialize (H2' _ Htid); rewrite Hcode in H2'; auto.
+      * subst; rewrite gssAddCode; auto; simpl.
+        split.
+        -- admit. (* ext_step doesn't guarantee that the argument to spawn is valid *)
+        -- apply val_inject_ok; auto.
     + (* MKLOCK *)
        destruct Hmem as [? [Hwd H2']]; split; [|split].
       * unfold Smallstep.globals_not_fresh.
@@ -898,9 +944,17 @@ hnf in H. destruct st as [[sch tr] tp]. destruct st' as [[sch' tr'] tp'].
         apply Mem.setN_inj with (access := fun _ => True); intros; rewrite ?Z.add_0_r; auto.
         apply encode_val_inject; constructor.
       * apply Mem.nextblock_store in Hstore. simpl in Hstore. rewrite Hstore in *.
-         admit.
+        intros; unshelve erewrite gLockSetCode.
+        { eapply cntUpdateL'; eauto. }
+        destruct (eq_dec i tid); [subst; rewrite gssThreadCode | unshelve erewrite gsoThreadCode; auto].
+        specialize (H2' _ Htid); rewrite Hcode in H2'; simpl in *; split; auto.
     + (* FREE_LOCK *)
-        admit.
+       destruct Hmem as [? [Hwd H2']]; split; [|split]; auto.
+        intros; unshelve erewrite gRemLockSetCode.
+        { SearchAbout containsThread remLockSet.
+          eapply cntRemoveL'; eauto. }
+        destruct (eq_dec i tid); [subst; rewrite gssThreadCode | unshelve erewrite gsoThreadCode; auto].
+        specialize (H2' _ Htid); rewrite Hcode in H2'; simpl in *; split; auto.
 (* ALTERNATE: 
     + eapply mem_wd2_alloc; eauto.
   - inv Htstep.
