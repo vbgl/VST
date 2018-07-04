@@ -997,14 +997,13 @@ destruct (typlist_of_typelist t) eqn:?Htypelist; try contradiction. clear H2.
 destruct t; inv Htypelist. 
 unfold initial_core; simpl.
 destruct (Mem.alloc m 0 0) as (m', b') eqn: Halloc.
-exists (Callstate f nil (Clight.Kcall None main_handler empty_env (PTree.empty _) Kstop) m'); split.
+eexists (Callstate f nil (Clight.Kcall None main_handler empty_env _ Kstop) m'); split.
 { split; auto; econstructor; eauto.
   { simpl.
     admit. }
   { admit. }
   { constructor. }
-  { admit. }
-  { contradiction. } }
+  { admit. } }
 intro.
 remember (State empty_env
           (PTree.Node PTree.Leaf (Some (Vptr b Ptrofs.zero)) PTree.Leaf)

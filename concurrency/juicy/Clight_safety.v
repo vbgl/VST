@@ -8,6 +8,7 @@ Require Import compcert.lib.Coqlib.
 Require Import compcert.common.Values.
 Require Import compcert.common.Globalenvs.
 Require Import compcert.common.Memory.
+Require Import compcert.cfrontend.Ctypes.
 Require Import VST.concurrency.common.core_semantics.
 Require Import VST.concurrency.common.bounded_maps.
 Require Import VST.concurrency.common.threadPool.
@@ -60,7 +61,7 @@ Definition initial_Clight_state : Clight.state :=
              (map (fun x => Clight.Etempvar (fst x) (snd x))
              (Clight_new.params_of_types 2 (Clight_new.params_of_fundef f))))
              ((*Clight.Kseq (Clight.Sloop Clight.Sskip Clight.Sskip)*) Clight.Kstop) Clight.empty_env
-             (Clight_new.temp_bindings 1 [Vptr (projT1 (spr CPROOF)) Ptrofs.zero]) init_mem.
+             (Clight.temp_bindings 1 [Vptr (projT1 (spr CPROOF)) Ptrofs.zero]) init_mem.
 
 (*...And we should be able to construct an initial state from the Clight_new and mem.*)
 (* See also veric/Clight_sim.v. *)
@@ -79,7 +80,7 @@ Definition new2Clight_state (q : Clight_new.corestate) (m : mem) : option Clight
   match q with
   | Clight_new.State e te (Clight_new.Kseq s :: k) =>
       Some (Clight.State main_handler s (make_cont k) e te m)
-(*  | Clight_new.ExtCall f args _ e te k => Some (Clight.Callstate (Ctypes.External f tyargs tyret cc) args (make_cont k) m)*)
+(*  | Clight_new.ExtCall f args _ e te k => Some (Clight.Callstate (External f tyargs tyret cc) args (make_cont k) m)*)
 (* main shouldn't be an extcall anyway *)
   | _ => None
   end.
@@ -486,7 +487,9 @@ Proof.
   - intros.
     apply memsem_lemmas.mem_step_obeys_cur_write; auto.
     eapply corestep_mem; eauto.
-  - admit. (* proved for CLN *)
+  - intros.
+    apply ev_step_ax2 in H as [].
+    eapply CLC_step_decay; simpl in *; eauto.
   - intros.
     apply mem_forward_nextblock, memsem_lemmas.mem_step_forward.
     eapply corestep_mem; eauto.
@@ -503,15 +506,15 @@ Proof.
     inv H.
     inv H0; simpl.
     split; intros.
-    + eapply Mem.valid_block_alloc_inv in H10; eauto.
-      destruct H10; [subst | contradiction].
+    + eapply Mem.valid_block_alloc_inv in H9; eauto.
+      destruct H9; [subst | contradiction].
       right; intro.
       destruct ((Mem.mem_access m1) # stk ofs k) eqn: Haccess; auto.
       eapply memsem_lemmas.alloc_access_inv in Haccess; eauto.
       destruct Haccess; [omega|].
-      destruct H10 as [? Haccess].
+      destruct H9 as [? Haccess].
       rewrite Mem.nextblock_noaccess in Haccess; [discriminate|].
-      apply Mem.alloc_result in H9; subst; auto.
+      apply Mem.alloc_result in H8; subst; auto.
     + destruct ((Mem.mem_access m1) # b ofs k) eqn: Haccess.
       * eapply memsem_lemmas.alloc_access_inv in Haccess; eauto.
         destruct Haccess; [omega | tauto].
@@ -521,7 +524,7 @@ Proof.
     inv H0; simpl.
     erewrite Mem.nextblock_alloc with (m1 := m)(m2 := m1) by eauto.
     apply Ple_succ.
-Admitted.
+Qed.
 
 Lemma CoreSafe_star: forall n U tr tp m tid (c : @semC (ClightSem ge)) c' tp' m' ev
   (HschedN: schedPeek U = Some tid)
@@ -626,7 +629,7 @@ Proof.
 Qed.
 
 Lemma type_of_fundef_fun: forall f, exists targs tres cc,
-  Clight.type_of_fundef f = Ctypes.Tfunction targs tres cc.
+  Clight.type_of_fundef f = Tfunction targs tres cc.
 Proof.
   destruct f; simpl; eauto.
   unfold Clight.type_of_function; eauto.
@@ -715,36 +718,48 @@ Proof.
 Admitted.
 
 (* spawn handler *)
-Parameter b_wrapper: block.
-Parameter f_wrapper: Clight.function.
-Axiom lookup_wrapper: Genv.find_funct_ptr (Clight.genv_genv ge) b_wrapper = Some (Ctypes.Internal f_wrapper).
-Axiom wrapper_args: forall l, In l (AST.regs_of_rpairs (Clight.loc_arguments' (map Ctypes.typ_of_type (map snd (Clight.fn_params f_wrapper))))) ->
-        match l with Locations.R _ => True | Locations.S _ _ _ => False end.
+Notation tvoidptr := (Tpointer Tvoid noattr).
+Notation tvoidfun := (Tfunction (Tcons tvoidptr Tnil) tvoidptr AST.cc_default).
 
-(* These two lemmas are probably not true. We need to reconcile what Clight_new and Clight do
-   after a thread finishes. *)
-Lemma match_body: forall body b v2 f,
+Definition f_wrapper : Clight.function :=
+  {| Clight.fn_return := Tvoid; Clight.fn_callconv := AST.cc_default;
+     Clight.fn_params := [(1%positive, tvoidfun); (2%positive, tvoidptr)];
+     Clight.fn_vars := []; Clight.fn_temps := [];
+     Clight.fn_body := Clight.Scall None (Clight.Etempvar 1%positive tvoidfun) [Clight.Etempvar 2%positive tvoidptr] |}.
+
+Class spawn_wrapper := { lookup_wrapper: exists b_wrapper, Genv.find_funct_ptr (Clight.genv_genv ge) b_wrapper = Some (Ctypes.Internal f_wrapper)}.
+Context {SW : spawn_wrapper}.
+
+Lemma match_cont_prefix: forall k k1 k2, match_cont (Clight_new.strip_skip k1) (strip_skip' k2) ->
+  match_cont (Clight_new.strip_skip (Clight_new.Kseq k :: k1))
+             (strip_skip' (CC.Kseq k k2)).
+Proof.
+  induction k; auto; intros; constructor; auto.
+Qed.
+
+Lemma match_body: forall body f te,
   match_cont
     (Clight_new.strip_skip
      [Clight_new.Kseq body; Clight_new.Kseq (Clight.Sreturn None);
-     Clight_new.Kcall None f Clight.empty_env
-       (PTree.Node (PTree.Node PTree.Leaf (Some v2) PTree.Leaf) (Some (Vptr b Ptrofs.zero))
-          PTree.Leaf)])
+      Clight_new.Kcall None f Clight.empty_env te])
     (strip_skip'
      (CC.Kseq body
-        (Clight.Kcall None f_wrapper (PTree.empty (block * Ctypes.type))
-           (PTree.empty val) Clight.Kstop))).
-Admitted.
+        (Clight.Kcall None f_wrapper Clight.empty_env te Clight.Kstop))).
+Proof.
+  intros; apply match_cont_prefix; simpl.
+  constructor; simpl; auto.
+  constructor.
+Qed.
 
-Lemma match_ext: forall ef b v2 t0 tyres,
+Lemma match_ext: forall ef v2 t0 tyres te,
   match_states
-  (Clight_new.ExtCall ef [v2] None Clight.empty_env
-     (PTree.Node (PTree.Node PTree.Leaf (Some v2) PTree.Leaf) (Some (Vptr b Ptrofs.zero)) PTree.Leaf)
-     [])
-  (CC'.CC_core_Callstate (Ctypes.External ef (Ctypes.Tcons t0 Ctypes.Tnil) tyres AST.cc_default) 
-     [v2]
-     (Clight.Kcall None f_wrapper (PTree.empty (block * Ctypes.type)) (PTree.empty val) Clight.Kstop)).
-Admitted.
+  (Clight_new.ExtCall ef [v2] None Clight.empty_env te [])
+  (CC'.CC_core_Callstate (Ctypes.External ef (Ctypes.Tcons t0 Ctypes.Tnil) tyres AST.cc_default) [v2]
+     (Clight.Kcall None f_wrapper Clight.empty_env te Clight.Kstop)).
+Proof.
+  intros; constructor; simpl; auto.
+  constructor.
+Qed.
 
 Lemma mem_compatible_updThreadC: forall {Sem ThreadPool} (tp : @t _ Sem ThreadPool)
   m i c (cnti : containsThread tp i),
@@ -795,11 +810,10 @@ Proof.
       { eapply MTCH_install_perm, Hperm. }
       { split.
         hnf in Hperm; subst.
+        destruct lookup_wrapper.
         econstructor; eauto.
         - apply mem_ok_restr; auto.
         - apply mem_ok_wd, mem_ok_restr; auto.
-        - apply lookup_wrapper.
-        - apply wrapper_args.
         - auto. }
       { eapply MTCH_invariant; eauto. } }
     simpl.
@@ -1152,6 +1166,8 @@ Proof.
 Qed.
 
 Lemma init_mem_ok: mem_ok init_mem.
+Proof.
+  
 Admitted.
 
 Transparent getThreadC.

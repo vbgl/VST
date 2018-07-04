@@ -763,6 +763,12 @@ Require Import Conventions.
 
 Definition loc_arguments' l := if Archi.ptr64 then loc_arguments_64 l 0 0 0 else loc_arguments_32 l 0.
 
+Fixpoint temp_bindings (i: positive) (vl: list val) :=
+ match vl with
+ | nil => PTree.empty val
+ | v::vl' => PTree.set i v (temp_bindings (i+1)%positive vl')
+ end.
+
 (*NOTE: DOUBLE CHECK TARGS (it's not used right now)*)
 Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop :=
 | initi_core:
@@ -779,10 +785,8 @@ Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop :=
                            && vals_defined args
                            && zlt (4*(2*(Zlength args))) Int.max_unsigned = true ->*)
       Genv.find_funct_ptr ge b0 = Some (Internal f0) ->
-      (forall l, In l (regs_of_rpairs (loc_arguments' (map typ_of_type (map snd (fn_params f0))))) ->
-        match l with Locations.R _ => True | Locations.S _ _ _ => False end) ->
       Mem.alloc m0 0 0 = (m1, stk) ->
-      entry_point ge m0 (Callstate f args (Kcall None f0 (PTree.empty _) (PTree.empty _) Kstop) m1) (Vptr fb Ptrofs.zero) args.
+      entry_point ge m0 (Callstate f args (Kcall None f0 empty_env (temp_bindings 1%positive (Vptr fb Ptrofs.zero::args)) Kstop) m1) (Vptr fb Ptrofs.zero) args.
 
 (** A final state is a [Returnstate] with an empty continuation. *)
 Inductive final_state: state -> int -> Prop :=
