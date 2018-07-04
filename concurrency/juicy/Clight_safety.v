@@ -1155,11 +1155,21 @@ Proof.
     apply Ple_refl.
   - unfold Genv.init_mem in Hinit.
     eapply mem_wd2_alloc_globals; eauto.
-    + unfold mem_wd2; simpl; intros.
+    + unfold mem_wd'; simpl; intros.
       rewrite PMap.gi, ZMap.gi; constructor.
-    + admit. (* Is this designed incorrectly? Why should the genv be valid wrt
-                the memory before allocating globals? *)
-Admitted.
+    + constructor.
+      * unfold isGlobalBlock; intro.
+        rewrite orb_true_iff.
+        unfold genv2blocksBool; simpl.
+        intros [|].
+        -- destruct (Genv.invert_symbol _ _) eqn: Hsym; [|discriminate].
+           apply Genv.invert_find_symbol in Hsym.
+           eapply Genv.find_symbol_not_fresh; eauto.
+        -- destruct (Genv.find_var_info _ _) eqn: Hsym; [|discriminate].
+           eapply Genv.find_var_info_not_fresh; eauto.
+      * intros.
+        eapply Genv.find_funct_ptr_not_fresh; eauto.
+Qed.
 
 Transparent getThreadC.
 
