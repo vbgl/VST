@@ -1468,6 +1468,28 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
      HybridMachine_simulation Machine2 Machine3 ->
      HybridMachine_simulation Machine1 Machine3.
    Proof.
+    destruct 1 as [index1 match_state1 SIM1].
+    destruct 1 as [index2 match_state2 SIM2].
+    (* What should the index of the combined simulation be? *)
+    econstructor.
+    inversion SIM1; inversion SIM2; econstructor.
+    - admit.
+    - intros.
+      destruct (initial_setup _ _ _ _ _ _ H) as (? & ? & ? & ? & ? & ? & H2 & ?).
+      destruct (initial_setup0 _ _ _ _ _ _ H2) as (? & ? & ? & ? & ? & ? & ? & ?).
+      do 7 eexists; eauto.
+      admit.
+    - intros.
+      (* Where should the second ge come from?
+      destruct (thread_diagram _ _ _ _ _ _ _ H _ _ _ _ H0) as (? & ? & ? & ? & ? & ?). *)
+      admit.
+(*      edestruct thread_diagram0 as (? & ? & ? & ? & ? & ?); eauto.*)
+    - intros.
+      (* Where should the second ge come from?
+      destruct (machine_diagram _ _ _ _ _ _ _ _ _ _ H _ _ _ _ H0) as (? & ? & ? & ? & ? & ?). *)
+      admit.
+    - admit.
+    - admit.
    Admitted.
  End SimulationTransitivity.
  
