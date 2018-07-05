@@ -515,90 +515,6 @@ repeat constructor; auto.
 apply IHs in H3; auto.
 Qed.
 
-(*
-Lemma find_label_ok:
- forall nextb lbl k s (al : list cont') (k' : cont),
-  Forall (cont'_ok nextb) al ->
-  find_label lbl s (al ++ call_cont k) = Some k' ->
-  cont_ok nextb k'
-with find_label_ls_ok:
- forall nextb lbl k s (al : list cont') (k' : cont),
-  Forall (cont'_ok nextb) al ->
-  find_label_ls lbl s (al ++ call_cont k) = Some k' ->
-  cont_ok nextb k'.
-Proof.
-* clear find_label_ok.
-induction s; simpl; intros; try discriminate.
--
-change (Kseq s2 :: al ++ call_cont k)
-  with ((Kseq s2 :: al) ++ call_cont k) in H0.
-destruct (find_label lbl s1
-         ((Kseq s2 :: al) ++ call_cont k)) eqn:?; inv H0.
-apply IHs1 in Heqo; auto.
-repeat constructor; auto.
-apply IHs2 in H2; auto.
--
-destruct (find_label lbl s1 (al ++ call_cont k)) eqn:?; inv H0.
-apply IHs1 in Heqo; auto.
-apply IHs2 in H2; auto.
--
-change  (Kseq Scontinue
-          :: Kloop1 s1 s2 :: al ++ call_cont k)
- with  ((Kseq Scontinue
-          :: Kloop1 s1 s2 :: al) ++ call_cont k) in H0.
-destruct ((Kseq Scontinue
-          :: Kloop1 s1 s2 :: al) ++ call_cont k) eqn:?; inv H0.
-destruct (find_label lbl s1 []) eqn:?; inv H2.
-simpl in Heql. inv Heql.
-change (Kloop2 s1 s2 :: al ++ call_cont k) with
- ((Kloop2 s1 s2 :: al) ++ call_cont k) in H1.
-apply IHs2 in H1; auto.
-repeat constructor; auto.
-simpl in Heql. inv Heql.
-change (find_label lbl s1
-         (Kseq Scontinue
-          :: Kloop1 s1 s2 :: al ++ call_cont k))
-  with (find_label lbl s1
-         ((Kseq Scontinue
-          :: Kloop1 s1 s2 :: al) ++ call_cont k)) in H2.
-destruct  ((Kseq Scontinue
-          :: Kloop1 s1 s2 :: al) ++ call_cont k) eqn:?; inv H2.
-simpl in Heql; inv Heql.
-simpl in Heql; inv Heql.
-destruct (find_label lbl s1
-         (Kseq Scontinue
-          :: Kloop1 s1 s2 :: al ++ call_cont k)) eqn:?; inv H1.
-change  (Kseq Scontinue
-          :: Kloop1 s1 s2 :: al ++ call_cont k)
- with ( (Kseq Scontinue
-          :: Kloop1 s1 s2 :: al) ++ call_cont k) in Heqo.
-apply IHs1 in Heqo; auto.
-repeat constructor; auto.
-change (Kloop2 s1 s2 :: al ++ call_cont k) with
-  ((Kloop2 s1 s2 :: al) ++ call_cont k) in H2.
-apply IHs2 in H2; auto.
-repeat constructor; auto.
-- change (Kswitch :: al ++ call_cont k) with ((Kswitch :: al) ++ call_cont k) in H0.
- eapply find_label_ls_ok; try apply H0; eauto.
- repeat constructor; auto.
- if_tac in H0. subst. inv H0. constructor; auto. constructor; auto.
- apply sublist.Forall_app. split; auto.
- admit.
- apply IHs in H0; auto.
-* clear find_label_ls_ok.
-induction s; intros.
-inv H0.
-simpl in H0.
-destruct (find_label lbl s
-         (Kseq (seq_of_labeled_statement s0) :: al ++ call_cont k)) eqn:?H; inv H0.
-change (Kseq (seq_of_labeled_statement s0) :: al ++ call_cont k)
- with ((Kseq (seq_of_labeled_statement s0) :: al) ++ call_cont k) in H1.
-eapply find_label_ok; try apply H1; eauto.
-repeat constructor; auto.
-apply IHs in H3; auto.
-Admitted.
-*)
-
 Lemma mem_ok_goto:
  forall (k : cont) (lbl : Clight.label)
        (s' : Clight.statement) (nextb : block),
@@ -627,6 +543,79 @@ inv H.
 destruct a; simpl; auto.
 Qed.
 
+Lemma loadbytes_storebytes_wd2:
+   forall m b' z' sz b z bytes m',
+   mem_wd2 m ->
+   Mem.loadbytes m b' z' sz = Some bytes ->
+   Mem.storebytes m b z bytes = Some m' -> mem_wd2 m'.
+Proof.
+intros.
+red in H.
+apply mem_lemmas.loadbytes_D in H0.
+destruct H0.
+subst bytes.
+generalize (H b'); intro.
+forget ((Mem.mem_contents m) !! b') as f.
+assert (Forall (fun x => memval_inject (Mem.flat_inj (Mem.nextblock m))  x x) 
+  (Mem.getN (nat_of_Z sz) z' f)).
+clear H0 H1. revert z'.
+induction (nat_of_Z sz); intros. simpl. constructor.
+constructor. auto. auto.
+forget (Mem.getN (nat_of_Z sz) z' f) as bytes.
+generalize (H b); intro.
+red.
+rewrite (Mem.nextblock_storebytes _ _ _ _ _ H1).
+apply Mem.storebytes_mem_contents in H1.
+rewrite H1. clear H1.
+intros.
+destruct (eq_block b0 b);
+  [  | rewrite PMap.gso by auto; apply H].
+subst.
+rewrite PMap.gss.
+forget ((Mem.mem_contents m) !! b) as g.
+clear - H4 H3.
+revert g H4.
+revert z H3; induction bytes; intros.
+simpl. auto.
+inv H3.
+simpl.
+apply IHbytes; auto.
+intros.
+destruct (zeq ofs0 z).
+subst.
+rewrite ZMap.gss; auto.
+rewrite ZMap.gso; auto.
+Qed.
+
+Lemma mem_wd_freelist:
+  forall m bl m', Mem.free_list m bl = Some m' -> mem_wd2 m -> mem_wd2 m'.
+Proof.
+intros.
+revert  bl m H H0; induction bl; simpl; intros.
+inv H; auto.
+destruct a as [[??]?].
+destruct (Mem.free m b z z0) eqn:?H; inv H.
+apply IHbl with m0; auto.
+clear - H0 H1.
+hnf; intros.
+Transparent Mem.free.
+destruct (eq_block b0 b).
+subst b0.
+unfold Mem.free in H1.
+if_tac in H1.
+inv H1.
+simpl.
+apply H0.
+inv H1.
+unfold Mem.free in H1.
+if_tac in H1.
+inv H1.
+simpl.
+apply H0.
+inv H1.
+Opaque Mem.free.
+Qed.
+
 Lemma cl_step_ok:
   forall c m c' m',
 Clight_new.cl_step ge c m c' m' ->
@@ -645,7 +634,7 @@ intros until m'. intro Hstep.
   assert (mem_wd.val_valid v m). {
    clear - H2.
     hnf. hnf in H2. destruct v; auto.
- }  
+ }
   inv H3.
   unfold Mem.storev in H10.
   pose proof (mem_wd2_store _ _ _ _ _ _ H5 H10 H8).
@@ -657,8 +646,7 @@ intros until m'. intro Hstep.
   split3.
   2: split3; auto; inv Hk; auto.
   2: apply Pos.le_refl.
-  clear - H13 H14 H5.
-  admit.
+  eapply loadbytes_storebytes_wd2; eauto.
 * (* set *)
    destruct H2 as [? [? ?]]. inv H4.
    repeat split;  auto.
@@ -715,6 +703,11 @@ intros until m'. intro Hstep.
   repeat constructor.
   inv H3. auto.
 * (* return *)
+ SearchAbout Mem.free_list Mem.nextblock.
+  rewrite (mem_lemmas.nextblock_freelist _ _ _ H0).
+  split3.
+  eapply mem_wd_freelist; eassumption.
+  2: apply Pos.le_refl.
   admit.
 * (* switch *)
   admit.

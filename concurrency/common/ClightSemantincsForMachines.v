@@ -607,138 +607,16 @@ Qed.
   Proof. auto. Qed.
 End CLN_SEM.
 
-Lemma storebytes_decay:
-  forall m loc p vl m', Mem.storebytes m loc p vl = Some m' -> decay m m'.
-Proof.
-intros.
-hnf; intros.
-split; intros.
-contradiction (Mem.storebytes_valid_block_2 _ _ _ _ _ H _ H1).
-right.
-intros.
-rewrite (Mem.storebytes_access _ _ _ _ _ H); auto.
-Qed.
-
-Lemma alloc_decay:
-  forall m lo hi m1 b1, Mem.alloc m lo hi = (m1,b1) -> decay m m1.
-Proof.
-intros.
-hnf; intros.
-split; intros.
-destruct (eq_block b1 b).
-subst.
-destruct (range_dec lo ofs hi).
-left.
-intros.
-Transparent Mem.alloc.
-unfold Mem.alloc in H.
-inv H.
-simpl. rewrite PMap.gss.
-destruct (zle lo ofs); try omega.
-destruct (zlt ofs hi); try omega; auto.
-right.
-intros.
-inv H; simpl.
-rewrite PMap.gss.
-destruct (zle lo ofs); try omega;
-destruct (zlt ofs hi); try omega; auto.
-contradiction H0.
-pose proof (Mem.valid_block_alloc_inv _ _ _ _ _ H b H1).
-destruct H2. subst. contradiction n; auto.
-auto.
-right.
-intros.
-assert (b1<>b).
-intro. subst.
-contradiction (Mem.fresh_block_alloc _ _ _ _ _ H).
-destruct ((Mem.mem_access m1) !! b ofs k) eqn:?H.
-destruct (semantics_lemmas.alloc_access_inv _ _ _ _ _ H _ _ _ _ H2).
-destruct H3; congruence.
-destruct H3; auto.
-apply (semantics_lemmas.alloc_access_inv_None _ _ _ _ _ H _ _ _ H2).
-Opaque Mem.alloc.
-Qed.
-
-Lemma free_decay: forall m b lo hi m', Mem.free m b lo hi = Some m' -> decay m m'.
-Proof.
-intros.
-hnf; intros.
-destruct (eq_block b b0).
-subst b0.
-split; intros.
-contradiction H0.
-eapply Mem.valid_block_free_2; eauto.
-Transparent Mem.free.
-unfold Mem.free in H.
-if_tac in H; inv H.
-destruct (range_dec lo ofs hi) as [?H|?H].
-specialize (H1 _ H).
-left.
-intros.
-hnf in H1.
-destruct ((Mem.mem_access m) !! b ofs Cur) eqn:H2; try contradiction.
-assert (p=Freeable) by (destruct p; inv H1; auto). subst p; clear H1.
-split.
-destruct k; auto.
-pose proof (Mem.access_max m b ofs).
-rewrite H2 in H1.
-destruct ((Mem.mem_access m) !! b ofs Max); inv H1; auto.
-simpl.
-rewrite PMap.gss.
-destruct (zle lo ofs); try omega.
-destruct (zlt ofs hi); try omega.
-simpl. auto.
-right.
-intros.
-simpl.
-rewrite PMap.gss.
-destruct (zle lo ofs); destruct (zlt ofs hi); try omega; auto.
-split.
-intros.
-contradiction H0.
-eapply Mem.valid_block_free_2; eauto.
-intros.
-right.
-intros.
-unfold Mem.free in H.
-destruct (Mem.range_perm_dec m b lo hi Cur Freeable).
-inv H.
-simpl.
-rewrite PMap.gso by auto.
-auto.
-inv H.
-Opaque Mem.free.
-Qed.
-
   Lemma CLN_step_decay: forall g c m tr c' m',
       event_semantics.ev_step (CLN_evsem g) c m tr c' m' ->
       decay m m'.
 Proof.
 intros.
-induction H; try apply decay_refl; auto.
-inv H3.
-unfold Mem.storev in H5.
-apply Mem.store_storebytes in H5.
-eapply storebytes_decay; eauto.
-eapply storebytes_decay; eauto.
-clear - H5.
-induction H5.
-apply decay_refl.
-apply decay_trans with m1; auto.
-eapply Mem.valid_block_alloc; eauto.
-eapply alloc_decay; eauto.
-clear - H0.
-revert m H0.
-induction (blocks_of_env g ve); intros.
-inv H0.
-apply decay_refl.
-simpl in H0. destruct a; destruct p.
-destruct (Mem.free m b z0 z) eqn:?H; inv H0.
-apply IHl in H2.
-apply decay_trans with m0; auto.
-eapply Mem.valid_block_free_1; eauto.
-clear - H.
-eapply free_decay; eauto.
+pose proof (msem_decay (CLN_memsem g) c m c' m').
+apply H0. clear H0.
+simpl in *.
+apply CLN_evstep_ax1 in H.
+auto.
 Qed.
 
   Lemma at_external_SEM_eq:
@@ -1130,55 +1008,20 @@ End CLC_step.
       decay m m'.
 Proof.
 intros.
-induction H; try apply decay_refl; auto.
-- inv H2.
-  unfold Mem.storev in H4.
-  apply Mem.store_storebytes in H4.
-  eapply storebytes_decay; eauto.
-  eapply storebytes_decay; eauto.
-- admit. (* builtins *)
-- revert m H.
-  induction (blocks_of_env g e); intros.
-  inv H.
-  apply decay_refl.
-  simpl in H. destruct a; destruct p.
-  destruct (Mem.free m b z0 z) eqn:?H; inv H.
-  apply IHl in H2.
-  apply decay_trans with m0; auto.
-  eapply Mem.valid_block_free_1; eauto.
-  clear - H0.
-  eapply free_decay; eauto.
-- clear - H1.
-  revert m H1.
-  induction (blocks_of_env g e); intros.
-  inv H1.
-  apply decay_refl.
-  simpl in H1. destruct a; destruct p.
-  destruct (Mem.free m b z0 z) eqn:?H; inv H1.
-  apply IHl in H2.
-  apply decay_trans with m0; auto.
-  eapply Mem.valid_block_free_1; eauto.
-  clear - H.
-  eapply free_decay; eauto.
-- revert m H0.
-  induction (blocks_of_env g e); intros.
-  inv H0.
-  apply decay_refl.
-  simpl in H0. destruct a; destruct p.
-  destruct (Mem.free m b z0 z) eqn:?H; inv H0.
-  apply IHl in H3.
-  apply decay_trans with m0; auto.
-  eapply Mem.valid_block_free_1; eauto.
-  clear - H1.
-  eapply free_decay; eauto.
-- inv H.
-  clear - H3.
-  induction H3.
-  apply decay_refl.
-  apply decay_trans with m1; auto.
-  eapply Mem.valid_block_alloc; eauto.
-  eapply alloc_decay; eauto.
-Admitted.
+pose proof (msem_decay (CLC_memsem g) c m c' m').
+apply H0. clear H0.
+simpl in *.
+unfold part_semantics2.
+apply clc_ax1 in H.
+destruct H as [? [t ?]].
+exploit coreify; eauto.
+apply H0.
+auto.
+intros.
+inv H0.
+econstructor; eauto.
+eapply alloc_variablesT_ax1; eauto.
+Qed.
 
   Instance ClightSem : Semantics :=
     { semG := G; semC := state; semSem := CLC_evsem; the_ge := g }.
