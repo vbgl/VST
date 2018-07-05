@@ -780,10 +780,6 @@ Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop :=
       Mem.arg_well_formed args m0 ->
       val_casted_list args targs ->
       Val.has_type_list args (typlist_of_typelist targs) ->
-      (*val_casted_list_func args targs 
-                           && tys_nonvoid targs 
-                           && vals_defined args
-                           && zlt (4*(2*(Zlength args))) Int.max_unsigned = true ->*)
       Genv.find_funct_ptr ge b0 = Some (Internal f0) ->
       Mem.alloc m0 0 0 = (m1, stk) ->
       entry_point ge m0 (Callstate f args (Kcall None f0 empty_env (temp_bindings 1%positive (Vptr fb Ptrofs.zero::args)) Kstop) m1) (Vptr fb Ptrofs.zero) args.

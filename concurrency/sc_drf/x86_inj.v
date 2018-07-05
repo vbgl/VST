@@ -2201,6 +2201,7 @@ Module X86Inj.
           Hobs_eq Hcore_inj Hfg Hge_wd Hincr Hcorestep.
     destruct cc as [rs], cf as [rsF], cc' as [rs'].
     inv Hcorestep.
+    rename m1 into mc'.
     assert (Smallstep.at_external (part_semantics the_ge) (set_mem (State rsF m0) mf) = None) as Hext.
     { exploit core_inj_ext; eauto using core_inj_wd.
       simpl in *;rewrite H0; clear H0.
@@ -2217,7 +2218,7 @@ Module X86Inj.
       destruct (exec_instr_ren _ _ Hobs_eq Hcore_inj Hfg Hge_wd Hincr H9)
         as (f' & rsF' & mF' & Hexec' & Hrs_ren' & Hobs_eq' & Hincr' & Hsep
             & Hnextblocks & Hinverse & Hid_extend & Hunmapped).
-      exists (State rsF' m), mF', f'.
+      exists (State rsF' mF'), mF', f'.
       repeat match goal with
              | [ |- _ /\ _] =>
                split; simpl; eauto with renamings reg_renamings
@@ -2232,10 +2233,20 @@ Module X86Inj.
       eapply eval_builtin_args_ren in H9 as (args' & ? & ?); eauto.
       (* We need Hsafe to give us that external calls behave the same even
          on injected arguments. *)
-      destruct ef;
+      destruct ef; try solve [intros []; subst;
+        match goal with H : external_call ?ef _ _ _ _ _ _ |- _ =>
+        assert (exists vres', external_call ef the_ge args' mf t0 vres' mf /\ val_obs f vres vres') as (? & ? & ?) by admit end;
+        eexists (State _ mf), mf, f; split;
+        [econstructor; eauto; eapply Asm.exec_step_builtin; eauto|];
+      repeat match goal with
+             | [ |- _ /\ _] =>
+               split; simpl; eauto with renamings reg_renamings val_renamings; try contradiction
+             end; apply regset_ren_set; try apply val_obs_offset_ptr; eauto with renamings reg_renamings val_renamings];
+             intros _.
+(*      destruct ef;
                try (intros (_ & _ & Hcontra);
                     now exfalso);
-               intros _.
+               intros _. *)
       + (* EF_malloc case*)
         pose proof H10 as Hext_call.
         simpl in H10.
@@ -2412,7 +2423,7 @@ Module X86Inj.
       destruct (Ptrofs.eq_dec _ _); [|contradiction].
       rewrite H6 in H0.
       apply get_extcall_arguments_spec in H8; rewrite H8 in H0; discriminate.
-  Qed.
+  Admitted.
 
   (** Coresteps maintain well-definedness *)
 
@@ -2643,15 +2654,13 @@ Qed.
       simpl in *.
     inv Hcorestep.
     inv H.
-    - destruct c'; inv H3.
-      eapply exec_instr_wd; eauto.
-    - destruct c'; inv H3.
-      exploit Hsafe; eauto.
+    - eapply exec_instr_wd; eauto.
+    - exploit Hsafe; eauto.
       destruct ef; try (intros (? & ? &?) ; exfalso; now auto).
       + (* EF_malloc case*) 
         intros.
-        simpl in H9.
-        inversion H9; subst.
+        simpl in H7.
+        inversion H7; subst.
         pose proof H1 as Halloc.
         eapply mem_valid_alloc in H1; eauto.
         destruct H1 as [Hvalid' [f' [Hincr' Hren']]].
@@ -2661,7 +2670,7 @@ Qed.
         { eapply Mem.valid_new_block in Halloc.
           unfold valid_val.
           destruct (Hren' b0) as [? ?].
-          specialize (H3 Halloc).
+          specialize (H8 Halloc).
           destruct (f' b0); [eexists | exfalso]; now eauto. }
         split; eauto.
         split; [eexists; eauto | intros ].
@@ -2685,8 +2694,8 @@ Qed.
           eauto.
       + (* EF_free case*)
         intros _.
-        simpl in H9.
-        inversion H9; subst.
+        simpl in H7.
+        inversion H7; subst.
         pose proof H2 as Hfree.
         pose proof H as Hload.
         eapply free_wd_domain in Hfree; eauto.
@@ -2706,8 +2715,8 @@ Qed.
         eapply X86WD.regset_wd_undef...
       + (* EF_memcpy case*) 
         intros.
-        simpl in H9.
-        inversion H9; subst.
+        simpl in H7.
+        inversion H7; subst.
         eapply valid_mem_loadbytes in H12; eauto.
         eapply storebytes_wd_domain in H13; eauto.
         destruct H13.
@@ -2728,10 +2737,10 @@ Qed.
         eapply X86WD.regset_wd_undef...
         apply regset_wd_set_res...
     - simpl in *.
-      rewrite H4 in H0.
+      rewrite H3 in H0.
       destruct (Ptrofs.eq_dec _ _); [|contradiction].
-      rewrite H5 in H0.
-      apply get_extcall_arguments_spec in H6; rewrite H6 in H0; discriminate.
+      rewrite H4 in H0.
+      apply get_extcall_arguments_spec in H5; rewrite H5 in H0; discriminate.
   Qed.
 
   Section Inj.
