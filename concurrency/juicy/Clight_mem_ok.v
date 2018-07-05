@@ -556,6 +556,12 @@ destruct H0.
 subst bytes.
 generalize (H b'); intro.
 forget ((Mem.mem_contents m) !! b') as f.
+assert (Forall (fun x => memval_inject (Mem.flat_inj (Mem.nextblock m))  x x) 
+  (Mem.getN (nat_of_Z sz) z' f)).
+clear H0 H1. revert z'.
+induction (nat_of_Z sz); intros. simpl. constructor.
+constructor. auto. auto.
+forget (Mem.getN (nat_of_Z sz) z' f) as bytes.
 generalize (H b); intro.
 red.
 rewrite (Mem.nextblock_storebytes _ _ _ _ _ H1).
@@ -564,7 +570,25 @@ rewrite H1. clear H1.
 intros.
 destruct (eq_block b0 b);
   [  | rewrite PMap.gso by auto; apply H].
+subst.
+rewrite PMap.gss.
+forget ((Mem.mem_contents m) !! b) as g.
+clear - H4 H3.
+revert g H4.
+revert z H3; induction bytes; intros.
+simpl. auto.
+inv H3.
+simpl.
+apply IHbytes; auto.
+intros.
+destruct (zeq ofs0 z).
+subst.
+rewrite ZMap.gss; auto.
+rewrite ZMap.gso; auto.
+Qed.
 
+Lemma mem_wd_freelist:
+  forall m bl m', Mem.free_list m bl = Some m' -> mem_wd2 m -> mem_wd2 m'.
 Admitted.
 
 Lemma cl_step_ok:
@@ -654,6 +678,11 @@ intros until m'. intro Hstep.
   repeat constructor.
   inv H3. auto.
 * (* return *)
+ SearchAbout Mem.free_list Mem.nextblock.
+  rewrite (mem_lemmas.nextblock_freelist _ _ _ H0).
+  split3.
+  eapply mem_wd_freelist; eassumption.
+  2: apply Pos.le_refl.
   admit.
 * (* switch *)
   admit.
