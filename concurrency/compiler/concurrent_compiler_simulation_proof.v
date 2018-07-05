@@ -578,7 +578,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
         destruct H3 as (c2' & j1' & t' & m2' & (CoreStep & MATCH & is_ext & inject_incr)).
         
         (* (2) Compiler step/s *)
-        inversion CoreStep. subst s1 m7 s0 m8.
+        inversion CoreStep. subst s1 m7 s0.
         eapply compiler_sim in H1; simpl in *; eauto.
         destruct H1 as (cd' & s2' & j2' & t'' & step & comp_match & INJ_incr & inj_event).
 
@@ -608,7 +608,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
             { eapply (core_semantics.corestep_mem (Clightcore_coop.CLC_memsem  Clight_g)).
               eauto.
             }
-            { (* This is the step constructed bellow *)
+            { (* This is the step constructed below *)
               admit.
             }
             { apply H0. }
@@ -624,7 +624,11 @@ unfold match_thread_compiled.
               match goal with
               | [  |- context[Injmatch_states _ _ _ _ ?X] ] =>
                 replace X with s2' by (destruct s2'; reflexivity)
-              end. 
+              end.
+              match goal with
+              | [  |- context[Injmatch_states _ _ _ ?X _] ] =>
+                replace X with c2' by (subst; destruct c2'; reflexivity)
+              end.
               eauto.
             }
           * eapply thread_step_plus_from_corestep; eauto.

@@ -2423,7 +2423,7 @@ Module X86Inj.
       destruct (Ptrofs.eq_dec _ _); [|contradiction].
       rewrite H6 in H0.
       apply get_extcall_arguments_spec in H8; rewrite H8 in H0; discriminate.
-  Qed.
+  Admitted.
 
   (** Coresteps maintain well-definedness *)
 
@@ -2654,32 +2654,13 @@ Qed.
       simpl in *.
     inv Hcorestep.
     inv H.
-<<<<<<< HEAD
     - eapply exec_instr_wd; eauto.
     - exploit Hsafe; eauto.
-      destruct ef; try solve [intros []; subst; eauto with wd].
-      intros []; subst; split; auto; split; eauto with wd.
-      intros; simpl.
-      apply regset_wd_set...
-      apply valid_val_offset_ptr...
-      rewrite gso_undef_regs.
-      auto.
-      (* ? *)
-      admit.
-      simpl; intro X; decompose [or] X; congruence.
-      apply regset_wd_undef...
-      apply regset_wd_set_res...
-      all: admit.
-=======
-    - destruct c'; inv H3.
-      eapply exec_instr_wd; eauto.
-    - destruct c'; inv H3.
-      exploit Hsafe; eauto.
       destruct ef; try (intros (? & ? &?) ; exfalso; now auto).
       + (* EF_malloc case*) 
         intros.
-        simpl in H9.
-        inversion H9; subst.
+        simpl in H7.
+        inversion H7; subst.
         pose proof H1 as Halloc.
         eapply mem_valid_alloc in H1; eauto.
         destruct H1 as [Hvalid' [f' [Hincr' Hren']]].
@@ -2689,7 +2670,7 @@ Qed.
         { eapply Mem.valid_new_block in Halloc.
           unfold valid_val.
           destruct (Hren' b0) as [? ?].
-          specialize (H3 Halloc).
+          specialize (H8 Halloc).
           destruct (f' b0); [eexists | exfalso]; now eauto. }
         split; eauto.
         split; [eexists; eauto | intros ].
@@ -2713,8 +2694,8 @@ Qed.
           eauto.
       + (* EF_free case*)
         intros _.
-        simpl in H9.
-        inversion H9; subst.
+        simpl in H7.
+        inversion H7; subst.
         pose proof H2 as Hfree.
         pose proof H as Hload.
         eapply free_wd_domain in Hfree; eauto.
@@ -2734,8 +2715,8 @@ Qed.
         eapply X86WD.regset_wd_undef...
       + (* EF_memcpy case*) 
         intros.
-        simpl in H9.
-        inversion H9; subst.
+        simpl in H7.
+        inversion H7; subst.
         eapply valid_mem_loadbytes in H12; eauto.
         eapply storebytes_wd_domain in H13; eauto.
         destruct H13.
@@ -2755,19 +2736,12 @@ Qed.
                end; auto.
         eapply X86WD.regset_wd_undef...
         apply regset_wd_set_res...
->>>>>>> refs/remotes/origin/HybridMachine
     - simpl in *.
       rewrite H3 in H0.
       destruct (Ptrofs.eq_dec _ _); [|contradiction].
-<<<<<<< HEAD
       rewrite H4 in H0.
       apply get_extcall_arguments_spec in H5; rewrite H5 in H0; discriminate.
-  Admitted.
-=======
-      rewrite H5 in H0.
-      apply get_extcall_arguments_spec in H6; rewrite H6 in H0; discriminate.
   Qed.
->>>>>>> refs/remotes/origin/HybridMachine
 
   Section Inj.
 

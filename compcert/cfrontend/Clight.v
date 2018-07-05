@@ -772,7 +772,7 @@ Fixpoint temp_bindings (i: positive) (vl: list val) :=
 (*NOTE: DOUBLE CHECK TARGS (it's not used right now)*)
 Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop :=
 | initi_core:
-    forall f fb f0 m0 m1 stk args targs tres,
+    forall f fb b0 f0 m0 m1 stk args targs tres,
       Genv.find_funct_ptr ge fb = Some f ->
       type_of_fundef f = Tfunction targs tres cc_default ->
       globals_not_fresh ge m0 ->
