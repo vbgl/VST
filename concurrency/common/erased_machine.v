@@ -182,8 +182,70 @@ Module BareMachine.
           (exists cntj q, @getThreadC _ _ _ j tp cntj = Krun q) <->
           (exists cntj' q', @getThreadC _ _ _ j tp' cntj' = Krun q').
     Proof.
-    Admitted.
-    (*NOTE: Admit for now, but proof is same as HybridMachine. The question is do we want this lemma to be part of the spec? *)
+  intros b i tp m cnt cmpt tp' m' tr H j; split.
+      - intros [cntj [ q running]].
+        destruct (NatTID.eq_tid_dec i j).
+        + subst j. generalize running; clear running.
+          inversion H; subst;
+            match goal with
+            | [ H: getThreadC ?cnt = Kblocked ?c |- _ ] =>
+              replace cnt with cntj in H by apply cnt_irr;
+                intros HH; rewrite HH in H; inversion H
+            end.
+        + (*this should be easy to automate or shorten*)
+          inversion H; subst;
+            try (exists (cntUpdateC (Kresume c Vundef) cnt cntj),
+                    q;
+                    intros;
+                    erewrite <- gsoThreadCC;
+                    now eauto).
+          * exists (cntAdd _ _ _
+                      (cntUpdateC (Kresume c Vundef) _ cntj)), q.
+            erewrite gsoAddCode .
+            erewrite <- gsoThreadCC; eassumption.
+          * do 2 eexists; eauto.
+      - intros [cntj [ q running]].
+        destruct (NatTID.eq_tid_dec i j).
+        + subst j. generalize running; clear running;
+                     inversion H; subst; intros;
+          try (rewrite gssThreadCC in running;
+               discriminate).
+          * (*add thread*)
+            assert (cntj':=cntj).
+            eapply cntAdd' in cntj'; destruct cntj' as [ [HH HHH] | HH].
+            ** exfalso.
+              assert (Heq: getThreadC cntj = getThreadC HH)
+                by (rewrite gsoAddCode; reflexivity).
+              rewrite Heq in running.
+              rewrite gssThreadCC in running.
+              discriminate.
+            ** erewrite gssAddCode in running; eauto.
+               discriminate.
+          * (* fail acq*)
+            do 2 eexists; eauto.
+        + generalize running; clear running.
+          inversion H; subst;
+            intros;
+            try (exists (cntUpdateC' _  cnt cntj), q;
+                 rewrite <- running;
+                 erewrite <- gsoThreadCC; now eauto).
+          * (*Add thread case*)
+            assert (cntj':=cntj).
+            eapply cntAdd' in cntj'; destruct cntj' as [ [HH HHH] | HH].
+            ** pose proof (cntUpdateC' _ _ HH) as cntj0.
+              exists cntj0, q.
+              rewrite <- running.
+              erewrite gsoAddCode with (cntj1 := HH).
+              erewrite <- gsoThreadCC;
+                now eauto.
+            ** exfalso.
+               erewrite gssAddCode in running; eauto.
+               discriminate.
+          * eauto.
+            Unshelve.
+            apply cntUpdateC;
+              now eauto.
+    Qed.
 
     Lemma syncstep_not_running:
       forall b i tp m cnt cmpt tp' m' tr,
