@@ -13,6 +13,7 @@ Require Import VST.concurrency.compiler.HybridMachine_simulation.
 Require Import VST.concurrency.compiler.Clight_self_simulation.
 Require Import VST.concurrency.compiler.Asm_self_simulation.
 
+Import memsem_lemmas.
 
 
 Set Bullet Behavior "Strict Subproofs".
@@ -337,12 +338,6 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
     Admitted.
 
     (*This lemma is used when the compiled thread steps*)
-    Inductive mem_step_star 
-  : mem -> mem -> Prop :=
-    mem_star_refl : forall m, mem_step_star m m
-  | mem_star_step : forall m1 m2 m3,
-                core_semantics.mem_step m1 m2 ->
-                mem_step_star m2 m3 -> mem_step_star m1 m3.
     
     Lemma Concur_update_compiled:
       forall (st1 : ThreadPool.t) (m1 m1' : mem) (Htid : ThreadPool.containsThread st1 hb) 
@@ -355,7 +350,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
         (mcompat2: mem_compatible st2 m2),
         core_semantics.mem_step
           (restrPermMap (proj1 (mcompat1 hb Htid))) m1' ->
-        mem_step_star
+        core_semantics.mem_step
           (restrPermMap (proj1 (mcompat2 hb Htid'))) m2' ->
         invariant st1 ->
         invariant st2 ->
@@ -391,26 +386,6 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
       | [ H: ev_step_sum _ _ _ _ _ _ _ |- _ ] => inversion H; clear H
       end.
 
-    
-    Inductive corestep_star
-              {state : Type}
-              (step : state -> mem -> state -> mem -> Prop)
-      : state -> mem -> state -> mem -> Prop :=
-      corestar_refl : forall s m, corestep_star step s m s m
-    | corestar_step : forall (s1 : state) m1 (s2 : state) m2
-                    (s3 : state) m3,
-        step s1 m1 s2 m2 ->
-        corestep_star step s2 m2 s3 m3 ->
-        corestep_star step s1 m1 s3 m3.
-    Inductive corestep_plus
-              (state : Type) (step : state -> mem -> state -> mem -> Prop)
-      : state -> mem -> state -> mem -> Prop :=
-    | plus_left : forall (s1 : state) m1 (s2 : state) 
-                    m2 (s3 : state) m3,
-        step s1 m1 s2 m2 ->
-        corestep_star step s2 m2 s3 m3 ->
-        corestep_plus state step s1 m1 s3 m3.
-
     Lemma self_simulation_plus:
       forall state coresem
         (SIM: self_simulation.self_simulation state coresem),
@@ -418,10 +393,10 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
         (m1 : mem) (c2 : state) (m2 : mem),
         self_simulation.match_self (self_simulation.code_inject _ _ SIM) f c1 m1 c2 m2 ->
         forall (c1' : state) (m1' : mem),
-          (corestep_plus _ (core_semantics.corestep coresem)) c1 m1 c1' m1' ->
+          (corestep_plus coresem) c1 m1 c1' m1' ->
           exists (c2' : state) (f' : meminj) (t' : Events.trace) 
             (m2' : mem),
-                (corestep_plus _ (core_semantics.corestep coresem)) c2 m2 c2' m2' /\
+                (corestep_plus coresem) c2 m2 c2' m2' /\
                 self_simulation.match_self (self_simulation.code_inject _ _ SIM) f' c1' m1' c2' m2' /\
                 self_simulation.is_ext f (Mem.nextblock m1) f' (Mem.nextblock m2) /\
                 Events.inject_trace f' t t'.
@@ -435,8 +410,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
                      (H0 : concur_match (Some cd0) mu st1 m1 st2 m2) (code2 : Asm.state)
                      (s4' : Smallstep.state (Asm.part_semantics Asm_g)) 
                      (m4' : mem),
-                corestep_plus (Smallstep.state (Asm.part_semantics Asm_g))
-                              (core_semantics.corestep (Asm_core.Asm_core_sem Asm_g)) code2
+                corestep_plus (Asm_core.Asm_core_sem Asm_g) code2
                               (restrPermMap
                                  (proj1 ((memcompat2 (Some cd0) mu st1 m1 st2 m2 H0) hb (contains12 H0 Htid))))
                               s4' m4' ->
@@ -458,7 +432,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
             Smallstep.plus
                 (Asm.step (Genv.globalenv Asm_program))
                 (Smallstep.set_mem s1 m1) t s2 ->
-            (corestep_plus _ (core_semantics.corestep (Asm_core.Asm_core_sem Asm_g)))
+            (corestep_plus (Asm_core.Asm_core_sem Asm_g))
               s1 m1 s2 (Smallstep.get_mem s2).
            (* This in principle is not provable. We should get it somehow from the simulation.
               Possibly, by showing that the (internal) Clight step has no traces and allo
@@ -525,8 +499,10 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
           { eapply core_semantics.corestep_mem in H2.
             eapply H2. }
           { eapply Asm_event.asm_ev_ax1 in H1.
-            (* This is the step constructed bellow *)
-            admit.
+
+            replace Htid' with (contains12 H0 Htid) by apply Axioms.proof_irr.
+            eapply core_semantics.corestep_mem.
+            eassumption.
           }
           { apply H0. }
 
@@ -609,13 +585,19 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
               eauto.
             }
             { (* This is the step constructed bellow *)
-              admit.
+              instantiate(1:=(memcompat2 (Some cd0) mu st1 m1 st2 m2 H0)).
+              remember (memcompat2 (Some cd0) mu st1 m1 st2 m2 H0) as Hcmpt'.
+              replace (contains12 H0 Htid) with Htid' in CstepPlus by apply Axioms.proof_irr.
+              eapply memsem_lemmas.corestep_star_mem.
+              eapply corestep_plus_star; eauto.
+              instantiate(3:= Asm_core.Asm_mem_sem _ Asm_genv_safe).
+              eauto.
             }
             { apply H0. }
             
             (* match_thread_compiled *)
             {
-unfold match_thread_compiled.
+              unfold match_thread_compiled.
               econstructor.
               econstructor; eauto.
               move comp_match at bottom.
@@ -628,7 +610,55 @@ unfold match_thread_compiled.
               eauto.
             }
           * eapply thread_step_plus_from_corestep; eauto.
-        + admit. (* no step for assam (CompCert sttuter) *)
+        + instantiate(1:=Events.E0) in inject_incr.
+          exists st2, m2, (Some cd'), mu.
+          subst.
+          split.
+          * (* Establish match when nothing has changed.*)
+
+            remember (contains12 H0 Htid) as Htid'.
+
+            (*assert (
+                st2 = 
+            eapply Concur_update_compiled; eauto.
+            
+            { eapply (core_semantics.corestep_mem (Clightcore_coop.CLC_memsem  Clight_g)).
+              eauto.
+            }
+            { (* This is the step constructed bellow *)
+              instantiate(1:=(memcompat2 (Some cd0) mu st1 m1 st2 m2 H0)).
+              remember (memcompat2 (Some cd0) mu st1 m1 st2 m2 H0) as Hcmpt'.
+              replace (contains12 H0 Htid) with Htid' in CstepPlus by apply Axioms.proof_irr.
+              eapply memsem_lemmas.corestep_star_mem.
+              eapply corestep_plus_star; eauto.
+              instantiate(3:= Asm_core.Asm_mem_sem _ Asm_genv_safe).
+              eauto.
+            }
+            { apply H0. }
+            
+            (* match_thread_compiled *)
+            {
+              unfold match_thread_compiled.
+              econstructor.
+              econstructor; eauto.
+              move comp_match at bottom.
+              simpl in comp_match.
+              unfold compiler_match.
+              match goal with
+              | [  |- context[Injmatch_states _ _ _ _ ?X] ] =>
+                replace X with s2' by (destruct s2'; reflexivity)
+              end. 
+              eauto.
+            }
+            
+            clear H4 H6 CMatch Compiler_Match.
+            revert H0 MATCH.
+             *)
+            admit.
+          * (* No step is taken and index is decreased. *)
+            right; split.
+            { exists 0; econstructor; eauto. }
+            econstructor; eauto.
         
       - (* tid > hb *)
         pose proof (mtch_source _ _ _ _ _ _ H0 _ l Htid (contains12 H0 Htid)) as HH.
@@ -1389,7 +1419,9 @@ unfold match_thread_compiled.
           (HybConcSem None m)
           infty_match.
     Proof.
-      intros.
+      intros. 
+      (*All the proofs use the following lemma*)
+      pose proof compile_n_threads as HH.
       econstructor.
       - eapply list_lt_wf.
       - apply initial_infty.
@@ -1397,6 +1429,8 @@ unfold match_thread_compiled.
       - apply infinite_machine_step_diagram.
       - apply infinite_halted.
       - apply infinite_running.
+
+        
     Qed.
 
  End CompileInftyThread.
@@ -1433,13 +1467,6 @@ unfold match_thread_compiled.
    Admitted.
  End SimulationTransitivity.
  
-
-
-
-  
-  
-      
-  
 (*  Lemma ConcurrentCompilerCorrectness:
     forall (p:Clight.program) (tp:Asm.program),
       CC_correct.CompCert_compiler p = Some tp ->
