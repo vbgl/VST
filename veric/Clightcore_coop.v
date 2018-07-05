@@ -33,6 +33,31 @@ Proof. intros.
   eapply core_semantics.mem_step_storebytes; eassumption.
 Qed.
 
+Lemma inline_assembly_memstep: forall text sg g vargs m t vres m' (IA:Events.inline_assembly_sem text sg g vargs m t vres m'),
+    mem_step m m'.
+Admitted. (*Maybe include mem_step in Events.extcall_properties.?*)
+
+Lemma extcall_sem_mem_step: forall name sg g vargs m t vres m' (E:Events.external_functions_sem name sg g vargs m t vres m'),
+  mem_step m m'.
+Admitted. (*Maybe include mem_step in Events.extcall_properties.?*)
+
+Lemma extcall_mem_step g: forall ef vargs m t vres m' (E:Events.external_call ef g vargs m t vres m'),
+  mem_step m m'.
+Proof.
+  destruct ef; simpl; intros; try solve [inv E; apply mem_step_refl].
+  { eapply extcall_sem_mem_step; eassumption. }
+  { eapply extcall_sem_mem_step; eassumption. }
+  { eapply extcall_sem_mem_step; eassumption. }
+  { inv E. inv H. eapply mem_step_refl.
+    apply Mem.store_storebytes in H1. eapply mem_step_storebytes. eassumption. }
+  { inv E. apply Mem.store_storebytes in H0.
+    eapply mem_step_trans. eapply mem_step_alloc; eassumption.
+    eapply mem_step_storebytes; eassumption. }
+  { inv E. eapply mem_step_free; eassumption. }
+  { inv E. eapply mem_step_storebytes. eassumption. }
+  { eapply inline_assembly_memstep; eassumption. }
+Qed.
+  
 Lemma CLC_corestep_mem:
   forall (g : genv) c (m : mem) c'  (m' : mem),
     core_semantics.corestep (cl_core_sem g) c m c' m' ->
@@ -44,14 +69,13 @@ Proof. simpl; intros. inv H; simpl in *. unfold step2 in H0.
   symmetry in HeqC;
     destruct c; inv HeqC; try solve [apply mem_step_refl].
   { eapply assign_loc_mem_step; eauto. }
-  { simpl in H1. admit. (* Events.external_call mem_step. ??*) }
+  { simpl in *. eapply extcall_mem_step; eassumption. } 
   { eapply mem_step_freelist; eauto. }
   { eapply mem_step_freelist; eauto. }
   { eapply mem_step_freelist; eauto. }
   { inv H. eapply alloc_variables_mem_step; eauto. }
   { inv H1. }
-Admitted.
-
+Qed. 
 
 Program Definition CLC_memsem  (ge : Clight.genv) :
   @MemSem state.

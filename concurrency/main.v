@@ -95,7 +95,9 @@ Qed.
        (ThreadPool:= threadPool.OrdinalPool.OrdinalThreadPool(Sem:=SemTarget))
        (HybridMachine:=@bareMach SemTarget)
        (machineSig:= BareMachine.BareMachineSig) m).
-  
+
+  Context {SW : Clight_safety.spawn_wrapper CPROOF}.
+
   Lemma CSL2CoarseAsm_safety:
     forall U,
     exists init_mem_target init_mem_target' init_thread_target,
@@ -129,7 +131,7 @@ Qed.
     end.
     intros HH'; specialize (H HH');
       match type of H with
-      | ?A -> _ => cut A; try (intros; eapply Clight_initial_safe)  (*That didn't work?*)
+      | ?A -> _ => cut A; try (intros; eapply Clight_initial_safe; auto)  (*That didn't work?*)
       end.
     intros HH''; specialize (H HH'').
 

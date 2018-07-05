@@ -55,14 +55,11 @@ Proof.
  unfold semax.jsafeN in H6.
  subst m.
  assert (joins (compcert_rmaps.RML.R.ghost_of (m_phi jm))
-   (Some (initial_world.ext_ghost tt, compcert_rmaps.RML.R.NoneP) :: nil)) as J.
+   (Some (initial_world.ext_ref tt, compcert_rmaps.RML.R.NoneP) :: nil)) as J.
  { destruct (compcert_rmaps.RML.R.ghost_of (m_phi jm)); inv H5.
    eexists; constructor; constructor.
    instantiate (1 := (_, _)); constructor; simpl; constructor; auto.
-   constructor; auto.
-   admit. (* William *)
-   admit. (* William *)
- }
+   instantiate (1 := (Some _, _)); repeat constructor; simpl; auto. }
  clear - H4 J H6.
  revert jm q H4 J H6; induction n; simpl; intros. constructor.
  inv H6.

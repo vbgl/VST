@@ -1250,7 +1250,7 @@ Proof.
       eexists (State _ m1). econstructor 2; try eassumption; simpl; trivial.
       ++ econstructor; eassumption.
       ++ econstructor; try eassumption.
-  + intro; assert (m' = m /\ forall mm, external_call ef0 g vargs mm t vres mm) as []
+  + intro; assert (m' = m /\ (forall mm, external_call ef0 g vargs mm t vres mm) /\ False) as [? []]
       by (destruct ef0; auto; contradiction); subst.
     split; [rewrite app_nil_r; auto|].
     intros ?? Hmm; rewrite app_nil_r in Hmm.

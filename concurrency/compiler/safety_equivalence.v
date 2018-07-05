@@ -237,8 +237,8 @@ Section Csafe_KSafe.
       eapply @threadHalt_updateC with (cnt := cnti');
         now eauto. *)
   Qed.
-    
-  Lemma MachStep_preserve_valid:
+
+  Lemma MachStep_preserve_unique:
     forall U tr st tr' st' m m',
       valid (tr, st, m) U -> 
       MachStep (U,tr,st) m (U,tr',st') m' ->
@@ -255,12 +255,110 @@ Section Csafe_KSafe.
       eapply (HasUniqueRun _ _ ltac:(eapply ThreadPool.cntUpdateC)).
       eapply ThreadPool.gssThreadCC.
     - (*step*)
-      (*this has to be proven for threadStep...*)
-      (*but sounds like an obvious, necessary, fact*)
-      admit. (*not defined*)
-      
-  Admitted.
-    
+      pose proof Htstep as Htstep'.
+      eapply threadStep_at_Krun in Htstep'.
+      destruct Htstep' as [q Hget].
+      eapply threadStep_equal_run with (j := tid) in Htstep.
+      destruct Htstep as [Hget_eq _].
+      specialize (Hget_eq ltac:(do 2 eexists; eauto)).
+      destruct Hget_eq as [? [? ?]].
+      econstructor;
+        now eauto.
+      Unshelve. all:auto.
+  Qed.
+
+    Lemma CoreStep_preserve_valid:
+    forall U tr st tr' st' m m',
+      valid (tr, st, m) U ->
+      MachStep (U,tr,st) m (U,tr',st') m' ->
+      valid (tr', st', m') U.
+  Proof.
+    intros.
+    unfold valid, correct_schedule in *.
+    inversion H0; simpl in *; subst;
+      try solve[exfalso; eapply schedPeek_Skip; eauto];
+      try (erewrite HschedN in *).
+    - (*start*)
+      inversion Htstep; subst.
+      intros j cntj' q Hget'.
+      destruct (Nat.eq_dec tid j); [now auto|].
+      assert (cntj : ThreadPool.containsThread st j)
+        by (eapply ThreadPool.cntUpdate'; eauto).
+      erewrite @ThreadPool.gsoThreadCode with (cntj := cntj) in Hget' by eauto.
+      specialize (H _ _ _ Hget').
+      destruct (Nat.eq_dec tid j);
+        now eauto.
+    - (*resume*) inversion Htstep; subst.
+      intros j cntj' q' Hget'.
+      destruct (Nat.eq_dec tid j); [auto|].
+      assert (cntj : ThreadPool.containsThread st j)
+        by (eapply ThreadPool.cntUpdateC'; eauto).
+      erewrite <- @ThreadPool.gsoThreadCC with (cntj := cntj) in Hget' by eauto.
+      specialize (H _ _ _ Hget').
+      destruct (Nat.eq_dec tid j);
+        now eauto.
+    - (*step*)
+      pose proof Htstep as Htstep'.
+      intros j cntj' q' Hget'.
+      eapply @threadStep_equal_run with (j := j) in Htstep.
+      destruct Htstep as [_ Hget_eq].
+      specialize (Hget_eq ltac:(do 2 eexists; eauto)).
+      destruct Hget_eq as [cntj [q Hgetj]].
+      specialize (H _ _ _ Hgetj).
+      assumption.
+  Qed.
+
+  Lemma AngelStep_preserve_valid:
+    forall U U' tr st tr' st' m m',
+      valid (tr, st, m) U ->
+      MachStep (U,tr,st) m (schedSkip U,tr',st') m' ->
+      valid (tr', st', m') U'.
+  Proof.
+    intros.
+    inversion H0; subst; simpl in *;
+      try (exfalso; eapply schedPeek_Skip; now eauto);
+      subst.
+    - (* suspend thread case*)
+      inversion Htstep; subst.
+      unfold valid, correct_schedule in *.
+      destruct (schedPeek U') eqn:HU'; auto.
+      rewrite HschedN in H.
+      simpl in *.
+      intros j cntj' q' Hget'.
+      destruct (Nat.eq_dec tid j); subst.
+      + rewrite ThreadPool.gssThreadCC in Hget'.
+        discriminate.
+      + assert (cntj: ThreadPool.containsThread st j)
+          by (eapply ThreadPool.cntUpdateC'; eauto).
+        erewrite <- @ThreadPool.gsoThreadCC with (cntj := cntj) in Hget' by eauto.
+        specialize (H _ _ _ Hget').
+        destruct (Nat.eq_dec tid j); subst;
+          simpl in *; exfalso;
+            now auto.
+    - (* syncStep case *)
+      unfold valid, correct_schedule in *.
+      rewrite HschedN in H.
+      simpl in *.
+      destruct (schedPeek U') eqn:?; auto.
+      intros j cntj' q' Hget'.
+      destruct (syncstep_equal_run _ _ _ _ _ _ _ _ _ Htstep j) as [? Hrun'].
+      destruct (Hrun' ltac:(do 2 eexists; eauto)) as [cntj [q Hget]].
+      specialize (H _ _ _ Hget).
+      destruct (Nat.eq_dec tid j); subst;
+        [|exfalso; simpl in *; now auto].
+      eapply @syncstep_not_running with (cntj:= cntj) (q:=q) in Htstep.
+      exfalso;
+        now auto.
+    - unfold valid, correct_schedule in *.
+      rewrite HschedN in H.
+      simpl in *.
+      destruct (schedPeek U'); auto.
+      intros j cntj' q' Hget'.
+      specialize (H _ _ _ Hget').
+      destruct (Nat.eq_dec tid j); subst;
+        simpl in *; exfalso; now auto.
+  Qed.
+  
   (* *)
   Lemma ksafe_csafe_equiv':
     forall st_ m tr,
@@ -286,8 +384,8 @@ Section Csafe_KSafe.
           -- eapply IHn.
              unfold ksafe_kstep, cstate2kstate.
              assumption.
-             unfold valid, correct_schedule.
-             admit. (* step preserves valid*)
+             eapply CoreStep_preserve_valid in H0;
+               eauto.
         *  (* AngelStep *) simpl_state.
          eapply AngelSafe; simpl.
            -- eassumption.
@@ -295,8 +393,9 @@ Section Csafe_KSafe.
               eapply IHn.
               unfold ksafe_kstep, cstate2kstate.
               assumption.
-              admit. (* angel step is valid for all states *)
-  Admitted.
+              eapply AngelStep_preserve_valid;
+                now eauto.
+  Qed.
 
 
   Lemma ksafe_csafe_equiv:
@@ -306,8 +405,92 @@ Section Csafe_KSafe.
       (forall n U, csafe (U, tr, tp) m n).
 
   Proof. intros ? ? ? H ? ? ?. apply ksafe_csafe_equiv'; try apply H.
-         auto. Qed.
+         auto.
+  Qed.
 
+  Lemma valid_unique_running:
+    forall tp tr m U U' tid tid',
+      schedPeek U = Some tid ->
+      schedPeek U' = Some tid' ->
+      valid (tr, tp, m) U ->
+      valid (tr, tp, m) U' ->
+      has_unique_running tp ->
+      tid = tid'.
+  Proof.
+    unfold valid, correct_schedule; simpl.
+    intros.
+    destruct (schedPeek U); inversion H;
+      destruct (schedPeek U'); inversion H0; subst.
+    unfold unique_Krun in *.
+    inversion H3.
+    specialize (H1 _ _ _ H4).
+    specialize (H2 _ _ _ H4).
+    destruct (Nat.eq_dec tid i), (Nat.eq_dec tid' i);
+      subst; auto;
+        simpl in *;
+        try (exfalso; now auto).
+  Qed.
+
+  Lemma csafe_first_tid:
+    forall n U U' tr tp m,
+      csafe (U, tr, tp) m n ->
+      schedPeek U = schedPeek U' -> 
+      csafe (U', tr, tp) m n.
+  Proof.
+    induction n; subst.
+    - constructor 1.
+    - intros. inversion H; subst.
+      + econstructor 2; eauto.
+        unfold halted_machine in *; simpl in *.
+        destruct (schedPeek U); try solve [inversion H1].
+        rewrite <- H0; eauto.
+      + econstructor 3; eauto; simpl in *.
+        inversion Hstep; simpl in *; subst;
+          try match goal with
+              | [ H: schedPeek ?U = Some _, H0: schedSkip U = U |- _ ] =>
+                apply schedPeek_Skip in H; eauto; inversion H
+              end.
+        * rewrite <- H6. fold_ids.
+          econstructor 1; simpl; eauto.
+          rewrite <- H0; eauto.
+        * rewrite <- H6. fold_ids. 
+          econstructor 2; simpl; eauto.
+          rewrite <- H0; eauto.
+        * unfold MachStep; simpl. fold_ids.
+          econstructor 3; simpl; eauto.
+          rewrite <- H0; eauto.
+      + econstructor 4; eauto; simpl in *.
+        inversion Hstep; simpl in *; subst;
+          try match goal with
+              | [ H: schedPeek ?U = Some _, H0: ?U = schedSkip ?U |- _ ] =>
+                eapply schedPeek_Skip in H; eauto; inversion H
+              end.
+        * rewrite <- H6; econstructor 4; subst; simpl in *; subst; eauto.
+          rewrite <- H0; eauto. 
+        * econstructor 5; subst; simpl in *; subst; eauto.
+          rewrite <- H0; eauto. 
+        * rewrite <- H6; econstructor 6; subst; simpl in *; subst; eauto.
+          rewrite <- H0; eauto. 
+  (* * rewrite <- H6; econstructor 7; subst; simpl in *; subst; eauto.
+                  rewrite <- H0; eauto.  *)
+  Qed.
+  
+  Lemma csafe_unique_running:
+    forall U tr tp m n tid,
+      schedPeek U = Some tid ->
+      has_unique_running tp ->
+      valid (tr, tp, m) U ->
+      csafe (U, tr, tp) m n ->
+      forall U', valid (tr, tp, m) U' ->
+            csafe (U', tr, tp) m n.
+  Proof.
+    intros.
+    destruct (schedPeek U') eqn:UU.
+    2: econstructor; unfold halted_machine; simpl; try rewrite UU; auto.
+    eapply csafe_first_tid; eauto.
+    rewrite H, UU; f_equal.
+    eapply valid_unique_running; eauto.
+  Qed.
   
   Lemma csafe_ksafe_equiv:
     forall st_ m tr,
@@ -336,124 +519,20 @@ Section Csafe_KSafe.
           eauto.
         * eapply IHn.
           simpl.
-
-     
-          
-
-          
-
-          
-          Lemma csafe_unique_running:
-            forall U tr tp m n tid,
-              schedPeek U = Some tid ->
-              has_unique_running tp ->
-              valid (tr, tp, m) U ->
-            csafe (U, tr, tp) m n ->
-            forall U', valid (tr, tp, m) U' ->
-                  csafe (U', tr, tp) m n.
-          Proof.
-            intros.
-            Lemma csafe_first_tid:
-              forall n U U' tr tp m,
-                csafe (U, tr, tp) m n ->
-                schedPeek U = schedPeek U' -> 
-                csafe (U', tr, tp) m n.
-            Proof.
-              induction n; subst.
-              - constructor 1.
-              - intros. inversion H; subst.
-                + econstructor 2; eauto.
-                  unfold halted_machine in *; simpl in *.
-                  destruct (schedPeek U); try solve [inversion H1].
-                  rewrite <- H0; eauto.
-                + econstructor 3; eauto; simpl in *.
-                  inversion Hstep; simpl in *; subst;
-                    try match goal with
-                        | [ H: schedPeek ?U = Some _, H0: schedSkip U = U |- _ ] =>
-                          apply schedPeek_Skip in H; eauto; inversion H
-                        end.
-                  * rewrite <- H6. fold_ids.
-                    econstructor 1; simpl; eauto.
-                    rewrite <- H0; eauto.
-                  * rewrite <- H6. fold_ids. 
-                    econstructor 2; simpl; eauto.
-                    rewrite <- H0; eauto.
-                  * unfold MachStep; simpl. fold_ids.
-                  econstructor 3; simpl; eauto.
-                  rewrite <- H0; eauto.
-              + econstructor 4; eauto; simpl in *.
-                inversion Hstep; simpl in *; subst;
-                try match goal with
-                      | [ H: schedPeek ?U = Some _, H0: ?U = schedSkip ?U |- _ ] =>
-                        eapply schedPeek_Skip in H; eauto; inversion H
-                    end.
-                * rewrite <- H6; econstructor 4; subst; simpl in *; subst; eauto.
-                  rewrite <- H0; eauto. 
-                * econstructor 5; subst; simpl in *; subst; eauto.
-                  rewrite <- H0; eauto. 
-                * rewrite <- H6; econstructor 6; subst; simpl in *; subst; eauto.
-                  rewrite <- H0; eauto. 
-               (* * rewrite <- H6; econstructor 7; subst; simpl in *; subst; eauto.
-                  rewrite <- H0; eauto.  *)
-          Qed.
-          
-
-          destruct (schedPeek U') eqn:UU.
-          2: econstructor; unfold halted_machine; simpl; try rewrite UU; auto.
-
-          
-
-          Lemma valid_unique_running:
-            forall tp tr m U U' tid tid',
-              schedPeek U = Some tid ->
-              schedPeek U' = Some tid' ->
-              valid (tr, tp, m) U ->
-              valid (tr, tp, m) U' ->
-              has_unique_running tp ->
-              tid = tid'.
-          Proof.
-            unfold valid, correct_schedule; simpl.
-            intros.
-            destruct (schedPeek U); inversion H;
-              destruct (schedPeek U'); inversion H0; subst.
-            unfold unique_Krun in *.
-            inversion H3.
-(*            assert (HH: ~ threadHalted cnti).
-            { clear. unfold threadHalted. destruct Machine; simpl; clear.
-              admit. (*threads don't halt... for now*)
-              
-            }*)
-            admit.
-            (**)
-          Admitted.
-
-          eapply csafe_first_tid; eauto.
-          rewrite H, UU; f_equal.
-          eapply valid_unique_running; eauto.
-          Qed.
-
-          (*csafe_unique_running
-     : forall (U : list nat) (tr : event_trace) (tp : ThreadPool.t) 
-         (m : mem) (n tid : nat),
-       schedPeek U = Some tid ->
-       has_unique_runing tp ->
-       valid (tr, tp, m) U ->
-       csafe (U, tr, tp) m n ->
-       forall U' : list nat, valid (tr, tp, m) U' -> csafe (U', tr, tp) m n*)
-
-          eapply csafe_unique_running; eauto.
-          -- admit.
-          -- admit.
-          -- admit.
+          assert (Hsched: exists tid, schedPeek U = Some tid)
+            by (inversion Hstep; subst;
+                eexists; eauto).
+          destruct Hsched.
+          eapply csafe_unique_running;
+            now eauto using MachStep_preserve_unique, CoreStep_preserve_valid.
       +  (*AngelStep*)
-        
         econstructor.
         * constructor 2; simpl_state.
           instantiate(1:=( seq.cat tr tr0, tp', m')); simpl.
           eauto.
         * eapply IHn.
           eauto.
-  Admitted.
+  Qed.
 
   Lemma csafe_ksafe_equiv_trick:
     forall st_ m tr,
@@ -732,8 +811,16 @@ Context (finit_branch_kstep:(forall x : kstate,
         finite_on_x
           (possible_image
              (fun (x0 : kstate) (y : schedule) (x' : kstate) =>
-              exists y' : schedule, kstep x0 y x' y') valid x))).
-  
+                exists y' : schedule, kstep x0 y x' y') valid x))).
+
+
+Lemma finite_state_preservation:
+  forall P0 P' : SST kstate,
+    konig.finite P0 -> SST_step kstate schedule kstep valid P0 P' -> konig.finite P'.
+Proof.
+  (* This should follow from finitebranching, lifted to sets *)
+Admitted.
+    
 Lemma csafe_safety_trick:
   forall tr tp m,
        (forall U : schedule, valid (tr, tp,m) U) ->
@@ -742,6 +829,7 @@ Lemma csafe_safety_trick:
 Proof.
   intros ??????.
   eapply ksafe_safe; eauto.
+  - eapply finite_state_preservation.
   - exact classic.
   - eapply csafe_ksafe_equiv_trick; eauto.
 Qed.
@@ -753,6 +841,7 @@ Lemma csafe_safety:
 Proof.
   intros ??????.
   eapply ksafe_safe'; eauto.
+  - eapply finite_state_preservation.
   - exact classic.
   - eapply csafe_ksafe_equiv; eauto.
 Qed.

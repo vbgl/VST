@@ -2228,6 +2228,7 @@ Module SCErasure.
   Section SCErasure.
     Context {Sem: Semantics}
             {SemAxioms: SemAxioms}
+            {SemD: SemDet}
             {CE: CoreErasure}
             {initU: seq.seq nat}.
     

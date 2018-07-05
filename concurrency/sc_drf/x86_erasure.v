@@ -1161,28 +1161,32 @@ Module X86CoreErasure.
         try econstructor.
   Qed.
 
-  Axiom extsem_erasure:
-    forall name sg vs1 vs1' t vres m1 m1' m2
-      (Hmem: mem_erasure m1 m1')
-      (Hval_erasure: val_erasure_list vs1 vs1')
-      (Hextcall: external_functions_sem name sg the_ge vs1 m1 t vres m2),
-    exists vres' m2',
-      external_functions_sem name sg the_ge vs1' m1' t vres' m2' /\
-      val_erasure vres vres' /\
-      mem_erasure m2 (erasePerm m2').
+  (* Axiom extsem_erasure: *)
+  (*   forall name sg vs1 vs1' t vres m1 m1' m2 *)
+  (*     (Hmem: mem_erasure m1 m1') *)
+  (*     (Hval_erasure: val_erasure_list vs1 vs1') *)
+  (*     (Hextcall: external_functions_sem name sg the_ge vs1 m1 t vres m2), *)
+  (*   exists vres' m2', *)
+  (*     external_functions_sem name sg the_ge vs1' m1' t vres' m2' /\ *)
+  (*     val_erasure vres vres' /\ *)
+  (*     mem_erasure m2 (erasePerm m2'). *)
 
-  Axiom inline_assembly_erasure:
-    forall text sg vs1 vs1' t vres m1 m1' m2
-      (Hmem: mem_erasure m1 m1')
-      (Hval_erasure: val_erasure_list vs1 vs1')
-      (Hextcall: inline_assembly_sem text sg the_ge vs1 m1 t vres m2),
-    exists vres' m2',
-      inline_assembly_sem text sg the_ge vs1' m1' t vres' m2' /\
-      val_erasure vres vres' /\
-      mem_erasure m2 (erasePerm m2').
+  (* Axiom inline_assembly_erasure: *)
+  (*   forall text sg vs1 vs1' t vres m1 m1' m2 *)
+  (*     (Hmem: mem_erasure m1 m1') *)
+  (*     (Hval_erasure: val_erasure_list vs1 vs1') *)
+  (*     (Hextcall: inline_assembly_sem text sg the_ge vs1 m1 t vres m2), *)
+  (*   exists vres' m2', *)
+  (*     inline_assembly_sem text sg the_ge vs1' m1' t vres' m2' /\ *)
+  (*     val_erasure vres vres' /\ *)
+  (*     mem_erasure m2 (erasePerm m2'). *)
   
   Lemma external_call_erasure:
     forall ef m1 m1' vs1 vs1' t m2 vres
+      (Hef: match ef with
+            | EF_memcpy _ _ | EF_malloc | EF_free => True
+            | _ => False
+            end)
       (Hmem: mem_erasure m1 m1')
       (Hval_erasure: val_erasure_list vs1 vs1')
       (Hextcall: external_call ef the_ge vs1 m1 t vres m2),
@@ -1193,38 +1197,7 @@ Module X86CoreErasure.
   Proof.
     intros.
     destruct ef; simpl in *;
-      try (eapply extsem_erasure; now eauto).
-    - inversion Hextcall; subst.
-      inv Hval_erasure. inv H2; inv H4.
-      inv H.
-      exists  (Val.load_result chunk v), m1'.
-      repeat match goal with
-             | [|- _ /\ _] => split
-             end;
-        eauto using val_erasure_refl, mem_erasure_idempotent.
-      do 2 econstructor; eauto.
-      eapply mem_load_erased in H1; eauto.
-      destruct H1 as [? [? ?]].
-      do 2 eexists;
-        repeat (constructor; eauto using mem_erasure_idempotent).
-    - inv Hextcall.
-      inv Hval_erasure. inv H2. inv H4.
-      inv H5.
-      inv H.
-      do 2 eexists;
-        repeat (econstructor; eauto using mem_erasure_idempotent). 
-      inv H3;
-        destruct chunk; try (simpl in H5; discriminate);
-          simpl in *;
-          destruct v; inv H6; try discriminate; inv H2;
-            try econstructor.
-      unfold Tptr in H.
-      destruct Archi.ptr64; try inv H4.
-      econstructor; now eauto.
-      eapply mem_store_erased in H1; eauto.
-      destruct H1 as [? [? ?]].
-      do 2 eexists;
-        repeat (econstructor; eauto using mem_erasure_idempotent).
+      try (exfalso; now eauto).
     - inv Hextcall.
       remember (Mem.alloc m1' (- size_chunk Mptr) (Ptrofs.unsigned sz)).
       destruct p as [m0' b'].
@@ -1259,35 +1232,6 @@ Module X86CoreErasure.
       do 2 eexists.
       split; [econstructor; eauto|].
       split; eauto using mem_erasure_idempotent with val_erasure.
-    - inv Hextcall.
-      exists Vundef, m1'.
-      split.
-      clear -H Hval_erasure.
-      econstructor.
-      generalize dependent vs1'.
-      induction H; intros.
-      + inv Hval_erasure.
-        econstructor.
-      + destruct vs1';
-          inv Hval_erasure.
-        econstructor; eauto.
-        inv H; inv H4;
-          econstructor; now eauto.
-      + split; [now econstructor | now eauto using mem_erasure_idempotent].
-    - inv Hextcall.
-      inv Hval_erasure.
-      inv H4.
-      exists v', m1'.
-      split.
-      econstructor.
-      inv H; inv H2; econstructor; now eauto.
-      split; eauto using mem_erasure_idempotent.
-    - eapply inline_assembly_erasure; now eauto.
-    - inv Hextcall.
-      do 2 eexists.
-      split.
-      econstructor.
-      split; [now constructor | now eauto using mem_erasure_idempotent].
   Qed.
   
   Lemma evstep_erase:
@@ -1321,6 +1265,7 @@ Module X86CoreErasure.
       assert (Hpc' : rs1' PC = Vptr b ofs)
           by (erewrite get_reg_erasure in H1; eauto;
               rewrite H1; discriminate).
+      pose proof H4 as Hargs.
       eapply eval_builtin_args_ev_erasure with (sp' := rs1' RSP) in H4...
       destruct H4 as [vargs' [T1' [Hargs_ev [Hargs_erasure Htrace_erasure]]]].
       eapply builtin_event_erasure in H5...
@@ -1342,6 +1287,13 @@ Module X86CoreErasure.
       eauto 15 with val_erasure regs_erasure.
       split;
         now eauto using mem_event_list_erasure_cat.
+      unfold Asm_core.safe_genv in Hsafe.
+      eapply Asm_event.eval_builtin_args_ev_eval_builtin_args in Hargs.
+      pose proof (Hsafe b ofs _ _ _ H2 H3 Hargs H6).
+      destruct ef;
+        auto;
+        destruct H as [? [? ?]];
+        now exfalso.
   Qed.
 
   Instance X86Erasure : CoreErasure.CoreErasure :=

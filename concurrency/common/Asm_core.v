@@ -220,7 +220,23 @@ Proof.
 Qed.
 
 (* A safe genv only marks as Internal functions that either have known semantics or don't touch
-   memory. *)
+   memory. 
+   The false conjuct in the second case essentially gives us that the program has no
+   builtins other than malloc, free, memcpy (which is true for the programs supported by VST).
+   In the future (right now it's not done because our imports would be affected),
+   we could generalize the property to be compatible with our stack of proofs:
+   1. Supporting externals whose semantics are preserved by alpha renaming 
+      forall f m2 vargs2, mem_obs_eq f m m2 -> val_obs_eq_list f vargs vargs ->
+                          external_call ef (Genv.to_senv ge) vargs m t vres m ->
+                          exists vres, external_call ef (Genv.to_senv ge) vargs2 m2 t vres' m2 /\
+                                       val_obs_eq f vres vres'
+   2. and whose semantics are preserved by permission erasure:
+      forall m2 vargs2, mem_erasure m m2 -> val_erasure_list vargs vargs ->
+                          external_call ef (Genv.to_senv ge) vargs m t vres m ->
+                          exists vres, external_call ef (Genv.to_senv ge) vargs2 m2 t vres' m2 /\
+                                       val_erasure vres vres'
+      
+*)
 Definition safe_genv (ge : genv) :=
   forall b ofs f ef args res r m vargs t vres m', Genv.find_funct_ptr ge b = Some (Internal f) ->
     find_instr (Ptrofs.unsigned ofs) (fn_code f) = Some (Pbuiltin ef args res) ->
@@ -228,7 +244,7 @@ Definition safe_genv (ge : genv) :=
     external_call ef (Genv.to_senv ge) vargs m t vres m' ->
   match ef with
   | EF_malloc | EF_free | EF_memcpy _ _ => True
-  | _ => m' = m /\ forall mm, external_call ef (Genv.to_senv ge) vargs mm t vres mm
+  | _ => m' = m /\ (forall mm, external_call ef (Genv.to_senv ge) vargs mm t vres mm) /\ False
   end.
 
 Lemma asm_mem_step : forall ge c m c' m' (CS: corestep (Asm_core_sem ge) c m c' m')

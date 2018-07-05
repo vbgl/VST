@@ -800,7 +800,7 @@ Definition spawn_pre :=
                (LOCALx (temp _y y :: gvars (globals x))
                (SEP   (pre x y)))
              POST [tptr tvoid]
-               PROP  ()
+               PROP  (False)
                LOCAL ()
                SEP   ())
            f);

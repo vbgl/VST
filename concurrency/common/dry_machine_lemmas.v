@@ -872,9 +872,7 @@ Module CoreLanguage.
       Context {Sem : Semantics}.
 
       Class SemAxioms :=
-        { (** The thread semantics are deterministic*)
-          corestep_det: corestep_fun semSem;
-          (** If the [Cur] permission is below [Writable] on some location then
+        { (** If the [Cur] permission is below [Writable] on some location then
               a thread step cannot change the contents at this location *)
           corestep_unchanged_on:
             forall  c m c' m' b ofs
@@ -896,12 +894,6 @@ Module CoreLanguage.
           (** A core cannot be both at external and halted *)
           at_external_halted_excl:
             forall q m, at_external semSem q m = None \/ forall i, ~ halted semSem q i;
-          (** [initial_core] is deterministic *)
-          initial_core_det:
-            forall i m v args c c' m' m'',
-              initial_core semSem i m c m' v args ->
-              initial_core semSem i m c' m'' v args ->
-              c = c' /\ m' = m'';
           (** If the [Cur] permission is below [Writable] on some location then
               [initial_core] cannot change the contents at this location *)
           initial_core_unchanged_on:
@@ -922,8 +914,18 @@ Module CoreLanguage.
               initial_core semSem i m c m' v args ->
               (Mem.nextblock m <= Mem.nextblock m')%positive;
         }.
-          
-      Context {SemAx : SemAxioms}.
+      Class SemDet :=
+        { (** The thread semantics are deterministic*)
+          corestep_det: corestep_fun semSem;
+          (** [initial_core] is deterministic *)
+          initial_core_det:
+            forall i m v args c c' m' m'',
+              initial_core semSem i m c m' v args ->
+              initial_core semSem i m c' m'' v args ->
+              c = c' /\ m' = m''
+        }.
+
+      Context {SemAx : SemAxioms} {SemD : SemDet}.
 
       Lemma corestep_validblock:
         forall c m c' m',

@@ -234,6 +234,8 @@ Section DrySafety.
     - apply init_no_locks.
   Qed.
 
+  Context {SW : spawn_wrapper CPROOF}.
+
   Notation ClightSem:= ClightSemantincsForMachines.ClightSem.
   Theorem Clight_initial_safe (sch : HybridMachineSig.schedule) (n : nat) :
     HybridMachineSig.HybridCoarseMachine.csafe
@@ -245,8 +247,8 @@ Section DrySafety.
                                        (permissions.getCurPerm init_mem)
                                        (initial_Clight_state CPROOF)) init_mem n.
   Proof.
-    eapply Clight_new_Clight_safety.
-    eapply dry_safety_initial_state.
+    apply Clight_new_Clight_safety; auto.
+    apply dry_safety_initial_state.
   Qed.
 
 End DrySafety.

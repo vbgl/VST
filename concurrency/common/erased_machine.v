@@ -132,6 +132,16 @@ Module BareMachine.
         thread_pool -> mem -> sync_event -> Prop:=
       @ext_step.
 
+    Lemma threadStep_at_Krun:
+      forall i tp m cnt cmpt tp' m' tr,
+        @threadStep i tp m cnt cmpt tp' m' tr ->
+        (exists q, @getThreadC _ _ _ i tp cnt = Krun q).
+    Proof.
+      intros.
+      inversion H; subst;
+        now eauto.
+    Qed.
+
    Lemma threadStep_equal_run:
     forall i tp m cnt cmpt tp' m' tr,
       @threadStep i tp m cnt cmpt tp' m' tr ->
@@ -208,6 +218,7 @@ Module BareMachine.
                                        install_perm
                                        add_block
                                        (@threadStep)
+                                       threadStep_at_Krun
                                        threadStep_equal_run
                                        (@syncStep)
                                        syncstep_equal_run

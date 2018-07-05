@@ -1077,8 +1077,9 @@ Section CLC_SEM.
          econstructor. eassumption. econstructor. split. { simpl. rewrite FR. reflexivity. } reflexivity. }
       { inv H1. rewrite H14 in LB; inv LB. rewrite ST in H15; inv H15.
         econstructor. eassumption. econstructor; split. eassumption. reflexivity. }
-      admit. (*Here we need that onnly the three builtins are supported destruct ef; try solve [contradiction].*)
+      admit. (*Here we need that only the three builtins are supported destruct ef; try solve [contradiction].*)
   Admitted.
+
 End CLC_step.
 
   Inductive function_entryT2 (f: function) (vargs: list val) (m: mem) (e: env) (le: temp_env) (m': mem) (T:list mem_event): Prop :=
@@ -1123,6 +1124,61 @@ End CLC_step.
 
   Lemma CLC_msem : msem CLC_evsem = CLC_memsem g.
   Proof. auto. Qed.
+
+  Lemma CLC_step_decay: forall c m tr c' m',
+      event_semantics.ev_step (CLC_evsem) c m tr c' m' ->
+      decay m m'.
+Proof.
+intros.
+induction H; try apply decay_refl; auto.
+- inv H2.
+  unfold Mem.storev in H4.
+  apply Mem.store_storebytes in H4.
+  eapply storebytes_decay; eauto.
+  eapply storebytes_decay; eauto.
+- admit. (* builtins *)
+- revert m H.
+  induction (blocks_of_env g e); intros.
+  inv H.
+  apply decay_refl.
+  simpl in H. destruct a; destruct p.
+  destruct (Mem.free m b z0 z) eqn:?H; inv H.
+  apply IHl in H2.
+  apply decay_trans with m0; auto.
+  eapply Mem.valid_block_free_1; eauto.
+  clear - H0.
+  eapply free_decay; eauto.
+- clear - H1.
+  revert m H1.
+  induction (blocks_of_env g e); intros.
+  inv H1.
+  apply decay_refl.
+  simpl in H1. destruct a; destruct p.
+  destruct (Mem.free m b z0 z) eqn:?H; inv H1.
+  apply IHl in H2.
+  apply decay_trans with m0; auto.
+  eapply Mem.valid_block_free_1; eauto.
+  clear - H.
+  eapply free_decay; eauto.
+- revert m H0.
+  induction (blocks_of_env g e); intros.
+  inv H0.
+  apply decay_refl.
+  simpl in H0. destruct a; destruct p.
+  destruct (Mem.free m b z0 z) eqn:?H; inv H0.
+  apply IHl in H3.
+  apply decay_trans with m0; auto.
+  eapply Mem.valid_block_free_1; eauto.
+  clear - H1.
+  eapply free_decay; eauto.
+- inv H.
+  clear - H3.
+  induction H3.
+  apply decay_refl.
+  apply decay_trans with m1; auto.
+  eapply Mem.valid_block_alloc; eauto.
+  eapply alloc_decay; eauto.
+Admitted.
 
   Instance ClightSem : Semantics :=
     { semG := G; semC := state; semSem := CLC_evsem; the_ge := g }.
@@ -1216,12 +1272,658 @@ Proof.
   eapply ev_plus_left; eauto. eapply ev_star_trans; eauto.
 Qed.
 
-  Lemma Clight_new_ev_sim : forall ge c1 m ev c1' m',
+Lemma exec_skipsT:
+ forall ge {s0 k s k'}
+   (H1: match_cont (Kseq s0 :: k) (strip_skip' (CC.Kseq s k')))
+   f ve te m mm,
+   match s0 with Sskip => False | Scontinue => False | Sloop _ _ => False
+            | Sifthenelse _ _ _ => False | Sreturn _ => False
+            | _ => True end ->
+   exists k2, strip_skip' (CC.Kseq s k') = CC.Kseq s0 k2 /\
+     ev_star ge (CC.State f s k' ve te mm) m nil (CC.State f s0 k2 ve te mm) m.
+Proof.
+ intros.
+ remember (CC.Kseq s k') as k0.
+ revert k s k' H1 Heqk0; induction k0; intros; inv Heqk0.
+ assert ({s1=Sskip}+{s1<>Sskip}) by (destruct s1; try (left; congruence); right; congruence).
+ destruct H0.
+{ subst s1.
+  destruct k'; try solve [inv H1].
+  { specialize (IHk0 _ s k' H1 (eq_refl _)).
+    destruct IHk0 as [k2 [? ?]].
+    exists k2. split; simpl; auto.
+    replace nil with ((@nil mem_event)++nil) by reflexivity. econstructor 2. constructor. apply H2. }
+  { inv H1; contradiction. }
+  simpl in *. inv H1. contradiction. }
+{ replace (strip_skip' (CC.Kseq s1 k')) with (CC.Kseq s1 k')  in *
+     by (destruct s1; try congruence; auto).
+  inv H1.
+  exists k'; split; auto.
+  constructor 1. }
+Qed.
+
+Lemma strip_evstep:
+  forall ge ve te k m T st' m',
+     cl_evstep ge (State ve te (strip_skip k)) m T st' m' <->
+    cl_evstep ge (State ve te k) m T st' m'.
+Proof.
+intros.
+ induction k; intros; split; simpl; intros; try destruct IHk; auto.
+ destruct a; try destruct s; auto.
+  constructor; auto.
+ destruct a; try destruct s; auto.
+ inv H. auto.
+Qed.
+
+Lemma ev_strip_skip'_loop1:
+  forall ge f ve te m a3 s k1 k mm, CC.Kloop1 a3 s k1 = strip_skip' k ->
+  ev_star ge (CC.State f Sskip k ve te mm) m nil (CC.State f Sskip (CC.Kloop1 a3 s k1) ve te mm) m.
+Proof.
+ induction k; intros; try solve [inv H].
+ destruct (dec_skip s0). subst. replace nil with (@nil mem_event++nil) by reflexivity. eapply ev_star_trans; try apply IHk; auto. apply ev_star_one.
+ constructor; eauto.
+ rewrite strip_skip'_not in * by auto.
+ rewrite <- H. constructor 1. simpl in H. inv H. constructor 1.
+Qed.
+
+Lemma evstrip_skip'_loop2:
+  forall ge f ve te m a3 s k1 k mm, CC.Kloop2 a3 s k1 = strip_skip' k ->
+  ev_star ge (CC.State f Sskip k ve te mm) m nil (CC.State f Sskip (CC.Kloop2 a3 s k1) ve te mm) m.
+Proof.
+ induction k; intros; try solve [inv H].
+ { destruct (dec_skip s0).
+   { subst. replace nil with (@nil mem_event++nil) by reflexivity.
+     eapply ev_star_trans; try apply IHk; auto.
+     replace nil with (@nil mem_event++nil) by reflexivity. apply ev_star_one.
+     constructor. }
+   { rewrite strip_skip'_not in * by auto.
+     rewrite <- H. constructor 1. } }
+ simpl in H. inv H. constructor 1.
+Qed.
+
+Lemma evstrip_skip'_call:
+  forall ge f ve te m lid f' ve' te' k1 k mm, CC.Kcall lid f' ve' te' k1 = strip_skip' k ->
+  ev_star ge (CC.State f Sskip k ve te mm) m nil (CC.State f Sskip (CC.Kcall lid f' ve' te' k1) ve te mm) m.
+Proof.
+ induction k; intros; try solve [inv H].
+ destruct (dec_skip s). subst. replace nil with (@nil mem_event++nil) by reflexivity. eapply ev_star_trans; try apply IHk; auto. apply ev_star_one.
+ constructor. auto.
+ rewrite strip_skip'_not in * by auto.
+ rewrite <- H. constructor 1. simpl in H. inv H. constructor 1.
+Qed.
+
+Lemma evexec_skips':
+  forall ge f s k' s0 k0' ve te m m0,
+        strip_skip' (CC.Kseq s k') = CC.Kseq s0 k0' ->
+        ev_star ge (CC.State f s k' ve te m0) m nil (CC.State f s0 k0' ve te m0) m.
+Proof.
+ intros.
+ destruct (dec_skip s). subst. simpl in *.
+ induction k'; try solve [inv H].
+ destruct (dec_skip s).
+ { subst. simpl in *.
+   replace nil with (@nil mem_event ++ nil) by reflexivity.
+   econstructor 2; eauto. constructor. }
+ { rewrite strip_skip'_not in * by auto.
+   inv H. replace nil with (@nil mem_event ++ nil) by reflexivity.
+   econstructor 2; eauto. constructor. constructor 1. }
+ { rewrite strip_skip'_not in H by auto. inv H. constructor 1. }
+Qed.
+
+Lemma evstep_continue_strip:
+  forall ge f k ve te m mm,
+           ev_star ge (CC.State f Scontinue k ve te mm) m nil
+               (CC.State f Scontinue (strip_skip' k) ve te mm) m.
+Proof.
+intros.
+induction k; simpl; try constructor 1.
+destruct (dec_skip s).
+{ subst. replace nil with (@nil mem_event ++ nil) by reflexivity.
+  eapply ev_star_trans.
+  apply ev_star_one. simpl. apply clc_evstep_continue_seq.
+  apply IHk. }
+destruct s; try congruence; constructor 1.
+Qed.
+
+Lemma break_evstrip:
+ forall ge f ve te m k mm,
+     ev_star ge (CC.State f Sbreak k ve te mm) m nil (CC.State f Sbreak (strip_skip' k) ve te mm) m.
+Proof.
+  induction k; try solve [constructor 1]. intros.
+  destruct (dec_skip s).
+  { subst. replace nil with (@nil mem_event ++ nil) by reflexivity.
+    econstructor 2. constructor. eauto. } 
+  { rewrite strip_skip'_not; auto. constructor 1. }
+Qed.
+
+Lemma Clight_new_ev_sim : forall ge c1 m ev c1' m',
     event_semantics.ev_step (@semSem (Clight_newSem ge)) c1 m ev c1' m' ->
     forall c2, match_states c1 (fst (CC'.CC_state_to_CC_core c2)) ->
     exists c2', ev_plus ge c2 m ev c2' m' /\
       match_states c1' (fst (CC'.CC_state_to_CC_core c2')).
   Proof.
     (* based on Clight_sim.Clightnew_Clight_sim_eq_noOrder_SSplusConclusion *)
-  Admitted.
+intros. simpl in H. revert c2 H0. induction H; intros.
+
+{ (* step_assign *)
+  destruct c2; simpl in *; inv H4. rename k0 into k'.  
+  simpl strip_skip in H6.
+  destruct (exec_skipsT ge H6 f e le m m0) as [k2 [K2 STAR]]; simpl; auto.
+  exists (CC_core_to_CC_state (CC'.CC_core_State f Sskip k2 e le) m').
+  rewrite CC'.CC_core_CC_state_1; simpl. split.
+  + replace (T1++T2++T3) with (nil ++ (T1++T2++T3)) by reflexivity.
+    eapply ev_star_plus_trans. eassumption.
+    apply ev_plus_one. econstructor; eauto.
+  + constructor. apply CUR. rewrite  K2 in H6. inv H6. assumption. }
+
+{ (* step_set *)
+  destruct c2; simpl in *; inv H0. rename k0 into k'. 
+  destruct (exec_skipsT ge H2 f e le m m0) as [k2 [K2 STAR]]; simpl; auto.
+  exists (CC_core_to_CC_state (CC'.CC_core_State f Sskip k2 e (PTree.set id v le)) m).
+  rewrite CC'.CC_core_CC_state_1; simpl. split. 
+  + replace T with (nil ++ T) by reflexivity.
+    eapply ev_star_plus_trans. eassumption.
+    apply ev_plus_one. econstructor; eauto.
+  + rewrite K2 in H2; inv H2; constructor; auto. }
+
+{ (* step_call_internal *)
+  destruct c2; simpl in *; inv H7. rename k0 into k'. 
+  destruct (exec_skipsT ge H9 f0 e le m m0) as [k2 [K2 STAR]]; simpl; auto.
+  rewrite K2 in H9; inv H9. simpl in CUR.
+  exists (CC_core_to_CC_state (CC'.CC_core_State f (fn_body f) (CC.Kcall optid f0 e le k2) ve' le') m).
+  rewrite CC'.CC_core_CC_state_1; simpl. split. 
+  + replace (T1++T2++T3) with (nil ++ (T1++T2++T3)) by reflexivity.
+    eapply ev_star_plus_trans. apply STAR.
+    replace (T1++T2++T3) with ((T1++T2)++T3) by (rewrite app_assoc; trivial).
+    eapply ev_plus_two. simpl. econstructor; try eassumption. instantiate (1:=m0). (*instantiate 1:=m should work, too*)
+    econstructor; eauto.
+    apply list_norepet_app in H4. destruct H4 as [? [? ?]].
+    econstructor; auto.
+  + constructor.
+    simpl; auto.
+    apply match_cont_strip. simpl. constructor; auto. }
+
+{ (* step_call_external *)
+  destruct c2; simpl in *; inv H3. rename k0 into k'. 
+  destruct (exec_skipsT ge H5 f e le m m0) as [k2 [K2 STAR]]; simpl; auto.
+  rewrite K2 in H5; inv H5. simpl in CUR.
+  exists (CC_core_to_CC_state (CC'.CC_core_Callstate
+                                 (External ef tyargs tyres cc) vargs (CC.Kcall optid f e le k2)) m).
+  rewrite CC'.CC_core_CC_state_1; simpl. split. 
+  + replace (T1++T2) with (nil ++ (T1++T2)) by reflexivity.
+    eapply ev_star_plus_trans. eassumption. eapply ev_plus_one.
+    econstructor; eauto. 
+  + econstructor; eauto. }
+
+{ (* step_seq *)
+  destruct c2; simpl in *; inv H0. rename k0 into k'. 
+  destruct (exec_skipsT ge H2 f e le m m0) as [k2 [K2 STAR]]; simpl; auto.
+  rewrite K2 in H2; inv H2. 
+  destruct (IHcl_evstep (CC_core_to_CC_state (CC'.CC_core_State f s1 (CC.Kseq s2 k2) e le) m))
+    as [st2 [? ?]]; clear  IHcl_evstep.
+  + repeat constructor; auto.
+    apply match_cont_strip.  apply match_cont_strip.  auto.
+  + exists st2; split; auto.
+    replace T with (nil ++ (nil++T)) by reflexivity.
+    eapply ev_star_plus_trans; [ eassumption | ].
+    eapply ev_plus_trans. apply ev_plus_one. constructor. eassumption. }
+
+{ (* step_skip *)
+  destruct c2; simpl in *; inv H0. rename k0 into k'. 
+  simpl strip_skip in H2.
+  remember (strip_skip k) as k0.
+  destruct k0.
+  elimtype False; clear - H Heqk0.
+  revert H; induction k; intros. inv H.
+  forget (a::k) as k';  clear - Heqk0 H.
+  remember (State e le k') as s.
+  revert e le k' Heqs Heqk0; induction H; intros; inv Heqs; simpl in *; try congruence.
+  eapply IHcl_evstep. reflexivity. auto.
+  remember (strip_skip' (CC.Kseq s k')) as k0'.
+  destruct k0'; inv H2;
+    try solve [rewrite <- strip_evstep in H; rewrite <- Heqk0 in H; inv H].
+  +
+    assert (s0<>Sskip).
+    clear- Heqk0; intro; subst.
+    revert Heqk0; induction k; simpl; intros. inv Heqk0. destruct a; try solve [inv Heqk0]; auto. destruct s; inv Heqk0; auto.
+    destruct (IHcl_evstep (CC_core_to_CC_state (CC'.CC_core_State f s k' e le) m0))
+      as [st2 [? ?]]; clear  IHcl_evstep.
+    constructor; auto. rewrite <- Heqk0. rewrite <- Heqk0'.
+    constructor 2; auto. simpl in H2.
+    exists st2; split; auto.
+  +
+    destruct (IHcl_evstep (CC_core_to_CC_state (CC'.CC_core_State f Sskip (CC.Kloop1 s0 s1 k0') e le) m0))
+      as [st2 [? ?]]; clear  IHcl_evstep.
+    constructor; auto. simpl. rewrite <- Heqk0. constructor. auto.
+    exists st2; split; auto.
+    simpl in H0. inv H0. rename ev1 into T1; rename ev2 into T2.
+    eapply ev_plus_star_trans; try apply H4.
+    clear - H3 Heqk0'.
+    destruct s; inv Heqk0'.
+    rewrite H0 in H3.
+    replace T1 with (nil++T1) by reflexivity.
+    eapply ev_star_plus_trans; [ | apply ev_plus_one; eauto ].
+    rewrite <- H0.
+      apply ev_strip_skip'_loop1; auto.
+  +
+    destruct (IHcl_evstep (CC_core_to_CC_state (CC'.CC_core_State f Sskip (CC.Kloop2 s0 s1 k0') e le) m0))
+      as [st2 [? ?]]; clear IHcl_evstep.
+    destruct (dec_skip s). subst.
+    econstructor; eauto. rewrite <- Heqk0. constructor. auto.
+    rewrite strip_skip'_not in Heqk0' by auto. inv Heqk0'.
+    exists st2; split; auto.
+    destruct s; inv Heqk0'.
+    replace T with (nil++T) by reflexivity.
+    eapply ev_star_plus_trans; try apply H0.
+    clear - H4; revert H4; induction k'; intros; inv H4.
+    destruct (dec_skip s). subst.
+    specialize (IHk' H0). replace nil with (@nil mem_event ++ nil) by reflexivity. econstructor 2.
+    constructor. apply IHk'. auto.
+    replace (CC.Kloop2 s0 s1 k0') with (CC.Kseq s k') by  (destruct s; auto; congruence).
+    constructor 1.
+    constructor 1.
+  +
+    destruct s; inv Heqk0'.
+    destruct (IHcl_evstep (CC_core_to_CC_state (CC'.CC_core_State f Sskip (CC.Kcall o f0 e0 t k0') e le) m0))
+      as [st2 [? ?]]; clear IHcl_evstep.
+    constructor; auto. rewrite <- Heqk0. constructor; auto.
+    exists st2; split; auto.
+    inv H0.
+    eapply ev_plus_star_trans; [ | apply H5].
+    inv H4.
+    replace ([Free (blocks_of_env ge e)]) with (nil ++ [Free (blocks_of_env ge e)]) by reflexivity.
+    eapply ev_star_plus_trans; [eapply evstrip_skip'_call; eauto | ].
+    apply ev_plus_one. constructor; auto. }
+    
+{ (* step_continue *)
+  destruct c2; simpl in *; inv H0. rename k0 into k'. 
+  simpl strip_skip in H2; inv H2.
+  +
+    change (CC.Kseq Scontinue k'0 = strip_skip' (CC.Kseq s k')) in H4.
+    symmetry in H4.
+    rewrite continue_cont_skip in *.
+    simpl in CUR.
+    rewrite <- current_function_strip in CUR.
+    forget (strip_skip k) as k0. clear k. rename k0 into k.
+    generalize (continue_cont_is k); case_eq (continue_cont k); intros; try contradiction.
+    rewrite H0 in H; inv H.
+    destruct c; try contradiction. destruct l; try contradiction. destruct c; try contradiction.
+    subst s0.
+    
+    assert (X1: ev_star ge (CC.State f s k' e le m0) m nil
+                 (CC.State f Scontinue k'0 e le m0) m).
+    { clear - H4.
+      destruct (dec_skip s). subst. simpl in H4.
+      eapply evexec_skips'; auto.
+      rewrite strip_skip'_not in H4 by auto. inv H4. constructor. }
+    assert (X2: ev_star ge (CC.State f Scontinue k'0 e le m0) m nil
+                 (CC.State f Scontinue (strip_skip' k'0) e le m0) m).
+    { clear.
+      induction k'0; try solve [constructor 1].
+      destruct (dec_skip s).
+      { subst. simpl in *.
+        replace nil with (@nil mem_event ++ nil) by reflexivity. econstructor 2.
+        constructor. eassumption. }
+      rewrite strip_skip'_not; auto. constructor 1. }
+    generalize (ev_star_trans ge X1 X2); clear X1 X2; intro.
+    clear H4.
+    forget (strip_skip' k'0) as k0'; clear k'0.
+    assert (precontinue_cont k = Kloop1 s1 s2 :: l).
+    revert H0; clear; induction k; simpl; try congruence.  destruct a; try congruence; auto.
+    assert (K1': exists k1',
+               ev_star ge (CC.State f Scontinue k0' e le m0) m nil
+                    (CC.State f Scontinue k1' e le m0) m /\
+               match_cont (Kseq Scontinue :: Kloop1 s1 s2 :: l) k1'). {
+      clear - H1 H0.
+      revert H0; induction H1; simpl; intros; try congruence.
+      { destruct IHmatch_cont as [k1' [? ?]].
+        rewrite <- continue_cont_skip; auto.
+        econstructor. split; [ | eassumption].
+        replace nil with (@nil mem_event ++ nil) by reflexivity.
+        eapply ev_star_trans; try apply H.
+        clear.
+        replace nil with (@nil mem_event ++ nil) by reflexivity.
+        eapply ev_star_trans. apply ev_star_one.
+        simpl. apply clc_evstep_continue_seq.
+        apply evstep_continue_strip. }
+      { inv H0.
+        econstructor; split. constructor 1.  constructor.  auto. }
+      { destruct IHmatch_cont as [k1' [? ?]].
+        rewrite <- continue_cont_skip; auto.
+        econstructor. split; [ | eassumption].
+        replace nil with (@nil mem_event ++ nil) by reflexivity.
+        eapply ev_star_trans; try apply H.
+        replace nil with (@nil mem_event ++ nil) by reflexivity.
+        eapply ev_star_trans.
+        + apply ev_star_one. simpl.
+         apply clc_evstep_continue_switch.
+        + apply evstep_continue_strip. }
+    }
+    destruct K1' as [k1' [STAR1 K1]].
+    generalize (ev_star_trans ge H2 STAR1); clear H2 STAR1; intro STAR.
+    rewrite H0 in *.
+    assert (CUR': match current_function l with
+                  | Some f' => f' = f
+                  | None => True
+                  end). {
+      clear - CUR H0. revert CUR H0; induction k; simpl; intros.
+      inv H0.
+      destruct a; try discriminate; auto.
+      apply IHk. auto. auto. inv H0. auto.
+      apply IHk; auto.
+    }
+    clear H1 CUR k H0 H3.
+    inv K1. inv H3. simpl in *.
+    destruct (IHcl_evstep (CC_core_to_CC_state (CC'.CC_core_State f s2 (CC.Kloop2 s1 s2 k'0) e le) m))
+                      as [st2 [? ?]]; clear IHcl_evstep.
+    constructor; auto. apply match_cont_strip. constructor. auto.
+    exists st2; split; auto.
+    replace T with (nil++T) by reflexivity.
+    eapply ev_star_plus_trans; [apply STAR | ].
+    replace T with (nil++T) by reflexivity.
+    eapply ev_star_plus_trans; [ | apply H0].
+    replace nil with (@nil mem_event ++ nil) by reflexivity.
+    apply ev_star_one. constructor. auto.
+ +
+   change (CC.Kloop1 s0 e3 k'0 = strip_skip' (CC.Kseq s k')) in H1.
+   destruct (dec_skip s); [ | destruct s; try congruence; inv H1].
+   subst s.
+   simpl in H.
+   simpl in H1.
+   simpl in *.
+   assert (STAR: ev_star ge (CC.State f Sskip k' e le m0) m nil
+                (CC.State f Sskip (CC.Kloop1 s0 e3 k'0) e le m0) m).
+   { rewrite H1; clear.
+     induction k'; intros; try solve [constructor 1].
+     destruct (dec_skip s).
+     { subst. simpl in *.
+       replace nil with (@nil mem_event ++ nil) by reflexivity. econstructor 2.
+       constructor.
+       apply IHk'. }
+     { rewrite strip_skip'_not; auto. constructor 1. } }
+   forget (CC.State f Sskip k' e le m0) as st1.
+   clear k' H1.
+   assert (PLUS: ev_plus ge st1 m nil (CC.State f e3 (CC.Kloop2 s0 e3 k'0) e le m0) m).
+   {
+     replace nil with (@nil mem_event ++ nil) by reflexivity.
+     eapply ev_star_plus_trans; try apply STAR.
+     replace nil with (@nil mem_event ++ nil) by reflexivity.
+     econstructor. econstructor. auto. constructor 1. }
+   clear STAR.
+   destruct (IHcl_evstep (CC_core_to_CC_state(CC'.CC_core_State f e3 (CC.Kloop2  s0 e3 k'0) e le) m0))
+     as [st2 [? ?]]; clear  IHcl_evstep.
+   { constructor; auto. apply match_cont_strip; constructor; auto. }
+   { exists st2; split; auto.
+     replace T with (nil ++ T) by reflexivity. simpl in H0.
+     eapply ev_plus_trans; eauto. } }
+
+{ (* step_break *)
+  destruct c2; simpl in *; inv H0. rename k0 into k'. 
+  simpl strip_skip in H2; inv H2.
+  change (CC.Kseq Sbreak k'0 = strip_skip' (CC.Kseq s k')) in H4.
+  symmetry in H4.
+  rewrite <- break_cont_skip in *.
+  simpl in CUR.
+  rewrite <- current_function_strip in CUR.
+  forget (strip_skip k) as k0. clear k. rename k0 into k.
+  simpl.
+  pose proof (evexec_skips' ge f s k' Sbreak k'0 e le m m0 H4).
+  forget (CC.State f s k' e le m0) as st1.
+  clear k' H4. 
+  pose proof (break_evstrip ge f e le m k'0).
+  pose proof (ev_star_trans ge H0 (H2 m0)); clear H0 H2.
+  forget (strip_skip' k'0) as k0'; clear k'0.
+  assert (X:exists k1',
+             ev_plus ge (CC.State f Sbreak k0' e le m0) m nil
+                  (CC.State f Sskip k1' e le m0) m
+             /\ match_cont (strip_skip (break_cont k)) (strip_skip' k1')). {
+    clear - H H1. rename H1 into H2.
+    revert H; induction H2; intros; try solve [inv H].
+    { rewrite break_cont_skip in *. simpl in H.
+      destruct (IHmatch_cont H) as [k1' [? ?]]; clear IHmatch_cont. simpl.
+      exists k1'; split; auto.
+      replace nil with (@nil mem_event ++ nil) by reflexivity.
+      eapply ev_star_plus_trans; try eassumption.
+      replace nil with (@nil mem_event ++ nil) by reflexivity.
+      econstructor 2. constructor.
+      apply break_evstrip. }
+      
+    { simpl  in *.
+      replace nil with (@nil mem_event ++ nil) by reflexivity.
+      exists k'; split. econstructor.
+      simpl. eapply clc_evstep_break_loop1. constructor 1. auto. }
+    
+    { simpl in *. 
+      replace nil with (@nil mem_event ++ nil) by reflexivity.
+      exists k'; split. econstructor. simpl. eapply clc_evstep_skip_break_switch. auto.
+      constructor 1; auto.
+      auto. }
+  }
+  
+  destruct X as [k1' [? ?]].
+  destruct (IHcl_evstep (CC_core_to_CC_state (CC'.CC_core_State f Sskip k1' e le) m0))
+    as [st2 [? ?]]; clear IHcl_evstep.
+  { constructor; auto.
+    clear - H CUR.
+    revert CUR; induction  k; intros. apply I.
+    destruct a; simpl in *; auto. apply IHk; auto. }
+  { exists st2; split; auto.
+    simpl in H4.
+    replace T with (nil ++ T) by reflexivity. 
+    eapply ev_star_plus_trans; [ | eassumption].
+    replace nil with (@nil mem_event ++ nil) by reflexivity.
+    eapply ev_star_trans; [eassumption | ]. 
+    replace nil with (@nil mem_event ++ nil) by reflexivity.
+    apply ev_plus_star; eassumption. } }
+
+{ (* step_ifthenelse *)
+  destruct c2; simpl in *; inv H1. rename k0 into k'. 
+  simpl strip_skip in H3; inv H3.
+  change (CC.Kseq (Sifthenelse a s1 s2) k'0 = strip_skip' (CC.Kseq s k')) in H5.
+  assert (STAR: ev_star ge (CC.State f s k' e le m0) m nil (CC.State f (Sifthenelse a s1 s2) k'0 e le m0) m). {
+     clear - H5.
+     revert H5; induction k'; intros; try solve [ destruct s; inv H5; constructor 1].
+     destruct (dec_skip s).
+     { subst s.
+       destruct (dec_skip s0).
+       { subst s0. simpl in *.
+         replace nil with (@nil mem_event ++ nil) by reflexivity.
+         eapply ev_star_trans; try apply IHk'; eauto.
+         replace nil with (@nil mem_event ++ nil) by reflexivity. apply ev_star_one.
+         constructor. }
+       { change (strip_skip' (CC.Kseq Sskip (CC.Kseq s0 k'))) with
+               (strip_skip' (CC.Kseq s0 k')) in H5.
+         rewrite strip_skip'_not in H5 by auto.
+         inv H5.
+         replace nil with (@nil mem_event ++ nil) by reflexivity. apply ev_star_one.
+         constructor. } }
+     { rewrite strip_skip'_not in * by auto.
+       inv H5. constructor 1. }
+  }
+  exists (CC_core_to_CC_state (CC'.CC_core_State f (if b then s1 else s2) k'0 e le) m0); split; auto.
+  { 
+    replace T with (nil ++ T) by reflexivity. eapply ev_star_plus_trans; try apply STAR.
+    replace nil with (@nil mem_event ++ nil) by reflexivity. 
+    apply ev_plus_one. econstructor; eauto. }
+  { constructor; auto.
+    apply match_cont_strip; auto. } }
+
+{ (* step_loop *)
+  destruct c2; simpl in *; inv H0. rename k0 into k'. 
+  inv H1. inv H3.
+  change (CC.Kseq (Sloop s1 s2) k'0 = strip_skip' (CC.Kseq s k')) in H1.
+  generalize (evexec_skips' ge f _ _ _ _ e le m m0 (@eq_sym _ _ _ H1)); intro.
+  exists (CC_core_to_CC_state (CC'.CC_core_State f s1 (CC.Kloop1 s1 s2 k'0) e le) m0); split.
+  { replace nil with (@nil mem_event ++ nil) by reflexivity.
+    eapply ev_star_plus_trans; try apply H.
+    replace nil with (@nil mem_event ++ nil) by reflexivity.
+    apply ev_plus_one. simpl. eapply clc_evstep_loop; eauto. }
+  { constructor; auto. apply match_cont_strip; constructor; auto. } }
+
+{ (* step_loop2 *)
+  destruct c2; simpl in *; inv H0. rename k0 into k'.
+  inv H1.
+  destruct s0; inv H4.
+  generalize (evstrip_skip'_loop2 ge f e le m _ _ _ _ m0 H1); intro.
+  exists (CC_core_to_CC_state (CC'.CC_core_State f s (CC.Kloop1 s a3 k'0) e le) m0); split.
+  + replace nil with (@nil mem_event ++ nil) by reflexivity.
+    eapply ev_star_plus_trans; try apply H.
+    replace nil with (@nil mem_event ++ nil) by reflexivity.    
+    econstructor. simpl. eapply clc_evstep_skip_loop2; eauto. instantiate (1:=m0). (*instantiate 1:=m should work, too*)
+    replace nil with (@nil mem_event ++ nil) by reflexivity.
+    apply ev_star_one. simpl. eapply clc_evstep_loop; eauto.
+  + constructor; auto. apply match_cont_strip. constructor. auto. }
+
+{ (* step_return *)
+  destruct c2; simpl in *; inv H3. rename k0 into k'0.
+  remember (strip_skip' (CC.Kseq s k'0)) as k3. simpl in CUR, H5.
+  inv H5.
+  { (*first case*)
+    generalize (evexec_skips' ge f0 _ _ _ _ e le m m0 (@eq_sym _ _ _ H4)); intro H99.
+    assert (f0=f).
+    { simpl in CUR; clear - CUR H.
+      revert H CUR; induction k; intros. inv H. simpl in *. destruct a; auto. inv CUR; auto. inv H; auto.
+    }
+    subst f.
+    generalize (match_cont_call_strip k k'1); intro.
+    spec H3; [congruence |]. spec H3; [auto |].
+    generalize H3; rewrite H; intro.
+    inv H5.
+    +  elimtype False; clear - H10.
+       revert H10; induction k'1; simpl; intros; congruence.
+    + destruct optexp;  [destruct H1 as [v [? ?]] | ]; (destruct optid; destruct H2 as [H2 H2'];
+               try solve [contradiction H2; auto]; subst te'' ).
+    -   eexists (CC_core_to_CC_state (CC'.CC_core_State f Sskip k'2 ve' (PTree.set i v' te')) m0).
+        split.
+        { replace (T ++ [Free (blocks_of_env ge e)]) with ((T ++ [Free (blocks_of_env ge e)]) ++ nil) by (rewrite app_nil_r; trivial).
+          apply (ev_star_plus_trans ge H99). (*with (s2:=CC.State f0 (Sreturn (Some e)) k'1 ve te m).  apply H99. *)
+          eapply (@ev_plus_trans ge) with (s2:=CC.Returnstate v' (CC.call_cont k'1) m').
+          eapply ev_plus_one. simpl. eapply clc_evstep_return_1; eauto. 
+          eapply ev_plus_one. simpl. rewrite <- H13.
+          eapply clc_evstep_returnstate. }
+        constructor; auto.
+    -   eexists (CC_core_to_CC_state (CC'.CC_core_State f Sskip k'2 ve' te') m0).
+        split.
+        { replace (T ++ [Free (blocks_of_env ge e)]) with ((T ++ [Free (blocks_of_env ge e)]) ++ nil) by (rewrite app_nil_r; trivial).
+          eapply (ev_star_plus_trans ge H99). (* with (s2:=CC.State f0 (Sreturn (Some e)) k'1 ve te m). apply H99. *)
+          eapply (@ev_plus_trans ge) with (s2:=CC.Returnstate v' (CC.call_cont k'1) m').
+          eapply ev_plus_one. simpl. econstructor; eauto.
+          eapply ev_plus_one. simpl. rewrite <- H13. eapply clc_evstep_returnstate. }
+        constructor; auto.
+    -   destruct H1; subst.
+        eexists (CC_core_to_CC_state (CC'.CC_core_State f Sskip k'2 ve' (CC.set_opttemp (Some i) Vundef te')) m0).
+        split.
+        { eapply (ev_star_plus_trans ge H99).  (*with (s2:=CC.State f0 (Sreturn None) k'1 ve te m).  apply H99. *)
+          replace [Free (blocks_of_env ge e)] with (([Free (blocks_of_env ge e)] ++ nil) ++ nil)
+            by (rewrite app_nil_r; trivial).  
+          eapply (@ev_plus_trans ge) with (s2:=CC.Returnstate Vundef (CC.call_cont k'1) m').
+          eapply ev_plus_one. simpl. econstructor; eauto.
+          eapply ev_plus_one. simpl. rewrite <- H13.
+          apply clc_evstep_returnstate. } 
+        simpl. constructor 1. auto. simpl.  auto.
+    - destruct H1; subst.
+      eexists (CC_core_to_CC_state (CC'.CC_core_State f Sskip k'2 ve' te') m0).
+      split.
+      { eapply (ev_star_plus_trans ge H99).
+        replace [Free (blocks_of_env ge e)] with (([Free (blocks_of_env ge e)] ++ nil) ++ nil)
+          by (rewrite app_nil_r; trivial). 
+        eapply (@ev_plus_trans) with (s2:=CC.Returnstate Vundef (CC.call_cont k'1) m').
+        eapply ev_plus_one. simpl. econstructor; eauto.
+        eapply ev_plus_one. simpl. rewrite <- H13.
+        apply clc_evstep_returnstate. }
+      simpl. constructor 1. auto. simpl.  auto. }
+  { (*second case*)
+    destruct H1; subst. destruct optid; destruct H2 as [_ H2]; subst te''.
+    { simpl in H. inv H. simpl in CUR. symmetry in CUR; inv CUR. 
+      destruct s; inv H4.
+      assert (STAR: ev_star ge (CC.State f Sskip k'0 e le m0) m nil
+                            (CC.State f Sskip (CC.Kcall (Some i) f1 ve' te' k'1) e le m0) m).
+      { clear - H1.
+        revert H1; induction k'0; intros; try solve [inv H1].
+        destruct (dec_skip s). subst s. simpl in H1.
+        replace nil with (@nil mem_event ++ nil) by reflexivity.
+        eapply ev_star_trans; try apply IHk'0; auto. 
+        replace nil with (@nil mem_event ++ nil) by reflexivity.
+        apply ev_star_one. simpl. constructor; auto.
+        rewrite strip_skip'_not in H1 by auto. rewrite <- H1. constructor 1.
+        simpl in H1. inv H1. constructor 1. }
+      eexists; split.
+      { eapply ev_star_plus_trans. apply STAR.
+        replace [Free (blocks_of_env ge e)] with ([Free (blocks_of_env ge e)] ++ nil)
+          by (rewrite app_nil_r; trivial).
+        eapply ev_plus_two.
+        + simpl. eapply clc_evstep_skip_call; simpl; eauto.
+        + simpl. apply clc_evstep_returnstate with (mx:=m0)(mx':=m0).  (*instantiating mx:=m and mx':=m should work, too*) }
+      econstructor; eauto. }
+    { simpl in H. inv H. simpl in CUR. symmetry in CUR; inv CUR.
+      destruct s; inv H4.
+      assert (STAR: ev_star ge (CC.State f Sskip k'0 e le m0) m nil
+                            (CC.State f Sskip (CC.Kcall None f1 ve' te' k'1) e le m0) m).
+      { clear - H1.
+        revert H1; induction k'0; intros; try solve [inv H1].
+        destruct (dec_skip s). subst s. simpl in H1.
+        replace nil with (@nil mem_event ++ nil) by reflexivity.
+        eapply ev_star_trans; try apply IHk'0; auto.
+        replace nil with (@nil mem_event ++ nil) by reflexivity.
+        apply ev_star_one. simpl. constructor; auto.
+        rewrite strip_skip'_not in H1 by auto. rewrite <- H1. constructor 1.
+        simpl in H1. inv H1. constructor 1. }
+      eexists; split.
+      { eapply ev_star_plus_trans. apply STAR.
+        replace [Free (blocks_of_env ge e)] with ([Free (blocks_of_env ge e)] ++ nil)
+          by (rewrite app_nil_r; trivial).
+        eapply ev_plus_two.
+        + simpl. eapply clc_evstep_skip_call; simpl; eauto.
+        + simpl.  apply clc_evstep_returnstate with (mx:=m0)(mx':=m0). (*instantiating mx:=m and mx':=m should work, too*) }
+      econstructor; eauto. } } }
+
+{ (* step_switch *)
+  destruct c2; simpl in *; inv H1. rename k0 into k'. 
+  simpl strip_skip in H3.
+  remember (CC.Kseq s k') as k0'.
+  inv H3.
+  exists  (CC'.CC_core_to_CC_state (CC'.CC_core_State f (seq_of_labeled_statement (select_switch n sl)) 
+              (Clight.Kswitch k'0) e le) m0); split.
+  { generalize (evexec_skips' ge f _ _ _ _ e le m m0 (@eq_sym _ _ _ H5)); intro H99.
+    replace T with (nil++T) by reflexivity. eapply ev_star_plus_trans; try apply H99.
+    eapply ev_plus_one. simpl. econstructor; eassumption. }
+  { simpl. constructor; auto. apply match_cont_strip. constructor; auto. } }
+  
+{ (* step_label *)
+  destruct c2; simpl in *; inv H0. rename k0 into k'. 
+  remember (CC.Kseq s0 k') as k0'. inv H2.
+  destruct (IHcl_evstep (CC_core_to_CC_state (CC'.CC_core_State f s k'0 e le) m0)) as [st2 [? ?]]; clear IHcl_evstep.
+  { constructor; auto. apply match_cont_strip. auto. }
+  exists st2; split; auto. simpl in H0. 
+  replace T with (nil++T) by reflexivity. 
+  eapply ev_star_plus_trans; try eassumption.
+  replace nil with (@nil mem_event ++ nil) by reflexivity.
+  eapply ev_star_trans.
+    eapply (evexec_skips' ge f _ _ _ _ e le m m0 (@eq_sym _ _ _ H4)). 
+  apply ev_star_one. constructor. } 
+
+{ (* step_goto *)
+  destruct c2; simpl in *; inv H0. 
+  remember (CC.Kseq s k0) as k0'. inv H2.
+  generalize (match_cont_call_strip k k'0(*k'1*)); intro.
+  spec H0.
+  { clear - CUR. apply (call_cont_nonnil _ _ CUR). }
+  specialize (H0 H1).
+  rewrite <- strip_call' in H0.
+  change (Kseq (Sreturn None) :: call_cont k) with (strip_skip (Kseq (Sreturn None) :: call_cont k)) in H0.
+  destruct (match_find_label _ _ _ _ _ H0 H) as [s2 [k2' [? ?]]].
+  exists (CC'.CC_core_to_CC_state (CC'.CC_core_State f s2 k2' e le) m0); split.
+  { simpl in CUR0. inversion2 CUR CUR0.
+    generalize (evexec_skips' ge f _ _ _ _ e le m m0 (@eq_sym _ _ _ H4)); intro H99.
+    replace nil with (@nil mem_event ++ nil) by reflexivity.
+    eapply ev_star_plus_trans; try apply H99.
+    apply ev_plus_one. constructor; auto. }
+  constructor; auto.
+  clear - CUR H. forget (fn_body f) as s.
+  rewrite <- current_function_call_cont in CUR.
+  change (current_function (Kseq (Sreturn None) :: call_cont k) = Some f) in CUR.
+  forget (Kseq (Sreturn None) :: call_cont k) as k0. clear - CUR H.
+  rewrite (current_function_find_label _ _ _ _ _ CUR H). auto.
+  apply match_cont_strip1. auto. }
+Qed.
 

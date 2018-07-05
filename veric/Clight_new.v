@@ -236,12 +236,6 @@ Definition cl_halted (c: corestate) : option val := None.
 
 Definition empty_function : function := mkfunction Tvoid cc_default nil nil nil Sskip.
 
-Fixpoint temp_bindings (i: positive) (vl: list val) :=
- match vl with
- | nil => PTree.empty val
- | v::vl' => PTree.set i v (temp_bindings (i+1)%positive vl')
- end.
-
 Definition Tint32s := Tint I32 Signed noattr.
 Definition true_expr : Clight.expr := Clight.Econst_int Int.one Tint32s.
 
@@ -285,7 +279,7 @@ Definition cl_initial_core (ge: genv) (v: val) (args: list val) (q: corestate) :
                                  (map (fun x => Etempvar (fst x) (snd x))
                                       (params_of_types 2%positive
                                                        (params_of_fundef f)))) ::
-                          Kseq (Sloop Sskip Sskip) :: nil)
+                          (*Kseq (Sloop Sskip Sskip) ::*) nil)
         | _ => False end
       | _ => False end
     else False

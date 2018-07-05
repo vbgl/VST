@@ -78,8 +78,9 @@ Module FineConcSafe.
 
     Context {Sem : Semantics}
             {semAx: CoreLanguage.SemAxioms}
+            {semDet: CoreLanguage.SemDet}
             {CI : CoreInj}
-            {FI : FineInit}. 
+            {FI : FineInit}.
 
     (** Excluded middle is required, but can be easily lifted*)
     Variable em : ClassicalFacts.excluded_middle.
@@ -487,14 +488,14 @@ Module FineConcSafe.
             simpl in Hstep.
             eapply @HybridFineMachine.StepSafe with (dilMem := FineDilMem);
               eauto.
-          + pose proof (@SimProofs.sim_internal _ _ _ sched  _ _ _ _ _ _ _ _ _ _ _ _ cnti Hsim Htype) as
+          + pose proof (@SimProofs.sim_internal _ _ _ _ sched  _ _ _ _ _ _ _ _ _ _ _ _ cnti Hsim Htype) as
                 (tpf' & m' & fp' & tr' & Hstep & Hsim').
             specialize (Hstep sched).
             specialize (IHsched _ _ _ _ _ _ _ _ _ Hsim').
             unfold corestep in Hstep.
             simpl in Hstep.
             econstructor 3; simpl; eauto.
-          + pose proof (@SimProofs.sim_suspend _ _ _ sched em _ _ _ _ _ _ _  _ _ _ _ _ cnti Hsim Htype) as
+          + pose proof (@SimProofs.sim_suspend _ _ _ _ sched em _ _ _ _ _ _ _  _ _ _ _ _ cnti Hsim Htype) as
                 (tpc' & trc' & mc' & tpf' & mf' & f' & fp' & tr' & Hstep & Hsim').
             specialize (IHsched _ _ _ _ _ _ _ _ _ Hsim').
             specialize (Hstep sched).
