@@ -696,7 +696,13 @@ Forall (cont'_ok (Mem.nextblock m)) k ->
 venv_ok (Mem.nextblock m) ve' /\
 tenv_ok (Mem.nextblock m) te' /\ cont_ok (Mem.nextblock m) k'.
 Proof.
-Admitted.
+intros.
+revert H; induction k; simpl; intros. inv H.
+inv H0.
+destruct a; try solve [apply IHk in H; auto].
+inv H.
+inv H3. split3; auto.
+Qed.
 
 Lemma cl_step_ok:
   forall c m c' m',
@@ -752,6 +758,8 @@ intros until m'. intro Hstep.
   clear - H12 H15.
   revert H15; apply Forall_impl.
   apply alloc_cont'_ok; auto.
+  clear. induction (fn_temps f); simpl. intros ? ? ?. rewrite PTree.gempty in H. inv H. destruct a.
+  apply set_tenv_ok; auto. hnf; auto.  
 *  (* call_external *)
  destruct H5 as [? [? ?]]. inv H7. clear H10.
   eapply eval_expr_ok in H0; eauto.
