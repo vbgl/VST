@@ -1,6 +1,7 @@
 Require Import compcert.common.Memory.
 Require Import compcert.common.AST.     (*for typ*)
 Require Import compcert.common.Values. (*for val*)
+Require Import compcert.common.Events.
 Require Import compcert.common.Globalenvs.
 Require Import compcert.lib.Integers.
 Require Import compcert.common.Values.
@@ -38,6 +39,8 @@ Require Import compcert.common.Smallstep.
 
 Require Import VST.concurrency.common.machine_semantics_lemmas.
 
+Import Events.
+
 Set Implicit Arguments.
 
 Section HybridSimulation. 
@@ -64,12 +67,60 @@ Section HybridSimulation.
   Variable ge2:G2.
   Variable (ge_inv: G1 -> G2 -> Prop). *)
 
-  Context (SG TG TID SCH TR SC TC R1 R2 (*s_thread_type t_thread_type*): Type).
-  Variable SourceHybridMachine: @ConcurSemantics SG TID SCH TR SC mem R1.
-  Variable TargetHybridMachine: @ConcurSemantics TG TID SCH TR TC mem R2.
+  Context (SG TG TID SCH SC TC R1 R2 (*s_thread_type t_thread_type*): Type).
+  Variable SourceHybridMachine: @ConcurSemantics SG TID SCH (list machine_event) SC mem R1.
+  Variable TargetHybridMachine: @ConcurSemantics TG TID SCH (list machine_event) TC mem R2.
   Variable opt_init_mem_source : option Memory.Mem.mem.
   Variable opt_init_mem_target : option Memory.Mem.mem.
-  
+
+  Inductive inject_address (f : meminj) : address -> address -> Prop :=
+  | inj_addr : forall b1 o1 b2 ofs, f b1 = Some (b2, ofs) ->
+      inject_address f (b1, o1) (b2, o1 + ofs).
+
+  Inductive inject_sync_event (f : meminj) : sync_event -> sync_event -> Prop :=
+  | inj_release : forall l1 l2 r1 r2, inject_address f l1 l2 ->
+      match r1, r2 with
+      | Some (a1, b1), Some (a2, b2) => inject_access_map f a1 a2 /\ inject_access_map f b1 b2
+      | None, None => True
+      | _, _ => False
+      end ->
+      inject_sync_event f (release l1 r1) (release l2 r2)
+  | inj_acquire : forall l1 l2 r1 r2, inject_address f l1 l2 ->
+      match r1, r2 with
+      | Some (a1, b1), Some (a2, b2) => inject_delta_map f a1 a2 /\ inject_delta_map f b1 b2
+      | None, None => True
+      | _, _ => False
+      end ->
+      inject_sync_event f (acquire l1 r1) (acquire l2 r2)
+  | inj_mklock : forall l1 l2, inject_address f l1 l2 ->
+      inject_sync_event f (mklock l1) (mklock l2)
+  | inj_freelock : forall l1 l2, inject_address f l1 l2 ->
+      inject_sync_event f (freelock l1) (freelock l2)
+  | inj_spawn : forall l1 l2 r1 r2 d1 d2, inject_address f l1 l2 ->
+      match r1, r2 with
+      | Some ((a1, b1), (c1, d1)), Some ((a2, b2), (c2, d2)) =>
+          inject_access_map f a1 a2 /\ inject_access_map f b1 b2 /\
+          inject_delta_map f c1 c2 /\ inject_delta_map f d1 d2
+      | None, None => True
+      | _, _ => False
+      end ->
+      match d1, d2 with
+      | Some a1, Some a2 => inject_delta_map f a1 a2
+      | None, None => True
+      | _, _ => False
+      end ->
+      inject_sync_event f (mklock l1) (mklock l2)
+  | inj_failacq : forall l1 l2, inject_address f l1 l2 ->
+      inject_sync_event f (failacq l1) (failacq l2).
+
+  Parameter inject_mem_event : meminj -> mem_event -> mem_event -> Prop.
+
+  Inductive inject_mevent (f : meminj) : machine_event -> machine_event -> Prop :=
+  | inj_internal : forall n me1 me2, inject_mem_event f me1 me2 ->
+      inject_mevent f (internal n me1) (internal n me2)
+  | inj_external : forall n se1 se2, inject_sync_event f se1 se2 ->
+      inject_mevent f (external n se1) (external n se2).
+
   Record HybridMachine_simulation_properties
          (index: Type)(match_state : index -> meminj -> SC -> mem -> TC -> mem -> Prop) :=
     { core_ord : index -> index -> Prop
@@ -98,13 +149,15 @@ Section HybridSimulation.
                       /\ (thread_step_plus (TargetHybridMachine) tge U st2 m2 st2' m2'
                \/ (thread_step_star (TargetHybridMachine) tge U st2 m2 st2' m2' /\ core_ord cd' cd))
       ; machine_diagram :
-          forall sge tge U tr st1 m1 U' tr' st1' m1',
-            machine_step SourceHybridMachine sge U tr st1 m1 U' tr' st1' m1' ->
-            forall cd st2 mu m2,
+          forall sge tge U tr1 st1 m1 U' tr1' st1' m1',
+            machine_step SourceHybridMachine sge U tr1 st1 m1 U' tr1' st1' m1' ->
+            forall cd tr2 st2 mu m2,
               match_state cd mu st1 m1 st2 m2 ->
-              exists st2', exists m2', exists cd', exists mu',
+              Forall2 (inject_mevent mu) tr1 tr2 ->
+              exists tr2', exists st2', exists m2', exists cd', exists mu',
                       match_state cd' mu' st1' m1' st2' m2'
-                      /\ machine_step (TargetHybridMachine) tge U tr st2 m2 U' tr' st2' m2'
+                      /\ Forall2 (inject_mevent mu') tr1' tr2'
+                      /\ machine_step (TargetHybridMachine) tge U tr2 st2 m2 U' tr2' st2' m2'
       ; thread_halted :
           forall cd mu U c1 m1 c2 m2 v1,
             match_state cd mu c1 m1 c2 m2 ->
