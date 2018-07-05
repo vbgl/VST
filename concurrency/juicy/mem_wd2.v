@@ -41,6 +41,25 @@ Proof.
   eapply flatinj_I; auto.
 Qed.
 
+(*
+Lemma mem_wd2_storebytes: forall m b ofs m' bl (WDm: mem_wd2 m)
+  (ST: Mem.storebytes m b ofs bl = Some m')
+  (V: val_valid v m), mem_wd2 m'.
+Proof.
+  unfold mem_wd2; intros.
+  rewrite (Mem.nextblock_storebytes _ _ _ _ _ ST).
+  erewrite Mem.storebytes_mem_contents by eauto.
+  destruct (eq_dec b0 b); [subst; rewrite PMap.gss | rewrite PMap.gso; auto].
+  replace ofs0 with (ofs0 + 0) at 2 by apply Z.add_0_r.
+  replace ofs with (ofs + 0) at 2 by apply Z.add_0_r.
+  apply Mem.setN_inj with (access := fun _ => True); intros; rewrite ?Z.add_0_r; auto.
+  apply encode_val_inject.
+  destruct v; try solve [constructor].
+  econstructor; [|symmetry; apply Ptrofs.add_zero].
+  eapply flatinj_I; auto.
+Qed.
+*)
+
 Import FunInd.
 
 Definition mem_wd' m m' := forall b ofs, memval_inject (Mem.flat_inj (Mem.nextblock m))
