@@ -1210,6 +1210,11 @@ unfold match_thread_compiled.
   Section CompileNThreads.
     
     Definition nth_index:= list (option compiler_index).
+    Definition list_lt: nth_index -> nth_index -> Prop.
+    Admitted.
+    Lemma list_lt_wf:
+      well_founded list_lt.
+    Admitted.
     Inductive match_state:
       forall n,
       nth_index ->
@@ -1222,7 +1227,33 @@ unfold match_thread_compiled.
           match_state n ils jn tp0 m0 tpn mn ->
           concur_match n ocd jSn tpn mn tpSn mSn ->
           match_state (S n) (cons ocd ils) (compose_meminj jn jSn) tp0 m0 tpSn mSn.
-          
+
+    Lemma trivial_self_injection:
+          forall m : option mem,
+            HybridMachine_simulation_properties (HybConcSem (Some 0) m)
+                                                (HybConcSem (Some 0) m) (match_state 0).
+    Proof.
+      (* NOTE: If this lemma is not trivial, we can start the induction at 1,
+         an the first case follow immediately by lemma
+         compile_one_thread
+       *)
+    Admitted.
+
+    Lemma simulation_inductive_case:
+      forall n : nat,
+        (forall m : option mem,
+            HybridMachine_simulation_properties (HybConcSem (Some 0) m)
+                                                (HybConcSem (Some n) m) (match_state n)) ->
+        (forall m : option mem,
+            HybridMachine_simulation_properties (HybConcSem (Some n) m)
+                                                (HybConcSem (Some (S n)) m) (concur_match n)) ->
+        forall m : option mem,
+          HybridMachine_simulation_properties (HybConcSem (Some 0) m)
+                                              (HybConcSem (Some (S n)) m) (match_state (S n)).
+    Proof.
+      intros n.
+    Admitted.
+    
     Lemma compile_n_threads:
       forall n m,
         HybridMachine_simulation.HybridMachine_simulation_properties
@@ -1230,30 +1261,178 @@ unfold match_thread_compiled.
           (HybConcSem (Some n) m)
           (match_state n).
     Proof.
-      intros.
-    Admitted.
+      induction n.
+      - (*trivial reflexive induction*)
+        apply trivial_self_injection.
+      - eapply simulation_inductive_case; eauto.
+        eapply compile_one_thread.
+    Qed.
 
   End CompileNThreads.
 
  Section CompileInftyThread.
-    
- Variable index: nat -> Type.
- Variable match_state: forall n,
-     index n ->
-     Values.Val.meminj ->
-     ThreadPool (Some 0) -> Memory.Mem.mem -> ThreadPool None -> Memory.Mem.mem -> Prop.
- 
+
+   Parameter lift_state: forall on, ThreadPool on -> forall on', ThreadPool on' -> Prop.
+   
+   Inductive infty_match:
+             nth_index -> meminj ->
+             ThreadPool (Some 0) -> mem ->
+             ThreadPool None -> mem -> Prop:=
+   | Build_infty_match:
+       forall n cd j st0 m0 stn mn st,
+         match_state n cd j st0 m0 stn mn ->
+         lift_state (Some n) stn None st ->
+         infty_match cd j st0 m0 st mn.
+
+
+   Lemma initial_infty:
+          forall (m : option mem) (s_mem s_mem' : mem) 
+                 (main : val) (main_args : list val)
+                 (s_mach_state : ThreadPool (Some 0)) (r1 : option res),
+            machine_semantics.initial_machine (HybConcSem (Some 0) m) r1
+                                              s_mem s_mach_state s_mem' main main_args ->
+            exists
+              (j : meminj) (cd : nth_index) (t_mach_state : ThreadPool None) 
+              (t_mem t_mem' : mem) (r2 : option res),
+              machine_semantics.initial_machine (HybConcSem None m) r2 t_mem
+                                                t_mach_state t_mem' main main_args /\
+              infty_match cd j s_mach_state s_mem' t_mach_state t_mem'.
+   Proof.
+     (* Follows from any initial diagram and a missing lemma showing that the initial state
+        can be "lifted" (lift_state) *)
+   Admitted.
+
+   Lemma infinite_step_diagram:
+          forall (m : option mem) (sge tge : HybridMachineSig.G)
+                 (U : list nat) (st1 : ThreadPool (Some 0)) 
+                 (m1 : mem) (st1' : ThreadPool (Some 0)) 
+                 (m1' : mem),
+            machine_semantics.thread_step (HybConcSem (Some 0) m) sge U st1
+                                          m1 st1' m1' ->
+            forall (cd : nth_index) (st2 : ThreadPool None) 
+                   (mu : meminj) (m2 : mem),
+              infty_match cd mu st1 m1 st2 m2 ->
+              exists
+                (st2' : ThreadPool None) (m2' : mem) (cd' : nth_index) 
+                (mu' : meminj),
+                infty_match cd' mu' st1' m1' st2' m2' /\
+                (machine_semantics_lemmas.thread_step_plus 
+                   (HybConcSem None m) tge U st2 m2 st2' m2' \/
+                 machine_semantics_lemmas.thread_step_star 
+                   (HybConcSem None m) tge U st2 m2 st2' m2' /\ 
+                 list_lt cd' cd).
+        Proof.
+          (*Proof sketch:
+            infty_match defines an intermediate machine Mn at level n, matching the 0 machine.
+            All threads of machine Mn are in Asm. A lemma should show that all hier machines 
+            (Mk, for k>n) also match the machine at 0. 
+            lemma [compile_n_threads] shows that machine M(S n) can step and reestablish 
+            [match_states]. Since we increased the hybrid bound (n -> S n) then the new thread 
+            is in Asm and [match_states] can be lifted to [infty_match].
+           *)
+        Admitted.
+        Lemma infinite_machine_step_diagram:
+          forall (m : option mem) (sge tge : HybridMachineSig.G)
+                 (U : list nat) (tr : HybridMachineSig.event_trace)
+                 (st1 : ThreadPool (Some 0)) (m1 : mem) (U' : list nat)
+                 (tr' : HybridMachineSig.event_trace)
+                 (st1' : ThreadPool (Some 0)) (m1' : mem),
+            machine_semantics.machine_step (HybConcSem (Some 0) m) sge U tr
+                                           st1 m1 U' tr' st1' m1' ->
+            forall (cd : nth_index) (st2 : ThreadPool None) 
+                   (mu : meminj) (m2 : mem),
+              infty_match cd mu st1 m1 st2 m2 ->
+              exists
+                (st2' : ThreadPool None) (m2' : mem) (cd' : nth_index) 
+                (mu' : meminj),
+                infty_match cd' mu' st1' m1' st2' m2' /\
+                machine_semantics.machine_step (HybConcSem None m) tge U tr st2
+                                               m2 U' tr' st2' m2'.
+        Proof.
+          (* Same as the other step diagram.*)
+        Admitted.
+
+        Lemma infinite_halted:
+          forall (m : option mem) (cd : nth_index) (mu : meminj)
+                 (U : list nat) (c1 : ThreadPool (Some 0)) 
+                 (m1 : mem) (c2 : ThreadPool None) (m2 : mem) 
+                 (v1 : val),
+            infty_match cd mu c1 m1 c2 m2 ->
+            machine_semantics.conc_halted (HybConcSem (Some 0) m) U c1 =
+            Some v1 ->
+            exists v2 : val,
+              machine_semantics.conc_halted (HybConcSem None m) U c2 =
+              Some v2.
+        Proof.
+          intros m.
+          (* Should follow easily from the match. *)
+        Admitted.
+
+        Lemma infinite_running:
+          forall (m : option mem) (cd : nth_index) (mu : meminj)
+                 (c1 : ThreadPool (Some 0)) (m1 : mem) (c2 : ThreadPool None)
+                 (m2 : mem),
+            infty_match cd mu c1 m1 c2 m2 ->
+            forall i : nat,
+              machine_semantics.running_thread (HybConcSem (Some 0) m) c1 i <->
+              machine_semantics.running_thread (HybConcSem None m) c2 i.
+        Proof.
+          intros m.
+          (* Should follow from the match relation. And there should be a similar lemma 
+             for the [match_states]
+           *)
+        Admitted.
   Lemma compile_all_threads:
-      forall n m,
+      forall m,
         HybridMachine_simulation.HybridMachine_simulation_properties
           (HybConcSem (Some 0) m)
           (HybConcSem None m)
-          (match_state n).
+          infty_match.
     Proof.
       intros.
-    Admitted.
+      econstructor.
+      - eapply list_lt_wf.
+      - apply initial_infty.
+      - apply infinite_step_diagram.
+      - apply infinite_machine_step_diagram.
+      - apply infinite_halted.
+      - apply infinite_running.
+    Qed.
 
-  End CompileInftyThread.
+ End CompileInftyThread.
+
+ Section TrivialSimulations.
+   Lemma trivial_clight_simulation:
+   (HybridMachine_simulation
+    (ClightMachine.DMS.ClightConcurSem(ge:=Clight_g)
+       (Genv.init_mem (Ctypes.program_of_program C_program)))
+    (HybConcSem (Some 0) (Genv.init_mem (Ctypes.program_of_program C_program)))).
+   Admitted.
+   Lemma trivial_asm_simulation:
+     (HybridMachine_simulation
+        (HybConcSem None (Genv.init_mem Asm_program))
+        (X86Context.AsmConcurSem
+           (the_program:=Asm_program)
+           (Hsafe:=Asm_genv_safe)
+           (Genv.init_mem Asm_program))).
+   Admitted.
+   End TrivialSimulations.
+
+
+ (* NOTE: This section could be moved to where the simulations are defined. *) 
+ Section SimulationTransitivity.
+   Lemma HBSimulation_transitivity:
+     forall G1 G2 G3 TID SCH TR C1 C2 C3 res,
+     forall (Machine1 : @machine_semantics.ConcurSemantics G1 TID SCH TR C1 mem res)
+       (Machine2 : @machine_semantics.ConcurSemantics G2 TID SCH TR C2 mem res)
+       (Machine3 : @machine_semantics.ConcurSemantics G3 TID SCH TR C3 mem res),
+     HybridMachine_simulation Machine1 Machine2 -> 
+     HybridMachine_simulation Machine2 Machine3 ->
+     HybridMachine_simulation Machine1 Machine3.
+   Proof.
+   Admitted.
+ End SimulationTransitivity.
+ 
 
 
 
@@ -1278,10 +1457,10 @@ unfold match_thread_compiled.
  *)
  End ThreadedSimulation.
 End ThreadedSimulation.
- 
 
 Module Concurrent_correctness (CC_correct: CompCert_correctness).
-
+  Module TSim:= (ThreadedSimulation CC_correct).
+  Import TSim.
   
   Lemma ConcurrentCompilerCorrectness:
     forall (p:Clight.program) (tp:Asm.program),
@@ -1294,10 +1473,16 @@ Module Concurrent_correctness (CC_correct: CompCert_correctness).
   Proof.
     unfold ConcurrentCompilerCorrectness_specification.
     intros.
-    apply CC_correct.simpl_clight_semantic_preservation in H.
-    unfold ClightMachine.ClightMachine.DMS.ClightConcurSem, HybridMachineSig.HybridMachineSig.ConcurMachineSemantics, ClightMachine.ClightMachine.DMS.ClightMachine, HybridMachineSig.HybridMachineSig.HybridCoarseMachine.HybridCoarseMachine.
-    econstructor.
-    
-    
+    eapply HBSimulation_transitivity; eauto.
+    - eapply trivial_clight_simulation; eauto.
+    -
+      eapply HBSimulation_transitivity.
+      + eauto.
+      + eauto.
+      + econstructor.
+        eapply compile_all_threads.
+      + pose proof trivial_asm_simulation.
+        specialize (X _ _ asm_genv_safety H).
+        (* difference in initial memoryes. *)
   Admitted.
 End Concurrent_correctness.
