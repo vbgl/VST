@@ -459,6 +459,24 @@ induction H3; try solve [apply I].
   apply eval_expr_ok in H3; auto.
 Qed.
 
+Lemma eval_exprlist_ok:
+  forall (m : mem) (ve : Clight.env) (te : Clight.temp_env)
+  (al : list Clight.expr) tl (vl : list val),
+@Smallstep.globals_not_fresh Clight.fundef type (Clight.genv_genv ge) m ->
+mem_wd2 m ->
+venv_ok (Mem.nextblock m) ve ->
+tenv_ok (Mem.nextblock m) te ->
+eval_exprlist ge ve te m al tl vl -> 
+Forall (val_ok (Mem.nextblock m)) vl.
+Proof.
+intros.
+induction H3.
+constructor.
+eapply eval_expr_ok in H3; eauto.
+constructor; auto.
+eapply sem_cast_ok in H4; eauto.
+Qed.
+
 Lemma find_label_ok:
  forall nextb lbl s (al : list cont') (k' : cont),
   cont_ok nextb al ->
@@ -654,6 +672,15 @@ intros until m'. intro Hstep.
    apply set_tenv_ok; auto.
    eapply eval_expr_ok; eauto.
 * (* call_internal *)
+ destruct H9 as [? [? ?]]. inv H11. clear H14.
+  eapply eval_expr_ok in H0; eauto.
+  eapply eval_exprlist_ok in H1; eauto.
+(*
+Lemma alloc_variables_ok: 
+  forall ve m vl ve' m1,
+   mem_wd2 m ->
+   venv_ok (Mem.nextblock m) ve ->
+   *)
   admit.
 *  (* call_external *)
   admit.
@@ -703,12 +730,28 @@ intros until m'. intro Hstep.
   repeat constructor.
   inv H3. auto.
 * (* return *)
- SearchAbout Mem.free_list Mem.nextblock.
   rewrite (mem_lemmas.nextblock_freelist _ _ _ H0).
   split3.
   eapply mem_wd_freelist; eassumption.
   2: apply Pos.le_refl.
-  admit.
+  clear - H H3 H1 H2 H4 H5.
+  destruct H5 as [? [? ?]].
+  inv H6. clear H9.
+  assert (val_ok (Mem.nextblock m) v'). {
+    destruct optexp.
+    destruct H1  as [? [? ?]]. eapply eval_expr_ok in H1; eauto.
+    eapply sem_cast_ok in H6; eauto. subst; hnf; auto.
+  }
+  clear H1.
+  assert (venv_ok (Mem.nextblock m) ve' /\ tenv_ok (Mem.nextblock m) te' /\ cont_ok (Mem.nextblock m) k'). {
+    clear - H H10.
+    admit.
+  }
+  destruct H1 as [? [? ?]].
+  split3; auto.
+  clear - H7 H2 H6.
+  destruct optid; destruct H2; subst; auto.
+  apply set_tenv_ok; auto.
 * (* switch *)
   admit.
 * (* label *)
