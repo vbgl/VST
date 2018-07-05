@@ -525,7 +525,10 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
           { eapply core_semantics.corestep_mem in H2.
             eapply H2. }
           { eapply Asm_event.asm_ev_ax1 in H1.
-            (* This is the step constructed bellow *)
+            (*pose proof (semantics.corestep_mem (Asm_core.Asm_mem_sem Asm_g )).
+            eapply semantics.corestep_mem in H1.
+            simpl in H1. *)
+            (* This is the step constructed bellow *) 
             admit.
           }
           { apply H0. }
