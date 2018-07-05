@@ -26,10 +26,10 @@ Record CoreSemantics {C M : Type} : Type :=
 
 (* Extract a CoreSemantics from a part_semantics*)
 Inductive step2corestep (sem:part_semantics):(state sem) -> mem -> (state sem) -> mem -> Prop :=
-  coreify: forall s1 m1 t s2 m2,
-    step sem (set_mem s1 m1) t (set_mem s2 m2) ->
+  coreify: forall s1 m1 t s2,
+    step sem (set_mem s1 m1) t s2 ->
     Smallstep.at_external sem (set_mem s1 m1) = None ->
-    step2corestep sem s1 m1 s2 m2.
+    step2corestep sem s1 m1 s2 (get_mem s2).
     
 Program Definition sem2coresem (sem:part_semantics) corestep_not_halted : CoreSemantics:=
   {|
