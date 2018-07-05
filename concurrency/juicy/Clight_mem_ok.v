@@ -589,7 +589,32 @@ Qed.
 
 Lemma mem_wd_freelist:
   forall m bl m', Mem.free_list m bl = Some m' -> mem_wd2 m -> mem_wd2 m'.
-Admitted.
+Proof.
+intros.
+revert  bl m H H0; induction bl; simpl; intros.
+inv H; auto.
+destruct a as [[??]?].
+destruct (Mem.free m b z z0) eqn:?H; inv H.
+apply IHbl with m0; auto.
+clear - H0 H1.
+hnf; intros.
+Transparent Mem.free.
+destruct (eq_block b0 b).
+subst b0.
+unfold Mem.free in H1.
+if_tac in H1.
+inv H1.
+simpl.
+apply H0.
+inv H1.
+unfold Mem.free in H1.
+if_tac in H1.
+inv H1.
+simpl.
+apply H0.
+inv H1.
+Opaque Mem.free.
+Qed.
 
 Lemma cl_step_ok:
   forall c m c' m',

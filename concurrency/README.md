@@ -87,28 +87,41 @@ which mentions the following axioms, categorized into
 
   
     [R] Rdefinitions.up
+    [H] ConcurCC_safe.ConcurCC_correct.TSim.trivial_clight_simulation  (easy)
+    [H] ConcurCC_safe.ConcurCC_correct.TSim.trivial_asm_simulation  (easy)
     [R] Raxioms.total_order_T
     [H] BareMachine.syncstep_equal_run (Nick)
+    [D] CC_correct.simpl_clight_semantic_preservation
     [A] Axioms.prop_ext
     [A] ProofIrrelevance.proof_irrelevance
     [A] lib.Axioms.proof_irr
+    [H] ConcurCC_safe.ConcurCC_correct.TSim.list_lt_wf  (easy)
+    [H] ConcurCC_safe.ConcurCC_correct.TSim.list_lt  (easy)
+    [H] ConcurCC_safe.ConcurCC_correct.TSim.lift_state  (easy)
     [C] Events.inline_assembly_sem
     [C] Events.inline_assembly_properties
     [H] Clightcore_coop.inline_assembly_memstep  (Lennart)
     [H] Events.inject_delta_map  (Santiago)
+    [H] ConcurCC_safe.ConcurCC_correct.initial_memories_are_equal  (William)
+    [H] ConcurCC_safe.ConcurCC_correct.TSim.initial_infty 
     [H] ConcurCC_safe.initial_csafe_all_schedule (Santiago)
+    [H] ConcurCC_safe.ConcurCC_correct.TSim.infinite_step_diagram (hard)
+    [H] ConcurCC_safe.ConcurCC_correct.TSim.infinite_running (hard)
+    [H] ConcurCC_safe.ConcurCC_correct.TSim.infinite_machine_step_diagram (hard)
+    [H] ConcurCC_safe.ConcurCC_correct.TSim.infinite_halted (easy)
     [A] functional_extensionality_dep
     [B] SeparationLogicSoundness.SoundSeparationLogic.CSL.func_ptr_isptr
     [B] SeparationLogicSoundness.SoundSeparationLogic.CSL.func_ptr_def
     [B] SeparationLogicSoundness.SoundSeparationLogic.CSL.func_ptr
     [H] safety_equivalence.finite_state_preservation  (Nick? Santiago?)
-    [H] x86_erasure.X86CoreErasure.extsem_erasure (Nick)
     [C] Events.external_functions_sem
     [C] Events.external_functions_properties
+    [H] Clightcore_coop.extcall_sem_mem_step
     [H] ConcurCC_safe.explicit_safety_step  (Santiago)
     [A] Eqdep.Eq_rect_eq.eq_rect_eq
     [H] x86_context.X86SEMAxioms.corestep_det (Nick) 
     [R] Raxioms.completeness
+    [H] Clight_self_simulation.clight_self_simulation (Lennart)
     [H] ClightSemantincsForMachines.clc_ev_elim (Lennart)
     [A] Classical_Prop.classic
     [H] Clight_mem_ok.cl_step_ok (Andrew)
@@ -134,10 +147,9 @@ which mentions the following axioms, categorized into
     [R] Rdefinitions.Rinv
     [R] Raxioms.R1_neq_R0
     [R] Rdefinitions.R1
-    [R} Rdefinitions.R0
+    [R] Rdefinitions.R0
     [R] Rdefinitions.R
-    [H] ConcurCC_safe.ConcurCC_correct.ConcurrentCompilerCorrectness  (Santiago)
+    [H] ConcurCC_safe.ConcurCC_correct.TSim.HBSimulation_transitivity  (William)
     [D] CC_correct.CompCert_compiler
-    [D] CC_correct.simpl_clight_semantic_preservation
     [H] ConcurCC_safe.Clight_finite_branching  (Santiago)
-    [H] Asm_self_simulation.Asm_self_simulation
+    [H] Asm_self_simulation.Asm_self_simulation (Lennart)
