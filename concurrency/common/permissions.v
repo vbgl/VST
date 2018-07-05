@@ -2297,3 +2297,138 @@ Lemma restrPermMap_irr:
   Defined.
 
 End permMapDefs.
+
+Require Import VST.concurrency.common.core_semantics.
+Require Import Coqlib.
+
+Lemma storebytes_decay:
+  forall m loc p vl m', Mem.storebytes m loc p vl = Some m' -> decay m m'.
+Proof.
+intros.
+hnf; intros.
+split; intros.
+contradiction (Mem.storebytes_valid_block_2 _ _ _ _ _ H _ H1).
+right.
+intros.
+rewrite (Mem.storebytes_access _ _ _ _ _ H); auto.
+Qed.
+
+Lemma alloc_decay:
+  forall m lo hi m1 b1, Mem.alloc m lo hi = (m1,b1) -> decay m m1.
+Proof.
+intros.
+hnf; intros.
+split; intros.
+destruct (eq_block b1 b).
+subst.
+destruct (Memory.range_dec lo ofs hi).
+left.
+intros.
+Transparent Mem.alloc.
+unfold Mem.alloc in H.
+inv H.
+simpl. rewrite PMap.gss.
+destruct (zle lo ofs); try omega.
+destruct (zlt ofs hi); try omega; auto.
+right.
+intros.
+inv H; simpl.
+rewrite PMap.gss.
+destruct (zle lo ofs); try omega;
+destruct (zlt ofs hi); try omega; auto.
+contradiction H0.
+pose proof (Mem.valid_block_alloc_inv _ _ _ _ _ H b H1).
+destruct H2. subst. contradiction n; auto.
+auto.
+right.
+intros.
+assert (b1<>b).
+intro. subst.
+contradiction (Mem.fresh_block_alloc _ _ _ _ _ H).
+destruct ((Mem.mem_access m1) !! b ofs k) eqn:?H.
+destruct (semantics_lemmas.alloc_access_inv _ _ _ _ _ H _ _ _ _ H2).
+destruct H3; congruence.
+destruct H3; auto.
+apply (semantics_lemmas.alloc_access_inv_None _ _ _ _ _ H _ _ _ H2).
+Opaque Mem.alloc.
+Qed.
+
+Lemma free_decay: forall m b lo hi m', Mem.free m b lo hi = Some m' -> decay m m'.
+Proof.
+intros.
+hnf; intros.
+destruct (eq_block b b0).
+subst b0.
+split; intros.
+contradiction H0.
+eapply Mem.valid_block_free_2; eauto.
+Transparent Mem.free.
+unfold Mem.free in H.
+if_tac in H; inv H.
+destruct (Memory.range_dec lo ofs hi) as [?H|?H].
+specialize (H1 _ H).
+left.
+intros.
+hnf in H1.
+destruct ((Mem.mem_access m) !! b ofs Cur) eqn:H2; try contradiction.
+assert (p=Freeable) by (destruct p; inv H1; auto). subst p; clear H1.
+split.
+destruct k; auto.
+pose proof (Mem.access_max m b ofs).
+rewrite H2 in H1.
+destruct ((Mem.mem_access m) !! b ofs Max); inv H1; auto.
+simpl.
+rewrite PMap.gss.
+destruct (zle lo ofs); try omega.
+destruct (zlt ofs hi); try omega.
+simpl. auto.
+right.
+intros.
+simpl.
+rewrite PMap.gss.
+destruct (zle lo ofs); destruct (zlt ofs hi); try omega; auto.
+split.
+intros.
+contradiction H0.
+eapply Mem.valid_block_free_2; eauto.
+intros.
+right.
+intros.
+unfold Mem.free in H.
+destruct (Mem.range_perm_dec m b lo hi Cur Freeable).
+inv H.
+simpl.
+rewrite PMap.gso; auto.
+inv H.
+Opaque Mem.free.
+Qed.
+
+
+Lemma msem_decay: 
+  forall C (Sem: MemSem C) c m c' m',
+   corestep (csem Sem)  c m c' m' ->
+  decay m m'.
+Proof.
+  intros.
+ apply corestep_mem in H.
+ induction H.
+ eapply storebytes_decay; eauto.
+ eapply alloc_decay; eauto.
+ revert m H; induction l; simpl; intros. inv H. apply decay_refl.
+ destruct a as [[? ?] ?].
+ destruct (Mem.free m b z z0) eqn:?; inv H.
+ apply IHl in H1.
+ apply decay_trans with m0; auto.
+ eapply Mem.valid_block_free_1; eauto.
+ eapply free_decay; eauto.
+ apply decay_trans with m''; auto.
+ apply semantics_lemmas.mem_step_nextblock' in H.
+ apply semantics_lemmas.mem_step_nextblock' in H0.
+ pose proof (Pos.le_trans _ _ _ H H0).
+ intros.
+ red in H2|-*.
+  unfold Plt in *.
+  eapply Pos.lt_le_trans; eauto.
+Qed.
+
+    

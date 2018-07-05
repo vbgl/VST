@@ -81,49 +81,37 @@ which mentions the following axioms, categorized into
           machine such as x86_32
     [D] The CompCert compiler itself; this is external (and supplied
          in our branch of the CompCert repo)
-    [E] Operational axiomatization of our 5 thread-library functions
     [R] part of the axiomatization of the Real numbers, used by
         CompCert's "Flocq" floating-point library
     [H] holes in our proof
 
   
-    [E] Clight_safety.wrapper_args (Andrew)
     [R] Rdefinitions.up
     [R] Raxioms.total_order_T
     [H] BareMachine.syncstep_equal_run (Nick)
     [A] Axioms.prop_ext
     [A] ProofIrrelevance.proof_irrelevance
     [A] lib.Axioms.proof_irr
-    [H] Clight_safety.mem_ok_step (Andrew)
-    [H] Clight_safety.match_ext
-    [H] Clight_safety.match_body
-    [E] Clight_safety.lookup_wrapper (Andrew)
-    [H] safety_equivalence.ksafe_csafe_equiv' (Andrew)
     [C] Events.inline_assembly_sem
     [C] Events.inline_assembly_properties
-    [H] x86_erasure.X86CoreErasure.inline_assembly_erasure (Nick)
-    [H] Events.inject_delta_map
+    [H] Clightcore_coop.inline_assembly_memstep  (Lennart)
+    [H] Events.inject_delta_map  (Santiago)
     [H] ConcurCC_safe.initial_csafe_all_schedule (Santiago)
-    [H] Clight_safety.init_mem_ok
     [A] functional_extensionality_dep
     [B] SeparationLogicSoundness.SoundSeparationLogic.CSL.func_ptr_isptr
     [B] SeparationLogicSoundness.SoundSeparationLogic.CSL.func_ptr_def
     [B] SeparationLogicSoundness.SoundSeparationLogic.CSL.func_ptr
-    [H] safety_equivalence.finite_state_preservation
-    [E] Clight_safety.f_wrapper  (Andrew)
+    [H] safety_equivalence.finite_state_preservation  (Nick? Santiago?)
     [H] x86_erasure.X86CoreErasure.extsem_erasure (Nick)
     [C] Events.external_functions_sem
     [C] Events.external_functions_properties
     [H] ConcurCC_safe.explicit_safety_step  (Santiago)
     [A] Eqdep.Eq_rect_eq.eq_rect_eq
-    [H] safety_equivalence.csafe_ksafe_equiv (Andrew)
-    [H] X86Inj.corestep_wd  (Nick)
-    [H] X86Inj.corestep_obs_eq (Nick)
     [H] x86_context.X86SEMAxioms.corestep_det (Nick) 
     [R] Raxioms.completeness
-    [H] ClightSemantincsForMachines.clc_ev_elim
+    [H] ClightSemantincsForMachines.clc_ev_elim (Lennart)
     [A] Classical_Prop.classic
-    [E] Clight_safety.b_wrapper  (Andrew)
+    [H] Clight_mem_ok.cl_step_ok (Andrew)
     [R] Raxioms.archimed
     [B] SeparationLogicSoundness.SoundSeparationLogic.CSL.approx_func_ptr
     [R] Raxioms.Rplus_opp_r
@@ -149,12 +137,7 @@ which mentions the following axioms, categorized into
     [R} Rdefinitions.R0
     [R] Rdefinitions.R
     [H] ConcurCC_safe.ConcurCC_correct.ConcurrentCompilerCorrectness  (Santiago)
-    [D] CC_correct.CompCert_compiler : program -> option Asm.program
-    [H] ClightSemantincsForMachines.Clight_new_ev_sim (Lennart)
-    [H] Clight_safety.Clight_new_Clight_safety_gen  (William)
+    [D] CC_correct.CompCert_compiler
+    [D] CC_correct.simpl_clight_semantic_preservation
     [H] ConcurCC_safe.Clight_finite_branching  (Santiago)
-    [H] Clight_safety.ClightAxioms
-    [H] Clightcore_coop.CLC_corestep_mem (Lennart)
-
-    [H] Clight_self_simulation.clight_self_simulation (Lennart)
-    [H] Asm_self_simulation.Asm_self_simulation (Nick? Lennart?)
+    [H] Asm_self_simulation.Asm_self_simulation
