@@ -146,6 +146,19 @@ rewrite PTree.gso in H1 by auto.
 apply H0 in H1. auto.
 Qed.
 
+Lemma set_venv_ok:
+  forall nextb i v ve, block_ok nextb (fst v) -> venv_ok nextb ve ->
+            venv_ok nextb (PTree.set i v ve).
+Proof.
+intros.
+hnf in H0|-*.
+intros.
+destruct (eq_dec i i0).
+subst. rewrite PTree.gss in H1. inv H1. auto.
+rewrite PTree.gso in H1 by auto.
+apply H0 in H1. auto.
+Qed.
+
 Lemma sem_add_ptr_int_ok:
   forall nextb ty si v1 v2 v,
   val_ok nextb v1 ->
@@ -459,6 +472,24 @@ induction H3; try solve [apply I].
   apply eval_expr_ok in H3; auto.
 Qed.
 
+Lemma eval_exprlist_ok:
+  forall (m : mem) (ve : Clight.env) (te : Clight.temp_env)
+  (al : list Clight.expr) tl (vl : list val),
+@Smallstep.globals_not_fresh Clight.fundef type (Clight.genv_genv ge) m ->
+mem_wd2 m ->
+venv_ok (Mem.nextblock m) ve ->
+tenv_ok (Mem.nextblock m) te ->
+eval_exprlist ge ve te m al tl vl -> 
+Forall (val_ok (Mem.nextblock m)) vl.
+Proof.
+intros.
+induction H3.
+constructor.
+eapply eval_expr_ok in H3; eauto.
+constructor; auto.
+eapply sem_cast_ok in H4; eauto.
+Qed.
+
 Lemma find_label_ok:
  forall nextb lbl s (al : list cont') (k' : cont),
   cont_ok nextb al ->
@@ -616,6 +647,63 @@ inv H1.
 Opaque Mem.free.
 Qed.
 
+Lemma alloc_variables_ok: 
+  forall ve m vl ve' m',
+   mem_wd2 m ->
+   venv_ok (Mem.nextblock m) ve ->
+   alloc_variables ge ve m vl ve' m' ->
+   venv_ok (Mem.nextblock m') ve' /\ mem_wd2 m' /\ (Mem.nextblock m <= Mem.nextblock m')%positive.
+Proof.
+  intros.
+  revert ve m H H0 H1; induction vl; simpl; intros.
+  inv H1. split3; auto. apply Pos.le_refl.
+  inv H1.
+  apply IHvl in H9.
+  destruct H9 as [? [? ?]].
+  split3; auto.
+  eapply Pos.le_trans; try apply H3.
+  apply Mem.nextblock_alloc in H6. rewrite H6.
+  apply Ple_succ.
+  eapply mem_wd2_alloc; eauto.
+  apply set_venv_ok.
+  apply Mem.valid_new_block in H6. red in H6. apply H6.
+  eapply alloc_venv_ok; try eassumption.
+  apply Mem.nextblock_alloc in H6. rewrite H6.
+  apply Ple_succ.
+Qed.
+
+Lemma bind_parameter_temps_ok:
+  forall m fl vl te te',
+    tenv_ok (Mem.nextblock m) te ->
+    Forall (val_ok (Mem.nextblock m))vl ->
+    bind_parameter_temps fl vl te = Some te' ->
+    tenv_ok (Mem.nextblock m) te'.
+Proof.
+induction fl; intros; auto.
+inv H1. destruct vl; inv H3. auto.
+inv H1.
+destruct a.
+destruct vl; inv H3.
+inv H0.
+apply IHfl in H2; auto.
+apply set_tenv_ok; auto.
+Qed.
+
+Lemma call_cont_ok_lemma:
+ forall f optid k m ve' te' k',
+call_cont k = Kcall optid f ve' te' :: k' ->
+Forall (cont'_ok (Mem.nextblock m)) k ->
+venv_ok (Mem.nextblock m) ve' /\
+tenv_ok (Mem.nextblock m) te' /\ cont_ok (Mem.nextblock m) k'.
+Proof.
+intros.
+revert H; induction k; simpl; intros. inv H.
+inv H0.
+destruct a; try solve [apply IHk in H; auto].
+inv H.
+inv H3. split3; auto.
+Qed.
+
 Lemma cl_step_ok:
   forall c m c' m',
 Clight_new.cl_step ge c m c' m' ->
@@ -654,9 +742,31 @@ intros until m'. intro Hstep.
    apply set_tenv_ok; auto.
    eapply eval_expr_ok; eauto.
 * (* call_internal *)
-  admit.
+ destruct H9 as [? [? ?]]. inv H11. clear H14.
+  eapply eval_expr_ok in H0; eauto.
+  eapply eval_exprlist_ok in H1; eauto.
+  eapply alloc_variables_ok in H5; eauto;
+   [ | clear; hnf; intros; rewrite PTree.gempty in H; inv H].
+  destruct H5 as [? [? ?]].
+  eapply bind_parameter_temps_ok in H6; eauto.
+  split3; auto.
+  split3; auto.
+  eapply alloc_tenv_ok; eauto.
+  repeat constructor; auto.
+  eapply alloc_venv_ok; eauto.
+  eapply alloc_tenv_ok; eauto.
+  clear - H12 H15.
+  revert H15; apply Forall_impl.
+  apply alloc_cont'_ok; auto.
+  clear. induction (fn_temps f); simpl. intros ? ? ?. rewrite PTree.gempty in H. inv H. destruct a.
+  apply set_tenv_ok; auto. hnf; auto.  
 *  (* call_external *)
-  admit.
+ destruct H5 as [? [? ?]]. inv H7. clear H10.
+  eapply eval_expr_ok in H0; eauto.
+  eapply eval_exprlist_ok in H1; eauto.
+  split3; auto.
+  2: apply Pos.le_refl.
+  split3; auto.
 * (* seq *)
   apply IHHstep. split; [|split]; auto.
   destruct H1 as [? [? ?]];  split; [|split]; auto.
@@ -703,14 +813,32 @@ intros until m'. intro Hstep.
   repeat constructor.
   inv H3. auto.
 * (* return *)
- SearchAbout Mem.free_list Mem.nextblock.
   rewrite (mem_lemmas.nextblock_freelist _ _ _ H0).
   split3.
   eapply mem_wd_freelist; eassumption.
   2: apply Pos.le_refl.
-  admit.
+  clear - H H3 H1 H2 H4 H5.
+  destruct H5 as [? [? ?]].
+  inv H6. clear H9.
+  assert (val_ok (Mem.nextblock m) v'). {
+    destruct optexp.
+    destruct H1  as [? [? ?]]. eapply eval_expr_ok in H1; eauto.
+    eapply sem_cast_ok in H6; eauto. subst; hnf; auto.
+  }
+  clear H1.
+  assert (venv_ok (Mem.nextblock m) ve' /\ tenv_ok (Mem.nextblock m) te' /\ cont_ok (Mem.nextblock m) k'). {
+   eapply call_cont_ok_lemma; eauto.
+  }
+  destruct H1 as [? [? ?]].
+  split3; auto.
+  clear - H7 H2 H6.
+  destruct optid; destruct H2; subst; auto.
+  apply set_tenv_ok; auto.
 * (* switch *)
-  admit.
+  destruct H3 as [? [? ?]].
+  split3; auto.
+  2: apply Pos.le_refl.
+  split3; auto. inv H5. constructor; auto.
 * (* label *)
   apply IHHstep. split; [|split]; auto.
   simpl in H1. destruct H1 as [? [? ?]]. split; [|split]; auto. inv H3.
@@ -722,6 +850,6 @@ intros until m'. intro Hstep.
   destruct H2 as [? [? ?]]. split; [|split]; auto.
   inv H4.
   eapply mem_ok_goto; eauto.
-Admitted.
+Qed.
 
 End GE.
