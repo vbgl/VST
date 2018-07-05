@@ -1435,7 +1435,7 @@ intros. simpl in H. revert c2 H0. induction H; intros.
   + replace (T1++T2++T3) with (nil ++ (T1++T2++T3)) by reflexivity.
     eapply ev_star_plus_trans. apply STAR.
     replace (T1++T2++T3) with ((T1++T2)++T3) by (rewrite app_assoc; trivial).
-    eapply ev_plus_two. econstructor; eauto.
+    eapply ev_plus_two. simpl. econstructor; try eassumption. instantiate (1:=m0). (*instantiate 1:=m should work, too*)
     econstructor; eauto.
     apply list_norepet_app in H4. destruct H4 as [? [? ?]].
     econstructor; auto.
@@ -1739,14 +1739,14 @@ intros. simpl in H. revert c2 H0. induction H; intros.
          constructor. } }
      { rewrite strip_skip'_not in * by auto.
        inv H5. constructor 1. }
- }
- exists (CC_core_to_CC_state (CC'.CC_core_State f (if b then s1 else s2) k'0 e le) m0); split; auto.
- { 
+  }
+  exists (CC_core_to_CC_state (CC'.CC_core_State f (if b then s1 else s2) k'0 e le) m0); split; auto.
+  { 
     replace T with (nil ++ T) by reflexivity. eapply ev_star_plus_trans; try apply STAR.
     replace nil with (@nil mem_event ++ nil) by reflexivity. 
     apply ev_plus_one. econstructor; eauto. }
- { constructor; auto.
-   apply match_cont_strip; auto. } }
+  { constructor; auto.
+    apply match_cont_strip; auto. } }
 
 { (* step_loop *)
   destruct c2; simpl in *; inv H0. rename k0 into k'. 
@@ -1769,7 +1769,7 @@ intros. simpl in H. revert c2 H0. induction H; intros.
   + replace nil with (@nil mem_event ++ nil) by reflexivity.
     eapply ev_star_plus_trans; try apply H.
     replace nil with (@nil mem_event ++ nil) by reflexivity.    
-    econstructor. simpl. eapply clc_evstep_skip_loop2; eauto.
+    econstructor. simpl. eapply clc_evstep_skip_loop2; eauto. instantiate (1:=m0). (*instantiate 1:=m should work, too*)
     replace nil with (@nil mem_event ++ nil) by reflexivity.
     apply ev_star_one. simpl. eapply clc_evstep_loop; eauto.
   + constructor; auto. apply match_cont_strip. constructor. auto. }
@@ -1853,7 +1853,7 @@ intros. simpl in H. revert c2 H0. induction H; intros.
           by (rewrite app_nil_r; trivial).
         eapply ev_plus_two.
         + simpl. eapply clc_evstep_skip_call; simpl; eauto.
-        + simpl. econstructor. }
+        + simpl. apply clc_evstep_returnstate with (mx:=m0)(mx':=m0).  (*instantiating mx:=m and mx':=m should work, too*) }
       econstructor; eauto. }
     { simpl in H. inv H. simpl in CUR. symmetry in CUR; inv CUR.
       destruct s; inv H4.
@@ -1874,7 +1874,7 @@ intros. simpl in H. revert c2 H0. induction H; intros.
           by (rewrite app_nil_r; trivial).
         eapply ev_plus_two.
         + simpl. eapply clc_evstep_skip_call; simpl; eauto.
-        + simpl. econstructor. }
+        + simpl.  apply clc_evstep_returnstate with (mx:=m0)(mx':=m0). (*instantiating mx:=m and mx':=m should work, too*) }
       econstructor; eauto. } } }
 
 { (* step_switch *)
@@ -1888,7 +1888,7 @@ intros. simpl in H. revert c2 H0. induction H; intros.
     replace T with (nil++T) by reflexivity. eapply ev_star_plus_trans; try apply H99.
     eapply ev_plus_one. simpl. econstructor; eassumption. }
   { simpl. constructor; auto. apply match_cont_strip. constructor; auto. } }
-
+  
 { (* step_label *)
   destruct c2; simpl in *; inv H0. rename k0 into k'. 
   remember (CC.Kseq s0 k') as k0'. inv H2.
@@ -1902,7 +1902,7 @@ intros. simpl in H. revert c2 H0. induction H; intros.
     eapply (evexec_skips' ge f _ _ _ _ e le m m0 (@eq_sym _ _ _ H4)). 
   apply ev_star_one. constructor. } 
 
-* (* step_goto *)
+{ (* step_goto *)
   destruct c2; simpl in *; inv H0. 
   remember (CC.Kseq s k0) as k0'. inv H2.
   generalize (match_cont_call_strip k k'0(*k'1*)); intro.
@@ -1924,13 +1924,6 @@ intros. simpl in H. revert c2 H0. induction H; intros.
   change (current_function (Kseq (Sreturn None) :: call_cont k) = Some f) in CUR.
   forget (Kseq (Sreturn None) :: call_cont k) as k0. clear - CUR H.
   rewrite (current_function_find_label _ _ _ _ _ CUR H). auto.
-  apply match_cont_strip1. auto.
-Unshelve.
-apply m. 
-apply m. 
-apply m. 
-apply m.
-apply m.
-apply m.
+  apply match_cont_strip1. auto. }
 Qed.
 
