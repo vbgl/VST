@@ -2233,20 +2233,9 @@ Module X86Inj.
       eapply eval_builtin_args_ren in H9 as (args' & ? & ?); eauto.
       (* We need Hsafe to give us that external calls behave the same even
          on injected arguments. *)
-      destruct ef; try solve [intros []; subst;
-        match goal with H : external_call ?ef _ _ _ _ _ _ |- _ =>
-        assert (exists vres', external_call ef the_ge args' mf t0 vres' mf /\ val_obs f vres vres') as (? & ? & ?) by admit end;
-        eexists (State _ mf), mf, f; split;
-        [econstructor; eauto; eapply Asm.exec_step_builtin; eauto|];
-      repeat match goal with
-             | [ |- _ /\ _] =>
-               split; simpl; eauto with renamings reg_renamings val_renamings; try contradiction
-             end; apply regset_ren_set; try apply val_obs_offset_ptr; eauto with renamings reg_renamings val_renamings];
-             intros _.
-(*      destruct ef;
+      destruct ef;
                try (intros (_ & _ & Hcontra);
-                    now exfalso);
-               intros _. *)
+                    now exfalso).
       + (* EF_malloc case*)
         pose proof H10 as Hext_call.
         simpl in H10.
@@ -2273,10 +2262,10 @@ Module X86Inj.
           eapply Asm.exec_step_builtin; eauto.
           simpl.
           inv H2.
-          inv H12.
+          inv H13.
           assert (v' = Vptrofs sz)
             by (unfold Vptrofs in *;
-                destruct Archi.ptr64; inv H10; reflexivity); subst.
+                destruct Archi.ptr64; inv H11; reflexivity); subst.
           econstructor.
           eauto.
           eauto.
@@ -2423,7 +2412,7 @@ Module X86Inj.
       destruct (Ptrofs.eq_dec _ _); [|contradiction].
       rewrite H6 in H0.
       apply get_extcall_arguments_spec in H8; rewrite H8 in H0; discriminate.
-  Admitted.
+  Qed.
 
   (** Coresteps maintain well-definedness *)
 
