@@ -1461,6 +1461,13 @@ End ThreadedSimulation.
 Module Concurrent_correctness (CC_correct: CompCert_correctness).
   Module TSim:= (ThreadedSimulation CC_correct).
   Import TSim.
+
+  Lemma initial_memories_are_equal:
+              forall (p : Clight.program) (tp : Asm.program),
+                Genv.init_mem tp = Genv.init_mem (Ctypes.program_of_program p).
+        Proof.
+          intros p tp.
+        Admitted.
   
   Lemma ConcurrentCompilerCorrectness:
     forall (p:Clight.program) (tp:Asm.program),
@@ -1481,8 +1488,12 @@ Module Concurrent_correctness (CC_correct: CompCert_correctness).
       + eauto.
       + econstructor.
         eapply compile_all_threads.
-      + pose proof trivial_asm_simulation.
-        specialize (X _ _ asm_genv_safety H).
-        (* difference in initial memoryes. *)
-  Admitted.
+      + replace (Genv.init_mem (Ctypes.program_of_program p)) with (Genv.init_mem tp) by
+            eapply initial_memories_are_equal.
+        eapply trivial_asm_simulation; eauto.
+        
+      Unshelve. auto.
+  Qed.
+
+        
 End Concurrent_correctness.
