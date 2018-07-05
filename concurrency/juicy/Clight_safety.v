@@ -20,6 +20,7 @@ Require Import VST.concurrency.common.dry_machine_lemmas.
 Require Import VST.concurrency.juicy.semax_simlemmas.
 Require Import VST.concurrency.juicy.semax_to_juicy_machine.
 Require Import VST.concurrency.juicy.mem_wd2.
+Require Import VST.concurrency.juicy.Clight_mem_ok.
 Require Import VST.veric.Clight_sim.
 Require Import VST.msl.eq_dec.
 Require Import BinNums.
@@ -647,109 +648,27 @@ Definition flat_inject (v: memval)
 
 Definition threadpool_of (st: MachStateDry) :=    match st with (_, _, tp) => tp end.
 
-Section CTL_OK.
-  Variable nextb : block.
+Definition dryThreadPool := @ThreadPool.t dryResources (Clight_newSem ge)
+                                  (@OrdinalPool.OrdinalThreadPool dryResources (Clight_newSem ge)).
 
-Definition block_ok (b: block) := Plt b nextb.
 
-Definition val_ok (v: val) : Prop := 
- match v with
- | Vptr b _ => block_ok b
- | _ => True
- end.
+Locate deref_locT.
+Locate deref_loc.
+SearchAbout Clight.deref_loc deref_locT.
 
-Definition venv_ok (ve: Clight.env) :=
-  forall i bt, PTree.get i ve = Some bt -> block_ok (fst bt).
-
-Definition tenv_ok (te: Clight.temp_env) :=
-  forall i (v: val), PTree.get i te = Some v -> val_ok v.
-
-Definition cont'_ok (k: Clight_new.cont') := 
- match k with
- | Clight_new.Kcall _ _ ve te => venv_ok ve /\ tenv_ok te
- | _ => True
- end.
-
-Definition cont_ok (k: Clight_new.cont) := Forall cont'_ok k.
-
-Definition corestate_ok (q: Clight_new.corestate) : Prop :=
- match q with
- | Clight_new.State ve te k => venv_ok ve /\ tenv_ok te /\ cont_ok k
- | Clight_new.ExtCall f vl _ ve te k => Forall val_ok vl /\ venv_ok ve /\ tenv_ok te /\ cont_ok k
- end.
-
-Definition ctl_ok (c: @ctl Clight_new.corestate) : Prop :=
+Definition ctl_ok nextb (c: @ctl Clight_new.corestate) : Prop :=
  match c with
- | Krun q => corestate_ok q 
- | Kblocked q => corestate_ok q
- | Kresume q v => corestate_ok q /\ val_ok v
- | Kinit v1 v2 => val_ok v1 /\ val_ok v2
+ | Krun q => corestate_ok nextb q 
+ | Kblocked q => corestate_ok nextb q
+ | Kresume q v => corestate_ok nextb q /\ val_ok nextb v
+ | Kinit v1 v2 => val_ok nextb v1 /\ val_ok nextb v2
  end.
-End CTL_OK.
 
-Section ALLOC_OK.
-Variable nextb: positive.
-Variable nextb': positive.
-Variable LESS:  (nextb <= nextb')%positive.
-
-Lemma alloc_block_ok: forall b, block_ok nextb b -> block_ok nextb' b.
-Proof.
-intros.
-red in H|-*. eapply Pos.lt_le_trans; eauto.
-Qed.
-
-Lemma alloc_val_ok: forall v, val_ok nextb v -> val_ok nextb' v.
-Proof.
-intros; destruct v; auto.
-red in H|-*. eapply alloc_block_ok; eauto.
-Qed.
-
-Lemma alloc_venv_ok: forall ve, venv_ok nextb ve -> venv_ok nextb' ve.
-Proof.
-intros.
-red in H|-*; intros.
-eapply alloc_block_ok; eauto.
-Qed.
-
-Lemma alloc_tenv_ok: forall te, tenv_ok nextb te -> tenv_ok nextb' te.
-Proof.
-intros.
-red in H|-*; intros.
-eapply alloc_val_ok; eauto.
-Qed.
-
-Lemma alloc_cont'_ok: forall k, cont'_ok nextb k -> cont'_ok nextb' k.
-Proof.
-destruct k; simpl; auto.
-intros [? ?]; split.
-eapply alloc_venv_ok; eauto.
-eapply alloc_tenv_ok; eauto.
-Qed.
-
-Lemma alloc_cont_ok: forall k, cont_ok nextb k -> cont_ok nextb' k.
-Proof.
-intros.
-red in H|-*.
-revert H; apply Forall_impl.
-apply alloc_cont'_ok.
-Qed.
-
-Lemma alloc_corestate_ok: forall q, corestate_ok nextb q -> corestate_ok nextb' q.
-Proof.
-destruct q; simpl.
-intros [? [? ?]]; split; [|split].
-eapply alloc_venv_ok; eauto.
-eapply alloc_tenv_ok; eauto.
-eapply alloc_cont_ok; eauto.
-intros [? [? [? ?]]]; split; [|split; [|split]].
-revert H; apply Forall_impl.
-apply alloc_val_ok.
-eapply alloc_venv_ok; eauto.
-eapply alloc_tenv_ok; eauto.
-eapply alloc_cont_ok; eauto.
-Qed.
-
-Lemma alloc_ctl_ok: forall c, ctl_ok nextb c -> ctl_ok nextb' c.
+Lemma alloc_ctl_ok: 
+ forall (nextb nextb': positive)
+   (LESS:  (nextb <= nextb')%positive)
+   c, 
+   ctl_ok nextb c -> ctl_ok nextb' c.
 Proof.
 destruct c; simpl; intros;
 try solve [eapply alloc_corestate_ok; eauto].
@@ -760,16 +679,14 @@ destruct H; split;
 eapply alloc_val_ok; eauto.
 Qed.
 
-End ALLOC_OK.
-
-Definition dryThreadPool := @ThreadPool.t dryResources (Clight_newSem ge)
-                                  (@OrdinalPool.OrdinalThreadPool dryResources (Clight_newSem ge)).
-
 Definition mem_ok (tp: dryThreadPool) m := 
    Smallstep.globals_not_fresh (Clight.genv_genv ge) m /\
    mem_wd2 m /\
   (forall i (CT: containsThread tp i),
       ctl_ok (Mem.nextblock m) (getThreadC CT)).
+
+
+
 
 Lemma mem_ok_wd: forall tp m, mem_ok tp m -> Mem.mem_wd m.
 Proof.
@@ -884,117 +801,6 @@ pose proof (@gssAddCode _ _ _ ms v1 v2 r (latestThread ms) (eq_refl _) CT).
 rewrite H3. split; auto.
 Qed.
 
-Lemma set_tenv_ok:
-  forall nextb i (v: val) te, val_ok nextb v -> tenv_ok nextb te ->
-            tenv_ok nextb (PTree.set i v te).
-Proof.
-intros.
-hnf in H0|-*.
-intros.
-destruct (eq_dec i i0).
-subst. rewrite PTree.gss in H1. inv H1. auto.
-rewrite PTree.gso in H1 by auto.
-apply H0 in H1. auto.
-Qed.
-
-Lemma eval_expr_ok:
-  forall (m : mem) (ve : Clight.env) (te : Clight.temp_env)
-  (a : Clight.expr) (v : val) (T : list mem_event),
-@Smallstep.globals_not_fresh Clight.fundef type (Clight.genv_genv ge) m ->
-mem_wd2 m ->
-venv_ok (Mem.nextblock m) ve ->
-tenv_ok (Mem.nextblock m) te ->
-eval_exprT ge ve te m a v T -> 
-val_ok (Mem.nextblock m) v
- with eval_lvalue_ok:
-  forall (m : mem) (ve : Clight.env) (te : Clight.temp_env)
-  (a : Clight.expr) (v : block) ofs (T : list mem_event),
-@Smallstep.globals_not_fresh Clight.fundef type (Clight.genv_genv ge) m ->
-mem_wd2 m ->
-venv_ok (Mem.nextblock m) ve ->
-tenv_ok (Mem.nextblock m) te ->
-eval_lvalueT ge ve te m a v ofs T -> 
-block_ok (Mem.nextblock m) v.
-Admitted.
-
-Lemma mem_ok_goto:
- forall (k : Clight_new.cont) (lbl : Clight.label)
-       (s' : Clight.statement) (nextb : block),
-   cont_ok nextb k ->
-   forall (s : Clight.statement) (k' : Clight_new.cont),
-   Clight_new.find_label lbl s
-     (Clight_new.Kseq s' :: Clight_new.call_cont k) = 
-    Some k' -> cont_ok nextb k'.
-Proof.
-intros.
-change (Clight_new.Kseq s' :: Clight_new.call_cont k) with
-  ([Clight_new.Kseq s'] ++ Clight_new.call_cont k) in H0.
-assert (Forall (cont'_ok nextb) [Clight_new.Kseq s'] ).
-repeat constructor.
-remember [Clight_new.Kseq s'] as al.
-clear Heqal.
-revert al k' H1 H0.
-induction s; simpl; intros; try discriminate.
--
-change (Clight_new.Kseq s2 :: al ++ Clight_new.call_cont k)
-  with ((Clight_new.Kseq s2 :: al) ++ Clight_new.call_cont k) in H0.
-destruct (Clight_new.find_label lbl s1
-         ((Clight_new.Kseq s2 :: al) ++ Clight_new.call_cont k)) eqn:?; inv H0.
-apply IHs1 in Heqo; auto.
-repeat constructor; auto.
-apply IHs2 in H3; auto.
--
-destruct (Clight_new.find_label lbl s1 (al ++ Clight_new.call_cont k)) eqn:?; inv H0.
-apply IHs1 in Heqo; auto.
-apply IHs2 in H3; auto.
--
-change  (Clight_new.Kseq Clight.Scontinue
-          :: Clight_new.Kloop1 s1 s2 :: al ++ Clight_new.call_cont k)
- with  ((Clight_new.Kseq Clight.Scontinue
-          :: Clight_new.Kloop1 s1 s2 :: al) ++ Clight_new.call_cont k) in H0.
-destruct ((Clight_new.Kseq Clight.Scontinue
-          :: Clight_new.Kloop1 s1 s2 :: al) ++ Clight_new.call_cont k) eqn:?; inv H0.
-destruct (Clight_new.find_label lbl s1 []) eqn:?; inv H3.
-simpl in Heql. inv Heql.
-change (Clight_new.Kloop2 s1 s2 :: al ++ Clight_new.call_cont k) with
- ((Clight_new.Kloop2 s1 s2 :: al) ++ Clight_new.call_cont k) in H2.
-apply IHs2 in H2; auto.
-repeat constructor; auto.
-simpl in Heql. inv Heql.
-change (Clight_new.find_label lbl s1
-         (Clight_new.Kseq Clight.Scontinue
-          :: Clight_new.Kloop1 s1 s2 :: al ++ Clight_new.call_cont k))
-  with (Clight_new.find_label lbl s1
-         ((Clight_new.Kseq Clight.Scontinue
-          :: Clight_new.Kloop1 s1 s2 :: al) ++ Clight_new.call_cont k)) in H3.
-destruct  ((Clight_new.Kseq Clight.Scontinue
-          :: Clight_new.Kloop1 s1 s2 :: al) ++ Clight_new.call_cont k) eqn:?; inv H3.
-simpl in Heql; inv Heql.
-simpl in Heql; inv Heql.
-destruct (Clight_new.find_label lbl s1
-         (Clight_new.Kseq Clight.Scontinue
-          :: Clight_new.Kloop1 s1 s2 :: al ++ Clight_new.call_cont k)) eqn:?; inv H2.
-change  (Clight_new.Kseq Clight.Scontinue
-          :: Clight_new.Kloop1 s1 s2 :: al ++ Clight_new.call_cont k)
- with ( (Clight_new.Kseq Clight.Scontinue
-          :: Clight_new.Kloop1 s1 s2 :: al) ++ Clight_new.call_cont k) in Heqo.
-apply IHs1 in Heqo; auto.
-repeat constructor; auto.
-change (Clight_new.Kloop2 s1 s2 :: al ++ Clight_new.call_cont k) with
-  ((Clight_new.Kloop2 s1 s2 :: al) ++ Clight_new.call_cont k) in H3.
-apply IHs2 in H3; auto.
-repeat constructor; auto.
-- admit.
-- 
-  destruct (AST.ident_eq lbl l). subst.
-  inv H0. repeat constructor; auto.
-  apply sublist.Forall_app.
-  split; auto.
-  revert H. clear.
-  induction k; simpl; intros. constructor. inv H. destruct a; auto.
-  eapply IHs; eauto.
-Admitted.
-
 Lemma mem_ok_threadStep: 
     forall
        (ms : dryThreadPool) (m : mem) (tid : nat) 
@@ -1042,80 +848,10 @@ Proof.
          by (subst m0; reflexivity).
   clear - H2 Hcorestep. rename m0 into m.
   revert H2.
- induction Hcorestep; intros [? [? ?]]. 
-* (* assign *)
-  admit.
-* (* set *)
-   destruct H2 as [? [? ?]]. inv H4.
-   repeat split;  auto.
-   2: apply Pos.le_refl.
-   apply set_tenv_ok; auto.
-   eapply eval_expr_ok; eauto.
-* (* call_internal *)
-  admit.
-*  (* call_external *)
-  admit.
-* (* seq *)
-  apply IHHcorestep. split; [|split]; auto.
-  destruct H1 as [? [? ?]];  split; [|split]; auto.
-  repeat constructor. inv H3; auto.
-* (* skip *)
-  apply IHHcorestep. split; [|split]; auto.
-  simpl in H1. destruct H1 as [? [? ?]]. split; [|split]; auto. inv H3. auto.
-* (* continue *)
-  apply IHHcorestep. split; [|split]; auto.
-  simpl in H1. destruct H1 as [? [? ?]]. split; [|split]; auto. inv H3.
-  clear - H7.
-  induction k. constructor.
-  inv H7.
-  specialize (IHk H2).
-  destruct a; auto. simpl in *. repeat constructor. auto.
-  repeat constructor. simpl in *. constructor.
-* (* break *)
-  apply IHHcorestep. split; [|split]; auto.
-  simpl in H1. destruct H1 as [? [? ?]]. split; [|split]; auto. inv H3.
-  clear - H7.
-  induction k. constructor.
-  inv H7.
-  specialize (IHk H2).
-  destruct a; auto. simpl in *. repeat constructor. auto.
-  repeat constructor.
-* (* ifthenelse *)
-  split; auto.
-  split.
-   2: apply Pos.le_refl.
-  destruct H3 as [? [? ?]]. split;[ |split]; auto.
-  constructor. constructor. inv H5; auto.
-* (* for *)
-  split; auto.
-  split.
-   2: apply Pos.le_refl.
-  destruct H1 as [? [? ?]]. split;[ |split]; auto.
-  repeat constructor.
-  inv H3. auto.
-* (* loop2 *)
-  split; auto.
-  split.
-   2: apply Pos.le_refl.
-  destruct H1 as [? [? ?]]. split;[ |split]; auto.
-  repeat constructor.
-  inv H3. auto.
-* (* return *)
-  admit.
-* (* switch *)
-  admit.
-* (* label *)
-  apply IHHcorestep. split; [|split]; auto.
-  simpl in H1. destruct H1 as [? [? ?]]. split; [|split]; auto. inv H3.
-  constructor; auto.
-* (* goto *)
-  split; auto.
-  split.
-   2: apply Pos.le_refl.
-  destruct H2 as [? [? ?]]. split; [|split]; auto.
-  inv H4.
-  eapply mem_ok_goto; eauto.
-Admitted.
+  apply CLN_evstep_ax1 in Hcorestep.
+  simpl in Hcorestep.
+  eapply cl_step_ok; eauto.
+Qed.
 
 Lemma mem_ok_step: forall st m st' m' (Hmem: mem_ok (threadpool_of st) m),
   MachStep(Sem := Clight_newSem ge)
