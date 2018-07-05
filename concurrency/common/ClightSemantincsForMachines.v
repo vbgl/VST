@@ -1008,18 +1008,14 @@ End CLC_step.
       decay m m'.
 Proof.
 intros.
-pose proof (msem_decay (CLC_memsem g) c m c' m').
-apply H0. clear H0.
+apply (msem_decay (CLC_memsem g) c m c' m').
 simpl in *.
-unfold part_semantics2.
 apply clc_ax1 in H.
-destruct H as [? [t ?]].
-exploit coreify; eauto.
-apply H0.
-auto.
+destruct H as [? [? [t ?]]]; subst.
+exploit (coreify (part_semantics2 g)); eauto.
 intros.
 inv H0.
-econstructor; eauto.
+constructor; auto.
 eapply alloc_variablesT_ax1; eauto.
 Qed.
 
