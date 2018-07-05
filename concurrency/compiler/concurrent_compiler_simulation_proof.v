@@ -211,6 +211,53 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
                                         (getThreadC cnti2)
                                         (restrPermMap (proj1 (memcompat2 i cnti2))) }.
 
+    Lemma mem_compat_restrPermMap:
+        forall sem tpool m perms st (permMapLt: permMapLt perms (getMaxPerm m)),
+          (mem_compatible(Sem:=sem)(tpool:=tpool) st m) ->
+          (mem_compatible st (restrPermMap permMapLt)).
+      Proof.
+        intros.
+        inversion H.
+        econstructor.
+        - intros; unfold permissions.permMapLt.
+          split; intros;
+            erewrite getMax_restr; 
+            eapply compat_th0.
+        - intros; unfold permissions.permMapLt.
+          split; intros;
+            erewrite getMax_restr; 
+            eapply compat_lp0; eauto.
+        - intros. eapply restrPermMap_valid; eauto.
+      Qed.
+      
+    Lemma concur_match_perm_restrict:
+      forall cd j st1 m1 st2 m2,
+        concur_match cd j st1 m1 st2 m2 ->
+        forall perms1 perms2 (permMapLt1: permMapLt perms1 (getMaxPerm m1))
+          (permMapLt2: permMapLt perms2 (getMaxPerm m2)),
+          concur_match cd j st1 (restrPermMap permMapLt1) st2 (restrPermMap permMapLt2).
+    Proof.
+      intros.
+      inversion H.
+
+      (* Move this lemma to where mem_compatible is defined. *)
+      
+
+      
+        
+      assert (memcompat3': mem_compatible st1 (restrPermMap permMapLt1)) by
+      (eapply mem_compat_restrPermMap; eauto).
+      assert (memcompat4': mem_compatible st2 (restrPermMap permMapLt2)) by
+          (eapply mem_compat_restrPermMap; eauto).
+      eapply Build_concur_match with memcompat3' memcompat4'; eauto.
+      - intros; simpl.
+        destruct memcompat3';
+        destruct memcompat4';
+        destruct memcompat3;
+        destruct memcompat4; simpl in *.
+        
+    Admitted.
+
     
     Lemma contains12:
       forall {data j cstate1 m1 cstate2 m2},
@@ -366,8 +413,6 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
       (*There is probably a relation missing from m1 m' m2 m2' *)
       (* Probably it's mem_step which is provable from where this lemma is used. *)
     Admitted.
-            
-
     
     Ltac exploit_match:=
       unfold match_thread_target,match_thread_source,match_thread_compiled in *;
@@ -615,11 +660,11 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
           subst.
           split.
           * (* Establish match when nothing has changed.*)
-
-            remember (contains12 H0 Htid) as Htid'.
-
-            (*assert (
-                st2 = 
+            admit.
+            (*
+            
+            assert (
+                st2 = updThread Htid' (Krun (TST code2)) (getThreadR)
             eapply Concur_update_compiled; eauto.
             
             { eapply (core_semantics.corestep_mem (Clightcore_coop.CLC_memsem  Clight_g)).
@@ -654,7 +699,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
             clear H4 H6 CMatch Compiler_Match.
             revert H0 MATCH.
              *)
-            admit.
+            
           * (* No step is taken and index is decreased. *)
             right; split.
             { exists 0; econstructor; eauto. }
