@@ -136,25 +136,26 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
         forall (m_s m_t : Memory.Mem.mem)
           (j : Values.Val.meminj)
           (C_source : OrdinalPool.t(Sem:=SemSource))
-          (C_target : OrdinalPool.t(Sem:=SemTarget)) tr
+          (C_target : OrdinalPool.t(Sem:=SemTarget)) tr1 tr2
           (SIM : HybridMachine_simulation (ClightConcurSem (opt_init_mem_source p))
                                           (AsmConcurSem (opt_init_mem_target tp))) (cd : index SIM)
           (Hmatch: match_state SIM cd j C_source m_s C_target m_t)
+          (Hmatch_events: List.Forall2 (inject_mevent j) tr1 tr2)
           (HsafeS: forall U,
-              (valid SemSource) (tr, C_source, m_s) U ->
+              (valid SemSource) (tr1, C_source, m_s) U ->
               explicit_safety
                 HybridMachine.DryHybridMachine.dryResources
                 SemSource
                 (threadPool.OrdinalPool.OrdinalThreadPool(Sem:=SemSource))
                 HybridMachine.DryHybridMachine.DryHybridMachineSig
-                U tr C_source m_s)
-           U (HvalidT: (valid SemTarget) (tr, C_target, m_t) U),
+                U tr1 C_source m_s)
+           U (HvalidT: (valid SemTarget) (tr2, C_target, m_t) U),
             explicit_safety
               HybridMachine.DryHybridMachine.dryResources
               SemTarget
               (threadPool.OrdinalPool.OrdinalThreadPool(Sem:=SemTarget))
               HybridMachine.DryHybridMachine.DryHybridMachineSig
-              U tr C_target m_t.
+              U tr2 C_target m_t.
     Proof.
       intros.
       eapply coinductive_safety.exp_safety_paco_correct.
@@ -164,7 +165,8 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
       now eapply (core_ord_wf SIM).
       generalize dependent m_t.
       generalize dependent C_target.
-      generalize dependent tr.
+      generalize dependent tr2.
+      generalize dependent tr1.
       generalize dependent U.
       generalize dependent m_s.
       generalize dependent j.
@@ -172,7 +174,7 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
       generalize dependent cd.
       pcofix HsafeT.
       intros.
-      assert (HvalidS: (valid SemSource) (tr, C_source, m_s) U)
+      assert (HvalidS: (valid SemSource) (tr1, C_source, m_s) U)
         by (eapply match_valid_equiv; eauto).
       specialize (HsafeS U HvalidS).
       inversion HsafeS as [HhaltedS | stS' Hstep CIH | U' stS' Hstep CIH].
@@ -199,7 +201,7 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
         + (* Step Plus case *)
           destruct HstepT as [n HstepN].
           pfold.
-          econstructor 2 with (y' := (tr, C_target', m_t')) (n:=n); eauto.
+          econstructor 2 with (y' := (tr2, C_target', m_t')) (n:=n); eauto.
           * clear CIH HsafeT HvalidT HvalidS HsafeS Hmatch' HstepS Hmatch.
             generalize dependent m_t'.
             generalize dependent C_target'.
@@ -210,22 +212,23 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
                simpl in HstepN.
                destruct HstepN as [? [? [? Heq]]].
                inversion Heq; subst.
-               econstructor 2 with (_y := (tr, C_target', m_t')); simpl; eauto.
+               econstructor 2 with (_y := (tr2, C_target', m_t')); simpl; eauto.
                econstructor 1.
                auto.
             ** intros.
                simpl in HstepN.
                destruct HstepN as [C_target'' [m_t'' [HstepT' HstepN]]].
-               econstructor 2 with (_y := (tr, C_target'', m_t'')); simpl; eauto.
+               econstructor 2 with (_y := (tr2, C_target'', m_t'')); simpl; eauto.
           * intros.
             simpl in H.
             right.
             eapply HsafeT; eauto.
-            intros.
+            (*intros.
             eapply explicit_safety_trace_irr with (tr := evS).
             eapply CIH.
             simpl.
-            now eauto.
+            now eauto.*) 
+            admit.
         + (* Step Star case *)
           eapply paco3_pfold; eauto.
           destruct HstepT as [n HstepN].
@@ -234,11 +237,12 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
             econstructor 4; eauto.
             eapply HsafeT; eauto.
             intros.
-            eapply explicit_safety_trace_irr with (tr := evS).
+            admit.
+            (*eapply explicit_safety_trace_irr with (tr := evS).
             eapply CIH.
             simpl.
-            now eauto.
-          * econstructor 2 with (y' := (tr, C_target', m_t')) (n:=n); eauto.
+            now eauto.*)
+          * econstructor 2 with (y' := (tr2, C_target', m_t')) (n:=n); eauto.
             (* this part here is exactly the same as the step plus case and I can 
                probably factor into a lemma,
                but right now I am just trying to get things to work *)
@@ -252,31 +256,32 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
                    simpl in HstepN.
                    destruct HstepN as [? [? [? Heq]]].
                    inversion Heq; subst.
-                   econstructor 2 with (_y := (tr, C_target', m_t')); simpl; eauto.
+                   econstructor 2 with (_y := (tr2, C_target', m_t')); simpl; eauto.
                    econstructor 1.
                    auto.
                *** intros.
                    simpl in HstepN.
                    destruct HstepN as [C_target'' [m_t'' [HstepT' HstepN]]].
-                   econstructor 2 with (_y := (tr, C_target'', m_t'')); simpl; eauto.
+                   econstructor 2 with (_y := (tr2, C_target'', m_t'')); simpl; eauto.
             ** intros.
                eapply HsafeT; eauto.
                intros.
-               eapply explicit_safety_trace_irr with (tr := evS); eauto.
-               eapply CIH; eauto.
+               admit.
+(*               eapply explicit_safety_trace_irr with (tr := evS); eauto.
+               eapply CIH; eauto.*)
       - (* external step case*)
         destruct stS' as [[evS C_source'] m_s'].
         simpl in Hstep.
         pose proof Hstep as HstepS.
         eapply (machine_diagram SIM) with (sge := Clight.globalenv p) (tge := the_ge) in Hstep;
           eauto.
-        destruct Hstep as [C_target' [m_t' [cd' [j' [Hmatch' HstepT]]]]].
+        destruct Hstep as [tr2' [C_target' [m_t' [cd' [j' [Hmatch' HstepT]]]]]].
         simpl in HstepT.
         pfold.
-        econstructor 3 with (y' := (evS, C_target', m_t'));
+        econstructor 3 with (y' := (tr2', C_target', m_t'));
           eauto.
         Unshelve. all:auto.
-    Qed.
+    Admitted.
         
     Lemma Clight_finite_branching:
       let ClightSem:= ClightSemantincsForMachines.ClightSem in 
