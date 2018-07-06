@@ -38,7 +38,7 @@ Section SelfSim.
   
   
   (*extension of a mem_injection 
-    (slightly stengthens the old inject_separated - LENB: not sure you need the stronger prop*)
+  (slightly stengthens the old inject_separated - LENB: not sure you need the stronger prop*)
   Definition is_ext (f1:meminj)(nb1: positive)(f2:meminj)(nb2:positive) : Prop:=
     forall b1 b2 ofs,
       f2 b1 = Some (b2, ofs) ->
@@ -181,6 +181,7 @@ Section SelfSimulation.
           exists c2' f' t' m2',
           core_semantics.corestep Sem c2 m2  c2' m2'  /\
           match_self code_inject f' c1' m1' c2' m2' /\
+          inject_incr f f' /\
           is_ext f (Mem.nextblock m1) f' (Mem.nextblock m2) /\
           Events.inject_trace f' t t'
     }. 
