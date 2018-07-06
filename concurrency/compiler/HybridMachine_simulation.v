@@ -140,12 +140,14 @@ Section HybridSimulation.
               machine_semantics.initial_machine TargetHybridMachine r2 t_mem t_mach_state t_mem' main main_args
            /\ match_state cd j s_mach_state s_mem' t_mach_state t_mem'
       ; thread_diagram :
-          forall sge tge U st1 m1 st1' m1',
+          forall sge tge U tr1 st1 m1 st1' m1',
             thread_step SourceHybridMachine sge U st1 m1 st1' m1' ->
-            forall cd st2 mu m2,
+            forall cd tr2 st2 mu m2,
               match_state cd mu st1 m1 st2 m2 ->
+              Forall2 (inject_mevent mu) tr1 tr2 ->
               exists st2', exists m2', exists cd', exists mu',
                       match_state cd' mu' st1' m1' st2' m2'
+                      /\ Forall2 (inject_mevent mu') tr1 tr2
                       /\ (thread_step_plus (TargetHybridMachine) tge U st2 m2 st2' m2'
                \/ (thread_step_star (TargetHybridMachine) tge U st2 m2 st2' m2' /\ core_ord cd' cd))
       ; machine_diagram :

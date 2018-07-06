@@ -485,21 +485,28 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
               all internal steps (because otherwise the traces wouldn't match).
             *)
           Admitted.
-        
-        
+
+    Lemma Forall2_impl: forall {A B} (P Q : A -> B -> Prop) l1 l2,
+      (forall a b, P a b -> Q a b) -> List.Forall2 P l1 l2 -> List.Forall2 Q l1 l2.
+    Proof.
+      induction 2; constructor; auto.
+    Qed.
+
     (* When a thread takes an internal step (i.e. not changing the schedule) *)
     Lemma internal_step_diagram:
       forall (m : option mem) (sge tge : HybridMachineSig.G) (U : list nat)
-        (st1 : ThreadPool (Some hb)) (m1 : mem) (st1' : ThreadPool (Some hb)) 
+        tr1 (st1 : ThreadPool (Some hb)) (m1 : mem) (st1' : ThreadPool (Some hb)) 
         (m1' : mem),
         machine_semantics.thread_step (HybConcSem (Some hb) m) sge U st1 m1 st1' m1' ->
-        forall (cd : option compiler_index) (st2 : ThreadPool (Some (S hb))) 
+        forall (cd : option compiler_index) tr2 (st2 : ThreadPool (Some (S hb))) 
           (mu : meminj) (m2 : mem),
           concur_match cd mu st1 m1 st2 m2 ->
+          forall (Hmatch_event : List.Forall2 (inject_mevent mu) tr1 tr2),
           exists
             (st2' : ThreadPool (Some (S hb))) (m2' : mem) (cd' : option compiler_index) 
             (mu' : meminj),
             concur_match cd' mu' st1' m1' st2' m2' /\
+            List.Forall2 (inject_mevent mu') tr1 tr2 /\
             (machine_semantics_lemmas.thread_step_plus
                (HybConcSem (Some (S hb)) m) tge U st2 m2
                st2' m2' \/
@@ -534,7 +541,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
         exists (updThread Htid' (Krun (TState Clight.state Asm.state c2'))
            (getCurPerm m2', snd (getThreadR Htid'))).
         (* new memory is given by the self_simulation. *)
-        exists m2', cd, f'. split; [|left].
+        exists m2', cd, f'. split; [|split; [|left]].
         
         + (*Reestablish the concur_match *)
           simpl.
@@ -557,6 +564,10 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
           unfold match_thread_target; simpl.
           constructor.
           exact MATCH.
+        + (* Reestablish inject_mevent *)
+          eapply Forall2_impl, Hmatch_event; intros.
+          (* Is is_ext sufficient to prove this? Do we know that inject_incr mu f'? *)
+          admit.
         + (* Construct the step *)
           exists 0; simpl.
           do 2 eexists; split; [|reflexivity].
@@ -620,7 +631,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
                        (getCurPerm m4', snd (getThreadR Htid'))).
           (* new memory is given by the self_simulation. *)
           exists m4', (Some cd'), (compose_meminj (compose_meminj j1' j2') j3').
-          split; [|left].
+          split; [|split; [|left]].
           * (* Reconstruct the match *)
           
             simpl in *.
@@ -658,11 +669,12 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
               end.
               eauto.
             }
+          * admit.
           * eapply thread_step_plus_from_corestep; eauto.
         + instantiate(1:=Events.E0) in inject_incr.
           exists st2, m2, (Some cd'), mu.
           subst.
-          split.
+          split; [|split; auto].
           * (* Establish match when nothing has changed.*)
             admit.
             (*
@@ -732,7 +744,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
         exists (updThread Htid' (Krun (SState Clight.state Asm.state c2'))
            (getCurPerm m2', snd (getThreadR Htid'))).
         (* new memory is given by the self_simulation. *)
-        exists m2', cd, f'. split; [|left].
+        exists m2', cd, f'. split; [|split; [|left]].
         
         + (*Reestablish the concur_match *)
           simpl.
@@ -750,6 +762,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
           unfold match_thread_source; simpl.
           constructor.
           exact MATCH.
+        + admit.
         + (* Construct the step *)
           exists 0; simpl.
           do 2 eexists; split; [|reflexivity].
@@ -1465,18 +1478,20 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
 
    Lemma infinite_step_diagram:
           forall (m : option mem) (sge tge : HybridMachineSig.G)
-                 (U : list nat) (st1 : ThreadPool (Some 0)) 
+                 (U : list nat) tr1 (st1 : ThreadPool (Some 0)) 
                  (m1 : mem) (st1' : ThreadPool (Some 0)) 
                  (m1' : mem),
             machine_semantics.thread_step (HybConcSem (Some 0) m) sge U st1
                                           m1 st1' m1' ->
-            forall (cd : nth_index) (st2 : ThreadPool None) 
+            forall (cd : nth_index) tr2 (st2 : ThreadPool None) 
                    (mu : meminj) (m2 : mem),
               infty_match cd mu st1 m1 st2 m2 ->
+              List.Forall2 (inject_mevent mu) tr1 tr2 ->
               exists
                 (st2' : ThreadPool None) (m2' : mem) (cd' : nth_index) 
                 (mu' : meminj),
                 infty_match cd' mu' st1' m1' st2' m2' /\
+                List.Forall2 (inject_mevent mu') tr1 tr2 /\
                 (machine_semantics_lemmas.thread_step_plus 
                    (HybConcSem None m) tge U st2 m2 st2' m2' \/
                  machine_semantics_lemmas.thread_step_star 
@@ -1617,8 +1632,10 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
       (* Where should the second ge come from?
       destruct (machine_diagram _ _ _ _ _ _ _ _ _ _ H _ _ _ _ H0) as (? & ? & ? & ? & ? & ?). *)
       admit.
-    - admit.
-    - admit.
+    - intros ???????? (? & ? & ? & ? & ? & ? & ?) ?.
+      edestruct thread_halted; eauto.
+    - intros ?????? (? & ? & ? & ? & ? & ? & ?) ?.
+      erewrite thread_running; eauto.
    Admitted.
  End SimulationTransitivity.
  

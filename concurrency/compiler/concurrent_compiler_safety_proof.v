@@ -196,7 +196,7 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
         pose proof Hstep as HstepS.
         eapply (thread_diagram SIM) with (sge := Clight.globalenv p) (tge := the_ge) in Hstep;
           eauto.
-        destruct Hstep as [C_target' [m_t' [cd' [j' [Hmatch' HstepT]]]]].
+        destruct Hstep as [C_target' [m_t' [cd' [j' [Hmatch' [Hevs' HstepT]]]]]].
         destruct HstepT as [HstepT | [HstepT Hdec]].
         + (* Step Plus case *)
           destruct HstepT as [n HstepN].
@@ -222,26 +222,24 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
           * intros.
             simpl in H.
             right.
-            eapply HsafeT; eauto.
-            (*intros.
+            eapply HsafeT; try apply Hevs'; eauto.
+            intros.
             eapply explicit_safety_trace_irr with (tr := evS).
             eapply CIH.
             simpl.
-            now eauto.*) 
-            admit.
+            now eauto.
         + (* Step Star case *)
           eapply paco3_pfold; eauto.
           destruct HstepT as [n HstepN].
           destruct n.
           * simpl in HstepN; inversion HstepN; subst.
             econstructor 4; eauto.
-            eapply HsafeT; eauto.
+            eapply HsafeT; try apply Hevs'; eauto.
             intros.
-            admit.
-            (*eapply explicit_safety_trace_irr with (tr := evS).
+            eapply explicit_safety_trace_irr with (tr := evS).
             eapply CIH.
             simpl.
-            now eauto.*)
+            now eauto.
           * econstructor 2 with (y' := (tr2, C_target', m_t')) (n:=n); eauto.
             (* this part here is exactly the same as the step plus case and I can 
                probably factor into a lemma,
@@ -264,24 +262,23 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
                    destruct HstepN as [C_target'' [m_t'' [HstepT' HstepN]]].
                    econstructor 2 with (_y := (tr2, C_target'', m_t'')); simpl; eauto.
             ** intros.
-               eapply HsafeT; eauto.
+               eapply HsafeT; try apply Hevs'; eauto.
                intros.
-               admit.
-(*               eapply explicit_safety_trace_irr with (tr := evS); eauto.
-               eapply CIH; eauto.*)
+               eapply explicit_safety_trace_irr with (tr := evS); eauto.
+               eapply CIH; eauto.
       - (* external step case*)
         destruct stS' as [[evS C_source'] m_s'].
         simpl in Hstep.
         pose proof Hstep as HstepS.
         eapply (machine_diagram SIM) with (sge := Clight.globalenv p) (tge := the_ge) in Hstep;
           eauto.
-        destruct Hstep as [tr2' [C_target' [m_t' [cd' [j' [Hmatch' HstepT]]]]]].
+        destruct Hstep as [tr2' [C_target' [m_t' [cd' [j' [Hmatch' [Hevs' HstepT]]]]]]].
         simpl in HstepT.
         pfold.
         econstructor 3 with (y' := (tr2', C_target', m_t'));
           eauto.
         Unshelve. all:auto.
-    Admitted.
+    Qed.
         
     Lemma Clight_finite_branching:
       let ClightSem:= ClightSemantincsForMachines.ClightSem in 
