@@ -984,6 +984,41 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
                     U tr2 st2 m2 (HybridMachineSig.schedSkip U)
                                                  (seq.cat tr2
                                                           (Events.external tid e' :: nil)) st2' m2'.
+        Proof.
+          
+          intros.
+          destruct (Compare_dec.lt_eq_lt_dec tid hb) as [[?|?]|?].
+          - (* tid < hb *)
+            
+            pose proof (mtch_target _ _ _ _ _ _ H0 _ l Htid (contains12 H0 Htid)) as HH.
+            simpl in H5; exploit_match.
+            inversion H18; clear H18.
+            simpl.
+
+            do 5 econstructor.
+            split; [|split].
+
+            + (* reestablish the *)
+              admit.
+
+            + simpl.
+              Lemma cat_app:
+                forall {T} (l1 l2:list T),
+                  seq.cat l1 l2 = app l1 l2.
+              Proof. intros. induction l1; eauto. Qed.
+              
+              rewrite cat_app.
+              rewrite (cat_app tr2).
+              eapply List.Forall2_app.
+              admit.
+              admit.
+              
+            + econstructor; eauto.
+              eapply step_release; eauto.
+              
+              unfold HybridMachineSig.isCoarse, HybridMachineSig.HybridCoarseMachine.scheduler.
+              
+              
         Admitted.
 
         Lemma Create_step_diagram:
@@ -1034,6 +1069,30 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
                                                         (Events.external tid e' :: nil)) st2' m2'.
         Proof.
           intros U tr1 tr2 st1 m1' tid cd st2 mu m2 Htid c b ofs arg virtue1 virtue2 threadPerm' newThreadPerm.
+          
+          intros.
+          destruct (Compare_dec.lt_eq_lt_dec tid hb) as [[?|?]|?].
+          - (* tid < hb *)
+            
+            pose proof (mtch_target _ _ _ _ _ _ H0 _ l Htid (contains12 H0 Htid)) as HH.
+            simpl in H5; exploit_match.
+            inversion H14; clear H14.
+            simpl.
+
+            do 5 econstructor.
+            split; [|split].
+
+            + (* reestablish the *)
+              admit.
+
+            + simpl.
+              admit.
+            + econstructor; eauto.
+              econstructor.
+              admit.
+
+
+            
         Admitted.
 
 
@@ -1612,7 +1671,6 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
       - apply infinite_halted.
       - apply infinite_running.
 
-        
     Qed.
 
  End CompileInftyThread.
