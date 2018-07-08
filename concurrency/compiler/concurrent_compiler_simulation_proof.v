@@ -178,6 +178,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
   { same_length: num_threads cstate1 = num_threads cstate2
     ; memcompat1: mem_compatible cstate1 m1
     ; memcompat2: mem_compatible cstate2 m2
+    ; INJ: Mem.inject j m1 m2
     ; taret_invariant: invariant cstate2
     ; mtch_source:
         forall (i:nat),
@@ -995,10 +996,28 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
             inversion H18; clear H18.
             simpl.
 
+
+            (** *Constructing the target objects: events, thread_pool, mem, meminj and index*)
+
+            (*First construct the virtueThread:
+                the permissions passed from the thread to the lock. *)
+              Definition virtueThread_inject (mu:meminj) (virtue:delta_map * delta_map):
+                delta_map * delta_map.
+              Admitted.
+              remember (virtueThread_inject mu virtueThread) as virtueThread2.
+
+            (* Second construct the virtueLP:
+               the permissions transfered to the Lock pool
+             *)
+              Definition virtueLP_inject (mu:meminj) (virtue:access_map * access_map):
+                access_map * access_map.
+              Admitted.
+              remember (virtueLP_inject mu virtueLP) as virtueLP2.
+              
             do 5 econstructor.
             split; [|split].
 
-            + (* reestablish the *)
+            + (* reestablish the Concur_match*)
               admit.
 
             + simpl.
@@ -1014,11 +1033,108 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
               admit.
               
             + econstructor; eauto.
-              eapply step_release; eauto.
+
               
-              unfold HybridMachineSig.isCoarse, HybridMachineSig.HybridCoarseMachine.scheduler.
+              eapply step_release with
+                  (virtueThread0:=virtueThread2)
+                  (virtueLP0:=virtueLP2); eauto.
               
+              (* 11 goals produced. *)
+
               
+              * unfold HybridMachineSig.isCoarse, HybridMachineSig.HybridCoarseMachine.scheduler.
+                move H2 at bottom.
+                assert (H2':
+                    bounded_maps.sub_map (fst virtueThread) (snd (getMaxPerm m1)) /\
+                    bounded_maps.sub_map (snd virtueThread) (snd (getMaxPerm m1))
+                  ) by assumption.
+                clear H2.
+
+
+                (*
+                  Sketch: virtue2 is the map from virtuethread by mu.
+                  mu also maps m1 to m2, so the sub_map relation hsould be preserved by 
+                  the injection.
+                 *)
+                admit.
+
+              * unfold HybridMachineSig.isCoarse, HybridMachineSig.HybridCoarseMachine.scheduler.
+                move H3 at bottom.
+
+                (*
+                  Sketch: virtueLP2 is the map from virtueLP by mu.
+                  mu also maps m1 to m2, so the sub_map relation hsould be preserved by 
+                  the injection.
+                 *)
+                admit.
+
+                
+              * eapply H0.
+
+              * simpl.
+                (*
+                  Sketch
+                  This should follow from the concur_match
+                  where the address is the image of [Vptr b ofs] under mu.
+                 *)
+                admit. 
+
+              * move H8 at bottom.
+                
+                (* Sketch:
+                   Again, this should follow from the injection preserving permissions.
+                 *)
+                admit.
+
+              * move H7 at bottom.
+
+               (* Sketch:
+                   Again, this should follow from the injection preserving permissions AND
+                   the contents of the location of the lock. H7
+                 *)
+                admit.
+
+              * move H9 at bottom.
+
+               (* Sketch:
+                   Again, this should follow from the injection preserving permissions and H9
+                 *)
+                admit.
+
+              * move H10 at bottom.
+                simpl.
+                (** *missing property from the concur_match, easy to mantain. *)
+
+                (* Sketch:
+                   concur_match should maintain "injection" of permissions in locks.
+                 *)
+                admit.
+
+
+              * (* Claims the transfered resources join in the appropriate way *)
+                simpl. move H12 at bottom.
+                
+                (*
+                  Sketch: 
+                  Should follow from the constructions of the transfered permissions and
+                  H12.
+                 *)
+                admit.
+
+                
+              * (* Claims the transfered resources join in the appropriate way *)
+                simpl. move H13 at bottom.
+                
+                (*
+                  Sketch: 
+                  Should follow from the constructions of the transfered permissions and
+                  H12.
+                 *)
+                admit.
+
+          - admit.
+          - admit.
+
         Admitted.
 
         Lemma Create_step_diagram:
