@@ -1299,7 +1299,6 @@ intros. simpl in H. revert c2 H0. induction H; intros.
     econstructor; eauto.
     apply list_norepet_app in H4. destruct H4 as [? [? ?]].
     econstructor; auto.
-    replace (T1++T2++T3) with ((T1++T2)++T3) by (rewrite app_assoc; trivial).
   + constructor.
     simpl; auto.
     apply match_cont_strip. simpl. constructor; auto. }
