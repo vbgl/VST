@@ -8,7 +8,7 @@ Require Import compcert.common.Globalenvs.
 Require Import compcert.cfrontend.Clight.
 Require Import VST.concurrency.juicy.erasure_safety.
 
-Require Import VST.concurrency.compiler.concurrent_compiler_safety_proof.
+Require Import VST.concurrency.compiler.concurrent_compiler_safety_axiom.
 Require Import VST.concurrency.compiler.sequential_compiler_correct.
 
 Require Import VST.concurrency.sc_drf.mem_obs_eq.
@@ -27,7 +27,7 @@ Set Bullet Behavior "Strict Subproofs".
 Module Main (CC_correct: CompCert_correctness).
   (*Import the *)
   (*Import the safety of the compiler for concurrent programs*)
-  Module ConcurCC_safe:= (Concurrent_Safety CC_correct).
+  Module ConcurCC_safe:= (SafetyStatement CC_correct).
   Import ConcurCC_safe.
 
   (*Importing the definition for ASM semantics and machines*)
@@ -98,6 +98,8 @@ Qed.
 
   Context {SW : Clight_safety.spawn_wrapper CPROOF}.
 
+  Variable ConcurrentCompilerSafety:
+    ConcurrentCompilerSafety_statement.
   Lemma CSL2CoarseAsm_safety:
     forall U,
     exists init_mem_target init_mem_target' init_thread_target,
@@ -119,7 +121,7 @@ Qed.
       init_MachState_target init_mem_target' n.
   Proof.
     intros.
-    pose proof (ConcurrentCompilerSafety _ _ compilation asm_genv_safe) as H.
+    pose proof (@ConcurrentCompilerSafety _ _ compilation asm_genv_safe) as H.
     unfold concurrent_compiler_safety.concurrent_simulation_safety_preservation in *.
     specialize (H U (init_mem CPROOF) (init_mem CPROOF) (Clight_safety.initial_Clight_state CPROOF) Main_ptr nil).
     match type of H with

@@ -178,6 +178,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
   { same_length: num_threads cstate1 = num_threads cstate2
     ; memcompat1: mem_compatible cstate1 m1
     ; memcompat2: mem_compatible cstate2 m2
+    ; INJ: Mem.inject j m1 m2
     ; taret_invariant: invariant cstate2
     ; mtch_source:
         forall (i:nat),
@@ -257,6 +258,8 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
         destruct memcompat4; simpl in *.
         
     Admitted.
+
+    
 
     
     Lemma contains12:
@@ -413,6 +416,33 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
       (*There is probably a relation missing from m1 m' m2 m2' *)
       (* Probably it's mem_step which is provable from where this lemma is used. *)
     Admitted.
+
+       
+    Lemma Concur_update_compiled':
+      forall (st1 : ThreadPool.t) (m1 m1' : mem) (Htid : ThreadPool.containsThread st1 hb) 
+        (st2 : ThreadPool.t) (mu : meminj) (m2 : mem) (cd0 : compiler_index),
+        concur_match (Some cd0) mu st1 m1 st2 m2 ->
+        forall (s' : Clight.state) (j1' : meminj) (cd' : Injindex compiler_sim)
+          (j2' : meminj) (s4 : Asm.state) (j3' : meminj)
+          (Htid' : containsThread st2 hb)
+        (mcompat1: mem_compatible st1 m1)
+        (mcompat2: mem_compatible st2 m2),
+        core_semantics.mem_step
+          (restrPermMap (proj1 (mcompat1 hb Htid))) m1' ->
+        invariant st1 ->
+        invariant st2 ->
+        match_thread_compiled cd' (compose_meminj (compose_meminj j1' j2') j3')
+                              (Krun (SState Clight.state Asm.state s')) m1'
+                              (Krun (TState Clight.state Asm.state s4))
+                              (restrPermMap (proj1 (mcompat2 hb Htid'))) ->
+        concur_match (Some cd') (compose_meminj (compose_meminj j1' j2') j3')
+                     (updThread Htid (Krun (SState Clight.state Asm.state s'))
+                                (getCurPerm m1', snd (getThreadR Htid))) m1'
+                     st2 m2.
+    Proof.
+      (*There is probably a relation missing from m1 m' m2 m2' *)
+      (* Probably it's mem_step which is provable from where this lemma is used. *)
+    Admitted.
     
     Ltac exploit_match:=
       unfold match_thread_target,match_thread_source,match_thread_compiled in *;
@@ -443,6 +473,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
             (m2' : mem),
                 (corestep_plus coresem) c2 m2 c2' m2' /\
                 self_simulation.match_self (self_simulation.code_inject _ _ SIM) f' c1' m1' c2' m2' /\
+                inject_incr f f' /\
                 self_simulation.is_ext f (Mem.nextblock m1) f' (Mem.nextblock m2) /\
                 Events.inject_trace f' t t'.
     Admitted.
@@ -492,6 +523,17 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
       induction 2; constructor; auto.
     Qed.
 
+    
+    Lemma inject_incr_trace:
+      forall (tr1 tr2 : list Events.machine_event) (mu f' : meminj),
+        inject_incr mu f' ->
+        List.Forall2 (inject_mevent mu) tr1 tr2 ->
+        List.Forall2 (inject_mevent f') tr1 tr2.
+    Proof.
+      intros. eapply Forall2_impl; try eassumption.
+      - intros. admit.
+    Admitted.
+    
     (* When a thread takes an internal step (i.e. not changing the schedule) *)
     Lemma internal_step_diagram:
       forall (m : option mem) (sge tge : HybridMachineSig.G) (U : list nat)
@@ -529,7 +571,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
         instantiate (1:=Asm_genv_safe) in H2.
         
         eapply Aself_simulation in H5; eauto.
-        destruct H5 as (c2' & f' & t' & m2' & (CoreStep & MATCH & is_ext & inject_incr)).
+        destruct H5 as (c2' & f' & t' & m2' & (CoreStep & MATCH & Hincr & is_ext & inj_trace)).
 
         eapply Asm_event.asm_ev_ax2 in CoreStep; try eapply Asm_genv_safe.
         destruct CoreStep as (?&?); eauto.
@@ -564,10 +606,9 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
           unfold match_thread_target; simpl.
           constructor.
           exact MATCH.
+          
         + (* Reestablish inject_mevent *)
-          eapply Forall2_impl, Hmatch_event; intros.
-          (* Is is_ext sufficient to prove this? Do we know that inject_incr mu f'? *)
-          admit.
+          eapply inject_incr_trace; eauto.
         + (* Construct the step *)
           exists 0; simpl.
           do 2 eexists; split; [|reflexivity].
@@ -607,12 +648,12 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
           by eapply Axioms.proof_irr.
         
         eapply Cself_simulation in H3; eauto.
-        destruct H3 as (c2' & j1' & t' & m2' & (CoreStep & MATCH & is_ext & inject_incr)).
+        destruct H3 as (c2' & j1' & t' & m2' & (CoreStep & MATCH & Hincr & His_ext & Htrace)).
         
         (* (2) Compiler step/s *)
         inversion CoreStep. subst s1 m7 s0.
         eapply compiler_sim in H1; simpl in *; eauto.
-        destruct H1 as (cd' & s2' & j2' & t'' & step & comp_match & INJ_incr & inj_event).
+        destruct H1 as (cd' & s2' & j2' & t'' & step & comp_match & Hincr2 & inj_event).
 
         eapply simulation_equivlanence in step.
         destruct step as [plus_step | (? & ? & ?)].
@@ -622,7 +663,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
 
           (* (3) Asm simulation (extended to multiple steps)  *)
           eapply (self_simulation_plus _ _ Aself_simulation) in plus_step; eauto.
-          destruct plus_step as (s4' & j3' & t3 & m4' & CstepPlus & AMatch & ? & inj_trace).  
+          destruct plus_step as (s4' & j3' & t3 & m4' & CstepPlus & AMatch & Hincr3 & His_ext3 & Htrace3).  
           
           (* contains.*)
           pose proof (@contains12  _ _ _ _ _ _  H0 _ Htid) as Htid'.
@@ -633,7 +674,8 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
           exists m4', (Some cd'), (compose_meminj (compose_meminj j1' j2') j3').
           split; [|split; [|left]].
           * (* Reconstruct the match *)
-          
+
+            
             simpl in *.
             eapply Concur_update_compiled; eauto.
             
@@ -669,58 +711,43 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
               end.
               eauto.
             }
-          * admit.
+          * eapply inject_incr_trace; try eassumption. eauto.
+            subst mu. repeat eapply compose_inject_incr; eauto.
+            
           * eapply thread_step_plus_from_corestep; eauto.
-        + instantiate(1:=Events.E0) in inject_incr.
-          exists st2, m2, (Some cd'), mu.
+        + remember (compose_meminj (compose_meminj j1' j2') j3) as mu'.
+          exists st2, m2, (Some cd'), mu'.
           subst.
           split; [|split; auto].
-          * (* Establish match when nothing has changed.*)
-            admit.
-            (*
-            
-            assert (
-                st2 = updThread Htid' (Krun (TST code2)) (getThreadR)
-            eapply Concur_update_compiled; eauto.
-            
-            { eapply (core_semantics.corestep_mem (Clightcore_coop.CLC_memsem  Clight_g)).
+          * (* Establish match when nothing has changed, at the assembly level.*)
+            eapply Concur_update_compiled'; eauto; try apply H0.
+            { (*the Clight step is a mem_step*)
+              eapply (core_semantics.corestep_mem (event_semantics.msem (@semSem CSem))).
               eauto.
             }
-            { (* This is the step constructed bellow *)
-              instantiate(1:=(memcompat2 (Some cd0) mu st1 m1 st2 m2 H0)).
-              remember (memcompat2 (Some cd0) mu st1 m1 st2 m2 H0) as Hcmpt'.
-              replace (contains12 H0 Htid) with Htid' in CstepPlus by apply Axioms.proof_irr.
-              eapply memsem_lemmas.corestep_star_mem.
-              eapply corestep_plus_star; eauto.
-              instantiate(3:= Asm_core.Asm_mem_sem _ Asm_genv_safe).
-              eauto.
-            }
-            { apply H0. }
             
-            (* match_thread_compiled *)
+            (* reestablishing the padded match *)
+            econstructor.
+            econstructor; eauto.
+            move H2 at bottom.
+            unfold compiler_match.
+            match goal with
+            | [  |- Injmatch_states _ _ _ ?c _ ] =>
+              replace c with c2' 
+            end.
+            eauto.
             {
-              unfold match_thread_compiled.
-              econstructor.
-              econstructor; eauto.
-              move comp_match at bottom.
-              simpl in comp_match.
-              unfold compiler_match.
-              match goal with
-              | [  |- context[Injmatch_states _ _ _ _ ?X] ] =>
-                replace X with s2' by (destruct s2'; reflexivity)
-              end. 
-              eauto.
+              clear; simpl.
+              destruct c2'; reflexivity.
             }
             
-            clear H4 H6 CMatch Compiler_Match.
-            revert H0 MATCH.
-             *)
-            
+          * eapply inject_incr_trace; try eassumption. eauto.
+            repeat eapply compose_inject_incr; eauto.
           * (* No step is taken and index is decreased. *)
             right; split.
             { exists 0; econstructor; eauto. }
             econstructor; eauto.
-        
+            
       - (* tid > hb *)
         pose proof (mtch_source _ _ _ _ _ _ H0 _ l Htid (contains12 H0 Htid)) as HH.
         simpl in *.
@@ -732,7 +759,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
           by eapply Axioms.proof_irr.
         
         eapply Cself_simulation in H5; eauto.
-        destruct H5 as (c2' & f' & t' & m2' & (CoreStep & MATCH & is_ext & inject_incr)).
+        destruct H5 as (c2' & f' & t' & m2' & (CoreStep & MATCH & Hincr & His_ext & Htrace)).
         
         eapply (event_semantics.ev_step_ax2 (@semSem CSem)) in CoreStep.
         destruct CoreStep as (?&?); eauto.
@@ -752,8 +779,10 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
           eapply Concur_update; eauto.
           { eapply core_semantics.corestep_mem in H2.
             eapply H2. }
-          { (* This is the step constructed bellow *)
-            admit.
+          { eapply (event_semantics.ev_step_ax1 (@semSem CSem)) in H1.
+            eapply core_semantics.corestep_mem in H1.
+            replace Htid' with (contains12 H0 Htid) by apply Axioms.proof_irr.
+            eauto.
           }
           { apply H0. }
           
@@ -762,7 +791,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
           unfold match_thread_source; simpl.
           constructor.
           exact MATCH.
-        + admit.
+        + eapply inject_incr_trace; try eassumption. 
         + (* Construct the step *)
           exists 0; simpl.
           do 2 eexists; split; [|reflexivity].
@@ -773,7 +802,13 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
             eapply H0.
           * simpl. econstructor; eauto.
           * simpl; repeat (f_equal; try eapply Axioms.proof_irr).
-    Admitted.
+
+
+
+            Unshelve. all: auto.
+            (*This shouldn't be here*) 
+            all: exact nil.
+    Qed.
 
 
     (** *Diagrams for machine steps*)
@@ -950,6 +985,231 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
                     U tr2 st2 m2 (HybridMachineSig.schedSkip U)
                                                  (seq.cat tr2
                                                           (Events.external tid e' :: nil)) st2' m2'.
+        Proof.
+          
+          intros.
+          destruct (Compare_dec.lt_eq_lt_dec tid hb) as [[?|?]|?].
+          - (* tid < hb *)
+            
+            pose proof (mtch_target _ _ _ _ _ _ H0 _ l Htid (contains12 H0 Htid)) as HH.
+            simpl in H5; exploit_match.
+            inversion H18; clear H18.
+            simpl.
+
+
+            (** *Constructing the target objects: events, thread_pool, mem, meminj and index*)
+
+            (*First construct the virtueThread:
+                the permissions passed from the thread to the lock. *)
+
+            Import BinNums.
+            Import BinInt.
+            Definition merge_func {A} (f1 f2:BinNums.Z -> option A):
+              (BinNums.Z -> option A):=
+              fun ofs =>
+                match f1 ofs with
+                  None => f2 ofs
+                | _ => f1 ofs
+                end.
+            (* apply an injections to the elements of a tree. *)
+            Fixpoint apply_injection_elements
+                     {A}
+                     (mu:meminj) (ls: list (positive * (Z -> option A)))
+              : list (positive * (Z -> option A)) :=
+              match ls with
+                nil => nil
+              | cons (b, ofs_f) ls' =>
+                match (mu b) with
+                 | None => apply_injection_elements mu ls'
+                 | Some (b',d) =>
+                   cons
+                     (b', fun ofs => ofs_f (ofs-d)%Z)
+                     (apply_injection_elements mu ls')
+                end
+              end.
+            Fixpoint extract_function_for_block
+                     {A} (b: positive) (ls: list (positive * (Z -> option A)))
+              : Z -> option A :=
+              match ls with
+                nil => fun _ => None
+              | cons (b', ofs_f') ls' =>
+                if (Pos.eq_dec b b') then
+                  merge_func ofs_f' (extract_function_for_block b ls')
+                else (extract_function_for_block b ls')
+                end.
+
+            (* HERE *)
+            (* Definition inject_map_using_mem 
+            *)
+            Fixpoint map_from_list
+                     {A:Type}
+                     (mu:meminj) (ls: list (positive * (Z -> option A))):=
+              match ls with
+                nil => @PTree.empty (BinNums.Z -> option A)
+              | cons (b, ofs_f) ls =>
+                let t:= map_from_list mu ls in
+                match mu b with
+                  None => t
+                | Some (b',d) =>
+                  match PTree.get b' t with
+                    None => PTree.set b' (fun ofs => ofs_f (ofs-d)%Z) t
+                  | Some f_old =>
+                    PTree.set b' (merge_func (fun ofs => ofs_f (ofs-d)%Z) f_old) t
+                  end
+                end
+              end.
+
+            
+                       
+
+            Definition tree_map_inject {A}(mu:meminj) (map:PTree.t (Z -> option A)):
+              PTree.t (Z -> option A):=
+              map_from_list mu (PTree.elements map).
+            Definition virtueThread_inject (mu:meminj) (virtue:delta_map * delta_map):
+              delta_map * delta_map:=
+              let (m1,m2):= virtue in
+              (tree_map_inject mu m1, tree_map_inject mu m2).
+            remember (virtueThread_inject mu virtueThread)  as virtueThread2.
+            
+            (* Second construct the virtueLP:
+               the permissions transfered to the Lock pool
+             *)
+            Definition access_map_inject (mu:meminj) (map:access_map):
+              access_map:=
+              (fst map, tree_map_inject mu (snd map)).
+            Definition virtueLP_inject (mu:meminj) (virtue:access_map * access_map):
+              access_map * access_map:=
+              (access_map_inject mu (fst virtue), access_map_inject mu (snd virtue)).
+            remember (virtueLP_inject mu virtueLP) as virtueLP2.
+              
+            do 5 econstructor.
+            split; [|split].
+
+            + (* reestablish the Concur_match*)
+              admit.
+
+            + simpl.
+              Lemma cat_app:
+                forall {T} (l1 l2:list T),
+                  seq.cat l1 l2 = app l1 l2.
+              Proof. intros. induction l1; eauto. Qed.
+              
+              rewrite cat_app.
+              rewrite (cat_app tr2).
+              eapply List.Forall2_app.
+              admit.
+              admit.
+              
+            + econstructor; eauto.
+
+              
+              eapply step_release with
+                  (virtueThread0:=virtueThread2)
+                  (virtueLP0:=virtueLP2); eauto.
+              
+              (* 11 goals produced. *)
+
+              
+              * unfold HybridMachineSig.isCoarse, HybridMachineSig.HybridCoarseMachine.scheduler.
+                move H2 at bottom.
+                assert (H2':
+                    bounded_maps.sub_map (fst virtueThread) (snd (getMaxPerm m1)) /\
+                    bounded_maps.sub_map (snd virtueThread) (snd (getMaxPerm m1))
+                  ) by assumption.
+                clear H2.
+
+
+                (*
+                  Sketch: virtue2 is the map from virtuethread by mu.
+                  mu also maps m1 to m2, so the sub_map relation hsould be preserved by 
+                  the injection.
+                 *)
+                { destruct H2' as (A&B).
+                  split.
+                  clear - A HeqvirtueThread2.
+                  rewrite HeqvirtueThread2.
+                  unfold bounded_maps.sub_map in *.
+                  admit.
+                  admit.
+                }
+                
+              * unfold HybridMachineSig.isCoarse, HybridMachineSig.HybridCoarseMachine.scheduler.
+                move H3 at bottom.
+
+                (*
+                  Sketch: virtueLP2 is the map from virtueLP by mu.
+                  mu also maps m1 to m2, so the sub_map relation hsould be preserved by 
+                  the injection.
+                 *)
+                admit. 
+
+                
+              * eapply H0.
+
+              * simpl.
+                (*
+                  Sketch
+                  This should follow from the concur_match
+                  where the address is the image of [Vptr b ofs] under mu.
+                 *)
+                admit. 
+
+              * move H8 at bottom.
+                
+                (* Sketch:
+                   Again, this should follow from the injection preserving permissions.
+                 *)
+                admit.
+
+              * move H7 at bottom.
+
+               (* Sketch:
+                   Again, this should follow from the injection preserving permissions AND
+                   the contents of the location of the lock. H7
+                 *)
+                admit.
+
+              * move H9 at bottom.
+
+               (* Sketch:
+                   Again, this should follow from the injection preserving permissions and H9
+                 *)
+                admit.
+
+              * move H10 at bottom.
+                simpl.
+                (** *missing property from the concur_match, easy to mantain. *)
+
+                (* Sketch:
+                   concur_match should maintain "injection" of permissions in locks.
+                 *)
+                admit.
+
+
+              * (* Claims the transfered resources join in the appropriate way *)
+                simpl. move H12 at bottom.
+                
+                (*
+                  Sketch: 
+                  Should follow from the constructions of the transfered permissions and
+                  H12.
+                 *)
+                admit.
+
+                
+              * (* Claims the transfered resources join in the appropriate way *)
+                simpl. move H13 at bottom.
+                
+                (*
+                  Sketch: 
+                  Should follow from the constructions of the transfered permissions and
+                  H12.
+                 *)
+                admit.
+
+          - admit.
+          - admit.
+
         Admitted.
 
         Lemma Create_step_diagram:
@@ -1000,6 +1260,30 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
                                                         (Events.external tid e' :: nil)) st2' m2'.
         Proof.
           intros U tr1 tr2 st1 m1' tid cd st2 mu m2 Htid c b ofs arg virtue1 virtue2 threadPerm' newThreadPerm.
+          
+          intros.
+          destruct (Compare_dec.lt_eq_lt_dec tid hb) as [[?|?]|?].
+          - (* tid < hb *)
+            
+            pose proof (mtch_target _ _ _ _ _ _ H0 _ l Htid (contains12 H0 Htid)) as HH.
+            simpl in H5; exploit_match.
+            inversion H14; clear H14.
+            simpl.
+
+            do 5 econstructor.
+            split; [|split].
+
+            + (* reestablish the *)
+              admit.
+
+            + simpl.
+              admit.
+            + econstructor; eauto.
+              econstructor.
+              admit.
+
+
+            
         Admitted.
 
 
@@ -1578,7 +1862,6 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
       - apply infinite_halted.
       - apply infinite_running.
 
-        
     Qed.
 
  End CompileInftyThread.
