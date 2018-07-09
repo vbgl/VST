@@ -9,10 +9,8 @@ Import HybridMachineSig.
 Set Bullet Behavior "Strict Subproofs".
   
 Require Import VST.concurrency.compiler.concurrent_compiler_simulation.
-Require Import VST.concurrency.compiler.concurrent_compiler_simulation_proof.
 Require Import VST.concurrency.compiler.sequential_compiler_correct.
 Require Import VST.concurrency.compiler.concurrent_compiler_safety.
-Require Import VST.concurrency.compiler.concurrent_compiler_simulation_proof.
 Require Import VST.concurrency.compiler.safety_equivalence.
 Require Import VST.concurrency.compiler.HybridMachine_simulation.
 Require Import VST.concurrency.common.HybridMachine.
@@ -32,20 +30,15 @@ Module SafetyStatement (CC_correct: CompCert_correctness).
   (*Import the Asm X86 Hybrid Machine*)
   Import X86Context.
 
-  Module ConcurCC_correct:= (Concurrent_correctness CC_correct).
-  Import ConcurCC_correct.
-  
   Definition Clight_init_state (p: Clight.program):=
     Clight.entry_point (Clight.globalenv p).
-  
+
   Definition Asm_init_state (p: Asm.program):=
     Asm.entry_point (@the_ge p).
 
   Notation valid Sem:=
     (valid dryResources Sem OrdinalPool.OrdinalThreadPool).
 
-
-    
     Definition ConcurrentCompilerSafety_statement:=
       forall (p : Clight.program) (tp : Asm.program),
         CC_correct.CompCert_compiler p = Some tp ->
