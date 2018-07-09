@@ -588,6 +588,11 @@ Module DryHybridMachine.
     Set Printing All.
     Section HybDryMachineLemmas.
 
+      Lemma build_delta_content_restr: forall d m p Hlt,
+        build_delta_content d (@restrPermMap p m Hlt) = build_delta_content d m.
+      Proof.
+        reflexivity.
+      Qed.
 
       (*TODO: This lemma should probably be moved. *)
       Lemma threads_canonical:

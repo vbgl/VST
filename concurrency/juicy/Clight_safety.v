@@ -413,6 +413,7 @@ Proof.
     instantiate (1 := Hcmpt').
     pose proof (restrPerm_sub_map _ _ Hlt).
     destruct Hbounded, Hbounded_new.
+    rewrite !build_delta_content_restr.
     eapply step_create; eauto; simpl; auto; split; eapply sub_map_trans; eauto.
   - erewrite restrPermMap_twice in *.
     eapply AngelSafe; eauto.
@@ -650,11 +651,6 @@ Definition threadpool_of (st: MachStateDry) :=    match st with (_, _, tp) => tp
 
 Definition dryThreadPool := @ThreadPool.t dryResources (Clight_newSem ge)
                                   (@OrdinalPool.OrdinalThreadPool dryResources (Clight_newSem ge)).
-
-
-Locate deref_locT.
-Locate deref_loc.
-SearchAbout Clight.deref_loc deref_locT.
 
 Definition ctl_ok nextb (c: @ctl Clight_new.corestate) : Prop :=
  match c with
