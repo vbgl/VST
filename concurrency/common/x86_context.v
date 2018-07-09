@@ -1,4 +1,3 @@
-
 (** * Instantiating the dry and bare machine for X86*)
 
 Require Import VST.concurrency.common.HybridMachine.
@@ -76,49 +75,51 @@ Module X86SEMAxioms.
 
     Lemma corestep_det: corestep_fun semSem.
     Proof.
-      simpl.
+      simpl.                  
       intros m m' m'' c c' c'' Hstep1 Hstep2.
+      simpl in Hstep1, Hstep2.
+      inv Hstep1;
+        inv Hstep2.
       simpl in *.
-      inv Hstep1.
-      (* simpl. *)
-      (* intros m m' m'' c c' c'' Hstep1 Hstep2. *)
-      (* simpl in Hstep1, Hstep2. *)
-      (* inv Hstep1. simpl in H. *)
-      (* inv Hstep1; *)
-      (*   inv Hstep2. *)
-      (* simpl in *. *)
-      (* inv H; inv H1; subst; *)
-      (*   try (congruence); *)
-      (*   unfold set_mem in *; destruct c, c', c''. *)
-      (*     repeat match goal with *)
-      (*            |[H: State _ _ = State _ _ |- _] => *)
-      (*             inv H *)
-      (*            end. *)
-      (* rewrite H5 in H10. *)
-      (* inv H10. *)
-      (* rewrite H6 in H11. inv H11. *)
-      (* rewrite H7 in H12. inv H12. *)
-      (* rewrite  *)
-      (* pose proof (semantics_determinate *)
-   Admitted.
-    (*   hnf; intros. *)
-    (*   inv H; inv H0; simpl in *. *)
-    (*   inv H; inv H1; *)
-    (*     repeat *)
-    (*       match goal with *)
-    (*       | H: ?A = _, H':?A=_ |- _ => inversion2 H H' *)
-    (*       | H: ?A, H': ?A |- _ => clear H' *)
-    (*       end; *)
-    (*     try congruence; try now (split; auto). *)
-    (*   assert (vargs0=vargs) by (eapply Events.eval_builtin_args_determ; eauto). *)
-    (*   subst vargs0. *)
-    (*   exploit Hsafe; eauto. *)
-    (*   assert (t0=t) by (eapply builtin_event_determ; eauto). subst t0. *)
-    (*   destruct (Events.external_call_determ _ _ _ _ _ _ _ _ _ _ H12 H16). *)
-    (*   specialize (H0 (eq_refl _)). destruct H0; subst m'' vres0. *)
-    (*   auto. *)
-    (* Qed. *)
-
+      inv H; inv H1; subst;
+        try (congruence);
+        unfold set_mem in *; destruct c;
+          try (repeat match goal with
+                 |[H: State _ _ = State _ _ |- _] =>
+                  inv H
+                 |[H: ?Expr = ?V1, H2: ?Expr = ?V2 |- _]=>
+                  rewrite H in H2; inv H2
+                 end;
+               eauto);
+          try (unfold exec_instr in *; discriminate).
+      simpl.
+      pose proof (Events.eval_builtin_args_determ H7 H12); subst.
+      assert (t = t0).
+      { destruct ef0; simpl in *;
+        unfold safe_genv in Hsafe;
+        specialize (Hsafe _ _ _ _ _ _ _ _ _ _ _ _ H5 H6 H7 H13);
+        simpl in *;
+        try (destruct Hsafe as [_ [_ Hcontra]]; now exfalso).
+        inversion H13. inversion H8; subst.
+        reflexivity.
+        inversion H13; inversion H8; subst.
+        reflexivity.
+        inversion H13; inversion H8; subst.
+        reflexivity.
+      }
+      subst.
+      destruct (Events.external_call_deterministic _ _ _ _ _ _ _ _ _ H8 H13);
+        subst.
+      now auto.
+      unfold at_external in H0.
+      rewrite H4 in H0.
+      erewrite if_true in H0 by reflexivity.
+      rewrite H5 in H0.
+      destruct (get_extcall_arguments r m (Conventions1.loc_arguments (AST.ef_sig ef0)))
+               eqn:Hget;
+      [discriminate | eapply get_extcall_arguments_spec in H10; congruence].
+    Qed.
+      
     Lemma mem_step_decay:
       forall m m',
         mem_step m m' ->

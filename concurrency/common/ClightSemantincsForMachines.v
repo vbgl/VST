@@ -33,6 +33,8 @@ Require Import VST.veric.Clightcore_coop.
 Require Import VST.sepcomp.event_semantics.
 Require Import VST.veric.Clight_sim.
 
+Set Bullet Behavior "Strict Subproofs".
+
 Lemma extcall_malloc_sem_inv: forall g v m t res m2 (E:Events.extcall_malloc_sem g v m t res m2),
   exists m1 b (sz : ptrofs), v=[Vptrofs sz] /\ t= Events.E0 /\ res=Vptr b Ptrofs.zero /\
                            Mem.alloc m (- size_chunk Mptr) (Ptrofs.unsigned sz) = (m1, b) /\
@@ -928,19 +930,27 @@ Section CLC_SEM.
     { inv EX2. eauto. }
   Qed.
 
+  Lemma extcall_ev_elim: forall ef g vargs m t vres m' ev
+    (Hext: Events.external_call ef g vargs m t vres m')
+    (Hev: builtin_event ef m vargs ev)
+    (Hef: match ef with EF_malloc | EF_free | EF_memcpy _ _ => False | _ => True end),
+    ev_elim m ev m'.
+  Proof.
+  Admitted.
+
   Lemma clc_ev_elim (FE: forall f vargs m e le m1 T (E:function_entryT f vargs m e le m1 T), ev_elim m T m1):
     forall c m T c' m' (E: clc_evstep c m T c' m'), ev_elim m T m'.
   Proof.
     induction 1; try solve [constructor];
       try solve [ apply eval_exprT_elim in H; trivial]; trivial.
-    { eapply assign_locT_elim in H2. destruct H2 as [EV3 _ ].
+    - eapply assign_locT_elim in H2. destruct H2 as [EV3 _ ].
       eapply eval_lvalueT_elim in H.
       eapply eval_exprT_elim in H0.
-      eapply ev_elim_app; eauto. eapply ev_elim_app; eauto. }
-    { apply eval_exprT_elim in H0.
+      eapply ev_elim_app; eauto. eapply ev_elim_app; eauto.
+    - apply eval_exprT_elim in H0.
       apply eval_exprTlist_elim in H1.
-      eapply ev_elim_app; eauto. }
-    { apply eval_exprTlist_elim in H. eapply ev_elim_app; eauto. clear H.
+      eapply ev_elim_app; eauto.
+    - apply eval_exprTlist_elim in H. eapply ev_elim_app; eauto. clear H.
       inv H0.
       { exploit extcall_malloc_sem_inv. apply H1. clear H1. intros [m1 [bb [sz [X [Ht [Hres [A STORE]]]]]]]; subst.
         assert (HV: Vptrofs n = Vptrofs sz).
@@ -955,8 +965,14 @@ Section CLC_SEM.
          econstructor. eassumption. econstructor. split. { simpl. rewrite FR. reflexivity. } reflexivity. }
       { inv H1. rewrite H14 in LB; inv LB. rewrite ST in H15; inv H15.
         econstructor. eassumption. econstructor; split. eassumption. reflexivity. }
-      admit. (*Here we need that only the three builtins are supported destruct ef; try solve [contradiction].*)
-  Admitted.
+      eapply extcall_ev_elim; eauto; constructor; auto.
+    - do 2 eexists; eauto; constructor.
+    - apply eval_exprT_elim in H.
+      eapply ev_elim_app; eauto.
+      do 2 eexists; eauto; constructor.
+    - do 2 eexists; eauto; constructor.
+    - eauto.
+  Qed.
 
 End CLC_step.
 

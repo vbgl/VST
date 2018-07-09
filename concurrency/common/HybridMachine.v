@@ -127,6 +127,27 @@ Module DryHybridMachine.
       end.
     Infix "??" := option_function (at level 80, right associativity).
 
+    Definition build_delta_content_function
+               (dm_f:Z -> option (option permission))
+               (cont_f: ZMap.t memval):
+      Z -> option memval :=
+      fun ofs =>
+        match (dm_f ofs) with
+        | None => None
+        | Some None => None
+        | Some (Some Nonempty) => None
+        | Some (Some _) => Some (ZMap.get ofs cont_f)
+        end.
+      
+    Definition build_delta_content (dm: delta_map) (m:mem): delta_content:=
+      let mcont:= snd (Mem.mem_contents m) in
+      PTree.map ( fun b cont_f =>
+                    match dm ! b with
+                      None => fun _ => None
+                    | Some dm_f =>
+                      build_delta_content_function dm_f cont_f
+                    end) mcont.
+    
     Inductive ext_step {isCoarse:bool} {tid0 tp m}
               (cnt0:containsThread tp tid0)(Hcompat:mem_compatible tp m):
       thread_pool -> mem -> sync_event -> Prop :=
@@ -169,7 +190,7 @@ Module DryHybridMachine.
             (Htp'': tp'' = updLockSet tp' (b, Ptrofs.intval ofs) (empty_map, empty_map)),
             ext_step cnt0 Hcompat tp'' m'
                      (acquire (b, Ptrofs.intval ofs)
-                              (Some virtueThread))
+                              (Some (build_delta_content (fst virtueThread) m')))
 
     | step_release :
         forall (tp' tp'':thread_pool) marg m0 m1 c m' b ofs virtueThread virtueLP pmap_tid' rmap
@@ -216,7 +237,7 @@ Module DryHybridMachine.
             (Htp'': tp'' = updLockSet tp' (b, Ptrofs.intval ofs) virtueLP),
             ext_step cnt0 Hcompat tp'' m'
                      (release (b, Ptrofs.intval ofs)
-                              (Some virtueLP))
+                              (Some (build_delta_content (fst virtueThread) m')))
     | step_create :
         forall (tp_upd tp':thread_pool) c marg b ofs arg virtue1 virtue2
           (Hbounded: if isCoarse then
@@ -248,7 +269,8 @@ Module DryHybridMachine.
             (Htp': tp' = addThread tp_upd (Vptr b ofs) arg newThreadPerm),
             ext_step cnt0 Hcompat tp' m
                      (spawn (b, Ptrofs.intval ofs)
-                            (Some (getThreadR cnt0, virtue1)) (Some virtue2))
+                            (Some (build_delta_content (fst virtue1) m))
+                            (Some (build_delta_content (fst virtue2) m)))
 
 
     | step_mklock :

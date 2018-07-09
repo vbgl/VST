@@ -32,6 +32,7 @@
 
 From mathcomp.ssreflect Require Import ssreflect seq ssrbool.
 Require Import compcert.common.Memory.
+Require Import compcert.common.Events.
 Require Import compcert.common.AST.     (*for typ*)
 Require Import compcert.common.Values. (*for val*)
 Require Import compcert.common.Globalenvs.
@@ -70,13 +71,22 @@ Module Events.
 footprints of permissions moved  when applicable*)
   Definition evRes := (access_map * access_map)%type.
   Definition evDelta := (delta_map * delta_map)%type.
-  
+
+  (* Santiago July 9: On consultation with Andrew and Lennart:
+     Turns out all we need from the traces, is the content of the 
+     observable locations (observable according to the delta_map, which is not in the trace)
+     events now record:
+     - delta_contents: is the memory, only with the contetns of "observable" memory
+   *)
+
+  (*  move this to  VST.concurrency.common.permissions*)
+  Definition delta_content := (Maps.PTree.t (Z -> option memval)).
   Inductive sync_event : Type :=
-  | release : address (*-> option (evRes * evDelta)*) -> option evRes -> sync_event
-  | acquire : address -> option evDelta (*option (evRes * evDelta) -> option evRes*)  -> sync_event
+  | release : address -> option delta_content -> sync_event
+  | acquire : address -> option delta_content -> sync_event
   | mklock :  address -> sync_event
   | freelock : address -> sync_event
-  | spawn : address -> option (evRes * evDelta) -> option evDelta -> sync_event
+  | spawn : address -> option delta_content -> option delta_content -> sync_event
   | failacq: address -> sync_event.
   
   (** Machine Events *)

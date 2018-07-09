@@ -80,14 +80,14 @@ Section HybridSimulation.
   Inductive inject_sync_event (f : meminj) : sync_event -> sync_event -> Prop :=
   | inj_release : forall l1 l2 r1 r2, inject_address f l1 l2 ->
       match r1, r2 with
-      | Some (a1, b1), Some (a2, b2) => inject_access_map f a1 a2 /\ inject_access_map f b1 b2
+      | Some (a1), Some (a2) => inject_delta_content f a1 a2
       | None, None => True
       | _, _ => False
       end ->
       inject_sync_event f (release l1 r1) (release l2 r2)
   | inj_acquire : forall l1 l2 r1 r2, inject_address f l1 l2 ->
       match r1, r2 with
-      | Some (a1, b1), Some (a2, b2) => inject_delta_map f a1 a2 /\ inject_delta_map f b1 b2
+      | Some (a1), Some (a2) => inject_delta_content f a1 a2
       | None, None => True
       | _, _ => False
       end ->
@@ -96,20 +96,20 @@ Section HybridSimulation.
       inject_sync_event f (mklock l1) (mklock l2)
   | inj_freelock : forall l1 l2, inject_address f l1 l2 ->
       inject_sync_event f (freelock l1) (freelock l2)
-  | inj_spawn : forall l1 l2 r1 r2 d1 d2, inject_address f l1 l2 ->
+  | inj_spawn : forall l1 l2 r1 r1' r2 r2', inject_address f l1 l2 ->
       match r1, r2 with
-      | Some ((a1, b1), (c1, d1)), Some ((a2, b2), (c2, d2)) =>
-          inject_access_map f a1 a2 /\ inject_access_map f b1 b2 /\
-          inject_delta_map f c1 c2 /\ inject_delta_map f d1 d2
+      | Some a1, Some a2 =>
+          inject_delta_content f a1 a2
       | None, None => True
       | _, _ => False
       end ->
-      match d1, d2 with
-      | Some a1, Some a2 => inject_delta_map f a1 a2
+      match r1', r2' with
+      | Some a1', Some a2' =>
+          inject_delta_content f a1' a2'
       | None, None => True
       | _, _ => False
       end ->
-      inject_sync_event f (mklock l1) (mklock l2)
+      inject_sync_event f (spawn l1 r1 r1') (spawn l2 r2 r2')
   | inj_failacq : forall l1 l2, inject_address f l1 l2 ->
       inject_sync_event f (failacq l1) (failacq l2).
 

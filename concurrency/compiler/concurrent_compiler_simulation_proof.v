@@ -178,6 +178,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
   { same_length: num_threads cstate1 = num_threads cstate2
     ; memcompat1: mem_compatible cstate1 m1
     ; memcompat2: mem_compatible cstate2 m2
+    ; INJ: Mem.inject j m1 m2
     ; taret_invariant: invariant cstate2
     ; mtch_source:
         forall (i:nat),
@@ -995,10 +996,100 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
             inversion H18; clear H18.
             simpl.
 
+
+            (** *Constructing the target objects: events, thread_pool, mem, meminj and index*)
+
+            (*First construct the virtueThread:
+                the permissions passed from the thread to the lock. *)
+
+            Import BinNums.
+            Import BinInt.
+            Definition merge_func {A} (f1 f2:BinNums.Z -> option A):
+              (BinNums.Z -> option A):=
+              fun ofs =>
+                match f1 ofs with
+                  None => f2 ofs
+                | _ => f1 ofs
+                end.
+            (* apply an injections to the elements of a tree. *)
+            Fixpoint apply_injection_elements
+                     {A}
+                     (mu:meminj) (ls: list (positive * (Z -> option A)))
+              : list (positive * (Z -> option A)) :=
+              match ls with
+                nil => nil
+              | cons (b, ofs_f) ls' =>
+                match (mu b) with
+                 | None => apply_injection_elements mu ls'
+                 | Some (b',d) =>
+                   cons
+                     (b', fun ofs => ofs_f (ofs-d)%Z)
+                     (apply_injection_elements mu ls')
+                end
+              end.
+            Fixpoint extract_function_for_block
+                     {A} (b: positive) (ls: list (positive * (Z -> option A)))
+              : Z -> option A :=
+              match ls with
+                nil => fun _ => None
+              | cons (b', ofs_f') ls' =>
+                if (Pos.eq_dec b b') then
+                  merge_func ofs_f' (extract_function_for_block b ls')
+                else (extract_function_for_block b ls')
+                end.
+
+            (* HERE *)
+            (* Definition inject_map_using_mem 
+                       (mu:meminj) (ls:  (positive * (Z -> option A))):=
+
+             *)
+              
+            
+            Fixpoint map_from_list
+                     {A:Type}
+                     (mu:meminj) (ls: list (positive * (Z -> option A))):=
+              match ls with
+                nil => @PTree.empty (BinNums.Z -> option A)
+              | cons (b, ofs_f) ls =>
+                let t:= map_from_list mu ls in
+                match mu b with
+                  None => t
+                | Some (b',d) =>
+                  match PTree.get b' t with
+                    None => PTree.set b' (fun ofs => ofs_f (ofs-d)%Z) t
+                  | Some f_old =>
+                    PTree.set b' (merge_func (fun ofs => ofs_f (ofs-d)%Z) f_old) t
+                  end
+                end
+              end.
+
+            
+                       
+
+            Definition tree_map_inject {A}(mu:meminj) (map:PTree.t (Z -> option A)):
+              PTree.t (Z -> option A):=
+              map_from_list mu (PTree.elements map).
+            Definition virtueThread_inject (mu:meminj) (virtue:delta_map * delta_map):
+              delta_map * delta_map:=
+              let (m1,m2):= virtue in
+              (tree_map_inject mu m1, tree_map_inject mu m2).
+            remember (virtueThread_inject mu virtueThread)  as virtueThread2.
+            
+            (* Second construct the virtueLP:
+               the permissions transfered to the Lock pool
+             *)
+            Definition access_map_inject (mu:meminj) (map:access_map):
+              access_map:=
+              (fst map, tree_map_inject mu (snd map)).
+            Definition virtueLP_inject (mu:meminj) (virtue:access_map * access_map):
+              access_map * access_map:=
+              (access_map_inject mu (fst virtue), access_map_inject mu (snd virtue)).
+            remember (virtueLP_inject mu virtueLP) as virtueLP2.
+              
             do 5 econstructor.
             split; [|split].
 
-            + (* reestablish the *)
+            + (* reestablish the Concur_match*)
               admit.
 
             + simpl.
@@ -1014,11 +1105,115 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
               admit.
               
             + econstructor; eauto.
-              eapply step_release; eauto.
+
               
-              unfold HybridMachineSig.isCoarse, HybridMachineSig.HybridCoarseMachine.scheduler.
+              eapply step_release with
+                  (virtueThread0:=virtueThread2)
+                  (virtueLP0:=virtueLP2); eauto.
               
+              (* 11 goals produced. *)
+
               
+              * unfold HybridMachineSig.isCoarse, HybridMachineSig.HybridCoarseMachine.scheduler.
+                move H2 at bottom.
+                assert (H2':
+                    bounded_maps.sub_map (fst virtueThread) (snd (getMaxPerm m1)) /\
+                    bounded_maps.sub_map (snd virtueThread) (snd (getMaxPerm m1))
+                  ) by assumption.
+                clear H2.
+
+
+                (*
+                  Sketch: virtue2 is the map from virtuethread by mu.
+                  mu also maps m1 to m2, so the sub_map relation hsould be preserved by 
+                  the injection.
+                 *)
+                { destruct H2' as (A&B).
+                  split.
+                  clear - A HeqvirtueThread2.
+                  rewrite HeqvirtueThread2.
+                  unfold bounded_maps.sub_map in *.
+                  admit.
+                  admit.
+                }
+                
+              * unfold HybridMachineSig.isCoarse, HybridMachineSig.HybridCoarseMachine.scheduler.
+                move H3 at bottom.
+
+                (*
+                  Sketch: virtueLP2 is the map from virtueLP by mu.
+                  mu also maps m1 to m2, so the sub_map relation hsould be preserved by 
+                  the injection.
+                 *)
+                admit. 
+
+                
+              * eapply H0.
+
+              * simpl.
+                (*
+                  Sketch
+                  This should follow from the concur_match
+                  where the address is the image of [Vptr b ofs] under mu.
+                 *)
+                admit. 
+
+              * move H8 at bottom.
+                
+                (* Sketch:
+                   Again, this should follow from the injection preserving permissions.
+                 *)
+                admit.
+
+              * move H7 at bottom.
+
+               (* Sketch:
+                   Again, this should follow from the injection preserving permissions AND
+                   the contents of the location of the lock. H7
+                 *)
+                admit.
+
+              * move H9 at bottom.
+
+               (* Sketch:
+                   Again, this should follow from the injection preserving permissions and H9
+                 *)
+                admit.
+
+              * move H10 at bottom.
+                simpl.
+                (** *missing property from the concur_match, easy to mantain. *)
+
+                (* Sketch:
+                   concur_match should maintain "injection" of permissions in locks.
+                 *)
+                admit.
+
+
+              * (* Claims the transfered resources join in the appropriate way *)
+                simpl. move H12 at bottom.
+                
+                (*
+                  Sketch: 
+                  Should follow from the constructions of the transfered permissions and
+                  H12.
+                 *)
+                admit.
+
+                
+              * (* Claims the transfered resources join in the appropriate way *)
+                simpl. move H13 at bottom.
+                
+                (*
+                  Sketch: 
+                  Should follow from the constructions of the transfered permissions and
+                  H12.
+                 *)
+                admit.
+
+          - admit.
+          - admit.
+
         Admitted.
 
         Lemma Create_step_diagram:
