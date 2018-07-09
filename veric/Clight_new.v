@@ -314,7 +314,7 @@ Program Definition cl_core_sem (ge: genv):
   @CoreSemantics corestate mem :=
   @Build_CoreSemantics _ _
     (*deprecated cl_init_mem*)
-    (fun _ m c m' v args => cl_initial_core ge v args c /\ Mem.arg_well_formed args m /\ m' = fst (Mem.alloc m 0 0))
+    (fun _ m c m' v args => cl_initial_core ge v args c /\ Mem.arg_well_formed args m /\ m' = m)
     (fun c _ => cl_at_external c)
     (fun ret c _ => cl_after_external ret c)
     (fun _ _ => False)
