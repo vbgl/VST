@@ -1404,7 +1404,8 @@ Module Parching <: ErasureSig.
                      (getThreadR Htid').2 virtue2)).
          pose (ds'':= updLockSet ds'
                       (b, Ptrofs.intval ofs) (empty_map,empty_map)).
-         exists ds'', (Events.acquire (b, Ptrofs.intval ofs) (Some (virtue1, virtue2)) ).
+                      SearchAbout Events.delta_content.
+         exists ds'', (Events.acquire (b, Ptrofs.intval ofs) (Some (build_delta_content virtue1 m')) ).
          split; [|split].
     - { (* invariant ds''*)
 
@@ -1764,7 +1765,7 @@ Module Parching <: ErasureSig.
           eapply Concur.compatible_threadRes_sub; eauto.
       }
 
-
+      change virtue1 with (virtue1, virtue2).1.
       econstructor 1.
 
       15: reflexivity.
@@ -2050,9 +2051,9 @@ Module Parching <: ErasureSig.
                apply po_None1 in HH. assumption.
              + inversion MATCH; rewrite mtch_perm2; reflexivity.
 }
-    (*TODO Fix the even trace*)
-    exists ds'',  (Events.release (b, Ptrofs.intval ofs)
-                                  (Some (Concur.juice2Perm d_phi m, Concur.juice2Perm_locks d_phi m)) ).
+SearchAbout Events.delta_content.
+SearchAbout access_map delta_map.
+    eexists ds'', _.
     split; [|split].
     - unfold ds''.
       cut (invariant ds').
@@ -2449,6 +2450,7 @@ Module Parching <: ErasureSig.
       econstructor 2.
       17: reflexivity.
       16: instantiate (2:= (virtue1, virtue2));
+          instantiate (1 := (Concur.juice2Perm d_phi m, Concur.juice2Perm_locks d_phi m));
         unfold ds'; repeat f_equal; try reflexivity; try apply proof_irrelevance.
       9: eassumption.
       11: eassumption.
@@ -3081,10 +3083,7 @@ Module Parching <: ErasureSig.
                     (computeMap empty_map virtue21,
                      computeMap empty_map virtue22)).
       exists ds'.
-      exists (Events.spawn
-           (b, Ptrofs.intval ofs)
-           (Some ((getThreadR (MTCH_cnt MATCH Hi)) , (virtue11, virtue12)))
-      (Some (virtue21, virtue22))) .
+      eexists.
       split ;[|split].
       { (* invariant *)
         cut (invariant ds_upd).
