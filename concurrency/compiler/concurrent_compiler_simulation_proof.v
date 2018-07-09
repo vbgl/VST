@@ -1040,7 +1040,11 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
 
             (* HERE *)
             (* Definition inject_map_using_mem 
-            *)
+                       (mu:meminj) (ls:  (positive * (Z -> option A))):=
+
+             *)
+              
+            
             Fixpoint map_from_list
                      {A:Type}
                      (mu:meminj) (ls: list (positive * (Z -> option A))):=

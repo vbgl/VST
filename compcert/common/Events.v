@@ -63,15 +63,16 @@ Inductive eventval: Type :=
 
 Notation access_map := (Maps.PMap.t (Z -> option permission)).
 Notation delta_map := (Maps.PTree.t (Z -> option (option permission))).
+Notation delta_content := (Maps.PTree.t (Z -> option memval)).
 
 Inductive event: Type :=
   | Event_syscall: string -> list eventval -> eventval -> event
   | Event_vload: memory_chunk -> ident -> ptrofs -> eventval -> event
   | Event_vstore: memory_chunk -> ident -> ptrofs -> eventval -> event
   | Event_annot: string -> list eventval -> event
-  | Event_acq: val -> mem -> event
-  | Event_rel: val -> delta_map -> event
-  | Event_spawn: val -> delta_map -> delta_map -> event.
+  | Event_acq: val -> delta_map -> delta_content -> event
+  | Event_rel: val -> delta_map -> delta_content -> event
+  | Event_spawn: val -> delta_map -> delta_content -> delta_map -> delta_content -> event.
 
 (** The dynamic semantics for programs collect traces of events.
   Traces are of two kinds: finite (type [trace]) or infinite (type [traceinf]). *)
@@ -622,26 +623,53 @@ Definition inject_separated (f f': meminj) (m1 m2: mem): Prop :=
   f b1 = None -> f' b1 = Some(b2, delta) ->
   ~Mem.valid_block m1 b1 /\ ~Mem.valid_block m2 b2.
 
-Parameter inject_delta_map: meminj -> delta_map -> delta_map -> Prop. 
-Parameter inject_access_map: meminj -> access_map -> access_map -> Prop.
+(*Parameter inject_delta_map: meminj -> delta_map -> delta_map -> Prop
+Parameter inject_access_map: meminj -> access_map -> access_map -> Prop. *)
+Require Import Maps.
+Definition option_func {A B} (of: option (A -> B)) (a:A): option B:=
+  match of with
+    None => None
+  | Some f => Some (f a)
+  end.
+Inductive inject_delta_map (f:meminj) (dm1 dm2:delta_map): Prop:=
+| Build_inject_delta_mem:
+    ( forall b b' d, f b = Some(b',d) -> forall ofs:Z,
+          option_func (dm1 ! b) ofs = option_func (dm2 ! b) (ofs-d)%Z) ->
+    inject_delta_map f dm1 dm2.
+Inductive inject_delta_content (f:meminj) (dm1 dm2:delta_content): Prop:=
+| Build_inject_delta_content:
+    ( forall b b' d, f b = Some(b',d) -> forall ofs (v1: memval),
+          option_func (dm1 ! b) ofs = Some (Some v1) -> 
+          exists v2, option_func (dm2 ! b) (ofs-d)%Z = Some (Some v2) /\ memval_inject f v1 v2) ->
+    ( forall b b' d, f b = Some(b',d) -> forall ofs (v1: option memval),
+          option_func (dm1 ! b) ofs = Some None -> 
+          option_func (dm2 ! b) (ofs-d)%Z = Some None) ->
+    ( forall b b' d, f b = Some(b',d) -> forall ofs (v1: option memval),
+          option_func (dm1 ! b) ofs = None -> 
+          option_func (dm2 ! b) (ofs-d)%Z = None) ->
+    inject_delta_content f dm1 dm2.
 Inductive inject_event: meminj -> event -> event -> Prop :=
   | INJ_syscall: forall f s t v, inject_event f (Event_syscall s t v) (Event_syscall s t v)
   | INJ_vload : forall f mc id n v, inject_event f (Event_vload mc id n v) (Event_vload mc id n v)
   | INJ_vstore : forall f mc id n v, inject_event f (Event_vstore mc id n v) (Event_vstore mc id n v)
   | INJ_annot : forall f st t, inject_event f (Event_annot st t) (Event_annot st t)
-  | INJ_acq : forall f v dm v' dm',
+  | INJ_acq : forall f v dm dc v' dm' dc',
       Val.inject f v v ->
-      Mem.inject f dm dm' ->
-      inject_event f (Event_acq v dm) (Event_acq v' dm')
-  | INJ_rel : forall f v dm v' dm',
+      inject_delta_map f dm dm' ->
+      inject_delta_content f dc dc' ->
+      inject_event f (Event_acq v dm dc) (Event_acq v' dm' dc')
+  | INJ_rel : forall f v dm dc v' dm' dc',
       Val.inject f v v -> 
       inject_delta_map f dm dm' ->
-      inject_event f (Event_rel v dm) (Event_rel v' dm')
-  | INJ_spawn : forall f v dm1 dm2 v' dm1' dm2',
+      inject_delta_content f dc dc' ->
+      inject_event f (Event_rel v dm dc) (Event_rel v' dm' dc')
+  | INJ_spawn : forall f v dm1 dc1 dm2 dc2 v' dm1' dc1' dm2' dc2',
       Val.inject f v v -> 
       inject_delta_map f dm1 dm1' ->
       inject_delta_map f dm2 dm2' ->
-      inject_event f (Event_spawn v dm1 dm2) (Event_spawn v' dm1' dm2').
+      inject_delta_content f dc1 dc1' ->
+      inject_delta_content f dc2 dc2' ->
+      inject_event f (Event_spawn v dm1 dc1 dm2 dc2) (Event_spawn v' dm1' dc1' dm2' dc2').
 
 Inductive inject_trace: meminj -> trace -> trace -> Prop :=
 | injt_nil : forall f, inject_trace f nil nil
