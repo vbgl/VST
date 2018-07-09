@@ -1001,18 +1001,86 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
 
             (*First construct the virtueThread:
                 the permissions passed from the thread to the lock. *)
-              Definition virtueThread_inject (mu:meminj) (virtue:delta_map * delta_map):
-                delta_map * delta_map.
-              Admitted.
-              remember (virtueThread_inject mu virtueThread) as virtueThread2.
 
+            Import BinNums.
+            Import BinInt.
+            Definition merge_func {A} (f1 f2:BinNums.Z -> option A):
+              (BinNums.Z -> option A):=
+              fun ofs =>
+                match f1 ofs with
+                  None => f2 ofs
+                | _ => f1 ofs
+                end.
+            (* apply an injections to the elements of a tree. *)
+            Fixpoint apply_injection_elements
+                     {A}
+                     (mu:meminj) (ls: list (positive * (Z -> option A)))
+              : list (positive * (Z -> option A)) :=
+              match ls with
+                nil => nil
+              | cons (b, ofs_f) ls' =>
+                match (mu b) with
+                 | None => apply_injection_elements mu ls'
+                 | Some (b',d) =>
+                   cons
+                     (b', fun ofs => ofs_f (ofs-d)%Z)
+                     (apply_injection_elements mu ls')
+                end
+              end.
+            Fixpoint extract_function_for_block
+                     {A} (b: positive) (ls: list (positive * (Z -> option A)))
+              : Z -> option A :=
+              match ls with
+                nil => fun _ => None
+              | cons (b', ofs_f') ls' =>
+                if (Pos.eq_dec b b') then
+                  merge_func ofs_f' (extract_function_for_block b ls')
+                else (extract_function_for_block b ls')
+                end.
+
+            (* HERE *)
+            (* Definition inject_map_using_mem 
+            *)
+            Fixpoint map_from_list
+                     {A:Type}
+                     (mu:meminj) (ls: list (positive * (Z -> option A))):=
+              match ls with
+                nil => @PTree.empty (BinNums.Z -> option A)
+              | cons (b, ofs_f) ls =>
+                let t:= map_from_list mu ls in
+                match mu b with
+                  None => t
+                | Some (b',d) =>
+                  match PTree.get b' t with
+                    None => PTree.set b' (fun ofs => ofs_f (ofs-d)%Z) t
+                  | Some f_old =>
+                    PTree.set b' (merge_func (fun ofs => ofs_f (ofs-d)%Z) f_old) t
+                  end
+                end
+              end.
+
+            
+                       
+
+            Definition tree_map_inject {A}(mu:meminj) (map:PTree.t (Z -> option A)):
+              PTree.t (Z -> option A):=
+              map_from_list mu (PTree.elements map).
+            Definition virtueThread_inject (mu:meminj) (virtue:delta_map * delta_map):
+              delta_map * delta_map:=
+              let (m1,m2):= virtue in
+              (tree_map_inject mu m1, tree_map_inject mu m2).
+            remember (virtueThread_inject mu virtueThread)  as virtueThread2.
+            
             (* Second construct the virtueLP:
                the permissions transfered to the Lock pool
              *)
-              Definition virtueLP_inject (mu:meminj) (virtue:access_map * access_map):
-                access_map * access_map.
-              Admitted.
-              remember (virtueLP_inject mu virtueLP) as virtueLP2.
+            Definition access_map_inject (mu:meminj) (map:access_map):
+              access_map:=
+              (fst map, tree_map_inject mu (snd map)).
+            Definition virtueLP_inject (mu:meminj) (virtue:access_map * access_map):
+              access_map * access_map:=
+              (access_map_inject mu (fst virtue), access_map_inject mu (snd virtue)).
+            remember (virtueLP_inject mu virtueLP) as virtueLP2.
               
             do 5 econstructor.
             split; [|split].
@@ -1056,8 +1124,15 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
                   mu also maps m1 to m2, so the sub_map relation hsould be preserved by 
                   the injection.
                  *)
-                admit.
-
+                { destruct H2' as (A&B).
+                  split.
+                  clear - A HeqvirtueThread2.
+                  rewrite HeqvirtueThread2.
+                  unfold bounded_maps.sub_map in *.
+                  admit.
+                  admit.
+                }
+                
               * unfold HybridMachineSig.isCoarse, HybridMachineSig.HybridCoarseMachine.scheduler.
                 move H3 at bottom.
 
@@ -1066,7 +1141,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
                   mu also maps m1 to m2, so the sub_map relation hsould be preserved by 
                   the injection.
                  *)
-                admit.
+                admit. 
 
                 
               * eapply H0.
