@@ -724,17 +724,15 @@ Module HybridMachineSig.
       Qed.
 
       (** Trace of the coarse-grained machine*)
-      Inductive ctrace (st : MachState) (m : mem) : event_trace -> nat -> Prop :=
-      | Trace_0: ctrace st m nil 0
-      | HaltedTrace: forall n, halted_machine st -> ctrace st m nil n
-      | CoreTrace : forall tp' m' n tr tr'
-                     (Hstep: MachStep st m (fst (fst st),(snd (fst st)) ++ tr,tp') m')
-                     (Hsafe: ctrace (fst (fst st),(snd (fst st)) ++ tr,tp') m' tr' n),
-          ctrace st m (tr ++ tr') (S n)
-      | AngelTrace: forall tp' m' n (tr tr': event_trace)
-                     (Hstep: MachStep st m (schedSkip (fst (fst st)),(snd (fst st)) ++ tr,tp') m')
-                     (Hsafe: forall U'', ctrace (U'',(snd (fst st)) ++ tr,tp') m' tr' n),
-          ctrace st m (tr ++ tr') (S n).
+      (* Note that this does not replace csafe - csafe guarantees safety for any rearrangement
+         of the schedule at synchronization points, while this fixes a particular schedule. *)
+      (* Note also that ctrace does not specify the number of steps required to produce the trace. *)
+      Inductive ctrace (st : MachState) (m : mem) : event_trace -> Prop :=
+      | Trace_0: ctrace st m nil (* if a state has trace tr, it also has all prefixes of tr *)
+      | Trace_Step : forall tp' m' U' tr tr'
+                     (Hstep: MachStep st m (U',(snd (fst st)) ++ tr,tp') m')
+                     (Hsafe: ctrace (U',(snd (fst st)) ++ tr,tp') m' tr'),
+          ctrace st m (tr ++ tr').
 
     End HybridCoarseMachine.
   End HybridCoarseMachine.
@@ -781,14 +779,13 @@ Module HybridMachineSig.
 
       (** Trace of the fine-grained machine*)
       Inductive ftrace (tp : thread_pool) (m : mem) (U : schedule)
-        : event_trace -> nat -> Prop :=
-      | Trace_0: ftrace tp m U nil 0
-      | HaltedTrace : forall n tr, halted_machine (U, tr, tp) -> ftrace tp m U nil n
+        : event_trace -> Prop :=
+      | Trace_0: ftrace tp m U nil
       | StepTrace : forall (tp' : thread_pool) (m' : mem)
-                     (tr tr' tr'': event_trace) n,
+                     (tr tr' tr'': event_trace),
           MachStep (U, tr, tp) m (schedSkip U, tr ++ tr', tp') m' ->
-          ftrace tp' m' (schedSkip U) tr'' n ->
-          ftrace tp m U (tr' ++ tr'') (S n).
+          ftrace tp' m' (schedSkip U) tr'' ->
+          ftrace tp m U (tr' ++ tr'').
     End HybridFineMachine.
 End HybridFineMachine.
 
