@@ -413,6 +413,7 @@ Proof.
     instantiate (1 := Hcmpt').
     pose proof (restrPerm_sub_map _ _ Hlt).
     destruct Hbounded, Hbounded_new.
+    rewrite !build_delta_content_restr.
     eapply step_create; eauto; simpl; auto; split; eapply sub_map_trans; eauto.
   - erewrite restrPermMap_twice in *.
     eapply AngelSafe; eauto.
@@ -503,29 +504,17 @@ Proof.
     inv Hstep.
     inv H; simpl.
     apply memsem_lemmas.mem_step_obeys_cur_write; auto.
-    eapply mem_step_alloc; eauto.
+    apply memsem_lemmas.mem_step_refl.
   - intros.
     inv H.
     inv H0; simpl.
     split; intros.
-    + eapply Mem.valid_block_alloc_inv in H9; eauto.
-      destruct H9; [subst | contradiction].
-      right; intro.
-      destruct ((Mem.mem_access m1) # stk ofs k) eqn: Haccess; auto.
-      eapply memsem_lemmas.alloc_access_inv in Haccess; eauto.
-      destruct Haccess; [omega|].
-      destruct H9 as [? Haccess].
-      rewrite Mem.nextblock_noaccess in Haccess; [discriminate|].
-      apply Mem.alloc_result in H8; subst; auto.
-    + destruct ((Mem.mem_access m1) # b ofs k) eqn: Haccess.
-      * eapply memsem_lemmas.alloc_access_inv in Haccess; eauto.
-        destruct Haccess; [omega | tauto].
-      * eapply memsem_lemmas.alloc_access_inv_None; eauto.
+    + contradiction. 
+    + auto. 
   - intros.
     inv H.
     inv H0; simpl.
-    erewrite Mem.nextblock_alloc with (m1 := m)(m2 := m1) by eauto.
-    apply Ple_succ.
+    apply Ple_refl.
 Qed.
 
 Lemma CoreSafe_star: forall n U tr tp m tid (c : @semC (ClightSem ge)) c' tp' m' ev
@@ -650,11 +639,6 @@ Definition threadpool_of (st: MachStateDry) :=    match st with (_, _, tp) => tp
 
 Definition dryThreadPool := @ThreadPool.t dryResources (Clight_newSem ge)
                                   (@OrdinalPool.OrdinalThreadPool dryResources (Clight_newSem ge)).
-
-
-Locate deref_locT.
-Locate deref_loc.
-SearchAbout Clight.deref_loc deref_locT.
 
 Definition ctl_ok nextb (c: @ctl Clight_new.corestate) : Prop :=
  match c with
@@ -868,29 +852,23 @@ hnf in H. destruct st as [[sch tr] tp]. destruct st' as [[sch' tr'] tp'].
      inv Htstep.
     hnf in Hperm; subst.
     destruct Hinitial as (? & ? & ?); subst.
-    destruct (Mem.alloc _ _ _) eqn: Halloc.
     destruct Hmem as [H1 [H2 H2']]; split; [|split].
     + unfold Smallstep.globals_not_fresh.
-      erewrite Mem.nextblock_alloc, restrPermMap_nextblock by eauto.
-      etransitivity; eauto.
-      apply Ple_succ.
+      etransitivity; eauto. simpl. apply Ple_refl. 
     + intros.
-      hnf; intros; erewrite Mem.nextblock_alloc, restrPermMap_nextblock by eauto.
-      destruct (eq_dec b0 b); [subst; erewrite AllocContentsUndef1 by eauto | erewrite AllocContentsOther1 by eauto].
-      * constructor.
-      * eapply memval_inject_incr, flat_inj_incr, Ple_succ; auto.
-    + intros. simpl. simpl in Halloc. simpl in CT.
-        pose proof (Mem.nextblock_alloc _ _ _ _ _ Halloc). simpl in H3.
-        clear - Hcode H Halloc H3 H2'.
+      hnf; intros.
+       eapply memval_inject_incr, flat_inj_incr, Ple_refl; auto.
+    + intros. simpl. simpl in CT.
+        clear - Hcode H H2'.
         revert i CT.
         assert (H2x: forall (i : nat) (CT : containsThread ms i),
-             ctl_ok (Mem.nextblock m0) (getThreadC CT)). {
-             intros. eapply alloc_ctl_ok. 2: eapply H2'; eauto. rewrite H3.
-             apply Pos.lt_le_incl. apply Pos.lt_succ_diag_r.
+             ctl_ok (Mem.nextblock m) (getThreadC CT)). {
+             intros. eapply alloc_ctl_ok. 2: eapply H2'; eauto.
+             apply Ple_refl.
          } clear H2'.
         generalize H2x; apply ctl_ok_updThread.
         specialize (H2x tid ctn). rewrite Hcode in H2x. 
-        set  (nextb := Mem.nextblock m0) in *; clearbody nextb.
+        set  (nextb := Mem.nextblock m) in *; clearbody nextb.
         clear - H H2x.
         hnf in H. destruct vf; try contradiction.
         destruct (Ptrofs.eq_dec i Ptrofs.zero);  try contradiction.
@@ -1058,6 +1036,8 @@ Proof.
   - rewrite gsoThreadCLPool in H0; eauto.
 Qed.
 
+Set Bullet Behavior "Strict Subproofs".
+
 Lemma Clight_new_Clight_safety_gen:
   forall n sch tr tp m tp' (Hmem: mem_ok tp m),
   csafe
@@ -1087,7 +1067,6 @@ Proof.
     destruct (Genv.find_funct_ptr _ b) eqn: Hb; try contradiction.
     destruct (Clight.type_of_fundef f) eqn: Hty; try contradiction.
     destruct Hinit as (? & ? & ? & ?); subst.
-    destruct (Mem.alloc _ _ _) eqn: Halloc.
     eapply CoreSafe.
     { hnf; simpl.
       rewrite <- H5.
@@ -1112,7 +1091,7 @@ Proof.
     { unfold halted_machine in H1; simpl in H1.
       rewrite HschedN in H1; discriminate. }
       match type of Hstep with MachStep ?st _ _ _ => 
-         assert (HmemUpd: mem_ok (threadpool_of st) m0) by auto
+         assert (HmemUpd: mem_ok (threadpool_of st) m') by auto
       end.
       pose proof (mem_ok_step _ _ _ _ HmemUpd Hstep) as Hmem''.
        clear HmemUpd.
@@ -1145,6 +1124,7 @@ Proof.
         eapply thread_step; eauto; econstructor; eauto.
         { pose proof (MTCH_invariant _ _ H0 Hinv) as Hinv'.
           destruct Hinv0.
+          inv Hperm.
           apply ThreadPoolWF.updThread_inv; auto; simpl in *; intros; try apply Hinv'.
           + split; [|apply Hinv'; auto].
             specialize (no_race_thr0 _ _ (cntUpdate _ _ ctn ctn) (cntUpdate _ _ ctn (mtch_cnt' _ cnt)) H1).
@@ -1177,6 +1157,7 @@ Proof.
         apply list_norepet_app with (l1 := [i]) in H21 as (? & ? & ?).
         constructor; eauto.
         erewrite restrPermMap_irr; eauto.
+        inv Hperm.
         rewrite !gssThreadRes; auto.
       - rewrite !updThread_twice.
         apply MTCH_updThread; auto.
@@ -1198,6 +1179,7 @@ Proof.
       inv H10.
       rewrite Cop.cast_val_casted in H12 by auto; inv H12.
       rewrite app_nil_r in Hsafe0.
+       inv Hperm.
       eapply IHn.
       2:{ eapply csafe_restr, Hsafe0.
         destruct c; auto. }
@@ -1442,31 +1424,21 @@ Proof.
     }
   Unshelve.
   all: auto.
-  + apply cntUpdate; auto.
+  2: apply cntUpdate; auto.
   + unfold add_block.
     hnf in Hperm; subst.
     unshelve eapply @CoreLanguageDry.decay_compatible with (m := m); auto.
     * eapply MTCH_compat; eauto.
     * eapply MTCH_invariant; eauto.
     * split.
-      { rewrite restrPermMap_valid; intros.
-        eapply Mem.valid_block_alloc_inv in H2; eauto.
-        rewrite restrPermMap_valid in H2; destruct H2; [|contradiction].
-        subst; right; intro.
-        destruct ((Mem.mem_access m0) # b0 ofs k) eqn: Haccess; auto.
-        eapply memsem_lemmas.alloc_access_inv in Haccess; eauto.
-        destruct Haccess as [[]|[]]; [omega | contradiction]. }
+      { rewrite restrPermMap_valid; intros. 
+(*        eapply Mem.valid_block_alloc_inv in H2; eauto. 
+        rewrite restrPermMap_valid in H2; destruct H2; [|contradiction]. *)
+        subst; right; intro. contradiction. }
       rewrite restrPermMap_valid; intro.
-      right; intro.
-      destruct ((Mem.mem_access m0) # b1 ofs k) eqn: Haccess.
-      { eapply memsem_lemmas.alloc_access_inv in Haccess; eauto.
-        destruct Haccess as [[]|[]]; [omega|].
+      right; intro. 
         erewrite restrPermMap_ext; eauto.
-        intro; extensionality ofs2; auto. }
-      { eapply memsem_lemmas.alloc_access_inv_None in Haccess; [|eauto].
-        erewrite restrPermMap_ext; eauto.
-        intro; extensionality ofs2; auto. }
-    * intros; eapply Mem.valid_block_alloc; eauto.
+        intro; extensionality ofs2; auto.
   + eapply mem_compatible_updThreadC, MTCH_compat; eauto.
   + erewrite <- mtch_gtr2; eauto.
   + erewrite <- mtch_gtr2; eauto.

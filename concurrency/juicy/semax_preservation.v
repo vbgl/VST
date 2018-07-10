@@ -1062,40 +1062,14 @@ Section Preservation.
       simpl JuicyMachine.add_block in *.
       unfold add_block in *.
       assert (mem_compatible_with (updThread i tp cnti (Krun c_new) (getThreadR i tp cnti))
-        (fst (alloc m' 0 0)) Phi) as Hcmpt'.
-      { hnf in Hperm; subst.
-        inversion compat; constructor; auto.
-         - rewrite join_all_res; auto.
-         - destruct (juicy_mem_ops.JuicyMemOps.juicy_mem_alloc
-             (mkJuicyMem _ _ (juicyRestrictContentCoh (acc_coh all_cohere0) (cont_coh all_cohere0)) (juicyRestrictAccCoh (acc_coh all_cohere0)) (juicyRestrictMaxCoh (acc_coh all_cohere0) (max_coh all_cohere0)) (all_coh all_cohere0)) 0 0)
-              as (jm', b') eqn: Hjm.
-            apply mem_cohere_same_except_cur with (m := m_dry jm').
-            { inv Hjm; hnf; unfold max_access_at; simpl; repeat split; auto.
-              extensionality l; destruct l as (b, ofs).
-              destruct (alloc _ _ _) eqn: Ha1.
-              destruct (alloc (juicyRestrict _ _ _) _ _) eqn: Ha2.
-              assert (ofs < 0 \/ ofs >= 0)%Z by omega.
-              erewrite <- (alloc_access_other _ _ _ _ _ Ha1),
-                <- (alloc_access_other _ _ _ _ _ Ha2) by auto.
-              unfold install_perm.
-              setoid_rewrite <- juicyRestrictMax; auto. }
-            destruct jm'; inv Hjm; simpl.
-            rewrite after_alloc_0 in *.
-            constructor; auto.
-          - simpl.
-            repeat intro.
-            exploit loc_writable0; eauto.
-            destruct (alloc _ _ _) eqn: Ha.
-            unfold install_perm in Ha.
-            pose proof (juicyRestrictMax (max_acc_coh_acc_coh (max_coh (thread_mem_compatible (mem_compatible_forget compat) cnti)))
-              (b, ofs0)) as Heq.
-            unfold max_access_at, access_at in Heq; simpl in Heq; rewrite Heq.
-            destruct ((mem_access (fst _)) !! _ _ _) eqn: Haccess.
-            { eapply semantics_lemmas.alloc_access_inv in Haccess; eauto.
-              destruct Haccess as [[] | []]; try omega.
-              setoid_rewrite H3; auto. }
-            { eapply semantics_lemmas.alloc_access_inv_None in Haccess; eauto.
-              setoid_rewrite Haccess; auto. } }
+        m' Phi) as Hcmpt'.
+      {apply mem_compatible_with_same_except_cur with m.
+       inv Hperm.
+       pose proof (same_except_cur_jm_ _ _ _ _ _ cnti compat).
+       unfold install_perm; simpl in H0.
+       auto. 
+       clear - compat. inv compat; constructor; auto.
+       rewrite join_all_res; auto. }
       assert (B : rmap_bound (Mem.nextblock m) Phi) by apply compat.
       right.  (* ? *)
       apply state_invariant_c with (mcompat := Hcmpt'); auto.
@@ -1115,13 +1089,8 @@ Section Preservation.
           destruct (valid_access_dec (restrPermMap (mem_compatible_locks_ltwritable
             (mem_compatible_forget compat))) _ _ _ _); [|discriminate].
           hnf in Hperm; subst.
-          rewrite if_true; simpl in *.
-          Local Transparent alloc.
-          simpl.
-          Opaque alloc.
-          rewrite PMap.gso; auto.
-          zify; omega.
-          { unfold install_perm, juicyRestrict.
+          rewrite if_true; auto.
+        { unfold install_perm, juicyRestrict.
             destruct v0; split; auto.
             apply Mem.range_perm_implies with Writable; [|constructor].
             destruct loc as (?, ofs).
@@ -1146,11 +1115,12 @@ Section Preservation.
           eapply unique_Krun_neq in Ej; try apply unique; auto; contradiction.
           { destruct safety' as [Hvalid' ?].
             split; [|erewrite gsoThreadRes; eauto].
-            destruct (alloc m' 0 0) eqn: Halloc.
+(*            destruct (alloc m' 0 0) eqn: Halloc.
             simpl; apply nextblock_alloc in Halloc as ->.
+*)
             eapply val_inject_incr, Hvalid'.
             hnf in Hperm; subst; simpl.
-            apply flat_inj_incr, Ple_succ. }
+            apply flat_inj_incr. apply Ple_refl. }
       - intros j cntj.
         destruct (eq_dec i j) as [<-|ne]; REWR.
         specialize (wellformed j cntj). auto.
