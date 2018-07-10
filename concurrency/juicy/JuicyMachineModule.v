@@ -89,6 +89,22 @@ Module THE_JUICY_MACHINE.
                  tp_bupd (fun tp' => jm_csafe (U'', tr', tp') m' n) tp'),
                 jm_csafe st m (S n).
 
+  Inductive jm_ctrace (st : jmachine_state) (m : mem) : event_trace -> nat -> Prop :=
+  | Trace_0 : jm_ctrace st m nil 0
+  | HaltedTrace : forall n : nat,
+                 is_true (ssrbool.isSome (halted_machine st)) ->
+                 jm_ctrace st m nil n
+  | CoreTrace : forall tr (tp' : jstate) (m' : mem) tr' (n : nat)
+               (Hstep : MachStep(Sem := JSem) st m (fst (fst st), snd (fst st) ++ tr, tp') m')
+               (Hsafe : tp_bupd (fun tp' => jm_ctrace (fst (fst st), snd (fst st) ++ tr, tp') m' tr' n) tp'),
+               jm_ctrace st m (tr ++ tr') (S n)
+  | AngelTrace : forall tr (tp' : jstate) (m' : mem) tr' (n : nat)
+                (Hstep : MachStep(Sem := JSem) st m
+                  (schedSkip (fst (fst st)), snd (fst st) ++ tr, tp') m')
+                (Hsafe : forall U'',
+                 tp_bupd (fun tp' => jm_ctrace (U'', snd (fst st) ++ tr, tp') m' tr' n) tp'),
+                jm_ctrace st m (tr ++ tr') (S n).
+
   End THE_JUICY_MACHINE.
 
   Arguments jstate : clear implicits.
