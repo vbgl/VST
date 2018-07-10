@@ -480,7 +480,7 @@ Module FineConcSafe.
           destruct Htype as [Htype | [Htype | Htype]].
           + assert (~ List.In i xs)
               by (eapply at_external_not_in_xs; eauto).
-            pose proof (@SimProofs.sim_external _ _ _ sched em _ _ _ _ _ _ _ _ _ _ _ _ cnti H Hsim Htype) as Hsim'.
+            pose proof (@SimProofs.sim_external _ _ _ _ sched em _ _ _ _ _ _ _ _ _ _ _ _ cnti H Hsim Htype) as Hsim'.
             destruct Hsim' as (tpc' & trc' & mc' & tpf' & mf' & f' & fp' & tr' & Hstep & Hsim'').
             specialize (IHsched _ _ _ _ _ _ _ _ _ Hsim'').
             specialize (Hstep sched).

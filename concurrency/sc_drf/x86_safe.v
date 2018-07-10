@@ -391,7 +391,7 @@ Module X86Safe.
     
     Instance X86Sem : Semantics := @X86Sem the_program Hsafe.
     Instance X86Axioms : CoreLanguage.SemAxioms := @X86Axioms the_program Hsafe.
-    Instance X86Det : CoreLanguage.SemDet := @X86Det U the_program Hsafe.
+    Instance X86Det : CoreLanguage.SemDet := @X86Det the_program Hsafe.
     Existing Instance X86CoreErasure.X86Erasure.
     Existing Instance X86Inj.X86Inj.
     (* We don't really have an instance for that, it would require to prove that
