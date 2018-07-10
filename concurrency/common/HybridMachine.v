@@ -127,26 +127,14 @@ Module DryHybridMachine.
       end.
     Infix "??" := option_function (at level 80, right associativity).
 
-    Definition build_delta_content_function
-               (dm_f:Z -> option (option permission))
-               (cont_f: ZMap.t memval):
-      Z -> option memval :=
-      fun ofs =>
-        match (dm_f ofs) with
-        | None => None
-        | Some None => None
-        | Some (Some Nonempty) => None
-        | Some (Some _) => Some (ZMap.get ofs cont_f)
-        end.
-      
-    Definition build_delta_content (dm: delta_map) (m:mem): delta_content:=
-      let mcont:= snd (Mem.mem_contents m) in
-      PTree.map ( fun b cont_f =>
-                    match dm ! b with
-                      None => fun _ => None
-                    | Some dm_f =>
-                      build_delta_content_function dm_f cont_f
-                    end) mcont.
+    Definition build_delta_content (dm: delta_map) (m:mem): delta_content :=
+      PTree.map (fun b dm_f =>
+                   fun ofs =>
+                     match dm_f ofs with
+                     | None | Some (None) 
+                     | Some (Some Nonempty) => None
+                     | Some _ => Some (ZMap.get ofs (Maps.PMap.get b (Mem.mem_contents m)))
+                     end) dm.
     
     Inductive ext_step {isCoarse:bool} {tid0 tp m}
               (cnt0:containsThread tp tid0)(Hcompat:mem_compatible tp m):

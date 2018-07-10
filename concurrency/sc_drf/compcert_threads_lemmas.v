@@ -128,7 +128,7 @@ Module SimDefs.
       f b = Some b' ->
       Maps.PTree.get b deltaMap = Maps.PTree.get b' deltaMap').
 
-  Definition delta_inj (f : memren) (deltaMap deltaMap' : delta_map) : Prop :=
+   Definition delta_inj (f : memren) (deltaMap deltaMap' : delta_map) : Prop :=
     (forall b b',
         f b = Some b' ->
         match Maps.PTree.get b deltaMap, Maps.PTree.get b' deltaMap' with
@@ -145,20 +145,52 @@ Module SimDefs.
     (forall b', (~exists b, f b = Some b') ->
            Maps.PTree.get b' deltaMap' = None).
 
-      
+   Definition build_delta_content (dm: delta_map) (m:mem): delta_content :=
+     PTree.map (fun b dm_f =>
+                  fun ofs =>
+                    match dm_f ofs with
+                    | None | Some (None) 
+                    | Some (Some Nonempty) => None
+                    | Some _ => Some ((ZMap.get ofs (Mem.mem_contents m) # b))
+                    end) dm.
+   
+  Definition delta_content_inj (f : memren) (deltaMap deltaMap' : delta_content) : Prop :=
+    (forall b b',
+        f b = Some b' ->
+        match Maps.PTree.get b deltaMap, Maps.PTree.get b' deltaMap' with
+        | Some d1, Some d2 => forall ofs, match d1 ofs, d2 ofs with
+                                    | Some mv1, Some mv2 =>
+                                      memval_obs_eq f mv1 mv2
+                                    | None, None => True
+                                    | _, _ => False
+                                    end  
+        | None, None => True
+        | Some d1, None => forall ofs, d1 ofs = None
+        | None, Some d2 => False
+        end) /\
+    (forall b, f b = None ->
+          match Maps.PTree.get b deltaMap with
+          | None => True
+          | Some d => False
+          end ) /\
+    (forall b', (~exists b, f b = Some b') ->
+           Maps.PTree.get b' deltaMap' = None).
+
+
+  
+
+  
   Inductive event_sim (f:memren) : Events.machine_event -> Events.machine_event -> Prop :=
-  | ReleaseSim : forall i b1 b2 ofs pmap1c pmap2c pmap1f pmap2f
+  | ReleaseSim : forall i b1 b2 ofs dc1 dc2
                    (Hf: f b1 = Some b2)
-                   (Hpmap1_inj: pmap_inj f pmap1c pmap1f)
-                   (Hpmap2_inj: pmap_inj f pmap2c pmap2f),
-      event_sim f (Events.external i (Events.release (b1,ofs) (Some (pmap1c, pmap2c))))
-                (Events.external i (Events.release (b2,ofs) (Some (pmap1f, pmap2f))))
-  | AcquireSim : forall i b1 b2 ofs pmap1c pmap2c pmap1f pmap2f
+                   (Hdelta_inj: delta_content_inj f dc1 dc2),
+      event_sim f (Events.external i (Events.release (b1,ofs) (Some dc1)))
+                (Events.external i (Events.release (b2,ofs) (Some dc2)))
+  | AcquireSim : forall i b1 b2 ofs dc1 dc2
                    (Hf: f b1 = Some b2)
-                   (Hpmap1_inj: delta_inj f pmap1c pmap1f)
-                   (Hpmap2_inj: delta_inj f pmap2c pmap2f),
-      event_sim f (Events.external i (Events.acquire (b1,ofs) (Some (pmap1c, pmap2c))))
-                (Events.external i (Events.acquire (b2,ofs) (Some (pmap1f, pmap2f))))
+                   (Hpmap1_inj: delta_content_inj f dc1 dc2),
+      event_sim f (Events.external i (Events.acquire (b1,ofs) (Some dc1)))
+                (Events.external i (Events.acquire (b2,ofs) (Some dc2)))
   | MkLockSim : forall i b1 b2 ofs
                    (Hf: f b1 = Some b2),
       event_sim f (Events.external i (Events.mklock (b1,ofs)))
@@ -167,12 +199,12 @@ Module SimDefs.
                   (Hf: f b1 = Some b2),
       event_sim f (Events.external i (Events.freelock (b1,ofs)))
                 (Events.external i (Events.freelock (b2, ofs)))
-  | SpawnSim : forall i b1 b2 ofs pmap pmapF virtue1 virtue1F virtue2 virtue2F
+  | SpawnSim : forall i b1 b2 ofs dc1a dc2a dc1b dc2b
                  (Hf: f b1 = Some b2)
-                 (Hinj1: delta_inj f virtue2#1 virtue2F#1)
-                 (Hinj2: delta_inj f virtue2#2 virtue2F#2),
-      event_sim f (Events.external i (Events.spawn (b1, ofs) (Some (pmap, virtue1)) (Some virtue2)))
-                (Events.external i (Events.spawn (b2, ofs) (Some (pmapF, virtue1F)) (Some virtue2F)))
+                 (Hinj1: delta_content_inj f dc1a dc2a)
+                 (Hinj2: delta_content_inj f dc1b dc2b),
+      event_sim f (Events.external i (Events.spawn (b1, ofs) (Some dc1a) (Some dc1b)))
+                (Events.external i (Events.spawn (b2, ofs) (Some dc2a) (Some dc2b)))
   | FAcqSim: forall i b1 b2 ofs
                (Hf: f b1 = Some b2),
       event_sim f (Events.external i (Events.failacq (b1,ofs)))
@@ -747,6 +779,185 @@ Module SimProofs.
       eapply Hincr;
         now eauto.
   Qed.
+
+  Lemma memval_obs_eq_incr:
+    forall (f f': memren) mv1 mv2
+      (Hincr: ren_incr f f')
+      (Hobs_eq: memval_obs_eq f mv1 mv2),
+      memval_obs_eq f' mv1 mv2.
+  Proof.
+    intros.
+    inversion Hobs_eq;
+      constructor.
+    inversion Hval_obs; subst; constructor.
+    apply Hincr in H1.
+      by auto.
+  Qed.
+
+  Lemma delta_content_inj_incr:
+    forall f f' pmap pmap'
+      (Hincr: ren_incr f f')
+      (Hinjective: forall b1 b1' b2,
+          f' b1 = Some b2 ->
+          f' b1' = Some b2 ->
+          b1 = b1')
+      (Hinj: delta_content_inj f pmap pmap'),
+      delta_content_inj f' pmap pmap'.
+  Proof.
+    intros.
+    unfold delta_content_inj in *.
+    repeat split.
+    - intros b b' Hf'.
+      destruct (f b) eqn:Hfb.
+      + pose proof (Hincr _ _ Hfb) as Hf'b.
+        rewrite Hf'b in Hf'.
+        inversion Hf'; subst.
+        destruct Hinj as [H0 [H1 H2]].
+        specialize (H0 _ _ Hfb).
+        repeat match goal with
+               |[ |- match ?Expr with _ => _ end] =>
+                destruct Expr eqn:?
+               | [|- forall _, _] => intros
+               end; auto;
+        specialize (H0 ofs);
+        rewrite Heqo1 Heqo2 in H0;
+        auto.
+        eapply memval_obs_eq_incr;
+          eauto.
+      + destruct Hinj as [H0 [H1 H2]].
+        specialize (H1 b Hfb).
+        destruct (pmap ! b) eqn:Hpmap.
+        * assert ((exists b, f b = Some b') \/ (~ exists b, f b = Some b'))
+            by (eapply em).
+          destruct H as [H | H].
+          ** destruct H as [b0 Hf0].
+             pose proof (Hincr _ _ Hf0) as Hf0'.
+             specialize (Hinjective _ _ _ Hf' Hf0'); subst.
+             congruence.
+          ** now exfalso.
+        * erewrite H2.
+          auto.
+          intros (b0 & Hf0).
+          pose proof (Hincr _ _ Hf0) as Hf0'.
+          specialize (Hinjective _ _ _ Hf' Hf0'); subst.
+          congruence.
+    - intros b Hf'.
+      destruct (f b) eqn:Hfb.
+      +  eapply Hincr in Hfb.
+         congruence.
+      +  eapply Hinj;
+           eauto.
+    - intros b' Hf'.
+      eapply Hinj.
+      intros Hcontra.
+      eapply Hf'.
+      destruct Hcontra as [b0 Hf0].
+      exists b0.
+      eapply Hincr;
+        now eauto.
+  Qed.
+
+  Lemma delta_content_inj_correct:
+    forall f pmapc pmapf dmap mc mf
+      (Hf_injective: forall b1 b1' b2,
+          f b1 = Some b2 ->
+          f b1' = Some b2 ->
+          b1 = b1')
+      (Hltc: permMapLt (computeMap pmapc dmap) (getMaxPerm mc))
+      (Hltf: permMapLt (computeMap pmapf (projectAngel f dmap)) (getMaxPerm mf))
+      (Hobs_eq: mem_obs_eq f (restrPermMap Hltc) (restrPermMap Hltf)),
+      delta_content_inj f (build_delta_content dmap mc)
+                        (build_delta_content (projectAngel f dmap) mf).
+  Proof.
+    intros.
+    repeat (split).
+    - intros.
+      inversion Hobs_eq.
+      destruct strong_obs_eq0.
+      destruct ((build_delta_content dmap mc) ! b) eqn:Hdeltac.
+      + destruct ((build_delta_content (projectAngel f dmap) mf) ! b') eqn:Hdeltaf.
+        * intros.
+          unfold build_delta_content in *.
+          rewrite PTree.gmap in Hdeltac.
+          rewrite PTree.gmap in Hdeltaf.
+          unfold Coqlib.option_map in *.
+          specialize (perm_obs_strong0 b b' ofs H).
+          rewrite! restrPermMap_Cur in perm_obs_strong0.
+          destruct (((Mem.mem_contents mc)#2) ! b) eqn:Hmc; try discriminate.
+          destruct (dmap ! b) eqn:Hdmap.
+          ** inversion Hdeltac; subst.
+             destruct (((Mem.mem_contents mf)#2) ! b') eqn:Hmf; try discriminate.
+             erewrite <- projectAngel_correct in Hdeltaf by eauto.
+             rewrite Hdmap in Hdeltaf.
+             inversion Hdeltaf. subst.
+             unfold build_delta_content_function.
+             destruct (o1 ofs) as [o|] eqn:Ho1; auto.
+             destruct o as [p|]; auto.
+             specialize (val_obs_eq0 _ _ ofs H).
+             unfold Mem.perm in val_obs_eq0.
+             assert (permission_at (restrPermMap Hltc) b ofs Cur =
+                     (Mem.mem_access (restrPermMap Hltc)) # b ofs Cur).
+             unfold permission_at. reflexivity.
+             rewrite <- H0 in val_obs_eq0.
+             rewrite restrPermMap_Cur in val_obs_eq0.
+             erewrite computeMap_1 in val_obs_eq0 by eauto.
+             unfold PMap.get in val_obs_eq0.
+             rewrite Hmc Hmf in val_obs_eq0.
+             simpl in val_obs_eq0.
+             destruct p;
+               now eauto using perm_order.
+          ** inversion Hdeltac.
+             erewrite <- projectAngel_correct in Hdeltaf by eauto.
+             rewrite Hdmap in Hdeltaf.
+             destruct (((Mem.mem_contents mf)#2) ! b'); try discriminate.
+             inversion Hdeltaf.
+             auto.
+        * unfold build_delta_content in *.
+          rewrite PTree.gmap in Hdeltac.
+          rewrite PTree.gmap in Hdeltaf.
+          unfold Coqlib.option_map in *.
+          destruct (((Mem.mem_contents mc)#2) ! b) eqn:Hmc; try discriminate.
+          destruct (dmap ! b) eqn:Hdmap.
+          ** inversion Hdeltac; subst.
+             unfold build_delta_content_function in *.
+             intros ofs.
+             destruct (((Mem.mem_contents mf)#2) ! b') eqn:Hmf.
+             discriminate.
+             destruct (o0 ofs) eqn:Ho0; auto.
+             destruct o; auto.
+             specialize (val_obs_eq0 _ _ ofs H).
+             unfold Mem.perm in val_obs_eq0.
+             assert (permission_at (restrPermMap Hltc) b ofs Cur =
+                     (Mem.mem_access (restrPermMap Hltc)) # b ofs Cur).
+             unfold permission_at. reflexivity.
+             rewrite <- H0 in val_obs_eq0.
+             rewrite restrPermMap_Cur in val_obs_eq0.
+             erewrite computeMap_1 in val_obs_eq0 by eauto.
+             unfold PMap.get in val_obs_eq0.
+             rewrite Hmc Hmf in val_obs_eq0.
+             simpl in val_obs_eq0.
+             destruct p; auto.
+             pose proof (Mem.contents_default mf b').
+             destruct (Mem.mem_contents mf); simpl in *.
+             unfold PMap.get in H1. simpl in H1.
+             rewrite Hmf in H1.
+             destruct t1. simpl in H1. subst.
+             
+             rewrite H1 in val_obs_eq0.
+             
+             erewrite Mem.contents_default in val_obs_eq0.
+
+                    specialize (perm_obs_strong0 b b' ofs H).
+          rewrite! restrPermMap_Cur in perm_obs_strong0.
+
+          
+          
+      +
+
+        destruct (dmap ! b0).
+        pose proof (projectAngel_correct _ _ Hf_injective _ H).
+        
+        rewrite projectAngel_correct.
   
   Lemma ev_sim_incr:
     forall f f' ev ev'
@@ -760,7 +971,7 @@ Module SimProofs.
   Proof.
     intros.
     inversion Hev_sim;
-      econstructor; eauto using pmap_inj_incr, delta_inj_incr.
+      econstructor; eauto using pmap_inj_incr, delta_content_inj_incr.
   Qed.
   
   Lemma trace_sim_incr:
@@ -8246,8 +8457,7 @@ relation*)
           unfold Mem.range_perm, permission_at, Mem.perm in *.
           erewrite Hperm_eq;
             by eauto.
-        }
-          
+        }        
         (** and finally build the final fine-grained state*)
         pose (empty_map, empty_map) as emptyRes.
         remember (updLockSet tpf' (b2, Ptrofs.intval ofs) (projectMap (fp i pfc) emptyRes.1, projectMap (fp i pfc) emptyRes.2))
@@ -8255,13 +8465,13 @@ relation*)
           symmetry in Htpf''.
         exists tpf'', mf' , (fp i pfc), fp,
         (trf ++ [:: (external i (acquire (b2, Ptrofs.intval ofs)
-                                       (Some virtueF)))]).
+                                       (Some (build_delta_content virtueF#1 mf'))))]).
         split.
         (** proof that the fine grained machine can step*)
         intros U.
         assert (HsyncStepF: syncStep false pff (mem_compf Hsim) tpf'' mf'
                                      (acquire (b2, Ptrofs.intval ofs)
-                                              (Some (virtueF))))
+                                              (Some (build_delta_content virtueF#1 mf'))))
           by (eapply step_acquire with (b0:=b2); eauto).
         econstructor;
            now eauto.
@@ -9016,7 +9226,14 @@ relation*)
           unfold virtueF.
           destruct virtueThread as [vT1 vT2].
           econstructor; eauto.
-          + repeat (split).
+          + simpl.
+
+           
+      
+                
+
+
+            repeat (split).
             * intros.
               erewrite <- projectAngel_correct with (b := b0) by eauto.
               simpl.
