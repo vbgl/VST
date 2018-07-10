@@ -81,7 +81,7 @@ Module Main (CC_correct: CompCert_correctness).
 Qed. 
 
   (*Safety from CSL to Coarse Asm*)
-  Definition SemSource p:= (ClightSemantincsForMachines.ClightSem (Clight.globalenv p)).
+  Definition SemSource p:= (ClightSemanticsForMachines.ClightSem (Clight.globalenv p)).
   Definition THM m:=
     (HybridMachineSig.HybridMachineSig.ConcurMachineSemantics
        (Sem:=SemTarget)

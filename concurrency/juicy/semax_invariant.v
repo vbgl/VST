@@ -38,7 +38,7 @@ Require Import VST.concurrency.common.semantics.
 Require Import VST.concurrency.common.scheduler.
 Require Import VST.concurrency.common.addressFiniteMap.
 Require Import VST.concurrency.common.permissions.
-Require Import VST.concurrency.common.ClightSemantincsForMachines.
+Require Import VST.concurrency.common.ClightSemanticsForMachines.
 Require Import VST.concurrency.juicy.JuicyMachineModule.
 Require Import VST.concurrency.juicy.sync_preds_defs.
 Require Import VST.concurrency.juicy.join_lemmas.

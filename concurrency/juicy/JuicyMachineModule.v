@@ -21,7 +21,7 @@ Require Import VST.concurrency.common.permissions.
 Require Import VST.veric.Clight_new.
 Require Import VST.veric.Clightnew_coop.
 Require Import VST.sepcomp.event_semantics.
-Require Import VST.concurrency.common.ClightSemantincsForMachines.
+Require Import VST.concurrency.common.ClightSemanticsForMachines.
 
 Module THE_JUICY_MACHINE.
 

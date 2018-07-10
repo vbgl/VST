@@ -844,7 +844,7 @@ Proof.
         assumption.
       * destruct safej as (Harg & q_new & Einit & safej); split.
         { destruct stepi as (stepi & _).
-          apply (corestep_mem (msem (ClightSemantincsForMachines.CLN_evsem ge))), mem_step_nextblock'
+          apply (corestep_mem (msem (ClightSemanticsForMachines.CLN_evsem ge))), mem_step_nextblock'
             in stepi; simpl in stepi.
           eapply val_inject_incr, Harg.
           apply flat_inj_incr; auto. }

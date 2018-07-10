@@ -599,7 +599,7 @@ Section safety_Clight.
       intros.
       inversion H; eauto; simpl in *; subst; eauto.
       -  (* initial *)
-         inversion Htstep. subst. apply ClightSemantincsForMachines.ClightSEM.initial_core_nomem in Hinitial; subst om.
+         inversion Htstep. subst. apply ClightSemanticsForMachines.ClightSEM.initial_core_nomem in Hinitial; subst om.
          simpl. auto.
       - (*thread step *)
         clear - H0 Htstep .
@@ -613,7 +613,7 @@ Section safety_Clight.
         simpl in HH.
         unfold semantics.corestep in HH; simpl in HH.
         unfold semantics.csem in HH; simpl in HH.
-        rewrite ClightSemantincsForMachines.ClightSEM.CLN_msem in HH.
+        rewrite ClightSemanticsForMachines.ClightSEM.CLN_msem in HH.
         simpl in HH.
         eapply Clight_bounds.CLight_step_mem_bound in HH; eauto.
         eapply Clight_bounds.bounded_getMaxPerm in H0; eauto.

@@ -51,7 +51,7 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
     (Genv.init_mem tp).
   Lemma explicit_safety_step:
     forall (p : Clight.program) (tp : Asm.program) (asm_genv_safety : Asm_core.safe_genv the_ge),
-        let SemSource:= (ClightSemantincsForMachines.ClightSem (Clight.globalenv p)) in
+        let SemSource:= (ClightSemanticsForMachines.ClightSem (Clight.globalenv p)) in
          let SemTarget:= @X86Sem tp asm_genv_safety in
          forall (U : schedule) (m_s m_t : Memory.Mem.mem)
              (j : Values.Val.meminj) (c : Asm.state)
@@ -82,7 +82,7 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
 
     Lemma match_valid_equiv:
       forall U (p : Clight.program) (tp : Asm.program) (asm_genv_safety : Asm_core.safe_genv the_ge),
-        let SemSource:= (ClightSemantincsForMachines.ClightSem (Clight.globalenv p)) in
+        let SemSource:= (ClightSemanticsForMachines.ClightSem (Clight.globalenv p)) in
         let SemTarget:= @X86Sem tp asm_genv_safety in
         forall (m_s m_t : Memory.Mem.mem)
           (j : Values.Val.meminj)
@@ -131,7 +131,7 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
   
     Lemma explicit_safety_step':
       forall (p : Clight.program) (tp : Asm.program) (asm_genv_safety : Asm_core.safe_genv the_ge),
-        let SemSource:= (ClightSemantincsForMachines.ClightSem (Clight.globalenv p)) in
+        let SemSource:= (ClightSemanticsForMachines.ClightSem (Clight.globalenv p)) in
         let SemTarget:= @X86Sem tp asm_genv_safety in
         forall (m_s m_t : Memory.Mem.mem)
           (j : Values.Val.meminj)
@@ -281,7 +281,7 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
     Qed.
         
     Lemma Clight_finite_branching:
-      let ClightSem:= ClightSemantincsForMachines.ClightSem in 
+      let ClightSem:= ClightSemanticsForMachines.ClightSem in 
             forall (p : Clight.program)
                    (x : kstate dryResources (ClightSem (Clight.globalenv p)) OrdinalPool.OrdinalThreadPool),
               safety.finite_on_x
@@ -298,7 +298,7 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
           Admitted.
     Lemma csafety_step:
       forall (p : Clight.program) (tp : Asm.program) (asm_genv_safety : Asm_core.safe_genv the_ge),
-        let SemSource:= (ClightSemantincsForMachines.ClightSem (Clight.globalenv p)) in
+        let SemSource:= (ClightSemanticsForMachines.ClightSem (Clight.globalenv p)) in
          let SemTarget:= @X86Sem tp asm_genv_safety in
          forall (U : schedule) (init_mem_source' : Memory.Mem.mem)
              (j : Values.Val.meminj) (c : Asm.state)
@@ -398,7 +398,7 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
       forall (p : Clight.program) (tp : Asm.program),
         CC_correct.CompCert_compiler p = Some tp ->
         forall asm_genv_safety : Asm_core.safe_genv (@the_ge tp),
-          let SemSource:= (ClightSemantincsForMachines.ClightSem (Clight.globalenv p)) in
+          let SemSource:= (ClightSemanticsForMachines.ClightSem (Clight.globalenv p)) in
           let SemTarget:= @X86Sem tp asm_genv_safety in
           concurrent_simulation_safety_preservation
             (Genv.init_mem (Ctypes.program_of_program p))

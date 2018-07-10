@@ -184,7 +184,7 @@ Section DrySafety.
 
   Variable (CPROOF : CSL_proof).
 
-  Instance Sem : Semantics := ClightSemantincsForMachines.Clight_newSem (globalenv CPROOF.(CSL_prog)).
+  Instance Sem : Semantics := ClightSemanticsForMachines.Clight_newSem (globalenv CPROOF.(CSL_prog)).
   Definition ge := globalenv CPROOF.(CSL_prog).
   Instance DTP : threadPool.ThreadPool.ThreadPool := Parching.DTP ge.
   Instance DMS : HybridMachineSig.MachineSig := Parching.DMS ge.
@@ -236,7 +236,7 @@ Section DrySafety.
 
   Context {SW : spawn_wrapper CPROOF}.
 
-  Notation ClightSem:= ClightSemantincsForMachines.ClightSem.
+  Notation ClightSem:= ClightSemanticsForMachines.ClightSem.
   Theorem Clight_initial_safe (sch : HybridMachineSig.schedule) (n : nat) :
     HybridMachineSig.HybridCoarseMachine.csafe
       (Sem := ClightSem ge)

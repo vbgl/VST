@@ -43,7 +43,7 @@ Module SafetyStatement (CC_correct: CompCert_correctness).
       forall (p : Clight.program) (tp : Asm.program),
         CC_correct.CompCert_compiler p = Some tp ->
         forall asm_genv_safety : Asm_core.safe_genv (@the_ge tp),
-          let SemSource:= (ClightSemantincsForMachines.ClightSem (Clight.globalenv p)) in
+          let SemSource:= (ClightSemanticsForMachines.ClightSem (Clight.globalenv p)) in
           let SemTarget:= @X86Sem tp asm_genv_safety in
           concurrent_simulation_safety_preservation
             (Genv.init_mem (Ctypes.program_of_program p))

@@ -36,7 +36,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
   (** *C Semantics*)
   Context (C_program: Clight.program).
   Definition Clight_g : Clight.genv := Clight.globalenv C_program.
-  Definition CSem : Semantics := ClightSemantincsForMachines.ClightSem Clight_g.
+  Definition CSem : Semantics := ClightSemanticsForMachines.ClightSem Clight_g.
   Definition Cself_simulation := clight_self_simulation Clight_g.
   Definition Clight_code_inject := self_simulation.code_inject _ _ Cself_simulation.
   Definition Clight_match := self_simulation.match_self Clight_code_inject.
@@ -480,7 +480,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
 
     
             Lemma thread_step_plus_from_corestep:
-              forall (m : option mem) (tge : ClightSemantincsForMachines.G * Asm.genv)
+              forall (m : option mem) (tge : ClightSemanticsForMachines.G * Asm.genv)
                      (U : list nat) (st1 : t) (m1 : mem) (Htid : containsThread st1 hb) 
                      (st2 : t) (mu : meminj) (m2 : mem) (cd0 : compiler_index)
                      (H0 : concur_match (Some cd0) mu st1 m1 st2 m2) (code2 : Asm.state)

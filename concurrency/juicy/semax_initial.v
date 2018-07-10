@@ -72,7 +72,7 @@ Section Initial_State.
                    (proj1_sig init_m) 0 all_safe (proj2_sig init_m) in
       let q : corestate := projT1 (projT2 spr) in
       let jm : juicy_mem := proj1_sig (snd (projT2 (projT2 spr)) n tt) in
-      @OrdinalPool.mk LocksAndResources (ClightSemantincsForMachines.Clight_newSem (globalenv prog))
+      @OrdinalPool.mk LocksAndResources (ClightSemanticsForMachines.Clight_newSem (globalenv prog))
         (pos.mkPos (le_n 1))
         (* (fun _ => Kresume q Vundef) *)
         (fun _ => Krun q)

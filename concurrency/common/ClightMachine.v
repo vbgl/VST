@@ -27,7 +27,7 @@ Require Import VST.veric.Clight_new.
 Require Import VST.veric.Clightnew_coop.
 Require Import VST.sepcomp.event_semantics.
 (*Require Import VST.veric.Clight_sim.*)
-Require Import VST.concurrency.common.ClightSemantincsForMachines.
+Require Import VST.concurrency.common.ClightSemanticsForMachines.
 Require Import VST.concurrency.common.Clight_bounds.
 
 (*SSReflect*)

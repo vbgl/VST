@@ -14,7 +14,7 @@ Require Import VST.concurrency.common.bounded_maps.
 Require Import VST.concurrency.common.threadPool.
 Require Import VST.concurrency.common.permissions.
 Require Import VST.concurrency.common.HybridMachineSig.
-Require Import VST.concurrency.common.ClightSemantincsForMachines.
+Require Import VST.concurrency.common.ClightSemanticsForMachines.
 Require Import VST.concurrency.common.ClightMachine.
 Require Import VST.concurrency.common.dry_machine_lemmas.
 Require Import VST.concurrency.juicy.semax_simlemmas.

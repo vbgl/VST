@@ -144,7 +144,7 @@ Lemma preservation_acquire
   (psh : shares.readable_share sh)
   (R : pred rmap)
   (Hthread : getThreadC i tp cnti = Kblocked c)
-  (Hat_external : at_external (ClightSemantincsForMachines.CLN_evsem ge) c m = Some (LOCK, Vptr b ofs :: nil))
+  (Hat_external : at_external (ClightSemanticsForMachines.CLN_evsem ge) c m = Some (LOCK, Vptr b ofs :: nil))
   (His_unlocked : lockRes tp (b, Ptrofs.intval ofs) = Some (Some d_phi))
   (Hload : Mem.load Mint32 (juicyRestrict_locks (mem_compat_thread_max_cohere Hcmpt cnti))
                     b (Ptrofs.intval ofs) =
@@ -157,10 +157,10 @@ Lemma preservation_acquire
   (*                     b (Ptrofs.intval ofs) (Vint Int.zero) = Some m') *)
   (HJcanwrite : getThreadR i tp cnti @ (b, Ptrofs.intval ofs) = YES sh psh (LK LKSIZE) (pack_res_inv R))
   (Hadd_lock_res : join (getThreadR i tp cnti) d_phi phi')
-  (jmstep : @JuicyMachine.machine_step _ (ClightSemantincsForMachines.Clight_newSem ge) _ HybridCoarseMachine.DilMem JuicyMachineShell HybridMachineSig.HybridCoarseMachine.scheduler (i :: sch) tr tp m sch (seq.cat tr (external i (acquire (b, Ptrofs.intval ofs) None) :: nil))
+  (jmstep : @JuicyMachine.machine_step _ (ClightSemanticsForMachines.Clight_newSem ge) _ HybridCoarseMachine.DilMem JuicyMachineShell HybridMachineSig.HybridCoarseMachine.scheduler (i :: sch) tr tp m sch (seq.cat tr (external i (acquire (b, Ptrofs.intval ofs) None) :: nil))
              (age_tp_to n
                 (updLockSet (updThread i tp cnti (Kresume c Vundef) phi') (b, Ptrofs.intval ofs) None)) m')
-  (Htstep : @syncStep (ClightSemantincsForMachines.Clight_newSem ge) true _ _ _ cnti Hcmpt
+  (Htstep : @syncStep (ClightSemanticsForMachines.Clight_newSem ge) true _ _ _ cnti Hcmpt
              (age_tp_to n
                 (updLockSet (updThread i tp cnti (Kresume c Vundef) phi') (b, Ptrofs.intval ofs) None)) m'
              (Events.acquire (b, Ptrofs.intval ofs) None)) :
@@ -218,11 +218,11 @@ Proof.
           set (u := at_external _ _ _) in Hat_external.
           set (v := at_external _ _ _) in step.
           assert (u = v).
-          { unfold u, v. rewrite ClightSemantincsForMachines.at_external_SEM_eq. reflexivity. }
+          { unfold u, v. rewrite ClightSemanticsForMachines.at_external_SEM_eq. reflexivity. }
           congruence.
         * assert (e = LOCK).
           { simpl in ae.
-            clear - ae Hat_external. rewrite ClightSemantincsForMachines.at_external_SEM_eq in Hat_external.
+            clear - ae Hat_external. rewrite ClightSemanticsForMachines.at_external_SEM_eq in Hat_external.
             unfold j_at_external in ae. unfold cl_at_external in ae.
             congruence. }
           subst e.
@@ -239,7 +239,7 @@ Proof.
           rewrite seplog.sepcon_emp in Hlk.
           assert (args = Vptr b ofs :: nil). {
             revert Hat_external ae; clear.
-            rewrite ClightSemantincsForMachines.CLN_msem. simpl.
+            rewrite ClightSemanticsForMachines.CLN_msem. simpl.
             intros. unfold cl_at_external in *.
             congruence.
           }
@@ -513,7 +513,7 @@ Proof.
           set (u := at_external _ _ _) in Hat_external.
           set (v := at_external _ _ _) in step.
           assert (u = v).
-          { unfold u, v. rewrite ClightSemantincsForMachines.at_external_SEM_eq. reflexivity.
+          { unfold u, v. rewrite ClightSemanticsForMachines.at_external_SEM_eq. reflexivity.
          }
           congruence.
 
@@ -530,12 +530,12 @@ Proof.
 
           + assert (e = LOCK).
             { simpl in ae.
-              clear - ae Hat_external. rewrite ClightSemantincsForMachines.at_external_SEM_eq in Hat_external.
+              clear - ae Hat_external. rewrite ClightSemanticsForMachines.at_external_SEM_eq in Hat_external.
               unfold j_at_external in ae. unfold cl_at_external in ae.
               congruence. }
             assert (args = Vptr b ofs :: nil).
             { simpl in ae.
-              clear - ae Hat_external. rewrite ClightSemantincsForMachines.at_external_SEM_eq in Hat_external.
+              clear - ae Hat_external. rewrite ClightSemanticsForMachines.at_external_SEM_eq in Hat_external.
               unfold j_at_external in ae. unfold cl_at_external in ae.
               congruence. }
             subst e args; simpl.
@@ -543,7 +543,7 @@ Proof.
 
           + assert (e = LOCK).
             { simpl in ae.
-              clear - ae Hat_external. rewrite ClightSemantincsForMachines.at_external_SEM_eq in Hat_external.
+              clear - ae Hat_external. rewrite ClightSemanticsForMachines.at_external_SEM_eq in Hat_external.
               unfold j_at_external in ae. unfold cl_at_external in ae.
               congruence. }
             subst e.
@@ -581,7 +581,7 @@ Proof.
           + (* we must satisfy the post condition *)
             assert (e = LOCK).
             { simpl in ae.
-              clear - ae Hat_external. rewrite ClightSemantincsForMachines.at_external_SEM_eq in Hat_external.
+              clear - ae Hat_external. rewrite ClightSemanticsForMachines.at_external_SEM_eq in Hat_external.
               unfold j_at_external in ae. unfold cl_at_external in ae. 
               congruence. }
             subst e.

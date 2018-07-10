@@ -56,7 +56,7 @@ Module Parching <: ErasureSig.
 
   Context (ge : genv).
 
-  Instance Sem : Semantics := ClightSemantincsForMachines.Clight_newSem ge.
+  Instance Sem : Semantics := ClightSemanticsForMachines.Clight_newSem ge.
 
   Instance JR : Resources := LocksAndResources.
   Instance JTP : ThreadPool.ThreadPool := OrdinalPool.OrdinalThreadPool.
@@ -4773,7 +4773,7 @@ Here be dragons
         {
           inversion Hcorestep.
           eapply ev_step_ax2 in H; destruct H as [T H].
-          apply ClightSemantincsForMachines.CLN_step_decay in H.
+          apply ClightSemanticsForMachines.CLN_step_decay in H.
           
           eapply step_decay_invariant
             with (Hcompatible:= MTCH_compat _ _ _ MATCH Hcmpt); try eapply H; eauto.
@@ -4797,7 +4797,7 @@ Here be dragons
     (*is decay *)
     inversion Hcorestep.
     eapply ev_step_ax2 in H; destruct H as [T H].
-    apply ClightSemantincsForMachines.CLN_step_decay in H.
+    apply ClightSemanticsForMachines.CLN_step_decay in H.
     { (*decay preserves lock permissions!!*)
       replace (MTCH_cnt' MATCH Htid') with Htid by apply proof_irrelevance.
       move: H0 => [] [] _ /(_ (b,ofs)) [] A B _.
