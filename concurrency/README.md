@@ -82,6 +82,40 @@ Translation into English:
   
 ---------------------------------------
 
+The definitions and theorems of the paper can be found in the development as follows:
+
+Theorem 2.1: concurrency/main.v, CSL2FineBareAsm_safety
+Figure 1: control rules in concurrency/common/HybridMachineSig.v, machine_step; synchronization rules in concurrency/common/HybridMachine.v, ext_step
+Definition 4.1: concurrency/common/HybridMachineSig.v, csafe
+Figure 2: concurrency/common/semax_conc.v
+Figure 4: msl/ghost_seplog.v
+Figure 5: veric/juicy_extspec.v
+Definition 6.2: veric/juicy_extspec.v, jsafeN_
+Theorem 6.3: veric/semax_prog.v, semax_prog_entry_point
+Figure 6: concurrency/juicy/juicy_machine.v, juicy_step and syncStep
+Definition 7.1: concurrency/juicy/semax_invariant.v, state_invariant
+Lemma 7.2: concurrency/juicy/semax_to_juicy_machine.v, safety_induction
+Definition 7.3: concurrency/juicy/semax_to_juicy_machine.v, jmsafe
+Theorem 7.4: concurrency/juicy/semax_to_juicy_machine.v, jmsafe_initial_state
+Definition 7.5: concurrency/juicy/erasure_proof.v, match_st
+Theorem 7.6: concurrency/juicy/erasure_proof.v
+Theorem 7.7: concurrency/juicy/erasure_safety.v, Clight_initial_safe
+Lemma 8.1: definition in concurrency/common/core_semantics.v, MemSem; proofs ?
+Hypothesis 1: concurrency/compiler/concurrent_compiler_safety_axiom.v, ConcurrentCompilerSafety_statement
+Definition 9.1: concurrency/common/HybridMachineSig.v, HybridFineMachine
+Definition 9.2: concurrency/sc_drf/compcert_threads_lemmas.v, sim
+Lemma 9.3: concurrency/sc_drf/compcert_threads_lemmas.v, sim_internal
+Definition 9.4: concurrency/sc_drf/compcert_threads_lemmas.v, weak_tsim
+Theorem 9.5: concurrency/sc_drf/fineConc_safe.v, fine_safe
+Lemma 9.6: concurrency/sc_drf/x86_inj.v
+Theorem 9.7: concurrency/sc_drf/?
+Definition 10.2: concurrency/sc_drf/spinlocks.v, spinlock_synchronized
+Definition 10.4: concurrency/sc_drf/spinlocks.v, spinlock_clean
+Theorem 10.6: concurrency/sc_drf/spinlocks.v, fineConc_spinlock and fineConc_clean
+Theorem 11.1: concurrency/sc_drf/x86_erasure.v
+
+---------------------------------------
+
 The last line of concurrency/main.v is 
      Print Assumptions CSL2FineBareAsm_safety.
 This is Coq's command to find all the axioms, assumptions, and "admitted" theorems, on which the proof depends.
@@ -117,7 +151,7 @@ The output of "Print Assumptions", with these labels added, is:
     [E] Events.external_functions_sem
     [E] Events.external_functions_properties
     [E] Clightcore_coop.extcall_sem_mem_step
-    [E] ClightSemantincsForMachines.extcall_ev_elim
+    [E] ClightSemanticsForMachines.extcall_ev_elim
     [A] Eqdep.Eq_rect_eq.eq_rect_eq
     [R] Raxioms.completeness
     [A] Classical_Prop.classic
