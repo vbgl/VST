@@ -100,7 +100,7 @@ Theorem 7.4: concurrency/juicy/semax_to_juicy_machine.v, jmsafe_initial_state
 Definition 7.5: concurrency/juicy/erasure_proof.v, match_st
 Theorem 7.6: concurrency/juicy/erasure_proof.v
 Theorem 7.7: concurrency/juicy/erasure_safety.v, Clight_initial_safe
-Lemma 8.1: definition in concurrency/common/core_semantics.v, MemSem; proofs ?
+Lemma 8.1: definition in concurrency/common/core_semantics.v, MemSem; proofs veric/Clightcore_coop.v CLC_memsem and concurrency/common/Asm_core.v Asm_mem_sem 
 Hypothesis 1: concurrency/compiler/concurrent_compiler_safety_axiom.v, ConcurrentCompilerSafety_statement
 Definition 9.1: concurrency/common/HybridMachineSig.v, HybridFineMachine
 Definition 9.2: concurrency/sc_drf/compcert_threads_lemmas.v, sim
