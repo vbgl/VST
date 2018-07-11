@@ -161,24 +161,7 @@ CONCUR_COMPILER_FILES= \
 #  compiler_correct.v
 
 CONCUR_FILES= \
-  safety.v memsem_lemmas.v \
-  cast.v compcert_imports.v \
-  disjointness.v \
-  join_sm.v  \
-  main.v memory_lemmas.v pred_lemmas.v \
-  # rc_semantics.v rc_semantics_lemmas.v \
-  # TheSchedule.v \
-  seq_lemmas.v stack.v \
-  wf_lemmas.v \
-  oracular_refinement.v \
-  coqlib5.v \
-	reestablish.v \
-linking_spec.v	\
-  coinductive_safety.v \
-  HybridMachine_simulation.v \
-  HybridMachine_simulation_proof.v \
-  Clight_safety.v main_safety.v main.v \
- # concurrent_machine.v dry_machine.v
+  main.v
 
 PACO_FILES= \
   hpattern.v\
@@ -480,7 +463,7 @@ all: default_target files travis hmacdrbg tweetnacl aes
 msl:     _CoqProject version.vo $(MSL_FILES:%.v=msl/%.vo)
 sepcomp: _CoqProject $(CC_TARGET) $(SEPCOMP_FILES:%.v=sepcomp/%.vo)
 ccc26x86:   _CoqProject $(CCC26x86_FILES:%.v=ccc26x86/%.vo)
-concurrency: _CoqProject $(CC_TARGET) $(SEPCOMP_FILES:%.v=sepcomp/%.vo) $(CONCUR_FILES:%.v=concurrency/%.vo) $(CONCUR_JUICY_FILES:%.v=concurrency/juicy/%.vo) $(CONCUR_COMMON_FILES:%.v=concurrency/common/%.vo)  $(CONCUR_COMPILER_FILES:%.v=concurrency/compiler/%.vo)
+concurrency: _CoqProject $(CONCUR_FILES:%.v=concurrency/%.vo)
 paco: _CoqProject $(PACO_FILES:%.v=concurrency/paco/src/%.vo)
 linking: _CoqProject $(LINKING_FILES:%.v=linking/%.vo)
 veric:   _CoqProject $(VERIC_FILES:%.v=veric/%.vo)
