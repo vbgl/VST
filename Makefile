@@ -1,7 +1,7 @@
 # See the file BUILD_ORGANIZATION for
 # explanations of why this is the way it is
 
-default_target: _CoqProject version.vo msl veric floyd progs
+default_target: _CoqProject version.vo concurrency
 
 COMPCERT ?= compcert
 -include CONFIGURE
