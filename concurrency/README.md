@@ -108,7 +108,7 @@ Lemma 9.3: concurrency/sc_drf/compcert_threads_lemmas.v, sim_internal
 Definition 9.4: concurrency/sc_drf/compcert_threads_lemmas.v, weak_tsim
 Theorem 9.5: concurrency/sc_drf/fineConc_safe.v, fine_safe
 Lemma 9.6: concurrency/sc_drf/x86_inj.v
-Theorem 9.7: concurrency/sc_drf/?
+Theorem 9.7: concurrency/sc_drf/fineConc_safe.v, init_fine_safe
 Definition 10.2: concurrency/sc_drf/spinlocks.v, spinlock_synchronized
 Definition 10.4: concurrency/sc_drf/spinlocks.v, spinlock_clean
 Theorem 10.6: concurrency/sc_drf/spinlocks.v, fineConc_spinlock and fineConc_clean
