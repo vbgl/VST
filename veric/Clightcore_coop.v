@@ -35,11 +35,11 @@ Qed.
 
 Lemma inline_assembly_memstep: forall text sg g vargs m t vres m' (IA:Events.inline_assembly_sem text sg g vargs m t vres m'),
     mem_step m m'.
-Admitted. (*Maybe include mem_step in Events.extcall_properties.?*)
+Admitted. (* Our Clight has no assembly so we don't need this case *)
 
 Lemma extcall_sem_mem_step: forall name sg g vargs m t vres m' (E:Events.external_functions_sem name sg g vargs m t vres m'),
   mem_step m m'.
-Admitted. (*Maybe include mem_step in Events.extcall_properties.?*)
+Admitted. (* Our clight code has no builtins or external calls that are not synchronizations. We don't need this case. *)
 
 Lemma extcall_mem_step g: forall ef vargs m t vres m' (E:Events.external_call ef g vargs m t vres m'),
   mem_step m m'.
