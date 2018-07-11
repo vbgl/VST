@@ -8,11 +8,8 @@ Require Import VST.concurrency.common.HybridMachineSig.
 Import HybridMachineSig.
 Set Bullet Behavior "Strict Subproofs".
   
-Require Import VST.concurrency.compiler.concurrent_compiler_simulation.
 Require Import VST.concurrency.compiler.sequential_compiler_correct.
 Require Import VST.concurrency.compiler.concurrent_compiler_safety.
-Require Import VST.concurrency.compiler.safety_equivalence.
-Require Import VST.concurrency.compiler.HybridMachine_simulation.
 Require Import VST.concurrency.common.HybridMachine.
 Require Import Omega.
             
@@ -35,9 +32,6 @@ Module SafetyStatement (CC_correct: CompCert_correctness).
 
   Definition Asm_init_state (p: Asm.program):=
     Asm.entry_point (@the_ge p).
-
-  Notation valid Sem:=
-    (valid dryResources Sem OrdinalPool.OrdinalThreadPool).
 
     Definition ConcurrentCompilerSafety_statement:=
       forall (p : Clight.program) (tp : Asm.program),

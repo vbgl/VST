@@ -8,8 +8,10 @@
 Require Import compcert.common.Globalenvs.
 
 Require Import VST.concurrency.common.HybridMachineSig.
-Require Import VST.concurrency.compiler.HybridMachine_simulation.
-Require Import VST.concurrency.compiler.concurrent_compiler_simulation.
+Require Import VST.concurrency.common.HybridMachine.
+Import threadPool.
+(*Require Import VST.concurrency.compiler.HybridMachine_simulation.
+Require Import VST.concurrency.compiler.concurrent_compiler_simulation.*)
 
 Set Implicit Arguments.
 
