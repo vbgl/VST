@@ -759,7 +759,7 @@ Fixpoint temp_bindings (i: positive) (vl: list val) :=
  end.
 
 (*NOTE: DOUBLE CHECK TARGS (it's not used right now)*)
-Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop :=
+Inductive start_stack (ge:genv): mem -> state -> val -> list val -> Prop :=
 | initi_core:
     forall f fb b0 f0 m0 args targs tres,
       Genv.find_funct_ptr ge fb = Some f ->
@@ -770,7 +770,7 @@ Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop :=
       val_casted_list args targs ->
       Val.has_type_list args (typlist_of_typelist targs) ->
       Genv.find_funct_ptr ge b0 = Some (Internal f0) ->
-      entry_point ge m0
+      start_stack ge m0
         (Callstate f args (Kcall None f0 empty_env 
                                      (temp_bindings 1%positive (Vptr fb Ptrofs.zero::args)) 
                                      (Kseq (Sloop Sskip Sskip) Kstop)) m0)
@@ -812,7 +812,7 @@ Definition step2 (ge: genv) := step ge (function_entry2 ge).
 
 Definition part_semantics1 (ge: genv) :=
   Build_part_semantics get_mem set_mem (step1 ge)
-                       (entry_point ge)
+                       (start_stack ge)
                        at_external
                        after_external
                        final_state ge ge.
@@ -825,7 +825,7 @@ Definition semantics1 (p: program) :=
 
 Definition part_semantics2 (ge: genv) :=
   Build_part_semantics get_mem set_mem (step2 ge)
-                       (entry_point ge)
+                       (start_stack ge)
                        at_external
                        after_external
                        final_state ge ge.

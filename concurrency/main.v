@@ -55,7 +55,7 @@ Module Main (CC_correct: CompCert_correctness).
      it says initial_Clight_state taken from CPROOF, is an initial state of CompCert.
    *)
   Context (CPROOF_initial:
-             Clight.entry_point (Clight.globalenv Clight_prog)
+             Clight.start_stack (Clight.globalenv Clight_prog)
                                 (init_mem CPROOF)
                                 (Clight_safety.initial_Clight_state CPROOF)
                                 Main_ptr nil).
