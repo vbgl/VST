@@ -68,7 +68,7 @@ Proof.
    + red. red. fold (globalenv prog). eassumption.
    + destruct (H1 (core (tl (compcert_rmaps.RML.R.ghost_of (m_phi m'))))) as (m'' & J'' & (? & ? & ?) & ?).
      { rewrite Hg.
-       destruct (compcert_rmaps.RML.R.ghost_of (m_phi jm)); [eexists; constructor|].
+       destruct (compcert_rmaps.RML.R.ghost_of (m_phi jm));  [eexists; constructor|].
        destruct J as [? J]; inv J.
        eexists; simpl; constructor.
        * inv H9; simpl; [constructor|].

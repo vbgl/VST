@@ -76,7 +76,7 @@ Definition main_pre (prog: program) : list Type -> (ident->val) -> assert :=
 Definition Tint32s := Tint I32 Signed noattr.
 
 Definition main_post (prog: program) : list Type -> (ident->val) -> assert :=
-  (fun nil _ _ => FF).
+  (fun nil _ _ => TT).
 
 Definition main_spec' (prog: program) 
     (post: list Type -> (ident->val) -> environ ->pred rmap): funspec :=
@@ -111,7 +111,7 @@ Definition semax_prog {C: compspecs}
   @semax_func V G C (prog_funct prog) G /\
   match_globvars (prog_vars prog) V = true /\
   match find_id prog.(prog_main) G with
-  | Some s => s = main_spec prog
+  | Some s => exists post, s = main_spec' prog post
   | None => False
   end.
 
@@ -1297,14 +1297,15 @@ Proof.
   pose proof I; intros.
   destruct H0 as [? [AL [HGG [[? ?] [GV ?]]]]].
   destruct (find_id (prog_main prog) G) as [fspec|] eqn:Hfind; try contradiction.
-  assert (H4': In (prog_main prog, main_spec prog) G /\ fspec = main_spec prog). {
+  assert (H4': exists post, In (prog_main prog, main_spec' prog post) G /\ fspec = main_spec' prog post). {
     destruct (find_id (prog_main prog) G) eqn:?.
-    apply find_id_e in Heqo.
+    apply find_id_e in Heqo. destruct H4 as [post ?]. exists post.
     subst. split; auto. inv Hfind. auto. inv Hfind.
-  } clear H4. rename H4' into H4. destruct H4 as [H4 Hfspec].
+  } clear H4. rename H4' into H4.
   assert ({ f | In (prog_main prog, f) (prog_funct prog)}).
   forget (prog_main prog) as id.
   assert (H4': In id (map fst G)). {
+  destruct H4 as [? [H4 _]].
   apply in_map_fst in H4. auto.
   }
   pose proof (match_fdecs_in _ _ _ H4' H2).
@@ -1323,9 +1324,10 @@ Proof.
   pose proof I.
   destruct EXx as [b [? ?]]; auto.
   assert (E: type_of_fundef f = Tfunction Tnil tint cc_default). {
+     destruct H4 as [post [? ?]].
       destruct (match_fdecs_exists_Gfun
                   prog G (prog_main prog)
-                  (main_spec prog))
+                  (main_spec' prog post))
         as (fd, (Ifd, sametypes)); auto.
       {
         apply find_id_i; auto.
@@ -1375,13 +1377,14 @@ Proof.
     reflexivity.
 
   - specialize (H3 (globalenv prog) (prog_contains_prog_funct _ H0)).
+    destruct H4 as [post [? ?]].
     unfold temp_bindings. simpl length. simpl typed_params. simpl type_of_params.
     pattern n at 1; replace n with (level (m_phi (initial_jm_ext z prog m G n H1 H0 H2))).
     pose (rho1 := mkEnviron (filter_genv (globalenv prog)) (Map.empty (block * type))
                            (Map.set 1 (Vptr b Ptrofs.zero) (Map.empty val))).
-    pose (post' := fun rho => TT * EX rv:val, (main_post prog) nil (globals_of_env rho1) (env_set (globals_only rho) ret_temp rv)).
+    pose (post' := fun rho => TT * EX rv:val, post nil (globals_of_env rho1) (env_set (globals_only rho) ret_temp rv)).
     eapply (semax_call_aux Espec (Delta1 V G) (ConstType (ident->val))
-              _ (main_post prog) _ (const_super_non_expansive _ _) (const_super_non_expansive _ _)
+              _ post _ (const_super_non_expansive _ _) (const_super_non_expansive _ _)
               nil (globals_of_env rho1) (fun _ => TT) (fun _ => TT)
               None (nil, tint) cc_default _ _ (normal_ret_assert post') _ _ _ _
               (construct_rho (filter_genv (globalenv prog)) empty_env
@@ -1402,9 +1405,10 @@ Proof.
       unfold normal_ret_assert; simpl.
       extensionality rho'.
       normalize.
-      unfold post'. clear.
+      unfold post'.
       apply pred_ext.
-         normalize. intros rv ?. destruct H as [? [u ?]].  normalize. exists u; auto.
+           normalize. intro rv. do 2 apply exp_right with rv; auto.
+           normalize. intro rv. apply exp_right with rv; auto. 
     + rewrite (corable_funassert _ _).
       simpl m_phi.
       rewrite core_inflate_initial_mem'; auto.
@@ -1419,12 +1423,22 @@ Proof.
       subst post'. cbv beta.
       destruct ek; simpl proj_ret_assert; normalize.
       apply derives_subp.
-      normalize.
+      normalize. intro rv.
+      simpl.
+      eapply derives_trans, own.bupd_intro.
+      intros ? ? ? ? _ ?.
+      destruct H9 as [[? [H10' [H11 ?]]] ?].
+      hnf in H10', H11.
+      destruct H9.
+      subst a.
+      change Clight_new.true_expr with true_expr.
+      change (level (m_phi jm)) with (level jm).
+      apply safe_loop_skip.
     + unfold glob_types, Delta1. simpl @snd.
       forget (prog_main prog) as main.
-      instantiate (1:= main_post prog).
+      instantiate (1:= post).
       instantiate (1:= main_pre prog).
-      assert (H8: list_norepet (map (@fst _ _) (prog_funct prog))). {
+      assert (H8': list_norepet (map (@fst _ _) (prog_funct prog))). {
       clear - H0.
       unfold prog_defs_names in H0. unfold prog_funct.
       change (AST.prog_defs prog) with (prog_defs prog) in H0.
@@ -1434,7 +1448,7 @@ Proof.
       destruct a; destruct g; simpl in *; auto. destruct H2; auto.
       }
       forget (prog_funct prog) as fs.
-      clear - H4 H8 H2.
+      clear - H4 H8' H2. rename H8' into H8.
       fold (main_spec prog).
       forget (main_spec prog) as fd.
       revert G H2 H4 H8; induction fs; intros; inv H2.
@@ -1609,7 +1623,7 @@ Lemma semax_prog_entry_point {CS: compspecs} V G prog b id_fun id_arg arg A
 
     forall (jm : juicy_mem) ts a,
       app_pred (P ts a rho1) (m_phi jm) ->
-      (forall rho, app_pred (! (Q ts a rho >=> !!False)) (m_phi jm)) ->
+(*      (forall rho, app_pred (! (Q ts a rho >=> !!False)) (m_phi jm)) ->*)
       app_pred (funassert (Delta_types V G (Tpointer Tvoid noattr::nil)) rho0) (m_phi jm) ->
       forall z, jsafeN (@OK_spec Espec) (globalenv prog) (level jm) z q jm }.
 Proof.
@@ -1683,7 +1697,7 @@ Proof.
   }
   { unfold arg_well_formed. constructor; auto. }
 
-  intros jm ts a m_sat_Pa NotQ m_funassert.
+  intros jm ts a m_sat_Pa m_funassert.
 
   assert (Pf : params_of_fundef f = Tpointer Tvoid noattr :: nil).
   { clear -Ef.
@@ -1745,16 +1759,7 @@ Proof.
   destruct ek; simpl proj_ret_assert in FrameRA;
    try solve [elimtype False; clear - FrameRA; destruct FrameRA as [? [? [? [[? ?] ?]]]]; contradiction];
    try solve [elimtype False; clear - FrameRA; destruct FrameRA as [? [? [? [? ?]]]]; contradiction].
-   subst R. elimtype False. clear - necr lev NotQ FrameRA.
-   destruct FrameRA as [? [? [? [[? [? [? [? [? [? [? ?]]]]]]] ?]]]].
-   forget (env_set
-           (globals_only (construct_rho (filter_genv (globalenv prog)) env te))
-           ret_temp x2) as rho.
-   specialize (NotQ rho x4).
-   spec NotQ.  apply join_level in H1. destruct H1. apply join_level in H; destruct H.
-   rewrite H5,H. apply necR_level in necr. omega.
-   specialize (NotQ x4 (necR_refl _)).
-   hnf in NotQ. apply NotQ in H3. apply H3.
+   apply safe_loop_skip.
   (* equivalence between Q and Q' *)
   intros vl; split; apply derives_imp; apply derives_refl'; reflexivity.
 

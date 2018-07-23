@@ -714,17 +714,6 @@ Inductive step: state -> trace -> state -> Prop :=
   corresponding to the invocation of the ``main'' function of the program
   without arguments and with an empty continuation. *)
 
-
-(*Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
-  | entry_point_intro: forall b f args m0,
-      let ge := Genv.globalenv p in
-      Genv.init_mem p = Some m0 ->
-      Genv.find_symbol ge p.(prog_main) = Some b ->
-      Genv.find_funct_ptr ge b = Some f ->
-      type_of_fundef f = Tfunction Tnil type_int32s cc_default ->
-      entry_point p m0 (Callstate f nil Kstop m0) (Vptr b Ptrofs.zero) args.*)
-
-
 Inductive initial_state (p: program): state -> Prop :=
   | initial_state_intro: forall b f m0,
       let ge := Genv.globalenv p in
@@ -781,7 +770,11 @@ Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop :=
       val_casted_list args targs ->
       Val.has_type_list args (typlist_of_typelist targs) ->
       Genv.find_funct_ptr ge b0 = Some (Internal f0) ->
-      entry_point ge m0 (Callstate f args (Kcall None f0 empty_env (temp_bindings 1%positive (Vptr fb Ptrofs.zero::args)) Kstop) m0) (Vptr fb Ptrofs.zero) args.
+      entry_point ge m0
+        (Callstate f args (Kcall None f0 empty_env 
+                                     (temp_bindings 1%positive (Vptr fb Ptrofs.zero::args)) 
+                                     (Kseq (Sloop Sskip Sskip) Kstop)) m0)
+        (Vptr fb Ptrofs.zero) args.
 
 (** A final state is a [Returnstate] with an empty continuation. *)
 Inductive final_state: state -> int -> Prop :=

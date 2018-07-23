@@ -996,7 +996,8 @@ destruct H3 as [? [? ?]].
 destruct (typlist_of_typelist t) eqn:?Htypelist; try contradiction. clear H2.
 destruct t; inv Htypelist. 
 unfold initial_core; simpl.
-eexists (Callstate f nil (Clight.Kcall None main_handler empty_env _ Kstop) m); split.
+eexists (Callstate f nil (Clight.Kcall None main_handler empty_env _ 
+                (Clight.Kseq (Sloop Sskip Sskip) Clight.Kstop)) m); split.
 { split; auto; econstructor; eauto.
   { simpl.
     admit. }
