@@ -1,3 +1,5 @@
+Require Import Omega.
+
 Require Import compcert.common.Globalenvs.
 Require Import compcert.common.ExposedSimulations.
 Require Import compcert.common.Values.
@@ -14,7 +16,10 @@ Require Import VST.concurrency.compiler.Clight_self_simulation.
 Require Import VST.concurrency.compiler.Asm_self_simulation.
 
 Import memsem_lemmas.
-
+Import BinNums.
+Import BinInt.
+Import List.
+            
 
 Set Bullet Behavior "Strict Subproofs".
 
@@ -847,7 +852,12 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
               concur_match cd' mu'
                            (ThreadPool.updLockSet (ThreadPool.updThread Htid (Kresume c Vundef) newThreadPerm)
                                                   (b, Integers.Ptrofs.intval ofs) (empty_map, empty_map)) m1' st2' m2' /\
-              List.Forall2 (inject_mevent mu') (seq.cat tr1 (Events.external tid (Events.acquire (b, Integers.Ptrofs.intval ofs) (Some virtueThread)) :: nil))
+              List.Forall2 (inject_mevent mu')
+                           (seq.cat tr1
+                                    (Events.external tid
+                                                     (Events.acquire
+                                                        (b, Integers.Ptrofs.intval ofs)
+                                                     (Some (build_delta_content (fst virtueThread) m1'))) :: nil))
                                                (seq.cat tr2 (Events.external tid e' :: nil)) /\
               HybridMachineSig.external_step(scheduler:=HybridMachineSig.HybridCoarseMachine.scheduler)
                                             U tr2 st2 m2 (HybridMachineSig.schedSkip U)
@@ -913,20 +923,102 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
 
         Admitted.
 
+
+        (** *Lemmas about map, map1, bounded_maps.strong_tree_leq *)
+        Lemma map_map1:
+          forall {A B} f m,
+            @PTree.map1 A B f m = PTree.map (fun _=> f) m.
+        Proof.
+          intros. unfold PTree.map.
+          remember 1%positive as p eqn:Heq.
+          clear Heq; revert p.
+          induction m; try reflexivity.
+          intros; simpl; rewrite <- IHm1.
+          destruct o; simpl; (*2 goals*)
+            rewrite <- IHm2; auto.
+        Qed.
+        Lemma strong_tree_leq_xmap:
+          forall {A B} f1 f2 t (leq: option B -> option A -> Prop),
+            (forall a p, leq (Some (f1 p a)) (Some (f2 p a))) ->
+            leq None None ->
+            forall p,
+              bounded_maps.strong_tree_leq
+                (PTree.xmap f1 t p)
+                (@PTree.xmap A A f2 t p)
+                leq.
+        Proof.
+          intros; revert p.
+          induction t0; simpl; auto.
+          repeat split; eauto.
+          - destruct o; auto.
+        Qed.
+        Lemma strong_tree_leq_map:
+          forall {A B} f1 f2 t (leq: option B -> option A -> Prop),
+            (forall a p, leq (Some (f1 p a)) (Some (f2 p a))) ->
+            leq None None ->
+            bounded_maps.strong_tree_leq
+              (@PTree.map A B f1 t)
+              (@PTree.map A A f2 t)
+              leq.
+        Proof. intros; eapply strong_tree_leq_xmap; eauto. Qed.
+
+        Lemma strong_tree_leq_xmap':
+          forall {A B} f1 f2 t (leq: option B -> option A -> Prop),
+          forall p,
+            (forall a p0,
+                PTree.get p0 t = Some a ->
+                leq (Some (f1 (PTree.prev_append p p0)%positive a))
+                    (Some (f2 (PTree.prev_append p p0)%positive a))) ->
+            leq None None ->
+            bounded_maps.strong_tree_leq
+              (@PTree.xmap A B f1 t p)
+              (@PTree.xmap A A f2 t p)
+              leq.
+        Proof.
+          intros. revert p H.
+          induction t0. simpl; auto.
+          intros.
+          repeat split.
+          - destruct o; auto.
+            move H at bottom.
+            assert ((PTree.Node t0_1 (Some a) t0_2) ! 1%positive = Some a)
+              by reflexivity.
+            eapply H in H1. auto.
+          -  eapply IHt0_1.
+             intros; specialize (H a (p0~0)%positive).
+             eapply H; auto.
+          -  eapply IHt0_2.
+             intros; specialize (H a (p0~1)%positive).
+             eapply H; auto.
+        Qed.
+        
+        Lemma strong_tree_leq_map':
+          forall {A B} f1 f2 t (leq: option B -> option A -> Prop),
+            (forall a p0,
+                PTree.get p0 t = Some a ->
+                leq (Some (f1 (PTree.prev_append 1 p0)%positive a))
+                    (Some (f2 (PTree.prev_append 1 p0)%positive a))) ->
+            leq None None ->
+            bounded_maps.strong_tree_leq
+              (@PTree.map A B f1 t)
+              (@PTree.map A A f2 t)
+              leq.
+        Proof. intros; eapply strong_tree_leq_xmap'; eauto. Qed.
+        
         Lemma release_step_diagram:
           forall (U : list nat) (tr1 tr2 : HybridMachineSig.event_trace)
-                 (st1 : ThreadPool (Some hb)) (m1 m1' : mem) 
-                 (tid : nat) (cd : option compiler_index)
-                 (st2 : ThreadPool (Some (S hb))) (mu : meminj) 
-                 (m2 : mem) (Htid : ThreadPool.containsThread st1 tid)
-                 (c : semC) (b : block) (ofs : Integers.Ptrofs.int)
-                 (virtueThread : PTree.t
-                                   (BinNums.Z -> option (option permission)) *
-                                 PTree.t
-                                   (BinNums.Z -> option (option permission)))
-                 (virtueLP : PMap.t (BinNums.Z -> option permission) *
-                             PMap.t (BinNums.Z -> option permission))
-                 (rmap : lock_info) (newThreadPerm : access_map * access_map),
+            (st1 : ThreadPool (Some hb)) (m1 m1' : mem) 
+            (tid : nat) (cd : option compiler_index)
+            (st2 : ThreadPool (Some (S hb))) (mu : meminj) 
+            (m2 : mem) (Htid : ThreadPool.containsThread st1 tid)
+            (c : semC) (b : block) (ofs : Integers.Ptrofs.int)
+            (virtueThread : PTree.t
+                              (BinNums.Z -> option (option permission)) *
+                            PTree.t
+                              (BinNums.Z -> option (option permission)))
+            (virtueLP : PMap.t (BinNums.Z -> option permission) *
+                        PMap.t (BinNums.Z -> option permission))
+            (rmap : lock_info) (newThreadPerm : access_map * access_map),
             HybridMachineSig.schedPeek U = Some tid ->
             forall Hcmpt : mem_compatible st1 m1,
               concur_match cd mu st1 m1 st2 m2 ->
@@ -978,13 +1070,13 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
                                                          computeMap (snd (ThreadPool.getThreadR Htid))
                                                                     (snd virtueThread))) (b, Integers.Ptrofs.intval ofs)
                                   virtueLP) m1' st2' m2' /\
-                  List.Forall2 (inject_mevent mu') (seq.cat tr1 (Events.external tid (Events.release (b, Integers.Ptrofs.intval ofs) (Some virtueLP)) :: nil))
-                                                   (seq.cat tr2 (Events.external tid e' :: nil)) /\
+                  List.Forall2 (inject_mevent mu') (seq.cat tr1 (Events.external tid (Events.release (b, Integers.Ptrofs.intval ofs) (Some (build_delta_content (fst virtueThread) m1'))) :: nil))
+                               (seq.cat tr2 (Events.external tid e' :: nil)) /\
                   HybridMachineSig.external_step
                     (scheduler:=HybridMachineSig.HybridCoarseMachine.scheduler)
                     U tr2 st2 m2 (HybridMachineSig.schedSkip U)
-                                                 (seq.cat tr2
-                                                          (Events.external tid e' :: nil)) st2' m2'.
+                    (seq.cat tr2
+                             (Events.external tid e' :: nil)) st2' m2'.
         Proof.
           
           intros.
@@ -994,7 +1086,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
             pose proof (mtch_target _ _ _ _ _ _ H0 _ l Htid (contains12 H0 Htid)) as HH.
             simpl in H5; exploit_match.
             inversion H18; clear H18.
-            simpl.
+            
 
 
             (** *Constructing the target objects: events, thread_pool, mem, meminj and index*)
@@ -1002,15 +1094,38 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
             (*First construct the virtueThread:
                 the permissions passed from the thread to the lock. *)
 
-            Import BinNums.
-            Import BinInt.
-            Definition merge_func {A} (f1 f2:BinNums.Z -> option A):
+            Definition merge_func {A} (f1 f2:Z -> option A):
               (BinNums.Z -> option A):=
               fun ofs =>
                 match f1 ofs with
                   None => f2 ofs
                 | _ => f1 ofs
                 end.
+            (* PTree.map: forall A B : Type, (positive -> A -> B) -> PTree.t A -> PTree.t B *)
+
+            Fixpoint build_function_for_a_block
+                     (mu:meminj) {A} (b: positive) (ls: list (positive * (Z -> option A))):
+              Z -> option A:=
+              match ls with
+              | nil => (fun _ => None)
+              | (b0, fb)::ls' =>
+                match mu b0 with
+                  | Some (b1, delt) =>
+                    if PMap.elt_eq b b1 then
+                      merge_func (fun p => (fb (p - delt)%Z)) (build_function_for_a_block mu b ls')
+                    else  (build_function_for_a_block mu b ls')
+                  | None => (build_function_for_a_block mu b ls') 
+                end
+              end.
+            
+            Definition tree_map_inject_over_tree {A B} (t:PTree.t (Z -> option B))(mu:meminj) (map:PTree.t (Z -> option A)):
+              PTree.t (Z -> option A):=
+              PTree.map (fun b _ => build_function_for_a_block mu b (PTree.elements map)) t.
+
+            Definition tree_map_inject_over_mem {A} m mu map:
+              PTree.t (Z -> option A) :=
+              tree_map_inject_over_tree (snd (getMaxPerm m)) mu map.
+            
             (* apply an injections to the elements of a tree. *)
             Fixpoint apply_injection_elements
                      {A}
@@ -1020,11 +1135,11 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
                 nil => nil
               | cons (b, ofs_f) ls' =>
                 match (mu b) with
-                 | None => apply_injection_elements mu ls'
-                 | Some (b',d) =>
-                   cons
-                     (b', fun ofs => ofs_f (ofs-d)%Z)
-                     (apply_injection_elements mu ls')
+                | None => apply_injection_elements mu ls'
+                | Some (b',d) =>
+                  cons
+                    (b', fun ofs => ofs_f (ofs-d)%Z)
+                    (apply_injection_elements mu ls')
                 end
               end.
             Fixpoint extract_function_for_block
@@ -1047,7 +1162,8 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
             
             Fixpoint map_from_list
                      {A:Type}
-                     (mu:meminj) (ls: list (positive * (Z -> option A))):=
+                     (mu:meminj) (ls: list (positive * (Z -> option A))):
+              PTree.t (Z -> option A) :=
               match ls with
                 nil => @PTree.empty (BinNums.Z -> option A)
               | cons (b, ofs_f) ls =>
@@ -1069,22 +1185,22 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
             Definition tree_map_inject {A}(mu:meminj) (map:PTree.t (Z -> option A)):
               PTree.t (Z -> option A):=
               map_from_list mu (PTree.elements map).
-            Definition virtueThread_inject (mu:meminj) (virtue:delta_map * delta_map):
+            Definition virtueThread_inject m (mu:meminj) (virtue:delta_map * delta_map):
               delta_map * delta_map:=
               let (m1,m2):= virtue in
-              (tree_map_inject mu m1, tree_map_inject mu m2).
-            remember (virtueThread_inject mu virtueThread)  as virtueThread2.
+              (tree_map_inject_over_mem m mu m1, tree_map_inject_over_mem m mu m2).
+            remember (virtueThread_inject m2 mu virtueThread)  as virtueThread2.
             
             (* Second construct the virtueLP:
                the permissions transfered to the Lock pool
              *)
-            Definition access_map_inject (mu:meminj) (map:access_map):
+            Definition access_map_inject m (mu:meminj) (map:access_map):
               access_map:=
-              (fst map, tree_map_inject mu (snd map)).
-            Definition virtueLP_inject (mu:meminj) (virtue:access_map * access_map):
+              (fst map, tree_map_inject_over_mem m mu (snd map)).
+            Definition virtueLP_inject m (mu:meminj) (virtue:access_map * access_map):
               access_map * access_map:=
-              (access_map_inject mu (fst virtue), access_map_inject mu (snd virtue)).
-            remember (virtueLP_inject mu virtueLP) as virtueLP2.
+              (access_map_inject m mu (fst virtue), access_map_inject m mu (snd virtue)).
+            remember (virtueLP_inject m2 mu virtueLP) as virtueLP2.
               
             do 5 econstructor.
             split; [|split].
@@ -1101,17 +1217,27 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
               rewrite cat_app.
               rewrite (cat_app tr2).
               eapply List.Forall2_app.
-              admit.
-              admit.
-              
+              * admit.
+              (* we carry the trace arround. this should follow from 
+                   H1 : List.Forall2 (inject_mevent mu) tr1 tr2
+                   and
+                   inject_incr mu mu'
+                   (*the last one is not proven yet.*)
+               *)
+                
+              * econstructor.
+                simpl.
+                admit. (* Should be obvious by construction *)
+                constructor.
+                
             + econstructor; eauto.
-
+              
               
               eapply step_release with
                   (virtueThread0:=virtueThread2)
                   (virtueLP0:=virtueLP2); eauto.
               
-              (* 11 goals produced. *)
+              (* 10 goals produced. *)
 
               
               * unfold HybridMachineSig.isCoarse, HybridMachineSig.HybridCoarseMachine.scheduler.
@@ -1129,23 +1255,152 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
                   the injection.
                  *)
                 { destruct H2' as (A&B).
-                  split.
-                  clear - A HeqvirtueThread2.
-                  rewrite HeqvirtueThread2.
                   unfold bounded_maps.sub_map in *.
-                  admit.
-                  admit.
+                  split.
+                  eapply self_simulation.minject in matchmem.
+                  clear - A HeqvirtueThread2 matchmem.
+                  - subst.
+                    replace  (snd (getMaxPerm m2)) with
+                        (PTree.map (fun _ a => a)  (snd (getMaxPerm m2))).
+                    unfold virtueThread_inject.
+                    destruct virtueThread as (virtue1, virtue2).
+                    cbv iota beta delta[fst].
+                    unfold tree_map_inject_over_mem, tree_map_inject_over_tree.
+                    
+                    apply strong_tree_leq_map'.
+                    + intros; simpl.
+                      intros p HH.
+
+                      pose proof (PTree.elements_complete virtue1).
+                      remember (PTree.elements virtue1) as Velmts.
+                      clear HeqVelmts.
+                      induction Velmts as [|[b0 fb]]; try solve[inversion HH].
+                      simpl in HH.
+                      destruct (mu b0) as [[b1 delt]|] eqn:Hinj.
+                      * destruct (PMap.elt_eq p0 b1); subst.
+                        unfold merge_func in HH.
+                        destruct (fb (p-delt)%Z) eqn:Hfbp.
+                        -- specialize (H1 b0 fb ltac:(left; auto)).
+                           clear HH.
+                           cbv beta zeta iota delta[fst] in A.
+                           Lemma strong_tree_leq_spec:
+                             forall {A B} (leq: option A -> option B -> Prop),
+                               leq None None ->
+                             forall t1 t2,
+                               bounded_maps.strong_tree_leq t1 t2 leq ->
+                               forall b,
+                                 leq (@PTree.get A b t1) 
+                                     (@PTree.get B b t2).
+                           Proof.
+                             intros A B leq Hleq t1.
+                             induction t1; eauto.
+                             - intros.
+                               destruct t2; try solve[inversion H].
+                               destruct b; simpl; auto.
+                             - intros t2 HH.
+                               destruct t2; try solve[inversion HH].
+                               destruct HH as (INEQ&L&R).
+                               destruct b; simpl; eauto.
+                           Qed.
+
+                           pose proof (strong_tree_leq_spec
+                                         bounded_maps.fun_leq
+                                         ltac:(simpl; auto)
+                                                virtue1 (snd (getMaxPerm m1)) A b0).
+                           rewrite H1 in H2.
+                           unfold bounded_maps.fun_leq in H2.
+                           destruct ((snd (getMaxPerm m1)) ! b0) eqn:Heqn;
+                             try solve[inversion H2].
+                           specialize (H2 (p - delt)%Z ltac:(rewrite Hfbp; auto)).
+                           eapply Mem.mi_perm in Hinj; try apply matchmem.
+
+                           2: {
+                             instantiate (2:= Max).
+                             instantiate (2:= (p - delt)%Z).
+                             instantiate (1:= Nonempty).
+                             unfold Mem.perm.
+                             pose proof restrPermMap_Max as H3.
+                             unfold permission_at in H3.
+                             rewrite H3; clear H3.
+                             unfold PMap.get.
+                             rewrite Heqn.
+                             
+
+                             destruct (o0 (p - delt)%Z); try solve[inversion H2].
+                             destruct p; try constructor.
+                           }
+                           
+                           unfold Mem.perm in Hinj.
+                           pose proof restrPermMap_Max as H3.
+                           unfold permission_at in H3.
+                           rewrite H3 in Hinj; clear H3.
+                           unfold PMap.get in Hinj.
+                           rewrite H in Hinj.
+                           replace (p - delt + delt)%Z with p in Hinj by omega.
+                           destruct (a p); inversion Hinj; auto.
+
+                        -- eapply IHVelmts in HH; auto.
+                           intros; eapply H1.
+                           right; auto.
+
+                        -- eapply IHVelmts in HH; auto.
+                           intros; eapply H1.
+                           right; auto.
+
+                      * (* mu b0 = None *)
+                         eapply IHVelmts in HH; auto.
+                         intros; eapply H1.
+                         right; auto.
+
+                    + constructor.
+                    + Lemma trivial_map1:
+                        forall {A} (t : PTree.t A),
+                          PTree.map1 (fun (a : A) => a) t = t.
+                      Proof.
+                        intros ? t; induction t; auto.
+                        simpl; f_equal; eauto.
+                        destruct o; reflexivity.
+                      Qed.
+                      Lemma trivial_map:
+                        forall {A} (t : PTree.t A),
+                          PTree.map (fun (_ : positive) (a : A) => a) t = t.
+                      Proof.
+                        intros; rewrite <- map_map1; eapply trivial_map1.
+                      Qed.
+                      eapply trivial_map.
+                      
+                      
+                  - admit.
+                    (* this should follow like the previous point !!*)
+
+
+                    
                 }
                 
               * unfold HybridMachineSig.isCoarse, HybridMachineSig.HybridCoarseMachine.scheduler.
                 move H3 at bottom.
 
-                (*
-                  Sketch: virtueLP2 is the map from virtueLP by mu.
-                  mu also maps m1 to m2, so the sub_map relation hsould be preserved by 
-                  the injection.
+                destruct H3 as (?&?&?).
+                
+                eapply (proj1 (and_assoc _ _ _)).
+                split.
+
+                (*Easy ones: the default is trivial:
+                  bounded_maps.map_empty_def
                  *)
-                admit. 
+                subst virtueLP2.
+                unfold virtueLP_inject,
+                bounded_maps.map_empty_def, access_map_inject;
+                  simpl.
+                split; auto.
+
+                (*
+                 Sketch: these proofs should follow just 
+                 like the "sub_map" for the thread virtue.
+                 (i.e. a couple goals above)
+               *)
+                admit.
+              
 
                 
               * eapply H0.
@@ -1254,8 +1509,15 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
                              (ThreadPool.addThread
                                 (ThreadPool.updThread Htid (Kresume c Vundef) threadPerm')
                                 (Vptr b ofs) arg newThreadPerm) m1' st2' m2' /\
-                List.Forall2 (inject_mevent mu') (seq.cat tr1 (Events.external tid (Events.spawn (b, Integers.Ptrofs.intval ofs)
-                    (Some (ThreadPool.getThreadR Htid, virtue1)) (Some virtue2)) :: nil))
+                List.Forall2 (inject_mevent mu')
+                             (seq.cat tr1
+                                      (Events.external tid
+                                                       (Events.spawn
+                                                          (b, Integers.Ptrofs.intval ofs)
+                                                          (*Some (ThreadPool.getThreadR Htid, virtue1)*)
+                                                          (Some (build_delta_content (fst virtue1) m1'))
+                                                          (*Some virtue2*)
+                                                          (Some (build_delta_content (fst virtue2) m1'))) :: nil))
                   (seq.cat tr2 (Events.external tid e' :: nil)) /\
                 HybridMachineSig.external_step
                   (scheduler:=HybridMachineSig.HybridCoarseMachine.scheduler)
