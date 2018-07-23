@@ -33,8 +33,8 @@ Require Import VST.concurrency.juicy.erasure_proof.
 Require Import VST.concurrency.juicy.erasure_safety.
 
 (** *SAFETY*)
-Require Import VST.concurrency.safety.
-Require Import VST.concurrency.coinductive_safety.
+Require Import VST.concurrency.compiler.safety.
+Require Import VST.concurrency.compiler.coinductive_safety.
 
 (** *SSROMEGA*)
 Require Import Omega.

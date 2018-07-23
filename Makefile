@@ -155,30 +155,13 @@ CONCUR_COMMON_FILES= \
   threads_lemmas.v \
 
 CONCUR_COMPILER_FILES= \
-  CoreSemantics_sum.v \
+  safety.v CoreSemantics_sum.v \
 #  self_simulation.v Clight_self_simulation.v Asm_self_simulation.v \
 #  lifting.v lifting_safety.v \
 #  compiler_correct.v
 
 CONCUR_FILES= \
-  safety.v memsem_lemmas.v \
-  cast.v compcert_imports.v \
-  disjointness.v \
-  join_sm.v  \
-  main.v memory_lemmas.v pred_lemmas.v \
-  # rc_semantics.v rc_semantics_lemmas.v \
-  # TheSchedule.v \
-  seq_lemmas.v stack.v \
-  wf_lemmas.v \
-  oracular_refinement.v \
-  coqlib5.v \
-	reestablish.v \
-linking_spec.v	\
-  coinductive_safety.v \
-  HybridMachine_simulation.v \
-  HybridMachine_simulation_proof.v \
-  Clight_safety.v main_safety.v main.v \
- # concurrent_machine.v dry_machine.v
+  memsem_lemmas.v main.v memory_lemmas.v  \
 
 PACO_FILES= \
   hpattern.v\

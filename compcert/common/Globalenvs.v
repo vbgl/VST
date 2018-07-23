@@ -277,8 +277,6 @@ Qed.
 Definition globalenv (p: program F V) :=
   add_globals (empty_genv p.(prog_public)) p.(prog_defs).
 
-
-
 (** Proof principles *)
 
 Section GLOBALENV_PRINCIPLES.

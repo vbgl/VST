@@ -22,9 +22,9 @@ Require Import VST.concurrency.common.addressFiniteMap.
 Require Import VST.concurrency.common.scheduler.
 Require Import Coq.Program.Program.
 
-Require Import VST.concurrency.safety.
+Require Import VST.concurrency.compiler.safety.
 
-Require Import VST.concurrency.coinductive_safety.
+Require Import VST.concurrency.compiler.coinductive_safety.
 
 
 Require Import VST.concurrency.common.HybridMachineSig.
