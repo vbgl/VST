@@ -156,7 +156,7 @@ Module DryHybridMachine.
             (Hcode: getThreadC cnt0 = Kblocked c)
             (* To check if the machine is at an external step and load its arguments install the thread data permissions*)
             (Hrestrict_pmap_arg: restrPermMap (Hcompat tid0 cnt0).1 = marg)
-            (Hat_external: core_semantics.at_external semSem c marg = Some (LOCK, Vptr b ofs::nil))
+            (Hat_external: semantics.at_external semSem c marg = Some (LOCK, Vptr b ofs::nil))
             (** install the thread's permissions on lock locations*)
             (Hrestrict_pmap0: restrPermMap (Hcompat tid0 cnt0).2 = m0)
             (** To acquire the lock the thread must have [Readable] permission on it*)
@@ -201,7 +201,7 @@ Module DryHybridMachine.
             (Hcode: getThreadC cnt0 = Kblocked c)
             (* To check if the machine is at an external step and load its arguments install the thread data permissions*)
             (Hrestrict_pmap_arg: restrPermMap (Hcompat tid0 cnt0).1 = marg)
-            (Hat_external: core_semantics.at_external semSem c marg =
+            (Hat_external: semantics.at_external semSem c marg =
                            Some (UNLOCK, Vptr b ofs::nil))
             (** install the thread's permissions on lock locations *)
             (Hrestrict_pmap0: restrPermMap (Hcompat tid0 cnt0).2 = m0)
@@ -247,7 +247,7 @@ Module DryHybridMachine.
             (Hcode: getThreadC cnt0 = Kblocked c)
             (* To check if the machine is at an external step and load its arguments install the thread data permissions*)
             (Hrestrict_pmap_arg: restrPermMap (Hcompat tid0 cnt0).1 = marg)
-            (Hat_external: core_semantics.at_external semSem c marg = Some (CREATE, Vptr b ofs::arg::nil))
+            (Hat_external: semantics.at_external semSem c marg = Some (CREATE, Vptr b ofs::arg::nil))
             (Harg: Val.inject (Mem.flat_inj (Mem.nextblock m)) arg arg)
             (** we do not need to enforce the almost empty predicate on thread
            spawn as long as it's considered a synchronizing operation *)
@@ -269,7 +269,7 @@ Module DryHybridMachine.
             (Hcode: getThreadC cnt0 = Kblocked c)
             (* To check if the machine is at an external step and load its arguments install the thread data permissions*)
             (Hrestrict_pmap_arg: restrPermMap (Hcompat tid0 cnt0).1 = marg)
-            (Hat_external: core_semantics.at_external semSem c marg = Some (MKLOCK, Vptr b ofs::nil))
+            (Hat_external: semantics.at_external semSem c marg = Some (MKLOCK, Vptr b ofs::nil))
             (** install the thread's data permissions*)
             (Hrestrict_pmap: restrPermMap (Hcompat tid0 cnt0).1 = m1)
             (** To create the lock the thread must have [Writable] permission on it*)
@@ -309,7 +309,7 @@ Module DryHybridMachine.
             (Hcode: getThreadC cnt0 = Kblocked c)
             (* To check if the machine is at an external step and load its arguments install the thread data permissions*)
             (Hrestrict_pmap_arg: restrPermMap (Hcompat tid0 cnt0).1 = marg)
-            (Hat_external: core_semantics.at_external semSem c marg = Some (FREE_LOCK, Vptr b ofs::nil))
+            (Hat_external: semantics.at_external semSem c marg = Some (FREE_LOCK, Vptr b ofs::nil))
             (** If this address is a lock*)
             (His_lock: lockRes tp (b, (Ptrofs.intval ofs)) = Some rmap)
             (** And the lock is taken *)
@@ -346,7 +346,7 @@ Module DryHybridMachine.
            (Hcode: getThreadC cnt0 = Kblocked c)
            (* To check if the machine is at an external step and load its arguments install the thread data permissions*)
            (Hrestrict_pmap_arg: restrPermMap (Hcompat tid0 cnt0).1 = marg)
-           (Hat_external: core_semantics.at_external semSem c marg = Some (LOCK, Vptr b ofs::nil))
+           (Hat_external: semantics.at_external semSem c marg = Some (LOCK, Vptr b ofs::nil))
            (** Install the thread's lock permissions*)
            (Hrestrict_pmap: restrPermMap (Hcompat tid0 cnt0).2 = m1)
            (** To acquire the lock the thread must have [Readable] permission on it*)
@@ -571,7 +571,7 @@ Module DryHybridMachine.
 
     Definition init_mach (pmap : option res) (m: mem)
                (ms:thread_pool) (m' : mem) (v:val) (args:list val) : Prop :=
-      exists c, core_semantics.initial_core semSem 0 m c m' v args /\
+      exists c, semantics.initial_core semSem 0 m c m' v args /\
            ms = mkPool (Krun c) (getCurPerm m', empty_map).
     Set Printing All.
     Section HybDryMachineLemmas.

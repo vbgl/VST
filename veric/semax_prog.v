@@ -1281,7 +1281,7 @@ Lemma semax_prog_rule' {CS: compspecs} :
      Genv.init_mem prog = Some m ->
      { b : block & { q : corestate &
        (Genv.find_symbol (globalenv prog) (prog_main prog) = Some b) *
-       (forall jm, m_dry jm = m -> exists jm', core_semantics.initial_core (juicy_core_sem (cl_core_sem (globalenv prog))) h
+       (forall jm, m_dry jm = m -> exists jm', semantics.initial_core (juicy_core_sem (cl_core_sem (globalenv prog))) h
                     jm q jm' (Vptr b Ptrofs.zero) nil) *
        forall n z,
          { jm |
@@ -1346,8 +1346,8 @@ Proof.
       auto.
     }
   exists b.
-  unfold core_semantics.initial_core, juicy_core_sem.
-  unfold j_initial_core, core_semantics.initial_core, cl_core_sem, cl_initial_core.
+  unfold semantics.initial_core, juicy_core_sem.
+  unfold j_initial_core, semantics.initial_core, cl_core_sem, cl_initial_core.
   eexists.
   unfold fundef in *.
   change (Genv.globalenv prog) with (genv_genv (globalenv prog)) in *.
@@ -1496,7 +1496,7 @@ Lemma semax_prog_rule {CS: compspecs} :
      Genv.init_mem prog = Some m ->
      { b : block & { q : corestate &
        (Genv.find_symbol (globalenv prog) (prog_main prog) = Some b) *
-       (forall jm, m_dry jm = m -> exists jm', core_semantics.initial_core (juicy_core_sem (cl_core_sem (globalenv prog))) h
+       (forall jm, m_dry jm = m -> exists jm', semantics.initial_core (juicy_core_sem (cl_core_sem (globalenv prog))) h
                     jm q jm' (Vptr b Ptrofs.zero) nil) *
        forall n,
          { jm |
@@ -1617,7 +1617,7 @@ Lemma semax_prog_entry_point {CS: compspecs} V G prog b id_fun id_arg arg A
 
   { q : corestate |
     (forall jm, Val.inject (Mem.flat_inj (nextblock (m_dry jm))) arg arg ->
-      exists jm', core_semantics.initial_core
+      exists jm', semantics.initial_core
       (juicy_core_sem (cl_core_sem (globalenv prog))) h
       jm q jm' (Vptr b Ptrofs.zero) (arg :: nil)) /\
 
@@ -1645,8 +1645,8 @@ Proof.
                       cc_default A P Q _ (necR_refl _)).
   spec Believe.
   { exists id_fun, NEP, NEQ. split; auto. exists b; split; auto. }
-  simpl (core_semantics.initial_core _). unfold j_initial_core.
-  simpl (core_semantics.initial_core _). unfold cl_initial_core.
+  simpl (semantics.initial_core _). unfold j_initial_core.
+  simpl (semantics.initial_core _). unfold cl_initial_core.
   if_tac [_|?]. 2:tauto.
 
   destruct (Genv.find_funct_ptr (globalenv prog) b) as [f|] eqn:Eb; swap 1 2.

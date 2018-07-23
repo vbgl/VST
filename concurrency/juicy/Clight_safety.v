@@ -45,7 +45,7 @@ Definition init_mem:= proj1_sig (init_mem CPROOF).
 Definition f_main : {f | Genv.find_funct_ptr (Clight.genv_genv ge) (projT1 (spr CPROOF)) = Some f}.
 Proof.
   destruct (spr CPROOF) as (b & q & [? Hinit] & s); simpl in *.
-  unfold juicy_extspec.j_initial_core in Hinit; simpl core_semantics.initial_core in Hinit.
+  unfold juicy_extspec.j_initial_core in Hinit; simpl semantics.initial_core in Hinit.
   destruct (s O tt) as (jm & Hjm & _).
   specialize (Hinit _ Hjm); simpl Genv.find_funct_ptr in Hinit.
   unfold prog, semax_to_juicy_machine.prog in *.

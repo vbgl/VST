@@ -72,7 +72,7 @@ Proof.
     destruct (S' o1) as [A _]. spec A. apply perm_order_pp_refl.
     destruct (S' o2) as [_ B]. spec B. apply perm_order_pp_refl.
     destruct o1 as [[]|], o2 as [[]|]; auto; simpl in *.
-    all: inv A; inv B; auto.
+    all: try solve [inv A; inv B; auto].
   - extensionality b ofs k. specialize (E k (b, ofs)).
     unfold access_at in *.
     simpl in E.

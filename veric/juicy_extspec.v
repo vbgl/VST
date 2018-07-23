@@ -1,5 +1,5 @@
 Require Import VST.veric.juicy_base.
-Require Import VST.concurrency.common.core_semantics.
+Require Import VST.concurrency.common.semantics.
 Require Import VST.sepcomp.extspec.
 Require Import VST.sepcomp.step_lemmas.
 Require Import VST.veric.shares.
@@ -7,6 +7,7 @@ Require Import VST.veric.juicy_safety.
 Require Import VST.veric.juicy_mem VST.veric.juicy_mem_lemmas VST.veric.juicy_mem_ops.
 Require Import VST.veric.initial_world.
 Require Import VST.veric.own.
+Require Import VST.sepcomp.semantics.
 
 Local Open Scope nat_scope.
 Local Open Scope pred.
@@ -27,15 +28,15 @@ Definition j_initial_core {C} (csem: @CoreSemantics C mem)
      (n: nat) (m: juicy_mem) (q: C) (m': juicy_mem) (v: val) (args: list val) 
      : Prop :=
   m' = m /\
-  core_semantics.initial_core csem n (m_dry m) q (m_dry m') v args.
+  initial_core csem n (m_dry m) q (m_dry m') v args.
 
 Definition j_at_external {C} (csem: @CoreSemantics C mem)
    (q: C) (jm: juicy_mem) : option (external_function * list val) :=
- core_semantics.at_external csem q (m_dry jm).
+ at_external csem q (m_dry jm).
 
 Definition j_after_external {C} (csem: @CoreSemantics C mem)
     (ret: option val) (q: C) (jm: juicy_mem) :=
-  core_semantics.after_external csem ret q (m_dry jm).
+  after_external csem ret q (m_dry jm).
 
 Definition jstep {C} (csem: @CoreSemantics C mem)
  (q: C) (jm: juicy_mem) (q': C) (jm': juicy_mem) : Prop :=
@@ -466,12 +467,12 @@ Section juicy_safety.
          Hrel n' m m' ->
          ext_spec_post Hspec e x (genv_symb ge) (sig_res (ef_sig e)) ret z' m' ->
          exists c',
-           core_semantics.after_external Hcore ret c (m_dry m') = Some c' /\
+           after_external Hcore ret c (m_dry m') = Some c' /\
            jm_bupd z' (jsafeN_ n' z' c') m') ->
       jsafeN_ (S n) z c m
   | jsafeN_halted:
       forall n z c m i,
-      core_semantics.halted Hcore c i ->
+      halted Hcore c i ->
       ext_spec_exit Hspec (Some (Vint i)) z m ->
       jsafeN_ n z c m.
 
@@ -578,9 +579,9 @@ Section juicy_safety.
   Lemma convergent_controls_jsafe :
     forall m q1 q2,
       (j_at_external Hcore q1 m = j_at_external Hcore q2 m) ->
-      (forall ret m q', core_semantics.after_external Hcore ret q1 m = Some q' ->
-                      core_semantics.after_external Hcore ret q2 m = Some q') ->
-      (core_semantics.halted Hcore q1 = core_semantics.halted Hcore q2) ->
+      (forall ret m q', after_external Hcore ret q1 m = Some q' ->
+                      after_external Hcore ret q2 m = Some q') ->
+      (halted Hcore q1 = halted Hcore q2) ->
       (forall q' m', jstep Hcore q1 m q' m' ->
                      jstep Hcore q2 m q' m') ->
       (forall n z, jsafeN_ n z q1 m -> jsafeN_ n z q2 m).

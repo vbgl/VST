@@ -226,7 +226,7 @@ Ltac inv_safe H :=
   try solve[match goal with
     | H : j_at_external _ _ _ = _ |- _ =>
       simpl in H; congruence
-    | H : core_semantics.halted _ _ _ |- _ =>
+    | H : semantics.halted _ _ _ |- _ =>
       contradiction
   end].
 (*

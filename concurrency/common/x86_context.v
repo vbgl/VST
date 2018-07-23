@@ -351,7 +351,7 @@ Module X86SEMAxioms.
     Qed.
 
     Lemma at_external_halted_excl:
-      forall q m, core_semantics.at_external (@semSem X86Sem) q m = None \/ forall i, ~ halted semSem q i.
+      forall q m, semantics.at_external (@semSem X86Sem) q m = None \/ forall i, ~ halted semSem q i.
     Proof.
       intros.
       simpl.

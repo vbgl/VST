@@ -1,5 +1,6 @@
 (** * Injections on X86 cores*)
 
+Require Import VST.sepcomp.semantics.
 Require Import VST.concurrency.common.core_semantics.
 Require Import VST.sepcomp.semantics_lemmas.
 
@@ -738,7 +739,7 @@ Module X86Inj.
       valid_mem m ->
       domain_memren f m ->
       core_wd f c ->
-      at_external (Asm_core_sem the_ge) c m = Some (ef, args) -> valid_val_list f args.
+      semantics.at_external (Asm_core_sem the_ge) c m = Some (ef, args) -> valid_val_list f args.
   Proof.
     intros.
     destruct c; simpl in *.
@@ -775,10 +776,10 @@ Module X86Inj.
   Lemma after_external_wd :
     forall the_ge m (c c' : state) (f : memren) (ef : external_function)
       (args : seq val) (ov : option val)
-      (Hat_external: at_external (Asm_core_sem the_ge) c m = Some (ef, args))
+      (Hat_external: semantics.at_external (Asm_core_sem the_ge) c m = Some (ef, args))
       (Hcore_wd: core_wd f c)
       (Hvalid_list: valid_val_list f args)
-      (Hafter_external: after_external (Asm_core_sem the_ge) ov c m = Some c')
+      (Hafter_external: semantics.after_external (Asm_core_sem the_ge) ov c m = Some c')
       (Hov: match ov with
             | Some v => valid_val f v
             | None => True
@@ -1113,15 +1114,15 @@ Module X86Inj.
       (Hc : core_wd f c)
       (Hinj : core_inj f c c')
       (Hmem : mem_obs_eq f m m'),
-      match at_external (Asm_core_sem the_ge) c m with
+      match semantics.at_external (Asm_core_sem the_ge) c m with
       | Some (ef, vs) =>
-        match at_external (Asm_core_sem the_ge) c' m' with
+        match semantics.at_external (Asm_core_sem the_ge) c' m' with
         | Some (ef', vs') =>
           ef = ef' /\ val_obs_list f vs vs'
         | None => False
         end
       | None =>
-        match at_external (Asm_core_sem the_ge) c' m' with
+        match semantics.at_external (Asm_core_sem the_ge) c' m' with
         | Some _ => False
         | None => True
         end
@@ -1156,9 +1157,9 @@ Module X86Inj.
       | Some v1 => valid_val f v1
       | None => True
       end ->
-      after_external (Asm_core_sem the_ge) ov1 c m = Some cc ->
+      semantics.after_external (Asm_core_sem the_ge) ov1 c m = Some cc ->
       exists (ov2 : option val) (cc' : state),
-        after_external (Asm_core_sem the_ge) ov2 c' m' = Some cc' /\
+        semantics.after_external (Asm_core_sem the_ge) ov2 c' m' = Some cc' /\
         core_inj f cc cc' /\
         match ov1 with
         | Some v1 =>

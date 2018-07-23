@@ -1,5 +1,5 @@
 Require Import VST.sepcomp.mem_lemmas.
-Require Import VST.concurrency.common.core_semantics.
+Require Import VST.sepcomp.semantics.
 Require Import VST.concurrency.memsem_lemmas.
 (*Require Import VST.sepcomp.simulations.*)
 (*Require Import VST.sepcomp.simulations_lemmas.*)
@@ -946,8 +946,8 @@ Definition coresem_extract_cenv {M} {core} (CS: @CoreSemantics core M)
             @CoreSemantics core M :=
   Build_CoreSemantics _ _
              (CS.(initial_core))
-             (CS.(core_semantics.at_external))
-             (CS.(core_semantics.after_external))
+             (CS.(semantics.at_external))
+             (CS.(semantics.after_external))
              CS.(halted)
             (CS.(corestep) )
             (CS.(corestep_not_halted) )

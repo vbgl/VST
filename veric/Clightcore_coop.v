@@ -9,8 +9,8 @@ Lemma alloc_variables_mem_step: forall cenv vars m e e2 m'
 Proof. intros.
   induction M.
   apply mem_step_refl.
-  eapply core_semantics.mem_step_trans.
-    eapply core_semantics.mem_step_alloc; eassumption. eassumption.
+  eapply semantics.mem_step_trans.
+    eapply semantics.mem_step_alloc; eassumption. eassumption.
 Qed.
 
 Lemma assign_loc_mem_step g t m b z v m' (A:assign_loc g t m b z v m'):
@@ -22,15 +22,15 @@ Proof.
 Qed.
 
 Lemma bind_parameters_mem_step: forall cenv e m pars vargs m'
-      (M: bind_parameters cenv e m pars vargs m'), core_semantics.mem_step m m'.
+      (M: bind_parameters cenv e m pars vargs m'), semantics.mem_step m m'.
 Proof. intros.
   induction M.
   apply mem_step_refl.
   inv H0.
-+ eapply core_semantics.mem_step_trans; try eassumption. simpl in H2.
++ eapply semantics.mem_step_trans; try eassumption. simpl in H2.
   eapply mem_step_store; eassumption.
-+ eapply core_semantics.mem_step_trans; try eassumption.
-  eapply core_semantics.mem_step_storebytes; eassumption.
++ eapply semantics.mem_step_trans; try eassumption.
+  eapply semantics.mem_step_storebytes; eassumption.
 Qed.
 
 Lemma inline_assembly_memstep: forall text sg g vargs m t vres m' (IA:Events.inline_assembly_sem text sg g vargs m t vres m'),
@@ -60,8 +60,8 @@ Qed.
   
 Lemma CLC_corestep_mem:
   forall (g : genv) c (m : mem) c'  (m' : mem),
-    core_semantics.corestep (cl_core_sem g) c m c' m' ->
-    core_semantics.mem_step m m'.
+    semantics.corestep (cl_core_sem g) c m c' m' ->
+    semantics.mem_step m m'.
 Proof. simpl; intros. inv H; simpl in *. unfold step2 in H0.
   remember (set_mem c m) as C.
   generalize dependent m. generalize dependent c.

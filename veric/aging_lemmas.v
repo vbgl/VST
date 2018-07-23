@@ -83,7 +83,7 @@ Qed.
 
 (** * Aging and operational steps *)
 
-Lemma jstep_age_sim {C} {csem : @core_semantics.CoreSemantics C mem} {c c' jm1 jm2 jm1'} :
+Lemma jstep_age_sim {C} {csem : @semantics.CoreSemantics C mem} {c c' jm1 jm2 jm1'} :
   age jm1 jm2 ->
   jstep csem c jm1 c' jm1' ->
   level jm2 <> O ->

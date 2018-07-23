@@ -55,7 +55,7 @@ Section SafetyEquivalence.
   Context (resources:semantics.Resources)
           (Sem:semantics.Semantics)
           (TP: threadPool.ThreadPool.ThreadPool).
-  Definition CoreSem:= core_semantics.csem (event_semantics.msem (@semantics.semSem Sem)).
+  Definition CoreSem:= semantics.csem (event_semantics.msem (@semantics.semSem Sem)).
   Context (Machine: MachineSig).
   Existing Instance Machine.
   Existing Instance DilMem.
