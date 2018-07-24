@@ -1,8 +1,6 @@
 Require Import compcert.lib.Coqlib.
-(* Require Import VST.sepcomp.simulations. *)
 Require Import ZArith List.
 Import ListNotations.
-(*Require Import veric.base. *)
 Require Import compcert.common.Globalenvs.
 Require Import compcert.common.Memory.
 Require Import compcert.lib.Integers.

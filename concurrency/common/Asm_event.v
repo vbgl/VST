@@ -9,17 +9,11 @@ Require Import compcert.common.Events.
 Require Import compcert.common.Globalenvs.
 Require Import compcert.common.Smallstep.
 Require Import compcert.backend.Locations.
-(*Require Import Stacklayout.*)
 Require Import compcert.backend.Conventions.
-
 Require Import compcert.x86.Asm.
-(*LENB: In CompComp, we used a modified Asm.v, called Asm.comp.v*)
-
 Require Import VST.sepcomp.mem_lemmas.
 Require Import VST.concurrency.common.core_semantics.
 Require Import VST.sepcomp.semantics_lemmas.
-Require Import VST.sepcomp.val_casted.
-(*Require Import VST.concurrency.BuiltinEffects.*)
 Require Import VST.sepcomp.event_semantics.
 Require Import VST.concurrency.common.Asm_core.
 

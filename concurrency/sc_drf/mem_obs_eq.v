@@ -2,7 +2,6 @@
 
 Require Import compcert.lib.Axioms.
 Require Import VST.concurrency.common.sepcomp. Import SepComp.
-(* Require Import VST.sepcomp.val_casted. *)
 
 Require Import VST.concurrency.common.pos.
 
@@ -15,10 +14,8 @@ Set Implicit Arguments.
   after Ssreflect eqtype.*)
 Require Import compcert.common.AST.
 Require Import compcert.common.Values. (*for val*)
-(* Require Import compcert.common.Globalenvs. *)
 Require Import compcert.common.Memory.
 Require Import VST.concurrency.memory_lemmas.
-(* Require Import compcert.common.Events. *)
 Require Import compcert.lib.Integers.
 
 Require Import Coq.ZArith.ZArith.
@@ -28,6 +25,7 @@ Require Import VST.concurrency.common.threads_lemmas.
 Require Import VST.concurrency.common.permissions.
 Require Import VST.concurrency.common.dry_context.
 Require Import VST.concurrency.common.semantics.
+Require Import VST.sepcomp.mem_wd.
 
 (** ** Block renamings*)
 Module Renamings.

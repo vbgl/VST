@@ -131,6 +131,7 @@ Module X86WD.
     destruct v2; constructor.
   Qed.
 
+(*
   Lemma decode_longs_valid_val:
     forall f vals tys,
       valid_val_list f vals ->
@@ -150,6 +151,7 @@ Module X86WD.
     constructor; auto.
     apply longofwords_valid_val; auto.
   Qed.
+*)
 
   Hint Extern 1 (valid_val _ (@Pregmap.set _ _ _ _ _)) => eapply regset_wd_set : wd.
   Hint Resolve regset_wd_set regset_wd_set_res : wd.
@@ -414,6 +416,7 @@ Module X86Inj.
   Import ValueWD MemoryWD Genv.
   Include X86WD.
 
+(*
   Lemma decode_longs_val_obs_list:
     forall f (vals vals' : seq val) tys
       (Hobs_eq: val_obs_list f vals vals'),
@@ -440,6 +443,7 @@ Module X86Inj.
       inversion H3; subst;
       constructor; try constructor; auto.
   Qed.
+*)
 
   (*
   Lemma set_res_empty_1:

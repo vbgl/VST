@@ -5,7 +5,7 @@ Require Import compcert.common.AST.
 Require Import compcert.common.Values.
 
 Require Import VST.sepcomp.extspec.
-Require Import VST.concurrency.common.core_semantics.
+Require Import VST.sepcomp.semantics.
 Require Import VST.sepcomp.semantics_lemmas.
 
 Definition has_opttyp (v : option val) (t : option typ) :=
@@ -115,9 +115,9 @@ Qed.
     apply (IHn0 _ _ _ _ n STEPN).
     assert (Heq: (n + S (S n0) = S (n + S n0))%nat) by omega.
     rewrite Heq in H1.
-(*    eapply safe_corestep_forward in H1; eauto.
-  Qed.*)
-  Abort.
+    eapply safe_corestep_forward in H1; auto.
+   2: eauto. eauto.
+ Qed.
 
   Lemma safe_step'_back2 :
     forall

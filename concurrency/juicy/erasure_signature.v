@@ -20,8 +20,6 @@ Require Import VST.concurrency.juicy.juicy_machine. Import Concur.
 Require Import VST.concurrency.common.HybridMachine.
 
 (*The simulations*)
-Require Import VST.sepcomp.wholeprog_simulations.
-
 Definition init_inj_ok (j: Values.Val.meminj) m:=
   forall b b' ofs, j b = Some (b', ofs) ->
               b = b' /\
