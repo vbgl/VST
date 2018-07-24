@@ -1,8 +1,7 @@
-Require Import VST.concurrency.common.core_semantics.
+Require Import VST.sepcomp.semantics.
 Require Import VST.veric.base.
 Require Import VST.veric.Clight_lemmas.
 Require compcert.common.Globalenvs.
-Require compcert.common.Smallstep.
 
 Inductive cont': Type :=
   | Kseq: statement -> cont'       (**r [Kseq s2 k] = after [s1] in [s1;s2] *)

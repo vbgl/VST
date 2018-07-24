@@ -1,4 +1,4 @@
-Require Import VST.concurrency.common.core_semantics.
+Require Import VST.sepcomp.semantics.
 Require Import VST.sepcomp.semantics_lemmas.
 Require Import VST.sepcomp.mem_lemmas.
 Require Import VST.veric.base.

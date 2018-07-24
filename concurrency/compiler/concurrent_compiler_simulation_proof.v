@@ -15,7 +15,7 @@ Require Import VST.concurrency.compiler.HybridMachine_simulation.
 Require Import VST.concurrency.compiler.Clight_self_simulation.
 Require Import VST.concurrency.compiler.Asm_self_simulation.
 
-Import memsem_lemmas.
+Require Import VST.concurrency.memsem_lemmas.
 Import BinNums.
 Import BinInt.
 Import List.

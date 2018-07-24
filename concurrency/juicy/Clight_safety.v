@@ -23,6 +23,7 @@ Require Import VST.concurrency.juicy.mem_wd2.
 Require Import VST.concurrency.juicy.Clight_mem_ok.
 Require Import VST.veric.Clight_sim.
 Require Import VST.msl.eq_dec.
+Require Import VST.concurrency.memsem_lemmas.
 Require Import BinNums.
 Require Import List.
 
@@ -56,6 +57,11 @@ Defined.
 
 (* Clight_new starts a step earlier than Clight, with a sequence of the initial call to main and
    an infinite loop. *)
+(* stub for the "function" that provides main's arguments on the stack *)
+Definition main_handler : Clight.function :=
+  {| Clight.fn_return := Ctypes.Tvoid; Clight.fn_callconv := AST.cc_default; Clight.fn_params := nil;
+     Clight.fn_vars := nil; Clight.fn_temps := nil; Clight.fn_body := Clight.Sskip |}.
+
 (* This could be simplified if we made some assumptions about main (e.g., that it has no arguments). *)
 Definition initial_Clight_state : Clight.state :=
   let f := proj1_sig f_main in
