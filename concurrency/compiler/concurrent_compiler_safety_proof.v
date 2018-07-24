@@ -35,10 +35,10 @@ Module Concurrent_Safety (CC_correct: CompCert_correctness).
   Import ConcurCC_correct.
   
   Definition Clight_init_state (p: Clight.program):=
-    Clight.entry_point (Clight.globalenv p).
+    Clight.start_stack (Clight.globalenv p).
   
   Definition Asm_init_state (p: Asm.program):=
-    Asm.entry_point (@the_ge p).
+    Asm.start_stack (@the_ge p).
 
   Notation valid Sem:=
     (valid dryResources Sem OrdinalPool.OrdinalThreadPool).

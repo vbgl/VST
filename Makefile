@@ -155,7 +155,7 @@ CONCUR_COMMON_FILES= \
   threads_lemmas.v \
 
 CONCUR_COMPILER_FILES= \
-  safety.v CoreSemantics_sum.v \
+  safety.v CoreSemantics_sum.v concurrent_compiler_safety_proof.v \
 #  self_simulation.v Clight_self_simulation.v Asm_self_simulation.v \
 #  lifting.v lifting_safety.v \
 #  compiler_correct.v

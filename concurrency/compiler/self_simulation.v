@@ -162,12 +162,12 @@ Arguments match_self {core}.
 Section SelfSimulation.
 
   Variable state:Type.
-  Variable Sem: core_semantics.CoreSemantics state mem.
+  Variable Sem: semantics.CoreSemantics state mem.
   Variable state_to_memcore: state -> (state * Mem.mem).
   Variable memcore_to_state: state -> Mem.mem -> state.
   Notation get_core s:= (fst (state_to_memcore s)). 
   Notation get_mem s:= (snd (state_to_memcore s)). 
-  
+
  Record self_simulation: Type :=
     { code_inject: meminj -> state -> state -> Prop;
       code_inj_incr: forall c1 mu c2 mu',
@@ -177,9 +177,9 @@ Section SelfSimulation.
       ssim_diagram: forall f t c1 m1 c2 m2,
         match_self code_inject f c1 m1 c2 m2 ->
         forall c1' m1',
-          core_semantics.corestep Sem c1 m1  c1' m1' ->
+          semantics.corestep Sem c1 m1  c1' m1' ->
           exists c2' f' t' m2',
-          core_semantics.corestep Sem c2 m2  c2' m2'  /\
+          semantics.corestep Sem c2 m2  c2' m2'  /\
           match_self code_inject f' c1' m1' c2' m2' /\
           inject_incr f f' /\
           is_ext f (Mem.nextblock m1) f' (Mem.nextblock m2) /\

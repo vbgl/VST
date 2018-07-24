@@ -375,9 +375,9 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
         (f' : meminj) (m2' : mem) (Htid' : ThreadPool.containsThread st2 tid)
         (mcompat1: mem_compatible st1 m1)
         (mcompat2: mem_compatible st2 m2),
-        core_semantics.mem_step
+        semantics.mem_step
           (restrPermMap (proj1 (mcompat1 tid Htid))) m1' ->
-        core_semantics.mem_step
+        semantics.mem_step
           (restrPermMap (proj1 (mcompat2 tid Htid'))) m2' ->
         invariant st1 ->
         invariant st2 ->
@@ -403,9 +403,9 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
           (Htid' : containsThread st2 hb)
         (mcompat1: mem_compatible st1 m1)
         (mcompat2: mem_compatible st2 m2),
-        core_semantics.mem_step
+        semantics.mem_step
           (restrPermMap (proj1 (mcompat1 hb Htid))) m1' ->
-        core_semantics.mem_step
+        semantics.mem_step
           (restrPermMap (proj1 (mcompat2 hb Htid'))) m2' ->
         invariant st1 ->
         invariant st2 ->
@@ -432,7 +432,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
           (Htid' : containsThread st2 hb)
         (mcompat1: mem_compatible st1 m1)
         (mcompat2: mem_compatible st2 m2),
-        core_semantics.mem_step
+        semantics.mem_step
           (restrPermMap (proj1 (mcompat1 hb Htid))) m1' ->
         invariant st1 ->
         invariant st2 ->
@@ -595,12 +595,12 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
           move H0 at bottom.
           
           eapply Concur_update; eauto.
-          { eapply core_semantics.corestep_mem in H2.
+          { eapply semantics.corestep_mem in H2.
             eapply H2. }
           { eapply Asm_event.asm_ev_ax1 in H1.
 
             replace Htid' with (contains12 H0 Htid) by apply Axioms.proof_irr.
-            eapply core_semantics.corestep_mem.
+            eapply semantics.corestep_mem.
             eassumption.
           }
           { apply H0. }
@@ -684,7 +684,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
             simpl in *.
             eapply Concur_update_compiled; eauto.
             
-            { eapply (core_semantics.corestep_mem (Clightcore_coop.CLC_memsem  Clight_g)).
+            { eapply (semantics.corestep_mem (Clightcore_coop.CLC_memsem  Clight_g)).
               eauto.
             }
             { (* This is the step constructed bellow *)
@@ -727,7 +727,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
           * (* Establish match when nothing has changed, at the assembly level.*)
             eapply Concur_update_compiled'; eauto; try apply H0.
             { (*the Clight step is a mem_step*)
-              eapply (core_semantics.corestep_mem (event_semantics.msem (@semSem CSem))).
+              eapply (semantics.corestep_mem (event_semantics.msem (@semSem CSem))).
               eauto.
             }
             
@@ -782,10 +782,10 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
           simpl.
           move H0 at bottom.
           eapply Concur_update; eauto.
-          { eapply core_semantics.corestep_mem in H2.
+          { eapply semantics.corestep_mem in H2.
             eapply H2. }
           { eapply (event_semantics.ev_step_ax1 (@semSem CSem)) in H1.
-            eapply core_semantics.corestep_mem in H1.
+            eapply semantics.corestep_mem in H1.
             replace Htid' with (contains12 H0 Htid) by apply Axioms.proof_irr.
             eauto.
           }
@@ -834,7 +834,7 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
           (Hbounded : bounded_maps.sub_map (fst virtueThread) (snd (getMaxPerm m1)) /\
              bounded_maps.sub_map (snd virtueThread) (snd (getMaxPerm m1)))
           (Hinv : invariant st1),
-            core_semantics.at_external (core_semantics.csem (event_semantics.msem semSem))
+            semantics.at_external (semantics.csem (event_semantics.msem semSem))
                    c (restrPermMap (fst (ssrfun.pair_of_and (Hcmpt tid Htid)))) =
                  Some (LOCK, (Vptr b ofs :: nil)%list) ->
             getThreadC Htid = Kblocked c ->
@@ -892,12 +892,12 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
           move H0 at bottom.
           
           eapply Concur_update; eauto.
-          { eapply core_semantics.corestep_mem in H2.
+          { eapply semantics.corestep_mem in H2.
             eapply H2. }
           { eapply Asm_event.asm_ev_ax1 in H1.
 
             replace Htid' with (contains12 H0 Htid) by apply Axioms.proof_irr.
-            eapply core_semantics.corestep_mem.
+            eapply semantics.corestep_mem.
             eassumption.
           }
           { apply H0. }
@@ -1037,8 +1037,8 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
                 bounded_maps.sub_map (snd (snd virtueLP)) (snd (getMaxPerm m1)) ->
                 invariant st1 ->
                 ThreadPool.getThreadC Htid = Kblocked c ->
-                core_semantics.at_external
-                  (core_semantics.csem (event_semantics.msem semSem)) c
+                semantics.at_external
+                  (semantics.csem (event_semantics.msem semSem)) c
                   (restrPermMap (fst (ssrfun.pair_of_and (Hcmpt tid Htid)))) =
                 Some (UNLOCK, (Vptr b ofs :: nil)%list) ->
                 Mem.load AST.Mint32
@@ -1494,8 +1494,8 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
               invariant st1 ->
               ThreadPool.getThreadC Htid = Kblocked c ->
               Val.inject (Mem.flat_inj (Mem.nextblock m1')) arg arg ->
-              core_semantics.at_external
-                (core_semantics.csem (event_semantics.msem semSem)) c
+              semantics.at_external
+                (semantics.csem (event_semantics.msem semSem)) c
                 (restrPermMap (fst (ssrfun.pair_of_and (Hcmpt tid Htid)))) =
               Some (CREATE, (Vptr b ofs :: arg :: nil)%list) ->
               permMapJoin (fst newThreadPerm) (fst threadPerm')
@@ -1567,8 +1567,8 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
               HybridMachineSig.schedPeek U = Some tid ->
               invariant st1 ->
               ThreadPool.getThreadC Htid = Kblocked c ->
-              core_semantics.at_external
-                (core_semantics.csem (event_semantics.msem semSem)) c
+              semantics.at_external
+                (semantics.csem (event_semantics.msem semSem)) c
                 (restrPermMap (fst (ssrfun.pair_of_and (Hcmpt tid Htid)))) =
               Some (MKLOCK, (Vptr b ofs :: nil)%list) ->
               Mem.store AST.Mint32
@@ -1621,8 +1621,8 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
               bounded_maps.bounded_nat_func' pdata LKSIZE_nat ->
               invariant st1 ->
               ThreadPool.getThreadC Htid = Kblocked c ->
-              core_semantics.at_external
-                (core_semantics.csem (event_semantics.msem semSem)) c
+              semantics.at_external
+                (semantics.csem (event_semantics.msem semSem)) c
                 (restrPermMap (fst (ssrfun.pair_of_and (Hcmpt tid Htid)))) =
               Some (FREE_LOCK, (Vptr b ofs :: nil)%list) ->
               ThreadPool.lockRes st1 (b, Integers.Ptrofs.intval ofs) =
@@ -1671,8 +1671,8 @@ Module ThreadedSimulation (CC_correct: CompCert_correctness).
             concur_match cd mu st1' m1' st2 m2 ->
             List.Forall2 (inject_mevent mu) tr1 tr2 ->
             HybridMachineSig.schedPeek U = Some tid ->
-            core_semantics.at_external
-              (core_semantics.csem (event_semantics.msem semSem)) c
+            semantics.at_external
+              (semantics.csem (event_semantics.msem semSem)) c
               (restrPermMap (fst (ssrfun.pair_of_and (Hcmpt tid Htid)))) =
             Some (LOCK, (Vptr b ofs :: nil)%list) ->
             Mem.load AST.Mint32
