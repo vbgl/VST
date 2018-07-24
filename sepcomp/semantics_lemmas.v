@@ -11,7 +11,7 @@ Require Import compcert.common.Globalenvs.
 Require Import VST.msl.Extensionality.
 
 Require Import VST.sepcomp.mem_lemmas.
-Require Import VST.concurrency.common.core_semantics.
+Require Import VST.sepcomp.semantics.
 
 Require Import VST.msl.Coqlib2.
 
@@ -858,7 +858,7 @@ Definition corestep_fun {C M : Type} (sem : @CoreSemantics C M) :=
 (**  Multistepping *)
 
 Section corestepN.
-  Context { C M E:Type} (Sem:@CoreSemantics C M).
+  Context {C M E:Type} (Sem:@CoreSemantics C M).
 
   Fixpoint corestepN (n:nat) : C -> M -> C -> M -> Prop :=
     match n with

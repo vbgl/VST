@@ -9,7 +9,7 @@ Require Import compcert.common.Globalenvs.
 
 Require Import VST.msl.Extensionality.
 Require Import VST.sepcomp.mem_lemmas.
-Require Import VST.concurrency.common.core_semantics.
+Require Import VST.sepcomp.semantics.
 Require Import VST.sepcomp.semantics_lemmas.
 
 (** * Effect Semantics *)
@@ -18,7 +18,7 @@ Require Import VST.sepcomp.semantics_lemmas.
     of a set of locations [block -> Z -> bool] associated with each internal
     step of the semantics. *)
 
-Record EffectSem { C} :=
+Record EffectSem {C} :=
   { (** [sem] is a memory semantics. *)
     sem :> @MemSem C
 
