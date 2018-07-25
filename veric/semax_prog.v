@@ -73,6 +73,9 @@ Definition semax_func
 Definition main_pre (prog: program) : list Type -> (ident->val) -> assert :=
 (fun nil gv => globvars2pred gv (prog_vars prog)).
 
+Definition main_pre_ext (prog: program) (ora: OK_ty) : list Type -> (ident->val) -> assert :=
+(fun nil gv rho => globvars2pred gv (prog_vars prog) rho * has_ext ora).
+
 Definition Tint32s := Tint I32 Signed noattr.
 
 Definition main_post (prog: program) : list Type -> (ident->val) -> assert :=
@@ -87,6 +90,17 @@ Definition main_spec' (prog: program)
 Definition main_spec (prog: program): funspec :=
   mk_funspec (nil, tint) cc_default
      (ConstType (ident->val)) (main_pre prog) (main_post prog)
+       (const_super_non_expansive _ _) (const_super_non_expansive _ _).
+
+Definition main_spec_ext' (prog: program) (ora: OK_ty)
+    (post: list Type -> (ident->val) -> environ ->pred rmap): funspec :=
+  mk_funspec (nil, tint) cc_default
+     (ConstType (ident->val)) (main_pre_ext prog ora) post
+       (const_super_non_expansive _ _) (const_super_non_expansive _ _).
+
+Definition main_spec_ext (prog: program) (ora: OK_ty): funspec :=
+  mk_funspec (nil, tint) cc_default
+     (ConstType (ident->val)) (main_pre_ext prog ora) (main_post prog)
        (const_super_non_expansive _ _) (const_super_non_expansive _ _).
 
 Definition is_Internal (prog : program) (f : ident) :=
@@ -112,6 +126,18 @@ Definition semax_prog {C: compspecs}
   match_globvars (prog_vars prog) V = true /\
   match find_id prog.(prog_main) G with
   | Some s => exists post, s = main_spec' prog post
+  | None => False
+  end.
+
+Definition semax_prog_ext {C: compspecs}
+           (prog: program) (ora: OK_ty) (V: varspecs) (G: funspecs) : Prop :=
+  compute_list_norepet (prog_defs_names prog) = true  /\
+  all_initializers_aligned prog /\
+  cenv_cs = prog_comp_env prog /\
+  @semax_func V G C (prog_funct prog) G /\
+  match_globvars (prog_vars prog) V = true /\
+  match find_id prog.(prog_main) G with
+  | Some s => exists post, s = main_spec_ext' prog ora post
   | None => False
   end.
 
@@ -558,7 +584,7 @@ Proof.
  intros id fs.
  apply prop_imp_i; intros.
  simpl ge_of; simpl fst; simpl snd.
- unfold filter_genv.
+ unfold filter_genv, Map.get.
  assert (exists f, In (id, f) (prog_funct prog)). {
  simpl in H1.
  forget (prog_funct prog) as g.
@@ -641,7 +667,7 @@ revert H5; case_eq (find_id i G); intros; [| congruence].
 destruct f as [?f ?A ?a ?a]; inv H6.
 apply Genv.invert_find_symbol in H3.
 exists i.
-simpl ge_of. unfold filter_genv.
+simpl ge_of. unfold filter_genv, Map.get.
 unfold globalenv; simpl.
  rewrite H3.
  split; auto.
@@ -699,7 +725,7 @@ Proof.
 Qed.
 
 Lemma funassert_initial_core_ext:
-  forall {Z} (ora : Z) (prog: program) ve te V G n,
+  forall (ora : OK_ty) (prog: program) ve te V G n,
       list_norepet (prog_defs_names prog) ->
       match_fdecs (prog_funct prog) G ->
       app_pred (funassert (nofunc_tycontext V G) (mkEnviron (filter_genv (globalenv prog)) ve te))
@@ -710,7 +736,7 @@ Proof.
  intros id fs.
  apply prop_imp_i; intros.
  simpl ge_of; simpl fst; simpl snd.
- unfold filter_genv.
+ unfold filter_genv, Map.get.
  assert (exists f, In (id, f) (prog_funct prog)). {
  simpl in H1.
  forget (prog_funct prog) as g.
@@ -793,7 +819,7 @@ revert H5; case_eq (find_id i G); intros; [| congruence].
 destruct f as [?f ?A ?a ?a]; inv H6.
 apply Genv.invert_find_symbol in H3.
 exists i.
-simpl ge_of. unfold filter_genv.
+simpl ge_of. unfold filter_genv, Map.get.
 unfold globalenv; simpl.
  rewrite H3.
  split; auto.
@@ -898,7 +924,7 @@ if_tac.
 Qed.
 
 Lemma core_inflate_initial_mem':
-  forall {Z} (ora : Z) (m: mem) (prog: program) (G: funspecs) (n: nat)
+  forall (ora : OK_ty) (m: mem) (prog: program) (G: funspecs) (n: nat)
      (INIT: Genv.init_mem prog = Some m),
     match_fdecs (prog_funct prog) G ->
       list_norepet (prog_defs_names prog) ->
@@ -1179,9 +1205,9 @@ Proof.
 unfold Delta1; intros.
 unfold construct_rho.
 unfold make_tycontext.
-unfold  typecheck_environ.
+unfold typecheck_environ.
 unfold ve_of, ge_of, te_of.
-split; [ | split3].
+split3.
 *
 unfold temp_types. unfold fst.
 unfold make_tycontext_t.
@@ -1204,10 +1230,6 @@ intuition. inv H2. destruct H2; inv H2.
 *
 unfold glob_types. unfold make_tycontext_t, snd.
 eapply tc_ge_denote_initial; eauto.
-*
-hnf; intros.
-simpl.
-left. unfold make_venv. unfold empty_env. apply PTree.gempty.
 Qed.
 
 Lemma in_map_sig {A B} (E:forall b b' : B, {b=b'}+{b<>b'}) y (f : A -> B) l : In y (map f l) -> {x : A | f x = y /\ In x l }.
@@ -1259,7 +1281,7 @@ Proof.
   unfold juicy_mem_core in *. erewrite E; try reflexivity.
 Qed.
 
-Lemma initial_jm_ext_funassert {Z} (ora : Z) V (prog : Clight.program) m G n H H1 H2 :
+Lemma initial_jm_ext_funassert (ora : OK_ty) V (prog : Clight.program) m G n H H1 H2 :
   (funassert (nofunc_tycontext V G) (empty_environ (globalenv prog)))
     (m_phi (initial_jm_ext ora prog m G n H H1 H2)).
 Proof.
@@ -1353,11 +1375,6 @@ Proof.
   change (Genv.globalenv prog) with (genv_genv (globalenv prog)) in *.
   rewrite H6, H7.
   rewrite if_true by auto.
-  (* unfold is_Internal in HInt. *)
-  (* rewrite H6 in HInt. *)
-  (* rewrite H7 in HInt. *)
-  (* destruct f as [func | ]; [ | exfalso; discriminate ]. *)
-  (* set (func' := func) at 1; destruct func' eqn:Ef. *)
   repeat split; eauto.
   {
     intros. eexists; split. reflexivity.
@@ -1578,8 +1595,6 @@ Proof.
     rewrite PTree.gempty.
     intros [? ?]; discriminate.
   - eapply tc_ge_denote_initial; eauto.
-  - left.
-    apply PTree.gempty.
 Qed.
 
 Lemma find_id_maketycontext_s G id : (make_tycontext_s G) ! id = find_id id G.
@@ -1589,8 +1604,6 @@ Proof.
   - rewrite PTree.gsspec.
     do 2 if_tac; congruence.
 Qed.
-
-(* note: because hypotheses changed several times, this proof has a lot of redundancy *)
 
 Lemma semax_prog_entry_point {CS: compspecs} V G prog b id_fun id_arg arg A 
    (P Q: forall ts : list Type, (dependent_type_functor_rec ts (AssertTT A)) mpred)
@@ -1695,7 +1708,7 @@ Proof.
       unfold Tptr. destruct Archi.ptr64; try contradiction; auto.
       unfold Tptr. destruct Archi.ptr64; auto.
   }
-  { unfold arg_well_formed. constructor; auto. }
+(*  { unfold arg_well_formed. constructor; auto. } *)
 
   intros jm ts a m_sat_Pa m_funassert.
 

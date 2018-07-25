@@ -139,8 +139,8 @@ Lemma typecheck_environ_sub:
    forall rho,
    typecheck_environ Delta' rho -> typecheck_environ Delta rho.
 Proof.
-intros ? ? [? [? [? [? Hs]]]] ?  [? [? [? ?]]].
-split; [ | split; [ | split]].
+intros ? ? [? [? [? [? Hs]]]] ?  [? [? ?]].
+split; [ | split].
 * clear - H H3.
  hnf; intros.
  specialize (H id); rewrite H0 in H.
@@ -158,13 +158,6 @@ split; [ | split; [ | split]].
 * clear - H2 H5.
  hnf; intros. eapply H5.
  specialize (H2 id). hnf in H2. rewrite H in H2. eauto.
-* clear - H6 H1 H2 H0.
- hnf; intros. specialize (H6 id t).
- specialize (H2 id); hnf in H2. rewrite H in H2.
- specialize (H6 H2).
- destruct H6; auto; right.
- destruct H3 as [t' ?]. exists t'.
- rewrite (H0 id); auto.
 Qed.
 
 Lemma funassert_resource: forall Delta rho a a' (Hl: level a = level a')
@@ -350,8 +343,7 @@ apply semax'_post; auto.
 Qed.
 
 Lemma cl_corestep_fun': forall ge, corestep_fun (cl_core_sem ge).
-Proof. repeat intro. eapply cl_corestep_fun; simpl in *; eauto.
-Qed.
+Proof.  repeat intro. eapply cl_corestep_fun; simpl in *; eauto. Qed.
 Hint Resolve cl_corestep_fun'.
 
 Lemma derives_skip:
@@ -1216,7 +1208,7 @@ Fixpoint prebreak_cont (k: cont) : cont :=
   match k with
   | Kloop1 s e3 :: k' => k
   | Kseq s :: k' => prebreak_cont k'
-  | Kloop2 s e3 :: _ => nil  (* stuck *)
+  | Kloop2 s e3 :: k' => k
   | Kswitch :: k' => k
   | _ =>  nil (* stuck *)
   end.
@@ -1224,6 +1216,7 @@ Fixpoint prebreak_cont (k: cont) : cont :=
 Lemma prebreak_cont_is: forall k,
   match (prebreak_cont k) with
   | Kloop1 _ _ :: _ => True
+  | Kloop2 _ _ :: _ => True
   | Kswitch :: _ => True
   | nil => True
   | _ => False
@@ -1409,7 +1402,7 @@ Proof. intros until m'. intros H0 H4 CS0 H H1.
     exists (State ve (PTree.set i Vundef te) (l ++ ctl2)); split; auto.  inv H5. eapply control_as_safe_bupd; auto.
     exists (State ve te (l ++ ctl2)); split; auto. eapply control_as_safe_bupd; auto.
     inv H5. auto. }
-  { contradiction. } }
+   contradiction. }
   (* sequence  *)
   { destruct (IHcl_step (Kseq s1) (Kseq s2 :: l)
             _ (eq_refl _) _ (eq_refl _) Hb Hc Hg H1 (eq_refl _))
@@ -1472,6 +1465,7 @@ Proof. intros until m'. intros H0 H4 CS0 H H1.
   (* break *)
 Focus 1.
   case_eq (prebreak_cont l); intros.
+  {
   assert (break_cont (l++ctl1) = break_cont (l++ctl2)).
   clear - H0 H2.
   revert H2; induction l; simpl; intros; try destruct a; try congruence.
@@ -1487,8 +1481,11 @@ Focus 1.
   exists st', m'0; split; auto.
   split3; auto.
   constructor. auto.
+  }
+  {
   assert (PB:= prebreak_cont_is l); rewrite H2 in PB.
   destruct c; try contradiction.
+  {
   assert (forall k, break_cont (l++k) = l0++k).
   clear - H2.
   revert H2; induction l; intros; try destruct a; simpl in *; auto; congruence.
@@ -1507,6 +1504,8 @@ Focus 1.
   rewrite H3; auto.
   exists c2,m2; split; auto.
   destruct H5; split; auto. constructor; auto. rewrite H3; auto.
+  }
+  {
   assert (forall k, break_cont (l++k) = l0++k).
   clear - H2.
   revert H2; induction l; intros; try destruct a; simpl in *; auto; congruence.
@@ -1525,6 +1524,28 @@ Focus 1.
   rewrite H3; auto.
   exists c2,m2; split; auto.
   destruct H5; split; auto. constructor; auto. rewrite H3; auto.
+  }
+  {
+  assert (forall k, break_cont (l++k) = l0++k).
+  clear - H2.
+  revert H2; induction l; intros; try destruct a; simpl in *; auto; congruence.
+  rewrite H3 in H.
+  destruct l0; simpl in *.
+  hnf in CS0.
+  specialize (CS0 ora ve te m0 (S n)).
+  assert (semantics.corestep (juicy_core_sem (cl_core_sem ge)) (State ve te ctl1) m0 st' m'0).
+  split3; auto.
+  pose proof (@jsafeN_step genv _ _ genv_symb_injective  (cl_core_sem ge) OK_spec ge _ _ _ _ _ _ H5 H1).
+  apply CS0 in H6; auto.
+  destruct (safe_step_forward ge n ora (State ve te ctl2) m0) as [c2 [m2 [? ?]]]; auto.
+  exists c2; exists m2; split; auto.
+  destruct H7;  constructor; auto. constructor; auto. rewrite H3. auto.
+  destruct (IHcl_step c l0 m0 (eq_refl _) m'0 (eq_refl _)) as [c2 [m2 [? ?]]]; auto.
+  rewrite H3; auto.
+  exists c2,m2; split; auto.
+  destruct H5; split; auto. constructor; auto. rewrite H3; auto.
+  }
+  } Unfocus.
   (* ifthenelse *)
   exists (State ve te (Kseq (if b then s1 else s2) :: l ++ ctl2)), m'.
   split. split3; auto. rewrite <- Heqdm'. econstructor; eauto.
@@ -1642,7 +1663,7 @@ Lemma control_suffix_safe :
    econstructor; eauto.
    eapply control_as_safe_le; eauto.
   simpl in H7. congruence.
-  contradiction.
+  simpl in H6. unfold cl_halted in H6. contradiction.
 Qed.
 
 Lemma guard_safe_adj:
@@ -1919,6 +1940,152 @@ Instance EqDec_external_function: EqDec external_function := eq_dec_external_fun
 Lemma closed_Slabel l c F: closed_wrt_modvars (Slabel l c) F = closed_wrt_modvars c F.
 Proof. unfold closed_wrt_modvars. rewrite modifiedvars_Slabel. trivial. Qed.
 
+Lemma closed_Sifthenelse b c1 c2 F: closed_wrt_modvars (Sifthenelse b c1 c2) F <-> closed_wrt_modvars c1 F /\ closed_wrt_modvars c2 F.
+Proof.
+  unfold closed_wrt_modvars.
+  pose proof modifiedvars_Sifthenelse b c1 c2.
+  pose proof modifiedvars_computable c1 as TC.
+  forget (modifiedvars (Sifthenelse b c1 c2)) as S.
+  forget (modifiedvars c1) as S1.
+  forget (modifiedvars c2) as S2.
+  clear b c1 c2.
+  unfold closed_wrt_vars.
+  split; [intros; split; intros | intros [? ?]; intros].
+  + apply H0.
+    intros.
+    specialize (H1 i).
+    specialize (H i).
+    clear - H H1.
+    tauto.
+  + apply H0.
+    intros.
+    specialize (H1 i).
+    specialize (H i).
+    clear - H H1.
+    tauto.
+  + specialize (TC (te_of rho) te').
+    destruct TC as [te'' [? ?]].
+    transitivity (F (mkEnviron (ge_of rho) (ve_of rho) te'')).
+    - apply H1.
+      clear H0 H1.
+      intros.
+      specialize (H3 i).
+      specialize (H i).
+      specialize (H2 i).
+      specialize (H4 i).
+      destruct H2; [| rewrite <- H0 in *]; tauto.
+    - change (mkEnviron (ge_of rho) (ve_of rho) te') with (mkEnviron (ge_of (mkEnviron (ge_of rho) (ve_of rho) te'')) (ve_of (mkEnviron (ge_of rho) (ve_of rho) te'')) te').
+      change te'' with (te_of (mkEnviron (ge_of rho) (ve_of rho) te'')) in H3, H4, H2.
+      forget (mkEnviron (ge_of rho) (ve_of rho) te'') as rho'.
+      apply H0.
+      clear H0 H1 H2 H3 H te''.
+      intros.
+      specialize (H4 i).
+      destruct H4; [auto | right; congruence].
+Qed.
+
+Lemma closed_Sloop c1 c2 F: closed_wrt_modvars (Sloop c1 c2) F <-> closed_wrt_modvars c1 F /\ closed_wrt_modvars c2 F.
+Proof.
+  unfold closed_wrt_modvars.
+  pose proof modifiedvars_Sloop c1 c2.
+  pose proof modifiedvars_computable c1 as TC.
+  forget (modifiedvars (Sloop c1 c2)) as S.
+  forget (modifiedvars c1) as S1.
+  forget (modifiedvars c2) as S2.
+  clear c1 c2.
+  unfold closed_wrt_vars.
+  split; [intros; split; intros | intros [? ?]; intros].
+  + apply H0.
+    intros.
+    specialize (H1 i).
+    specialize (H i).
+    clear - H H1.
+    tauto.
+  + apply H0.
+    intros.
+    specialize (H1 i).
+    specialize (H i).
+    clear - H H1.
+    tauto.
+  + specialize (TC (te_of rho) te').
+    destruct TC as [te'' [? ?]].
+    transitivity (F (mkEnviron (ge_of rho) (ve_of rho) te'')).
+    - apply H1.
+      clear H0 H1.
+      intros.
+      specialize (H3 i).
+      specialize (H i).
+      specialize (H2 i).
+      specialize (H4 i).
+      destruct H2; [| rewrite <- H0 in *]; tauto.
+    - change (mkEnviron (ge_of rho) (ve_of rho) te') with (mkEnviron (ge_of (mkEnviron (ge_of rho) (ve_of rho) te'')) (ve_of (mkEnviron (ge_of rho) (ve_of rho) te'')) te').
+      change te'' with (te_of (mkEnviron (ge_of rho) (ve_of rho) te'')) in H3, H4, H2.
+      forget (mkEnviron (ge_of rho) (ve_of rho) te'') as rho'.
+      apply H0.
+      clear H0 H1 H2 H3 H te''.
+      intros.
+      specialize (H4 i).
+      destruct H4; [auto | right; congruence].
+Qed.
+
+Lemma closed_Ssequence c1 c2 F: closed_wrt_modvars (Ssequence c1 c2) F <-> closed_wrt_modvars c1 F /\ closed_wrt_modvars c2 F.
+Proof.
+  unfold closed_wrt_modvars.
+  pose proof modifiedvars_Ssequence c1 c2.
+  pose proof modifiedvars_computable c1 as TC.
+  forget (modifiedvars (Ssequence c1 c2)) as S.
+  forget (modifiedvars c1) as S1.
+  forget (modifiedvars c2) as S2.
+  clear c1 c2.
+  unfold closed_wrt_vars.
+  split; [intros; split; intros | intros [? ?]; intros].
+  + apply H0.
+    intros.
+    specialize (H1 i).
+    specialize (H i).
+    clear - H H1.
+    tauto.
+  + apply H0.
+    intros.
+    specialize (H1 i).
+    specialize (H i).
+    clear - H H1.
+    tauto.
+  + specialize (TC (te_of rho) te').
+    destruct TC as [te'' [? ?]].
+    transitivity (F (mkEnviron (ge_of rho) (ve_of rho) te'')).
+    - apply H1.
+      clear H0 H1.
+      intros.
+      specialize (H3 i).
+      specialize (H i).
+      specialize (H2 i).
+      specialize (H4 i).
+      destruct H2; [| rewrite <- H0 in *]; tauto.
+    - change (mkEnviron (ge_of rho) (ve_of rho) te') with (mkEnviron (ge_of (mkEnviron (ge_of rho) (ve_of rho) te'')) (ve_of (mkEnviron (ge_of rho) (ve_of rho) te'')) te').
+      change te'' with (te_of (mkEnviron (ge_of rho) (ve_of rho) te'')) in H3, H4, H2.
+      forget (mkEnviron (ge_of rho) (ve_of rho) te'') as rho'.
+      apply H0.
+      clear H0 H1 H2 H3 H te''.
+      intros.
+      specialize (H4 i).
+      destruct H4; [auto | right; congruence].
+Qed.
+
+Lemma closed_Sswitch e sl F:
+  closed_wrt_modvars (Sswitch e sl) F ->
+  (forall n, closed_wrt_modvars (seq_of_labeled_statement (select_switch (Int.unsigned n) sl)) F).
+Proof.
+  intros.
+  unfold closed_wrt_modvars, closed_wrt_vars in *.
+  intros.
+  apply H.
+  intros.
+  specialize (H0 i); destruct H0; auto.
+  left.
+  eapply modifiedvars_Sswitch; eauto.
+Qed.
+
 (*Moved here from semax_switch*)
 Lemma semax_eq:
  forall {Espec: OracleKind} {CS: compspecs} Delta P c R,
@@ -1950,7 +2117,7 @@ inversion 1; subst.
 + econstructor; eauto. simpl. destruct H0 as (?&?&?). split3; eauto. 
   simpl in H0. simpl. eapply step_label; trivial.
 + simpl in *; congruence.
-+ contradiction.
++ simpl in *. unfold cl_halted in H0. contradiction.
 Qed.
 
 Lemma semax_Slabel {Espec: OracleKind} {cs:compspecs}
@@ -1985,7 +2152,7 @@ split; intros.
     inversion H11; clear H11; subst. 
     econstructor. econstructor. trivial.
   + simpl in *; congruence.
-  + contradiction. }
+  + simpl in *. unfold cl_halted in H0. contradiction. }
 { inversion H; clear H; subst; simpl in *.
   + constructor.
   + destruct H0 as (?&?&?); simpl in *. inversion H; clear H; subst; simpl in *.
@@ -1994,7 +2161,7 @@ split; intros.
     econstructor; eauto; simpl.
     econstructor; eauto.
   + simpl in *; congruence.
-  + contradiction. }
+  + simpl in *. unfold cl_halted in H0. contradiction. }
 Qed.
 
 Lemma semax_seq_Slabel:

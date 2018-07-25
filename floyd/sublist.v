@@ -1613,3 +1613,6 @@ Qed.
 Lemma nth_Znth {A} {d: Inhabitant A}:
 forall n (xs:list A), 0 <= n < Zlength xs -> (nth (Z.to_nat n) xs d) = (Znth n xs).
 Proof. intros; unfold Znth; if_tac; unfold default. omega. reflexivity. Qed.
+
+
+ 

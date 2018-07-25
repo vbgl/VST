@@ -63,7 +63,7 @@ Fixpoint break_cont (k: cont) : cont :=
   match k with
   | Kseq s :: k' => break_cont k'
   | Kloop1 _ _ :: k' => k'
-  | Kloop2 _ _ :: _ => nil  (* stuck *)
+  | Kloop2 _ _ :: k' => k'
   | Kswitch :: k' => k'
   | _ =>  nil (* stuck *)
   end.
@@ -235,6 +235,12 @@ Definition cl_halted (c: corestate) : option val := None.
 
 Definition empty_function : function := mkfunction Tvoid cc_default nil nil nil Sskip.
 
+Fixpoint temp_bindings (i: positive) (vl: list val) :=
+ match vl with
+ | nil => PTree.empty val
+ | v::vl' => PTree.set i v (temp_bindings (i+1)%positive vl')
+ end.
+
 Definition Tint32s := Tint I32 Signed noattr.
 Definition true_expr : Clight.expr := Clight.Econst_int Int.one Tint32s.
 
@@ -262,6 +268,13 @@ Definition params_of_fundef (f: fundef) : list type :=
   | External _ t _ _ => typelist2list t
   end.
 
+Inductive val_casted_list: list val -> typelist -> Prop :=
+  | vcl_nil:
+      val_casted_list nil Tnil
+  | vcl_cons: forall v1 vl ty1 tyl,
+      val_casted v1 ty1 -> val_casted_list vl tyl ->
+      val_casted_list (v1 :: vl) (Tcons  ty1 tyl).
+
 Definition cl_initial_core (ge: genv) (v: val) (args: list val) (q: corestate) : Prop :=
   match v with
     Vptr b i =>
@@ -270,7 +283,7 @@ Definition cl_initial_core (ge: genv) (v: val) (args: list val) (q: corestate) :
         Some f =>
         match type_of_fundef f with Tfunction targs _ c =>
         c = cc_default /\
-        Clight.val_casted_list args targs /\
+        val_casted_list args targs /\
         Val.has_type_list args (Ctypes.typlist_of_typelist targs) /\
         q = State empty_env (temp_bindings 1%positive (v::args))
                     (Kseq (Scall None
@@ -309,14 +322,14 @@ destruct lid; try congruence; inv H; auto.
 destruct lid; try congruence; inv H; auto.
 Qed.
 
-Program Definition cl_core_sem (ge: genv):
+Program Definition cl_core_sem  (ge: genv):
   @CoreSemantics corestate mem :=
   @Build_CoreSemantics _ _
     (*deprecated cl_init_mem*)
-    (fun _ m c m' v args => cl_initial_core ge v args c /\ Mem.arg_well_formed args m /\ m' = m)
+    (fun _ m c m' v args => cl_initial_core ge v args c (* /\ Mem.arg_well_formed args m /\ m' = m *))
     (fun c _ => cl_at_external c)
     (fun ret c _ => cl_after_external ret c)
-    (fun _ _ => False)
+    (fun c _ =>  False (*cl_halted c <> None*))
     (cl_step ge)
     _
     (cl_corestep_not_at_external ge).

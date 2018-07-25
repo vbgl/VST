@@ -59,19 +59,14 @@ Lemma tc_globalvar_sound:
    tc_environ Delta rho ->
    globvar2pred (globals_of_env rho) (i, gz) rho |-- init_data_list2pred idata (readonly2share (gvar_readonly gz)) (eval_var i t rho) rho.
 Proof.
-pose (H2:=True).
-pose (H4:=True).
-pose (H5:=True); intros.
+intros.
 unfold globvar2pred.
 simpl.
-destruct H6 as [? [? [? ?]]].
-destruct (H9 i _ H0); [ | destruct H10; congruence].
-destruct (H8 _ _ H0) as [b ?].
-unfold globals_of_env. 
-rewrite H11. rewrite H1.
-rewrite H3; simpl.
+destruct_var_types i.
+destruct_glob_types i.
+unfold globals_of_env.
 unfold eval_var.
-unfold Map.get. rewrite H10. rewrite H11.
+rewrite Heqo0, Heqo1, H1, H2.
 auto.
 Qed.
 
@@ -85,17 +80,13 @@ Lemma tc_globalvar_sound':
    globvar2pred (globals_of_env rho)  (i, gv) rho |--
    init_data_list2pred idata (readonly2share (gvar_readonly gv)) (globals_of_env rho i) rho.
 Proof.
-pose (H2:=True).
-pose (H4:=True).
-pose (H5:=True); intros.
+intros.
 unfold globvar2pred.
 simpl.
-destruct H6 as [? [? [? ?]]].
-destruct (H9 i _ H0); [ | destruct H10; congruence].
-destruct (H8 _ _ H0) as [b ?].
-unfold globals_of_env. 
-rewrite H11. rewrite H1.
-rewrite H3; simpl. auto.
+destruct_glob_types i.
+unfold globals_of_env.
+rewrite Heqo0, H1, H2.
+auto.
 Qed.
 
 Definition zero_of_type (t: type) : val :=
@@ -110,7 +101,7 @@ Definition eval_sgvar (id: ident) (ty: type) (rho: environ) :=
 | Some b => Vptr b Ptrofs.zero
 | None => Vundef
 end.
-
+(*
 Lemma eval_sgvar_lemma1:
   forall (F: val -> mpred) ofs id t,
     F Vundef |-- FF ->
@@ -121,21 +112,21 @@ intros.
 extensionality rho.
 unfold_lift. unfold local, lift1.
 unfold eval_sgvar.
-unfold Map.get. simpl.
+simpl.
 apply pred_ext.
 unfold sgvar_denote.
-destruct (ge_of rho id).
+destruct (Map.get (ge_of rho) id).
 apply exp_right with (Vptr b Ptrofs.zero).
 normalize.
 eapply derives_trans; [ apply H | ].
 apply FF_left.
 unfold sgvar_denote.
 apply exp_left; intro; normalize.
-destruct (ge_of rho id).
+destruct (Map.get (ge_of rho) id).
 subst. auto.
 contradiction.
 Qed.
-
+*)
 Definition init_data2pred' {cs: compspecs}
      (Delta: tycontext) (gv: globals) (d: init_data)  (sh: share) (v: val) : mpred :=
  match d with
@@ -229,17 +220,13 @@ assert (H6:=I).
     pose proof (Z.le_max_l z 0).
     rewrite H8.
     apply mapsto_zeros_memory_block; auto.
-*  destruct ((var_types Delta) ! i) eqn:Hv;
-   destruct ((glob_types Delta) ! i) eqn:Hg;
-    try destruct g; try solve [simpl; apply TT_right].
- +   destruct (proj1 (proj2 (proj2 H7)) _ _ Hg) as [b' H15]; rewrite H15.
-     simpl.
-     rewrite H8. cancel.
- +
-   destruct (proj1 (proj2 (proj2 H7)) _ _ Hg) as [b' H15]; rewrite H15.
-   replace (offset_val (Ptrofs.unsigned i0) (globals_of_env rho i)) with (Vptr b' i0).
-   replace (mapsto sh (Tpointer Tvoid noattr) (offset_val ofs v) (Vptr b' i0))
-   with (mapsto sh (Tpointer t noattr) (offset_val ofs v) (Vptr b' i0)).
+* destruct_var_types i eqn:Hv&Hv'; rewrite ?Hv, ?Hv';
+  destruct_glob_types i eqn:Hg&Hg'; rewrite ?Hg, ?Hg';
+try solve [simpl; apply TT_right].
+ + rewrite H8. cancel.
+ + replace (offset_val (Ptrofs.unsigned i0) (globals_of_env rho i)) with (Vptr b0 i0).
+   replace (mapsto sh (Tpointer Tvoid noattr) (offset_val ofs v) (Vptr b0 i0))
+   with (mapsto sh (Tpointer t noattr) (offset_val ofs v) (Vptr b0 i0)).
    destruct t; auto.
    unfold mapsto; simpl.
    destruct (offset_val ofs v); auto. rewrite !if_true by auto. rewrite andb_false_r.
@@ -247,7 +234,7 @@ assert (H6:=I).
    unfold mapsto; simpl.
    destruct (offset_val ofs v); auto. rewrite !if_true by auto. rewrite andb_false_r.
    reflexivity.
-   unfold globals_of_env. rewrite H15. simpl. rewrite Ptrofs.add_zero_l.
+   unfold globals_of_env. rewrite Hg'. simpl. rewrite Ptrofs.add_zero_l.
    f_equal. rewrite Ptrofs.repr_unsigned; auto.
 Qed.
 
@@ -477,8 +464,8 @@ simpl map.
 unfold id2pred_star; fold @id2pred_star.
 erewrite (split2_data_at_Tarray sh t (Z.succ (Zlength data)) 1).
 4: rewrite sublist_same.
-4: apply JMeq_refl.
-2: list_solve. 2: list_solve. 2: auto. 2: list_solve. 2: apply JMeq_refl. 2: apply JMeq_refl.
+4: apply eq_refl.
+2: list_solve. 2: list_solve. 2: auto. 2: list_solve. 2: apply eq_refl. 2: apply eq_refl.
 rewrite (sublist_one) by list_solve.
 autorewrite with sublist.
 rewrite sublist_1_cons.
@@ -487,7 +474,7 @@ rewrite sublist_same by list_solve.
 apply sepcon_derives.
 +
 clear IHdata.
-fold (tarray t 1). erewrite data_at_singleton_array_eq by apply JMeq_refl.
+fold (tarray t 1). erewrite data_at_singleton_array_eq by apply eq_refl.
 rewrite <- (mapsto_data_at sh t (Vint (Cop.cast_int_int sz sign a)) (Vint (Cop.cast_int_int sz sign a)) v); try reflexivity; auto.
 2: subst t; destruct sz, sign; reflexivity.
 Focus 2. {
@@ -589,21 +576,12 @@ Lemma id2pred_star_ZnthV_tint  {cs: compspecs}:
 Proof. intros; apply id2pred_star_ZnthV_Tint; auto; apply Coq.Init.Logic.I.
 Qed.
 
-Lemma gvar_isptr:
-  forall i s rho, locald_denote (gvar i s) rho -> isptr s.
-Proof.
-intros.
-hnf in H. destruct (Map.get (ve_of rho) i) as [[? ?]|]; try contradiction.
-destruct (ge_of rho i); try contradiction.
-subst; apply Coq.Init.Logic.I.
-Qed.
-
 Lemma offset_zero_globals_of_env: forall rho i,
    offset_val 0 (globals_of_env rho i) = globals_of_env rho i.
 Proof.
 intros.
 unfold globals_of_env.
-destruct (ge_of rho i); simpl; auto.
+destruct (Map.get (ge_of rho) i); simpl; auto.
 Qed.
 
 Lemma unpack_globvar_array  {cs: compspecs}:
@@ -684,7 +662,7 @@ Proof.
     unfold Ptrofs.max_unsigned in H6.
     pose proof init_data_list_size_pos (gvar_init gv).
     simpl in H8.
-    unfold globals_of_env in H9. destruct (ge_of rho i) eqn:?H; inv H9.
+    unfold globals_of_env in H9. destruct (Map.get (ge_of rho) i) eqn:?H; inv H9.
     rewrite Ptrofs.unsigned_zero.
     split; try omega. 
     rewrite Z.add_0_l.
@@ -911,6 +889,25 @@ rewrite prop_true_andp by auto.
 auto.
 Qed.
 
+Lemma main_pre_ext_start:
+ forall {Espec : OracleKind} prog u gv ora,
+   main_pre_ext prog ora u gv = (PROP() LOCAL(gvars gv) SEP(has_ext ora))%assert * globvars2pred gv (prog_vars prog).
+Proof.
+intros.
+unfold main_pre_ext.
+unfold globvars2pred,  PROPx, LOCALx, SEPx.
+unfold lift2.
+extensionality rho.
+simpl.
+normalize.
+unfold gvars_denote. unfold_lift. unfold local, lift1.
+fold (globals_of_env rho).
+rewrite sepcon_comm.
+apply pred_ext; intros; normalize.
+rewrite prop_true_andp by auto.
+auto.
+Qed.
+
 Lemma process_globvar_space:
   forall {cs: compspecs} {Espec: OracleKind} Delta P Q R (i: ident)
           gz gv gvs SF c Post t,
@@ -956,7 +953,7 @@ eapply derives_trans; [ apply H7  | ].
 unfold_lift.
 assert_PROP (isptr (globals_of_env rho i)) by (saturate_local; apply prop_right; auto).
 assert (headptr (globals_of_env rho i)).
-hnf. unfold globals_of_env in H9|-*. destruct (ge_of rho i); try contradiction. eauto.
+hnf. unfold globals_of_env in H9|-*. destruct (Map.get (ge_of rho) i); try contradiction. eauto.
 rewrite memory_block_data_at_; auto.
 subst t.
 rewrite andb_true_iff in H1; destruct H1.
@@ -991,7 +988,7 @@ Ltac process_one_globvar :=
   ];
   change (Share.lub extern_retainer _) with Ews;
   change (Share.lub extern_retainer _) with Ers;
-  change (Vint oo _) with (Vint oo id);
+  try change (Vint oo _) with (Vint oo id);
   fold_types;
   rewrite ?Combinators.compose_id_right.
 
@@ -1033,7 +1030,7 @@ rewrite <- !sepcon_assoc.
 pull_left (`(g (h x))).
 apply derives_refl.
 Qed.
-
+(*
 Lemma move_globfield_into_SEP'':
  forall {cs: compspecs}{Espec: OracleKind} Delta P Q R
    (i: ident) (v: val)
@@ -1060,12 +1057,12 @@ destruct H1.
 clear - H2 H.
 hnf in H,H2.
 destruct (Map.get (ve_of rho) i) as [[? ?]|]. contradiction.
-destruct (ge_of rho i); try contradiction.
+destruct (Map.get (ge_of rho) i); try contradiction.
 subst. auto.
 destruct H1.
 auto.
 Qed.
-
+*)
 Lemma move_globfield_into_SEP0:
  forall {cs: compspecs}{Espec: OracleKind} Delta
    (S0 S3 S4: environ -> mpred) c Post,
@@ -1099,13 +1096,13 @@ Ltac process_idstar :=
          subst p;
        repeat first
         [simple apply move_globfield_into_SEP
-        | simple eapply move_globfield_into_SEP''; [ now repeat econstructor | ]
-        | simple apply move_globfield_into_SEP'; intros ?gvar0;
+(*        | simple eapply move_globfield_into_SEP''; [ now repeat econstructor | ] *)
+        | simple apply move_globfield_into_SEP'; intros ?gvar0 (*;
           lazymatch goal with
           | |- semax _ ((PROPx _ (LOCALx (gvar ?A ?B :: _) _)) * _ * _ * _)  _ _ =>
                  let n := fresh "v" A in rename B into n
           | |- _ => idtac
-          end
+          end*)
         ];
       simple apply move_globfield_into_SEP0
     | |- semax _ (_ * _ * _) _ _ => idtac
@@ -1122,9 +1119,10 @@ go_lowerx; normalize.
 Qed.
 
 Ltac expand_main_pre :=
- rewrite main_pre_start;
+ (rewrite main_pre_start || rewrite main_pre_ext_start);
  unfold prog_vars, prog_vars'; simpl globvars2pred;
  repeat  process_idstar;
  apply eliminate_globvars2pred_nil;
- rewrite ?offset_val_unsigned_repr.
+ rewrite ?offset_val_unsigned_repr;
+ simpl readonly2share.
 

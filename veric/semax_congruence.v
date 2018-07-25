@@ -138,7 +138,7 @@ Proof.
   apply Hc1; auto.
 Qed.
 
-Lemma jsafeN_step_jsem_seq: forall (gx: genv) vx tx n c1 c2 k ora jm,
+Lemma jsafeN_step_jsem_seq: forall gx vx tx n c1 c2 k ora jm,
   jsafeN OK_spec gx n ora (State vx tx (Kseq (Ssequence c1 c2) :: k)) jm <->
   jsafeN OK_spec gx n ora (State vx tx (Kseq c1 :: Kseq c2 :: k)) jm.
 Proof.
@@ -146,7 +146,7 @@ Proof.
   intros.
   destruct n.
   + split; intros; apply jsafeN_0.
-  + rewrite !@safeN_step_jsem_spec.
+  + rewrite !safeN_step_jsem_spec.
     split; intros; destruct H as [c' [m' [? ?]]]; exists c', m'; (split; [| auto]); clear H0.
     - inversion H; subst.
       auto.

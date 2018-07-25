@@ -97,8 +97,7 @@ Definition funspec2pre (ext_link: Strings.String.string -> ident) (A : TypeTree)
 
 Definition funspec2post (ext_link: Strings.String.string -> ident) (A : TypeTree)
   (Q: forall ts, dependent_type_functor_rec ts (AssertTT A) mpred)
-  id sig ef x ge_s 
-    (tret : option typ) ret (z : Z) m : Prop :=
+  id sig ef x ge_s (tret : option typ) ret (z : Z) m : Prop :=
   match oi_eq_dec (Some (id, sig)) (ef_id_sig ext_link ef) as s
   return ((if s then (rmap*(sigT (fun ts => dependent_type_functor_rec ts A mpred)))%type else ext_spec_type Espec ef) -> Prop)
   with

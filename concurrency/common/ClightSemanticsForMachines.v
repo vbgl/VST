@@ -1545,7 +1545,14 @@ intros. simpl in H. revert c2 H0. induction H; intros.
       replace nil with (@nil mem_event ++ nil) by reflexivity.
       exists k'; split. econstructor.
       simpl. eapply clc_evstep_break_loop1. constructor 1. auto. }
-    
+
+
+    { simpl in *. 
+      replace nil with (@nil mem_event ++ nil) by reflexivity.
+      exists k'; split. econstructor. simpl. eapply clc_evstep_break_loop2. auto.
+      constructor 1; auto.
+      auto. }
+
     { simpl in *. 
       replace nil with (@nil mem_event ++ nil) by reflexivity.
       exists k'; split. econstructor. simpl. eapply clc_evstep_skip_break_switch. auto.

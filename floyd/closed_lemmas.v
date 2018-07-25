@@ -514,14 +514,6 @@ destruct (Map.get (ve_of rho) id); auto.
 Qed.
 Hint Resolve closed_wrt_lvar : closed.
 
-Lemma closed_wrt_gvar:
-  forall S id v, closed_wrt_vars S (locald_denote (gvar id v)).
-Proof.
-intros.
-hnf; intros; simpl. auto.
-Qed.
-Hint Resolve closed_wrt_gvar : closed.
-
 Lemma closed_wrt_gvars:
   forall S gv, closed_wrt_vars S (locald_denote (gvars gv)).
 Proof.
@@ -538,14 +530,6 @@ hnf; intros; simpl. reflexivity.
 Qed.
 Hint Resolve closed_wrtl_gvars : closed.
 
-Lemma closed_wrt_sgvar:
-  forall S id v, closed_wrt_vars S (locald_denote (sgvar id v)).
-Proof.
-intros.
-hnf; intros; simpl. auto.
-Qed.
-Hint Resolve closed_wrt_sgvar : closed.
-
 Lemma closed_wrtl_lvar:
  forall  {cs: compspecs} S id t v,
     ~ S id -> closed_wrt_lvars S (locald_denote (lvar id t v)).
@@ -557,25 +541,6 @@ destruct (H0 id); try contradiction.
 rewrite H1; auto.
 Qed.
 Hint Resolve closed_wrtl_lvar : closed.
-
-Lemma closed_wrtl_gvar:
- forall S id v,   ~ S id -> closed_wrt_lvars S (locald_denote (gvar id v)).
-Proof.
-intros.
-hnf; intros; simpl.
-unfold gvar_denote.
-destruct (H0 id); try contradiction.
-rewrite H1; auto.
-Qed.
-Hint Resolve closed_wrtl_gvar : closed.
-
-Lemma closed_wrtl_sgvar:
- forall S id v,  closed_wrt_lvars S (locald_denote (sgvar id v)).
-Proof.
-intros.
-hnf; intros; simpl. auto.
-Qed.
-Hint Resolve closed_wrtl_sgvar : closed.
 
 Definition expr_closed_wrt_lvars (S: ident -> Prop) (e: expr) : Prop :=
   forall (cs: compspecs) rho ve',
@@ -717,6 +682,29 @@ simpl. f_equal; eauto.
 Qed.
 Hint Resolve closed_wrt_andp closed_wrtl_andp : closed.
 
+Lemma closed_wrt_exp: forall {A} S (P: A -> environ->mpred),
+  (forall a, closed_wrt_vars S (P a)) ->
+  closed_wrt_vars S (exp P).
+Proof.
+intros; hnf in *; intros.
+simpl. apply exp_congr. intros a.
+specialize (H a).
+hnf in H.
+eauto.
+Qed.
+
+Lemma closed_wrtl_exp: forall {A} S (P: A -> environ->mpred),
+  (forall a, closed_wrt_lvars S (P a)) ->
+  closed_wrt_lvars S (exp P).
+Proof.
+intros; hnf in *; intros.
+simpl. apply exp_congr. intros a.
+specialize (H a).
+hnf in H.
+eauto.
+Qed.
+Hint Resolve closed_wrt_exp closed_wrtl_exp : closed.
+
 Lemma closed_wrt_imp: forall S (P Q: environ->mpred),
   closed_wrt_vars S P -> closed_wrt_vars S Q ->
   closed_wrt_vars S (P --> Q).
@@ -820,7 +808,17 @@ Lemma closed_wrtl_main_pre:
   forall prog u v S, closed_wrt_lvars S (main_pre prog u v).
 Proof.
 intros. apply closed_wrtl_globvars. Qed.
-Hint Resolve closed_wrt_main_pre closed_wrtl_main_pre : closed.
+Lemma closed_wrt_main_pre_ext:
+  forall {Espec : OracleKind} prog z u v S, closed_wrt_vars S (main_pre_ext prog z u v).
+Proof.
+intros. unfold main_pre_ext. apply closed_wrt_sepcon; [apply closed_wrt_globvars | apply closed_wrt_const].
+Qed.
+Lemma closed_wrtl_main_pre_ext:
+  forall {Espec : OracleKind} prog z u v S, closed_wrt_lvars S (main_pre_ext prog z u v).
+Proof.
+intros. unfold main_pre_ext. apply closed_wrtl_sepcon; [apply closed_wrtl_globvars | apply closed_wrtl_const].
+Qed.
+Hint Resolve closed_wrt_main_pre closed_wrtl_main_pre closed_wrt_main_pre_ext closed_wrtl_main_pre_ext : closed.
 
 Lemma closed_wrt_not1:
   forall (i j: ident),

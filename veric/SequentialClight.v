@@ -1,4 +1,4 @@
-Require Import VST.concurrency.common.core_semantics.
+Require Import VST.sepcomp.semantics.
 
 Require Import VST.veric.base.
 Require Import VST.veric.Clight_new.
@@ -66,34 +66,26 @@ Proof.
  - destruct H0 as (?&?&?&Hg).
    econstructor.
    + red. red. fold (globalenv prog). eassumption.
-   + destruct (H1 (core (tl (compcert_rmaps.RML.R.ghost_of (m_phi m'))))) as (m'' & J'' & (? & ? & ?) & ?).
+   + destruct (H1 (Some (initial_world.ext_ref tt, compcert_rmaps.RML.R.NoneP) :: nil)) as (m'' & J'' & (? & ? & ?) & ?); auto.
+     { eexists; apply join_comm, core_unit. }
      { rewrite Hg.
-       destruct (compcert_rmaps.RML.R.ghost_of (m_phi jm));  [eexists; constructor|].
-       destruct J as [? J]; inv J.
-       eexists; simpl; constructor.
-       * inv H9; simpl; [constructor|].
-         destruct a1, a0; inv H6; simpl in *.
-         constructor; constructor; simpl; auto.
-         inv H5; constructor; auto.
-       * rewrite compcert_rmaps.RML.R.ghost_core; simpl.
-         erewrite <- compcert_rmaps.RML.R.ghost_core.
-         apply join_comm, core_unit. }
+       destruct J; eexists; apply compcert_rmaps.RML.ghost_fmap_join; eauto. }
      replace (m_dry m') with (m_dry m'') by auto.
      apply IHn; auto.
-     * change (level (m_phi jm)) with (level jm) in H4.
-       rewrite H4 in H2; inv H2; auto.
-     * destruct (compcert_rmaps.RML.R.ghost_of (m_phi m'')); [eexists; constructor|].
-       destruct J'' as [? J'']; inv J''.
-       eexists; constructor; eauto; constructor.
+     change (level (m_phi jm)) with (level jm) in H4.
+     rewrite H4 in H2; inv H2; auto.
  - exfalso; auto.
  - eapply safeN_halted; eauto.
- Unshelve. apply I.
+ Unshelve. simpl. split; [apply Share.nontrivial | hnf]. exists None; constructor.
+  apply Int.zero.
 Qed.
 
 Require Import VST.veric.juicy_safety.
 
 Definition fun_id (ext_link: Strings.String.string -> ident) (ef: external_function) : option ident :=
   match ef with EF_external id sig => Some (ext_link id) | _ => None end.
+
+Print genv.
 
 Axiom module_sequential_safety : (*TODO*)
    forall {CS: compspecs} (prog: program) (V: varspecs) (G: funspecs) ora m f f_id f_b f_body args,
@@ -102,17 +94,17 @@ Axiom module_sequential_safety : (*TODO*)
      let spec := add_funspecs NullExtension.Espec ext_link G in
      let tys := sig_args (ef_sig f) in
      let rty := sig_res (ef_sig f) in
-     let sem := juicy_core_sem cl_core_sem in
+     let sem := juicy_core_sem (cl_core_sem (Build_genv ge (prog_comp_env prog))) in
      @semax_prog spec CS prog V G ->
      fun_id ext_link f = Some f_id ->
      Genv.find_symbol ge f_id = Some f_b ->
      Genv.find_funct  ge (Vptr f_b Ptrofs.zero) = Some f_body ->
      forall x : ext_spec_type (@OK_spec spec) f,
-     ext_spec_pre (@OK_spec spec) f x (Genv.genv_symb ge) tys args ora m ->
+     ext_spec_pre (@OK_spec spec) f x (genv_symb_injective ge) tys args ora m ->
      exists q,
        initial_core sem 
          0 (*additional temporary argument - TODO (Santiago): FIXME*)
-         (Build_genv ge (prog_comp_env prog))
-              (Vptr f_b Ptrofs.zero) args = Some q /\
-       forall n, safeN_(genv_symb := @Genv.genv_symb _ _)(Hrel := juicy_extspec.Hrel) (coresem_extract_cenv sem (prog_comp_env prog))
-(upd_exit (@OK_spec spec) x (Genv.genv_symb ge)) ge n ora q m.
+             m q m
+              (Vptr f_b Ptrofs.zero) args /\
+       forall n, safeN_(genv_symb := @genv_symb_injective _ _)(Hrel := juicy_extspec.Hrel) (coresem_extract_cenv sem (prog_comp_env prog))
+(upd_exit (@OK_spec spec) x (genv_symb_injective ge)) ge n ora q m.

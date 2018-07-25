@@ -1,3 +1,5 @@
+Require Import VST.sepcomp.semantics.
+
 Require Import VST.veric.juicy_base.
 Require Import VST.veric.juicy_mem VST.veric.juicy_mem_lemmas VST.veric.juicy_mem_ops.
 Require Import VST.veric.res_predicates.
@@ -33,7 +35,7 @@ Import CSL.
 
 Axiom semax_prog_rule :
   forall {Espec: OracleKind}{CS: compspecs},
-  @OK_ty Espec = unit -> 
+  OK_ty = unit -> 
   forall V G prog m h,
      @semax_prog Espec CS prog V G ->
      Genv.init_mem prog = Some m ->
@@ -41,12 +43,13 @@ Axiom semax_prog_rule :
        (Genv.find_symbol (globalenv prog) (prog_main prog) = Some b) *
        (forall jm, m_dry jm = m -> exists jm', semantics.initial_core (juicy_core_sem (cl_core_sem (globalenv prog))) h
                     jm q jm' (Vptr b Ptrofs.zero) nil) *
-       forall n, { jm |
-       m_dry jm = m /\ level jm = n /\
-       (forall z, jsafeN (@OK_spec Espec) (globalenv prog) n z q jm) /\
-       no_locks (m_phi jm) /\
-       matchfunspecs (globalenv prog) G (m_phi jm) /\
-       app_pred (funassert (nofunc_tycontext V G) (empty_environ (globalenv prog))) (m_phi jm)
+       forall n,
+         { jm |
+           m_dry jm = m /\ level jm = n /\
+           (forall z, jsafeN (@OK_spec Espec) (globalenv prog) n z q jm) /\
+           no_locks (m_phi jm) /\
+           matchfunspecs (globalenv prog) G (m_phi jm) /\
+           app_pred (funassert (nofunc_tycontext V G) (empty_environ (globalenv prog))) (m_phi jm)
      } } }%type.
 
 (* This version lets the user choose the external state instead of quantifying over it. *)
@@ -59,14 +62,16 @@ Axiom semax_prog_rule' :
        (Genv.find_symbol (globalenv prog) (prog_main prog) = Some b) *
        (forall jm, m_dry jm = m -> exists jm', semantics.initial_core (juicy_core_sem (cl_core_sem (globalenv prog))) h
                     jm q jm' (Vptr b Ptrofs.zero) nil) *
-       forall n z, { jm |
-       m_dry jm = m /\ level jm = n /\
-       nth_error (ghost_of (m_phi jm)) 0 = Some (Some (ext_ghost z, NoneP)) /\
-       jsafeN (@OK_spec Espec) (globalenv prog) n z q jm /\
-       no_locks (m_phi jm) /\
-       matchfunspecs (globalenv prog) G (m_phi jm) /\
-       app_pred (funassert (nofunc_tycontext V G) (empty_environ (globalenv prog))) (m_phi jm)
+       forall n z,
+         { jm |
+           m_dry jm = m /\ level jm = n /\
+           nth_error (ghost_of (m_phi jm)) 0 = Some (Some (ext_ghost z, NoneP)) /\
+           jsafeN (@OK_spec Espec) (globalenv prog) n z q jm /\
+           no_locks (m_phi jm) /\
+           matchfunspecs (globalenv prog) G (m_phi jm) /\
+           app_pred (funassert (nofunc_tycontext V G) (empty_environ (globalenv prog))) (m_phi jm)
      } } }%type.
+
 
 End SEPARATION_LOGIC_SOUNDNESS.
 
@@ -102,6 +107,7 @@ Definition extract_exists := @extract_exists.
 Definition semax_body := @semax_body.
 Definition semax_func := @semax_func.
 Definition semax_prog := @semax_prog.
+Definition semax_prog_ext := @semax_prog_ext.
 Definition semax_func_nil := @semax_func_nil.
 Definition semax_func_cons := @semax_func_cons.
 (* Definition semax_func_skip := @semax_func_skip. *)
@@ -112,6 +118,7 @@ Definition semax_seq := @semax_seq.
 Definition semax_break := @semax_break.
 Definition semax_continue := @semax_continue.
 Definition semax_loop := @semax_loop.
+Definition semax_loop_nocontinue := @semax_loop_nocontinue.
 Definition semax_if_seq := @semax_if_seq.
 Definition semax_switch := @semax_switch.
 Definition semax_Slabel := @semax_Slabel.
@@ -147,15 +154,6 @@ Definition juicy_ext_spec := juicy_ext_spec.
 
 Definition semax_ext := @semax_ext.
 Definition semax_ext_void := @semax_ext_void.
-
-Lemma semax_loop_nocontinue:
- trust_loop_nocontinue ->
- forall {Espec: OracleKind} {CS: compspecs} Q Delta P body incr R,
- @semax CS Espec Delta Q (Ssequence body incr) (loop1a_ret_assert Q R) ->
- @semax CS Espec Delta P (Sloop body incr) R.
-Proof.
-intros. inv H.
-Qed.
 
 End CSL.
 

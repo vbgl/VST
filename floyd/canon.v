@@ -6,10 +6,7 @@ Local Open Scope logic.
 Inductive localdef : Type :=
  | temp: ident -> val -> localdef
  | lvar: ident -> type -> val -> localdef   (* local variable *)
- | gvar: ident -> val -> localdef           (* visible global variable *)
- | sgvar: ident -> val -> localdef          (* (possibly) shadowed global variable *)
- | localprop: Prop -> localdef
- | gvars: globals -> localdef.
+ | gvars: globals -> localdef.              (* global variables *)
 
 Arguments temp i%positive v.
 
@@ -19,32 +16,13 @@ Definition lvar_denote (i: ident) (t: type) (v: val) rho :=
          | None => False
          end.
 
-Definition gvar_denote (i: ident) (v: val) rho :=
-         match Map.get (ve_of rho) i with
-         | Some (b, ty') => False
-         | None =>
-             match ge_of rho i with
-             | Some b => v = Vptr b Ptrofs.zero
-             | None => False
-             end
-         end.
-
-Definition sgvar_denote (i: ident) (v: val) rho :=
-         match ge_of rho i with
-             | Some b => v = Vptr b Ptrofs.zero
-             | None => False
-         end.
-
 Definition gvars_denote (gv: globals) rho :=
-   gv = (fun i => match ge_of rho i with Some b => Vptr b Ptrofs.zero | None => Vundef end).
+   gv = (fun i => match Map.get (ge_of rho) i with Some b => Vptr b Ptrofs.zero | None => Vundef end).
 
 Definition locald_denote (d: localdef) : environ -> Prop :=
  match d with
  | temp i v => `(eq v) (eval_id i)
  | lvar i t v => lvar_denote i t v
- | gvar i v =>  gvar_denote i v
- | sgvar i v => sgvar_denote i v
- | localprop P => `P
  | gvars gv => gvars_denote gv
  end.
 
@@ -342,15 +320,6 @@ Qed.
 
 Arguments semax {CS} {Espec} Delta Pre%assert cmd Post%assert.
 
-Lemma sgvar_gvar: forall i v, local (locald_denote (gvar i v)) |-- local (locald_denote (sgvar i v)).
-Proof.
-  intros.
-  unfold local, lift1; intro rho; apply prop_derives.
-  intros.
-  hnf in H |- *.
-  destruct (Map.get (ve_of rho) i) as [[? ?] |]; tauto.
-Qed.
-
 Lemma insert_prop : forall (P: Prop) PP QR, prop P && (PROPx PP QR) = PROPx (P::PP) QR.
 Proof.
 intros. unfold PROPx. simpl. extensionality rho.
@@ -402,30 +371,6 @@ Ltac go_lowerx' simpl_tac :=
 Ltac go_lowerx := go_lowerx' simpl.
 
 Ltac go_lowerx_no_simpl := go_lowerx' idtac.
-
-Lemma grab_nth_LOCAL:
-   forall n P Q R,
-     (PROPx P (LOCALx Q (SEPx R))) =
-     (PROPx P (LOCALx (nth n Q (localprop True) :: delete_nth n Q) (SEPx R))).
-Proof.
-intros n P Q R.
-f_equal.
-unfold LOCALx, local; super_unfold_lift.
-f_equal.
-extensionality rho;  f_equal.
-revert Q; induction n; intros.
-destruct Q; simpl nth. unfold delete_nth.
-apply prop_ext; simpl; intuition.
-simpl. auto.
-destruct Q; simpl nth; unfold delete_nth; fold @delete_nth.
-apply prop_ext; simpl; intuition.
-simpl.
-apply prop_ext.
-rewrite (IHn Q).
-simpl.
-clear IHn.
-intuition.
-Qed.
 
 Lemma grab_nth_SEP:
    forall n P Q R,
@@ -1166,7 +1111,7 @@ Tactic Notation "replace_SEP" constr(n) constr(R) :=
   unfold my_nth,replace_nth; simpl nat_of_Z;
    repeat simpl_nat_of_P; cbv beta iota; cbv beta iota.
 
-Tactic Notation "replace_SEP" constr(n) constr(R) "by" tactic(t):=
+Tactic Notation "replace_SEP" constr(n) constr(R) "by" tactic1(t):=
   first [apply (replace_SEP' (nat_of_Z n) R) | apply (replace_SEP'' (nat_of_Z n) R)];
   unfold my_nth,replace_nth; simpl nat_of_Z;
    repeat simpl_nat_of_P; cbv beta iota; cbv beta iota; [ now t | ].
@@ -1219,7 +1164,7 @@ Tactic Notation "viewshift_SEP" constr(n) constr(R) :=
   unfold my_nth,replace_nth; simpl nat_of_Z;
    repeat simpl_nat_of_P; cbv beta iota; cbv beta iota.
 
-Tactic Notation "viewshift_SEP" constr(n) constr(R) "by" tactic(t):=
+Tactic Notation "viewshift_SEP" constr(n) constr(R) "by" tactic1(t):=
   first [apply (replace_SEP'_bupd (nat_of_Z n) R) | apply (replace_SEP''_bupd (nat_of_Z n) R)];
   unfold my_nth,replace_nth; simpl nat_of_Z;
    repeat simpl_nat_of_P; cbv beta iota; cbv beta iota; [ now t | ].
@@ -1300,38 +1245,6 @@ Proof.
 intros. extensionality rho. reflexivity.
 Qed.
 Hint Rewrite @local_lift0: norm2.
-
-Lemma move_prop_from_LOCAL:
-  forall P1 P Q R, PROPx P (LOCALx (localprop P1::Q) R) = PROPx (P1::P) (LOCALx Q R).
-Proof.
- intros.
- extensionality rho.
- unfold PROPx, LOCALx, local, lift0, lift1.
- unfold_lift.
- simpl.
- apply pred_ext; normalize.
-apply andp_right; auto.
-apply prop_right; auto.
-apply andp_right; auto.
-apply prop_right; auto.
-Qed.
-
-Ltac extract_prop_from_LOCAL :=
- match goal with |- @semax _ _ _ (PROPx _ (LOCALx ?Q _)) _ _ =>
-   match Q with
-    | context [ lift0 ?z :: _ ] =>
-        let n := find_in_list (lift0 z) Q
-         in rewrite (grab_nth_LOCAL n);
-             unfold nth, delete_nth;
-             rewrite move_prop_from_LOCAL
-   | context [@liftx (LiftEnviron Prop) ?z :: _ ] =>
-       let n := find_in_list (@liftx (LiftEnviron Prop) z) Q
-         in rewrite (grab_nth_LOCAL n);
-             change (@liftx (LiftEnviron Prop) z) with (@lift0 Prop z);
-             unfold nth, delete_nth;
-             rewrite move_prop_from_LOCAL
-  end
-end.
 
 Lemma extract_exists_pre:
       forall
@@ -1654,13 +1567,13 @@ Qed.
 Tactic Notation "assert_PROP" constr(A) :=
   first [apply (assert_later_PROP A) | apply (assert_PROP A) | apply (assert_PROP' A)]; [ | intro ].
 
-Tactic Notation "assert_PROP" constr(A) "by" tactic(t) :=
+Tactic Notation "assert_PROP" constr(A) "by" tactic1(t) :=
   first [apply (assert_later_PROP A) | apply (assert_PROP A) | apply (assert_PROP' A) ]; [ now t | intro ].
 
 Tactic Notation "assert_PROP" constr(A) "as" simple_intropattern(H)  :=
   first [apply (assert_later_PROP A) | apply (assert_PROP A) | apply (assert_PROP' A)]; [ | intro H ].
 
-Tactic Notation "assert_PROP" constr(A) "as" simple_intropattern(H) "by" tactic(t) :=
+Tactic Notation "assert_PROP" constr(A) "as" simple_intropattern(H) "by" tactic1(t) :=
   first [apply (assert_later_PROP A) | apply (assert_PROP A) | apply (assert_PROP' A)]; [ now t | intro H ].
 
 Lemma assert_LOCAL:
@@ -1678,7 +1591,7 @@ Qed.
 Tactic Notation "assert_LOCAL" constr(A) :=
   apply (assert_LOCAL A).
 
-Tactic Notation "assert_LOCAL" constr(A) "by" tactic(t) :=
+Tactic Notation "assert_LOCAL" constr(A) "by" tactic1(t) :=
   apply (assert_LOCAL A); [ now t | ].
 
 Lemma drop_LOCAL'':
@@ -1734,9 +1647,6 @@ Fixpoint find_LOCAL_index (name: ident) (current: nat) (l : list localdef) : opt
   | h :: t => match h with
     | temp  i _   => if (i =? name)%positive then Some current else find_LOCAL_index name (S current) t
     | lvar  i _ _ => if (i =? name)%positive then Some current else find_LOCAL_index name (S current) t
-    | gvar  i _   => if (i =? name)%positive then Some current else find_LOCAL_index name (S current) t
-    | sgvar i _   => if (i =? name)%positive then Some current else find_LOCAL_index name (S current) t
-    | localprop _ => find_LOCAL_index name (S current) t
     | gvars _ => find_LOCAL_index name (S current) t
     end
   | nil => None
@@ -1999,21 +1909,16 @@ Proof. intros. eapply semax_post; eauto. subst t. clear - H0. rename H0 into H.
   simpl in H.
   rewrite prop_true_andp in H. auto.
   clear H.
-  destruct H0 as [? [? [? ?]]]; split; [ | split3]; auto.
+  destruct H0 as [? [? ?]]; split3; auto.
   + unfold te_of, env_set.
     unfold temp_types, ret_tycon.
     hnf; intros.
     destruct (is_void_type (ret_type Delta)).
-    * rewrite PTree.gempty in H4; inv H4.
+    * rewrite PTree.gempty in H3; inv H3.
     * destruct (ident_eq id ret_temp).
-      2: rewrite PTree.gso in H4 by auto; rewrite PTree.gempty in H4; inv H4.
-      subst id. rewrite PTree.gss in H4. inv H4.
+      2: rewrite PTree.gso in H3 by auto; rewrite PTree.gempty in H3; inv H3.
+      subst id. rewrite PTree.gss in H3. inv H3.
       rewrite Map.gss. exists v. split; auto.
-  + intros id t. specialize (H3 id t).
-    intro.
-    spec H3. rewrite <- H4.
-    unfold ret_tycon. destruct (is_void_type (ret_type Delta)); reflexivity.
-    unfold env_set. unfold ve_of at 1. left; simpl. reflexivity.
 -
   destruct (ret_type Delta) eqn:?; auto.
   unfold_lift. simpl.
@@ -2021,11 +1926,9 @@ Proof. intros. eapply semax_post; eauto. subst t. clear - H0. rename H0 into H.
   simpl in H. rewrite prop_true_andp in H; auto.
   clear H.
   unfold ret_tycon. rewrite Heqt. simpl is_void_type. cbv beta iota.
-  destruct H0 as [? [? [? ?]]]; split; [ | split3]; auto.
+  destruct H0 as [? [? ?]]; split3; auto.
   unfold globals_only; simpl.
-  hnf; intros. rewrite PTree.gempty in H3; inv H3.
-  intros id t. specialize (H2 id t).
-  simpl. intros. left. reflexivity.
+  hnf; intros. rewrite PTree.gempty in H2; inv H2.
 Qed.
 
 Definition ret0_tycon (Delta: tycontext): tycontext :=
@@ -2040,19 +1943,15 @@ Lemma make_args0_tc_environ: forall rho Delta,
   tc_environ (ret0_tycon Delta) (make_args nil nil rho).
 Proof.
   intros.
-  destruct H as [? [? [? ?]]].
-  split; [| split; [| split]]; simpl.
+  destruct H as [? [? ?]].
+  split; [| split]; simpl.
   + hnf; intros.
-    rewrite PTree.gempty in H3; inversion H3.
+    rewrite PTree.gempty in H2; inversion H2.
   + hnf; split; intros.
-    - rewrite PTree.gempty in H3; inversion H3.
-    - destruct H3 as [v ?].
-      inversion H3.
+    - rewrite PTree.gempty in H2; inversion H2.
+    - destruct H2 as [v ?].
+      inversion H2.
   + auto.
-  + hnf; intros.
-    left.
-    simpl.
-    reflexivity.
 Qed.
 
 Lemma make_args1_tc_environ: forall rho Delta v,
@@ -2062,27 +1961,23 @@ Lemma make_args1_tc_environ: forall rho Delta v,
 Proof.
   intros.
   rename H0 into HH.
-  destruct H as [? [? [? ?]]].
+  destruct H as [? [? ?]].
   simpl.
-  split; [| split; [| split]].
+  split; [| split].
   + hnf; intros.
-    unfold ret1_tycon, temp_types in H3.
-    rewrite PTree.gsspec in H3.
+    unfold ret1_tycon, temp_types in H2.
+    rewrite PTree.gsspec in H2.
     destruct (peq id ret_temp).
     - subst.
-      inversion H3; subst.
+      inversion H2; subst.
       exists v; simpl.
       split; auto.
-    - rewrite PTree.gempty in H3; inversion H3.
+    - rewrite PTree.gempty in H2; inversion H2.
   + hnf; split; intros.
-    - rewrite PTree.gempty in H3; inversion H3.
-    - destruct H3 as [v' ?].
-      inversion H3.
+    - rewrite PTree.gempty in H2; inversion H2.
+    - destruct H2 as [v' ?].
+      inversion H2.
   + auto.
-  + hnf; intros.
-    left.
-    simpl.
-    reflexivity.
 Qed.
 
 Lemma semax_post_ret1: forall P' R' Espec {cs: compspecs} Delta P v R Pre c,
@@ -2149,9 +2044,6 @@ Inductive return_outer_gen: ret_assert -> ret_assert -> Prop :=
 | return_outer_gen_loop1x: forall inv P Q,
     return_outer_gen P Q ->
     return_outer_gen (loop1x_ret_assert inv P) Q
-| return_outer_gen_loop1a: forall inv P Q,
-    return_outer_gen P Q ->
-    return_outer_gen (loop1a_ret_assert inv P) Q
 | return_outer_gen_loop2: forall inv P Q,
     return_outer_gen P Q ->
     return_outer_gen (loop2_ret_assert inv P) Q.
@@ -2185,7 +2077,7 @@ Inductive return_inner_gen (S: list mpred): option val -> (environ -> mpred) -> 
       return_inner_gen S ov_gen (exp post1) (exp post2).
 
 Lemma return_inner_gen_EX: forall S ov_gen A post1 post2,
-  (forall a: A, exists P, return_inner_gen S ov_gen (post1 a) P /\ P = post2 a) ->
+  (forall a: A, exists P, return_inner_gen S ov_gen (post1 a) P /\ post2 a = P) ->
   return_inner_gen S ov_gen (exp post1) (exp post2).
 Proof.
   intros.
@@ -2461,38 +2353,6 @@ Proof.
     - intros. simpl in *. cancel.
 Qed.
 
-Lemma replace_nth_SEP_andp_local:
-   forall P Q R n (Rn Rn': mpred) (Rn'': Prop) x,
-  nth_error R n = Some Rn ->
-  (PROPx P (LOCALx Q (SEPx (replace_nth n R ((prop Rn'') && Rn'))))) x
-  = (PROPx P (LOCALx (localprop Rn'' :: Q) (SEPx (replace_nth n R Rn')))) x.
-Proof.
-  intros.
-  normalize.
-  f_equal.
-  extensionality rho.
-  unfold LOCALx, SEPx, local, lift1; simpl.
-  unfold_lift. simpl.
-  fold locald_denote.
-  forget (fold_right
-     (fun (x0 x1 : environ -> Prop) (x2 : environ) => x0 x2 /\ x1 x2)
-     (fun _ : environ => True) (map locald_denote Q) rho) as Q'.
- rewrite <- gather_prop_right.
- rewrite andp_comm. f_equal.
-  revert R H. clear.
-  induction n; intros.
-  + destruct R; inversion H.
-    subst m.
-    simpl. normalize.
-  + destruct R; inversion H.
-    pose proof IHn R H1.
-    unfold replace_nth in *.
-    fold (@replace_nth mpred) in *.
-    simpl fold_right_sepcon in *.
-    rewrite H0.
-    normalize.
-Qed.
-
 Lemma nth_error_SEP_prop:
   forall P Q R n (Rn: mpred) (Rn': Prop),
     nth_error R n = Some Rn ->
@@ -2513,7 +2373,7 @@ Proof.
     rewrite (add_andp _ _ H2).
     normalize.
 Qed.
-    
+
 Lemma LOCAL_2_hd: forall P Q R Q1 Q2,
   (PROPx P (LOCALx (Q1 :: Q2 :: Q) (SEPx R))) =
   (PROPx P (LOCALx (Q2 :: Q1 :: Q) (SEPx R))).
@@ -2527,3 +2387,58 @@ Proof.
   unfold_lift in H0;
   split; simpl in *; tauto.
 Qed.
+
+Lemma lvar_eval_lvar {cs: compspecs}:
+  forall i t v rho, locald_denote (lvar i t v) rho -> eval_lvar i t rho = v.
+Proof.
+unfold eval_lvar; intros. hnf in H.
+destruct (Map.get (ve_of rho) i) as [[? ?]|]; try contradiction.
+destruct H; subst. rewrite eqb_type_refl; auto.
+Qed.
+
+Lemma lvar_eval_var:
+ forall i t v rho, locald_denote (lvar i t v) rho -> eval_var i t rho = v.
+Proof.
+intros.
+unfold eval_var. hnf in H.
+destruct (Map.get (ve_of rho) i) as [[? ?]|]; try contradiction.
+destruct H; subst. rewrite eqb_type_refl; auto.
+Qed.
+
+Lemma gvars_eval_var:
+ forall Delta gv i rho t, tc_environ Delta rho -> (var_types Delta) ! i = None -> locald_denote (gvars gv) rho -> eval_var i t rho = gv i.
+Proof.
+intros.
+unfold eval_var. hnf in H1. subst.
+destruct_var_types i.
+rewrite Heqo0.
+auto.
+Qed.
+
+Lemma lvar_isptr:
+  forall i t v rho, locald_denote (lvar i t v) rho -> isptr v.
+Proof.
+intros. hnf in H.
+destruct (Map.get (ve_of rho) i) as [[? ?]|]; try contradiction.
+destruct H; subst; apply Coq.Init.Logic.I.
+Qed.
+
+Lemma gvars_isptr:
+  forall Delta gv i rho t, tc_environ Delta rho -> (glob_types Delta) ! i = Some t -> locald_denote (gvars gv) rho -> isptr (gv i).
+Proof.
+intros. hnf in H1.
+subst.
+destruct_glob_types i.
+rewrite Heqo0.
+apply Coq.Init.Logic.I.
+Qed.
+
+Lemma lvar_isptr_eval_var :
+ forall i t v rho, locald_denote (lvar i t v) rho -> isptr (eval_var i t rho).
+Proof.
+intros.
+erewrite lvar_eval_var; eauto.
+eapply lvar_isptr; eauto.
+Qed.
+
+Hint Extern 1 (isptr (eval_var _ _ _)) => (eapply lvar_isptr_eval_var; eassumption) : norm2.

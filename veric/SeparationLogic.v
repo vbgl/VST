@@ -71,8 +71,6 @@ Local Open Scope logic.
 
 Transparent mpred Nveric Sveric Cveric Iveric Rveric Sveric SIveric CSLveric CIveric SRveric Bveric.
 
-Inductive trust_loop_nocontinue : Prop := .
-
 (* BEGIN from expr2.v *)
 Definition denote_tc_iszero v : mpred :=
          match v with
@@ -368,7 +366,7 @@ Definition init_data2pred (d: init_data)  (sh: share) (a: val) (rho: environ) : 
   | Init_float64 r =>  mapsto sh (Tfloat F64 noattr) a (Vfloat r)
   | Init_space n => mapsto_zeros n sh a
   | Init_addrof symb ofs =>
-       match ge_of rho symb with
+       match Map.get (ge_of rho) symb with
        | Some b => mapsto sh (Tpointer Tvoid noattr) a (Vptr b ofs)
        | _ => mapsto_ sh (Tpointer Tvoid noattr) a
        end
@@ -415,7 +413,7 @@ Definition globvar2pred (gv: globals) (idv: ident * globvar type) : environ->mpr
                                    (readonly2share (gvar_readonly (snd idv))) (gv (fst idv)).
 
 Definition globals_of_env (rho: environ) (i: ident) : val := 
-  match ge_of rho i with Some b => Vptr b Ptrofs.zero | None => Vundef end.
+  match Map.get (ge_of rho) i with Some b => Vptr b Ptrofs.zero | None => Vundef end.
 
 Definition globvars2pred  (gv: globals)  (vl: list (ident * globvar type)) : environ->mpred :=
   (lift2 andp) (fun rho => prop (gv = globals_of_env rho))
@@ -723,20 +721,11 @@ Definition loop1_ret_assert (Inv: environ->mpred) (R: ret_assert) : ret_assert :
      RA_return := r |}
  end.
 
-Definition loop1a_ret_assert (Inv: environ->mpred) (R: ret_assert) : ret_assert :=
- match R with 
-  {| RA_normal := n; RA_break := b; RA_continue := c; RA_return := r |} =>
-  {| RA_normal := Inv;
-     RA_break := n; 
-     RA_continue := FF;
-     RA_return := r |}
- end.
-
 Definition loop2_ret_assert (Inv: environ->mpred) (R: ret_assert) : ret_assert :=
  match R with 
   {| RA_normal := n; RA_break := b; RA_continue := c; RA_return := r |} =>
   {| RA_normal := Inv;
-     RA_break := seplog.FF; 
+     RA_break := n;
      RA_continue := seplog.FF;
      RA_return := r |}
  end.
@@ -746,6 +735,29 @@ Definition function_body_ret_assert (ret: type) (Q: environ->mpred) : ret_assert
     RA_break := seplog.FF; 
     RA_continue := seplog.FF;
     RA_return := fun vl => bind_ret vl ret Q |}.
+
+Fixpoint nojumps s :=
+ match s with
+ | Ssequence s1 s2 => if nojumps s1 then nojumps s2 else false
+ | Sifthenelse _ s1 s2 => if nojumps s1 then nojumps s2 else false
+ | Sset _ _ => true
+ | Sassign _ _ => true
+ | Sskip => true
+ | _ => false
+end.
+
+Fixpoint nocontinue s :=
+ match s with
+ | Ssequence s1 s2 => if nocontinue s1 then nocontinue s2 else false
+ | Sifthenelse _ s1 s2 => if nocontinue s1 then nocontinue s2 else false
+ | Sswitch _ sl => nocontinue_ls sl
+ | Sgoto _ => false
+ | Scontinue => false
+ | _ => true
+end
+with nocontinue_ls sl :=
+ match sl with LSnil => true | LScons _ s sl' => if nocontinue s then nocontinue_ls sl' else false
+ end.
 
 Definition tc_environ (Delta: tycontext) : environ -> Prop :=
    fun rho => typecheck_environ Delta rho.
@@ -831,6 +843,9 @@ Definition initblocksize (V: Type)  (a: ident * globvar V)  : (ident * Z) :=
 Definition main_pre (prog: program) : list Type -> globals -> environ -> mpred :=
 (fun nil gv => globvars2pred gv (prog_vars prog)).
 
+Definition main_pre_ext {Espec: OracleKind} (prog: program) (ora: OK_ty) : list Type -> globals -> environ -> mpred :=
+(fun nil gv rho => globvars2pred gv (prog_vars prog) rho * has_ext ora).
+
 Definition main_post (prog: program) : list Type -> (ident->val) -> environ->mpred :=
   (fun nil _ _ => TT).
 
@@ -844,6 +859,17 @@ Definition main_spec' (prog: program)
 Definition main_spec (prog: program): funspec :=
   mk_funspec (nil, tint) cc_default
      (rmaps.ConstType globals) (main_pre prog) (main_post prog)
+       (const_super_non_expansive _ _) (const_super_non_expansive _ _).
+
+Definition main_spec_ext' {Espec: OracleKind} (prog: program) (ora: OK_ty)
+    (post: list Type -> globals -> environ -> mpred): funspec :=
+  mk_funspec (nil, tint) cc_default
+     (rmaps.ConstType globals) (main_pre_ext prog ora) post
+       (const_super_non_expansive _ _) (const_super_non_expansive _ _).
+
+Definition main_spec_ext {Espec: OracleKind} (prog: program) (ora: OK_ty) : funspec :=
+  mk_funspec (nil, tint) cc_default
+     (rmaps.ConstType globals) (main_pre_ext prog ora) (main_post prog)
        (const_super_non_expansive _ _) (const_super_non_expansive _ _).
 
 Fixpoint match_globvars (gvs: list (ident * globvar type)) (V: varspecs) : bool :=
@@ -1112,6 +1138,19 @@ Definition semax_prog
   | None => False
   end.
 
+Definition semax_prog_ext
+    {Espec: OracleKind} {C: compspecs}
+     (prog: program) (z : OK_ty) (V: varspecs) (G: funspecs) : Prop :=
+  compute_list_norepet (prog_defs_names prog) = true  /\
+  all_initializers_aligned prog /\
+  cenv_cs = prog_comp_env prog /\
+  @semax_func Espec V G C (prog_funct prog) G /\
+  match_globvars (prog_vars prog) V = true /\
+  match initial_world.find_id prog.(prog_main) G with
+  | Some s => exists post, s = main_spec_ext' prog z post
+  | None => False
+  end.
+
 Axiom semax_func_nil:   forall {Espec: OracleKind},
         forall V G C, @semax_func Espec V G C nil nil.
 
@@ -1226,10 +1265,12 @@ forall Delta Q Q' incr body R,
      @semax CS Espec Delta Q (Sloop body incr) R.
 
 Axiom semax_loop_nocontinue:
- trust_loop_nocontinue ->
- forall {Espec: OracleKind} {CS: compspecs} Q Delta P body incr R,
- semax Delta Q (Ssequence body incr) (loop1a_ret_assert Q R) ->
- semax Delta P (Sloop body incr) R.
+  forall {Espec: OracleKind}{CS: compspecs} ,
+ forall Delta P body incr R,
+ nocontinue body = true ->
+ nojumps incr = true ->
+ @semax CS Espec Delta P (Ssequence body incr) (loop1_ret_assert P R) ->
+ @semax CS Espec Delta P (Sloop body incr) R.
 
 Axiom semax_if_seq:
  forall {Espec: OracleKind} {CS: compspecs} Delta P e c1 c2 c Q,

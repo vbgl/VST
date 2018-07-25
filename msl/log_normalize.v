@@ -419,6 +419,20 @@ Proof.
     apply derives_refl.
 Qed.
 
+Lemma exp_derives {A}{NA: NatDed A}{B}:
+   forall F G: B -> A, (forall x, F x |-- G x) -> exp F |-- exp G.
+Proof.
+intros.
+apply exp_left; intro x. apply exp_right with x; auto.
+Qed.
+
+Lemma exp_congr:
+ forall A NA T X Y,
+    (forall v, X v = Y v) -> @exp A NA T X = @exp A NA T Y.
+Proof.
+intros. f_equal. extensionality v; auto.
+Qed.
+
 Lemma exp_uncurry:
   forall {T} {ND: NatDed T} A B F, (@exp T ND A (fun a => @exp T ND B (fun b => F a b)))
    = @exp T ND (A*B) (fun ab => F (fst ab) (snd ab)).
@@ -735,13 +749,6 @@ Hint Rewrite @sepcon_emp @emp_sepcon @TT_andp @andp_TT
          @sepcon_andp_prop @sepcon_andp_prop'
      using (solve [auto with typeclass_instances])
         : norm.
-
-Lemma exp_congr:
- forall A NA T X Y,
-    (forall v, X v = Y v) -> @exp A NA T X = @exp A NA T Y.
-Proof.
-intros. f_equal. extensionality v; auto.
-Qed.
 
 Lemma forall_pred_ext  {A}  {NA: NatDed A}: forall B (P Q: B -> A),
  (ALL x : B, (P x <--> Q x)) |-- (ALL x : B, P x) <--> (ALL x: B, Q x) .
@@ -1577,3 +1584,14 @@ Qed.
 
 (****** End contractiveness *****)
 
+Require Import VST.msl.ghost_seplog.
+
+Lemma bupd_andp2_corable: forall {A N D: Type} {ND : NatDed A} {SL : SepLog A} {CSL: ClassicalSep A} {BS : BupdSepLog A N D} {CoSL: CorableSepLog A},
+  forall P Q, corable Q -> (|==> P) && Q |-- |==> (P && Q).
+Proof.
+  intros.
+  rewrite (andp_comm P Q), (andp_left_corable Q), sepcon_comm by auto.
+  eapply derives_trans; [| apply bupd_frame_r].
+  rewrite (andp_comm _ Q), (andp_left_corable Q), sepcon_comm by auto.
+  auto.
+Qed.

@@ -2,6 +2,49 @@ Require Import VST.floyd.base2.
 Require Export VST.floyd.canon.
 Local Open Scope logic.
 
+Lemma SEP_entail:
+ forall R' Delta P Q R, 
+   fold_right_sepcon R |-- fold_right_sepcon R' -> 
+   ENTAIL Delta, PROPx P (LOCALx Q (SEPx R)) |-- PROPx P (LOCALx Q (SEPx R')).
+Proof.
+intros.
+apply andp_left2.
+apply andp_derives; auto.
+apply andp_derives; auto.
+intro rho.
+apply H.
+Qed.
+
+Ltac refold_right_sepcon R :=
+ match R with
+ | @sepcon mpred _ _ ?R1 ?R' => let S := refold_right_sepcon R' in constr: (R1 :: S )
+ | _ => constr:(R :: nil)
+ end.
+
+Ltac sep_apply_in_lifted_entailment H :=
+ apply SEP_entail;
+ unfold fold_right_sepcon at 1;
+ match goal with |- ?R |-- ?R2 => 
+  let r2 := fresh "R2" in pose (r2 := R2); change (R |-- r2);
+  sep_apply_in_entailment H;
+  match goal with |- ?R' |-- _ =>
+   let R'' := refold_right_sepcon R' 
+     in replace R' with (fold_right_sepcon R'') 
+           by (unfold fold_right_sepcon; rewrite ?sepcon_emp; reflexivity);
+        subst r2; apply derives_refl
+   end
+ end.
+
+Ltac sep_apply_in_semax H :=
+   eapply semax_pre; [sep_apply_in_lifted_entailment H | ].
+
+Ltac sep_apply H :=
+ match goal with
+ | |- ENTAIL _ , _ |-- _ => eapply ENTAIL_trans; [sep_apply_in_lifted_entailment H | ] 
+ | |- @derives mpred _ _ _ => sep_apply_in_entailment H
+ | |- semax _ _ _ _ => sep_apply_in_semax H
+ end.
+
 Arguments sem_cmp c !t1 !t2 / v1 v2.
 
 (* The following line should not be needed, and was not needed
@@ -1245,13 +1288,6 @@ Notation "'WITH'  x1 : t1 , x2 : t2 , x3 : t3 , x4 : t4 , x5 : t5 , x6 : t6 , x7
              P at level 100, Q at level 100).
 
 
-Lemma exp_derives {A}{NA: NatDed A}{B}:
-   forall F G: B -> A, (forall x, F x |-- G x) -> exp F |-- exp G.
-Proof.
-intros.
-apply exp_left; intro x. apply exp_right with x; auto.
-Qed.
-
 Lemma prop_true_andp1 {A}{NA: NatDed A} :
   forall (P1 P2: Prop) Q ,
     P1 -> (!! (P1 /\ P2) && Q = !!P2 && Q).
@@ -1450,21 +1486,6 @@ Proof.
       apply prop_derives; simpl.
       unfold subst; simpl; intros.
       rewrite eval_id_other in H0 by auto; auto.
-    - rewrite !local_lift2_and.
-      apply andp_derives; [| exact IHQ].
-      unfold local, lift1; unfold_lift; intros rho.
-      unfold subst; simpl.
-      apply derives_refl.
-    - rewrite !local_lift2_and.
-      apply andp_derives; [| exact IHQ].
-      unfold local, lift1; unfold_lift; intros rho.
-      unfold subst; simpl.
-      apply derives_refl.
-    - rewrite !local_lift2_and.
-      apply andp_derives; [| exact IHQ].
-      unfold local, lift1; unfold_lift; intros rho.
-      unfold subst; simpl.
-      apply derives_refl.
     - rewrite !local_lift2_and.
       apply andp_derives; [| exact IHQ].
       unfold local, lift1; unfold_lift; intros rho.

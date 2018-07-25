@@ -9,9 +9,8 @@ Require VST.veric.Clight_core.
 Module CC' := Clight_core.
 Section GE.
 Variable ge : genv.
-
 Definition CCstep s1 s2 := 
-  Clight.at_external s1 = None /\
+  Clight_core.at_external s1 = None /\
   Clight.step ge (Clight.function_entry2 ge) s1 Events.E0 s2.
 
 Fixpoint strip_skip' (k: CC.cont) : CC.cont :=
@@ -737,6 +736,9 @@ clear.
 
             simpl  in *. exists k'; split. econstructor.
                split;[reflexivity|].  eapply CC.step_break_loop1. constructor 1. auto.
+
+            simpl  in *. exists k'; split. econstructor.
+               split;[reflexivity|].  eapply CC.step_break_loop2. constructor 1. auto.
 
             simpl in *. exists k'; split.
                   econstructor. split;[reflexivity|]. eapply CC.step_skip_break_switch. auto.

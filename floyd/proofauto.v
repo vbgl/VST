@@ -21,6 +21,7 @@ Require Export VST.floyd.reptype_lemmas.
 Require Export VST.floyd.simpl_reptype.
 Require Export VST.floyd.data_at_rec_lemmas.
 Require Export VST.floyd.field_at.
+Require Export VST.floyd.field_at_wand.
 Require Export VST.floyd.field_compat.
 Require Export VST.floyd.stronger.
 Require Export VST.floyd.loadstore_mapsto.
@@ -39,6 +40,10 @@ Require Export VST.floyd.freezer.
 Require Export VST.floyd.deadvars.
 Require Export VST.floyd.hints.
 Require Export VST.floyd.Clightnotations.
+Require VST.msl.iter_sepcon.
+Require VST.msl.wand_frame.
+Require VST.msl.wandQ_frame.
+
 Arguments semax {CS} {Espec} Delta Pre%assert cmd%C Post%assert.
 Export ListNotations.
 Export Cop2.

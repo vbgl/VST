@@ -271,6 +271,7 @@ Lemma cop2_sem_cast :
    denote_tc_test_eq v (Vint Int.zero) (m_phi m) )->
   t1 <> int_or_ptr_type ->
   t2 <> int_or_ptr_type ->
+  tc_val t1 v ->
  Cop.sem_cast v t1 t2 (m_dry m) = sem_cast t1 t2 v.
 Proof.
 intros.
@@ -282,27 +283,32 @@ assert (Cop.classify_cast t1 t2 = classify_cast t1 t2). {
   destruct t1; auto; destruct t2; auto;
   unfold Cop.classify_cast, classify_cast; auto; rewrite ?H0,?H1; auto.
 }
-rewrite <- H2 in *.
-rewrite H2.
+rewrite <- H3 in *.
+rewrite H3.
 destruct (classify_cast t1 t2);
 destruct v; try reflexivity.
-unfold sem_cast_i2bool.
-destruct Archi.ptr64 eqn:Hp; auto.
-specialize (H H2).
-do 3 red in H.
-rewrite Hp in H.
-red in H. destruct H as [_ H].
-apply weak_valid_pointer_dry in H.
-unfold Mem.weak_valid_pointer.
-rewrite H. reflexivity.
++ destruct t1 as [| [| | |] | | [|] | | | | |], t2 as [| [| | |] | | [|] | | | | |]; inv H3; simpl in H2; try inv H2.
+  - revert H2; simple_if_tac; intros H2; inv H2.
+  - revert H2; simple_if_tac; intros H2; inv H2.
++ destruct t1 as [| [| | |] | | [|] | | | | |], t2 as [| [| | |] | | [|] | | | | |]; inv H3; simpl in H2; try inv H2.
+  - revert H2; simple_if_tac; intros H2; inv H2.
+  - revert H2; simple_if_tac; intros H2; inv H2.
++ destruct t1 as [| [| | |] | | [|] | | | | |], t2 as [| [| | |] | | [|] | | | | |]; inv H3; simpl in H2; try inv H2.
+  - revert H2; simple_if_tac; intros H2; inv H2.
+  - revert H2; simple_if_tac; intros H2; inv H2.
++ destruct t1 as [| [| | |] | | [|] | | | | |], t2 as [| [| | |] | | [|] | | | | |]; inv H3; simpl in H2; try inv H2.
+  - revert H2; simple_if_tac; intros H2; inv H2.
+  - revert H2; simple_if_tac; intros H2; inv H2.
++ unfold sem_cast_i2bool.
+  destruct Archi.ptr64 eqn:Hp; auto.
+  specialize (H H3).
+  do 3 red in H.
+  rewrite Hp in H.
+  red in H. destruct H as [_ H].
+  apply weak_valid_pointer_dry in H.
+  unfold Mem.weak_valid_pointer.
+  rewrite H. reflexivity.
 Qed.
-
-
-Ltac cop2_sem_cast_change := 
-match goal with H: classify_cast ?t1 ?t2 = _ |- _ =>
-change (Cop.classify_cast t1 t2)
-  with (classify_cast t1 t2)
-end.
 
 Ltac destruct_eqb_type := 
 match goal with H: context [eqb_type ?t1 ?t2] |- _ =>
@@ -345,7 +351,11 @@ destruct (eqb_type t int_or_ptr_type) eqn:J;
 (destruct (eqb_type t1 int_or_ptr_type) eqn:J0;
  [apply eqb_type_true in J0; subst t1
  | apply eqb_type_false in J0]).
-* auto.
+* unfold sem_cast, sem_cast_pointer in H; simpl in *.
+  rewrite N.eqb_refl in *.
+  simpl in H.
+  inv H.
+  destruct v1; auto; inv H1.
 *
 unfold sem_cast, classify_cast in H.
 rewrite eqb_type_refl in H.
@@ -368,7 +378,7 @@ rewrite eqb_type_refl in H.
 rewrite (proj2 (eqb_type_false _ _) J) in H.
 inv H.
 *
-rewrite <- H.
+revert H.
 clear - J J0 H0 H1.
 unfold Cop.sem_cast, sem_cast.
 unfold Cop.classify_cast, classify_cast, sem_cast_pointer, 
@@ -379,7 +389,11 @@ destruct t1   as [ | [ | | | ] [ | ] | | [ | ] | | | | | ]; auto;
 destruct t   as [ | [ | | | ] [ | ] | | [ | ] | | | | | ]; auto; try discriminate H0;
  auto;
  destruct Archi.ptr64 eqn:Hp; auto;
- destruct v; auto; try contradiction.
+ destruct v; auto; try contradiction;
+ try solve [simpl in H1; rewrite Hp in H1; inv H1];
+ try solve [simpl in H1; revert H1; simple_if_tac; intros []].
+ 
+ simpl in H1; revert H1; simple_if_tac; simpl; rewrite Hp; intros [].
 Qed.
 
 Lemma cop2_sem_cast' :
@@ -414,7 +428,7 @@ unfold denote_tc_test_eq in H;
 rewrite Heqv, Hp in H; destruct H;
 apply weak_valid_pointer_dry in H1;
 unfold Mem.weak_valid_pointer; rewrite H1, Hp; reflexivity].
-all: rewrite Hp; auto.
+simpl in H0; rewrite Hp in H0; inv H0.
 Qed.
 
 (*
@@ -671,7 +685,7 @@ subst rho.
 simpl in Heqo. symmetry in Heqo; apply Heqo.
 subst rho.
 unfold typecheck_environ in *.
-destruct H0 as [? [Hve [Hge _]]].
+destruct H0 as [? [Hve Hge]].
 hnf in Hve,Hge.
 revert H1; case_eq ((var_types Delta) ! i); intros; try contradiction.
 specialize (Hve i t0). destruct Hve as [Hve _].
@@ -689,35 +703,21 @@ apply Clight.eval_Evar_global; auto.
 
 * (* eval_lvalue Evar *)
  simpl in H1.
- destruct (get_var_type Delta i) eqn:?; [ | contradiction].
- destruct (eqb_type t t0) eqn:?; inversion H1; clear H1.
- apply eqb_type_true in Heqb; subst t0.
- destruct H0 as [_ [? [? ?]]].
+ unfold get_var_type in H1.
  subst rho; simpl in *.
- hnf in H0,H1.
- unfold get_var_type in Heqo.
- destruct ((var_types Delta)!i) eqn:?; inv Heqo.
+ unfold eval_var.
+ destruct_var_types i eqn:HH1&HH2; rewrite ?HH1, ?HH2 in *;
+  [| destruct_glob_types i eqn:HH3&HH4; rewrite ?HH3, ?HH4 in *; [| inv H1]].
  +
- apply H0 in Heqo0. destruct Heqo0 as [b ?];
+ destruct (eqb_type t t0) eqn:?; [| inv H1].
+ apply eqb_type_true in Heqb0; subst t0.
  exists b; exists Ptrofs.zero; split; auto.
  constructor; auto.
- unfold eval_var; simpl. rewrite H.
- rewrite eqb_type_refl. reflexivity.
  +
- destruct ((glob_types Delta)!i) eqn:?; inv H3.
- destruct (H1 _ _ Heqo) as [b ?];
+ destruct (eqb_type t t0) eqn:?; [| inv H1].
+ apply eqb_type_true in Heqb0; subst t0.
  exists b; exists Ptrofs.zero; split; auto.
- specialize (H2 _ _ Heqo).
- simpl in H2.
- destruct H2.
  constructor 2; auto.
- unfold filter_genv in H. destruct (Genv.find_symbol ge i); inv H.
- destruct H2 as [t' ?]. congruence.
- unfold eval_var. simpl.
- specialize (H2 _ _ Heqo).
- destruct H2. simpl in H2. unfold Map.get; rewrite H2.
- rewrite H. auto.
- destruct H2; congruence.
 
 * (*temp*)
 assert (TC:= typecheck_expr_sound).
@@ -772,8 +772,8 @@ specialize (H2 H3).
 apply tc_bool_e in H4.
 assert (mkEnviron (ge_of rho) (ve_of rho) (te_of rho) = rho). destruct rho; auto.
 destruct rho. unfold typecheck_environ in *. intuition.
-destruct H2 as [b [? ?]]. destruct H10 as [base [ofs ?]].  simpl in *.
-intuition. rewrite H11 in *. constructor. inv H8. auto.
+destruct H2 as [b [? ?]]. destruct H9 as [base [ofs ?]].  simpl in *.
+intuition. rewrite H10 in *. constructor. inv H7. auto.
 
 * (*unop*)
  eapply eval_unop_relate; eauto.
@@ -797,8 +797,8 @@ destruct (eqb_type (typeof e) t) eqn:Heq.
 +
 apply eqb_type_true in Heq. subst t.
 destruct (eqb_type (typeof e) int_or_ptr_type) eqn:Heq'.
-apply eqb_type_true in Heq'. rewrite Heq' in *.
-apply H1.
+apply eqb_type_true in Heq'.
+rewrite cop2_sem_cast'; auto.
 apply eqb_type_false in Heq'.
 rewrite cop2_sem_cast'; auto.
 +
