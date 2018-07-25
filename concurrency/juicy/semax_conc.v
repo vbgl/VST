@@ -803,7 +803,7 @@ Definition spawn_pre :=
                LOCAL ()
                SEP   ())
            f);
-         pre w b)))
+         valid_pointer b && pre w b)))
    end).
 
 Definition spawn_post :=
@@ -830,7 +830,7 @@ Proof.
   destruct x as ((((?, ?), ?), ?), ?); simpl.
   unfold PROPx; simpl; rewrite !approx_andp; f_equal.
   unfold LOCALx; simpl; rewrite !approx_andp; f_equal.
-  unfold SEPx; simpl; rewrite !sepcon_emp, !approx_sepcon, ?approx_idem; f_equal.
+  unfold SEPx; simpl; rewrite !sepcon_emp, !approx_sepcon, !approx_andp, ?approx_idem; f_equal.
   rewrite !approx_exp; apply f_equal; extensionality y.
   rewrite approx_func_ptr'.
   setoid_rewrite approx_func_ptr' at 2.

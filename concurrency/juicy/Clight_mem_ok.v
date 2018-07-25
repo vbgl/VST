@@ -790,8 +790,7 @@ intros until m'. intro Hstep.
   induction k. constructor.
   inv H7.
   specialize (IHk H2).
-  destruct a; auto. simpl in *. repeat constructor. auto.
-  repeat constructor.
+  destruct a; auto. simpl in *. repeat constructor.
 * (* ifthenelse *)
   split; auto.
   split.

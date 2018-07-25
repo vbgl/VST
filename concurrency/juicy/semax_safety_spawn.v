@@ -495,15 +495,13 @@ clear - Initcore.
 
         (* LOCAL 2 : locald_denote of global variables *)
        {
-        clear - PreB3.
-        induction (globals f_with_x). constructor.
-        split; [ | now apply IHl; destruct PreB3; auto ].
-        destruct PreB3 as [WOB _]. clear IHl.
-        simpl in *.
-        unfold canon.gvar_denote in *. simpl in *.
-        unfold make_venv, Map.get, empty_env. rewrite PTree.gempty.
-        unfold Genv.find_symbol in *.
-        assumption.
+        split3. hnf.
+        clear - PreB3. destruct PreB3 as [PreB3 _].
+        hnf in PreB3. rewrite PreB3; clear PreB3.
+        unfold Map.get, make_ext_args. unfold expr.env_set. 
+        unfold ge_of.
+        unfold filter_genv.
+        extensionality i. unfold Genv.find_symbol. simpl. auto.
        }
 
         (* SEP: only precondition of spawned condition *)

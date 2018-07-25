@@ -3,7 +3,7 @@
 
 default_target: _CoqProject version.vo msl veric floyd progs
 
-COMPCERT ?= compcert
+COMPCERT ?= compcert_new
 -include CONFIGURE
 #Note:  You can make a CONFIGURE file with the definition
 #   COMPCERT=../compcert
@@ -28,24 +28,20 @@ COMPCERT ?= compcert
 ANNOTATE=silent   # suppress chatty output from coqc
 # ANNOTATE=false  # leave chatty output of coqc unchanged
 
-CC_TARGET=compcert/cfrontend/Clight.vo
+CC_TARGET= $(COMPCERT)/cfrontend/Clight.vo
 CC_DIRS= lib common cfrontend exportclight
 VSTDIRS= msl sepcomp veric floyd progs concurrency ccc26x86 
 OTHERDIRS= wand_demo sha fcf hmacfcf tweetnacl20140427 hmacdrbg aes mailbox
 DIRS = $(VSTDIRS) $(OTHERDIRS)
 CONCUR = concurrency
 
-CV1=$(shell cat compcert/VERSION)
-CV2=$(shell cat $(COMPCERT)/VERSION)
-
-ifneq ($(CV1), $(CV2))
- $(error COMPCERT_VERSION=$(CV1) but $(COMPCERT)/VERSION=$(CV2))
-endif
-
 ifeq ($(wildcard $(COMPCERT)/*/Clight.vo), )
 ifeq ($(COMPCERT), compcert)
 else
+ifeq ($(COMPCERT), compcert_new)
+else
  $(error FIRST BUILD COMPCERT, by:  cd $(COMPCERT); make clightgen)
+endif
 endif
 endif
 
@@ -517,14 +513,14 @@ floyd/floyd.coq: floyd/proofauto.vo
 .depend depend:
 #	$(COQDEP) $(filter $(wildcard *.v */*.v */*/*.v),$(FILES))  > .depend
 	@echo 'coqdep ... >.depend'
-#	$(COQDEP) >.depend `find compcert $(filter $(wildcard *), $(DIRS)) -name "*.v"`
-	@$(COQDEP) 2>&1 >.depend `find compcert $(filter $(wildcard *), $(DIRS)) -name "*.v"` | grep -v 'Warning:.*found in the loadpath' || true
+#	$(COQDEP) >.depend `find $(COMPCERT) $(filter $(wildcard *), $(DIRS)) -name "*.v"`
+	@$(COQDEP) 2>&1 >.depend `find $(COMPCERT) $(filter $(wildcard *), $(DIRS)) -name "*.v"` | grep -v 'Warning:.*found in the loadpath' || true
 
 depend-paco:
 	$(COQDEP) > .depend-paco $(PACO_FILES:%.v=concurrency/paco/src/%.v)
 
 clean:
-	rm -f version.vo .version.vo.aux version.glob .lia.cache .nia.cache floyd/floyd.coq .depend _CoqProject _CoqProject-export $(wildcard */.*.aux)  $(wildcard */*.glob) $(wildcard */*.vo) compcert/*/*.vo compcert/*/*/*.vo
+	rm -f version.vo .version.vo.aux version.glob .lia.cache .nia.cache floyd/floyd.coq .depend _CoqProject _CoqProject-export $(wildcard */.*.aux)  $(wildcard */*.glob) $(wildcard */*.vo) {compcert,compcert_new}{*/,}/*/*.vo
 	rm -fr doc/html
 
 clean-concur:

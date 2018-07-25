@@ -622,7 +622,7 @@ auto.
 Qed.
 
   Lemma at_external_SEM_eq:
-     forall ge c m, at_external (CLN_evsem ge) c m =
+     forall ge c m, semantics.at_external (CLN_evsem ge) c m =
       match c with
       | State _ _ _ => None
       | ExtCall ef args _ _ _ _ => Some (ef, args)

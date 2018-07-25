@@ -1091,7 +1091,8 @@ Proof.
         econstructor; eauto.
         - destruct H6; auto.
         - eapply mem_ok_wd; destruct H6; eauto.
-        - auto. }
+        - clear - H2. inv H2. constructor; auto. inv H4; constructor; auto.
+        -  auto. }
       { eapply MTCH_invariant; eauto. } }
     simpl.
     destruct n; [constructor|].
