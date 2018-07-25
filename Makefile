@@ -52,13 +52,17 @@ ifdef MATHCOMP
  EXTFLAGS:=$(EXTFLAGS) -R $(MATHCOMP) mathcomp
 endif
 
-COQFLAGS=$(foreach d, $(VSTDIRS), $(if $(wildcard $(d)), -Q $(d) VST.$(d))) $(foreach d, $(OTHERDIRS), $(if $(wildcard $(d)), -Q $(d) $(d))) $(EXTFLAGS)
+ifeq ($(COMPCERT), compcert_new)
+SHIM= -Q concurrency/shim VST.veric
+endif
+
+COQFLAGS=$(foreach d, $(VSTDIRS), $(if $(wildcard $(d)), -Q $(d) VST.$(d))) $(foreach d, $(OTHERDIRS), $(if $(wildcard $(d)), -Q $(d) $(d))) $(EXTFLAGS) $(SHIM)
 DEPFLAGS:=$(COQFLAGS)
 
 # DO NOT DISABLE coqc WARNINGS!  That would hinder the Coq team's continuous integration.
 # Warning setting  -w -deprecated-focus  is needed until we no longer
 # list version 8.7._ in the COQVERSION list.
-COQC=$(COQBIN)coqc -w -deprecated-focus,-deprecated-unfocus,-deprecated,-notation-overridden
+COQC=$(COQBIN)coqc -w -deprecated-focus,-deprecated-unfocus,-deprecated,-notation-overridden,-overriding-logical-loadpath
 COQTOP=$(COQBIN)coqtop
 COQDEP=$(COQBIN)coqdep $(DEPFLAGS)
 COQDOC=$(COQBIN)coqdoc -d doc/html -g  $(DEPFLAGS)
@@ -514,7 +518,15 @@ floyd/floyd.coq: floyd/proofauto.vo
 #	$(COQDEP) $(filter $(wildcard *.v */*.v */*/*.v),$(FILES))  > .depend
 	@echo 'coqdep ... >.depend'
 #	$(COQDEP) >.depend `find $(COMPCERT) $(filter $(wildcard *), $(DIRS)) -name "*.v"`
-	@$(COQDEP) 2>&1 >.depend `find $(COMPCERT) $(filter $(wildcard *), $(DIRS)) -name "*.v"` | grep -v 'Warning:.*found in the loadpath' || true
+ifeq ($(COMPCERT), compcert_new)
+	$(COQDEP) 2>&1 >.depend `find $(COMPCERT) $(filter $(wildcard *), $(DIRS)) -name "*.v" -a -not -name Clight_core.v` | grep -v 'Warning:.*found in the loadpath' || true
+	echo "" >>.depend
+	$(COQDEP) 2>&1 concurrency/shim/Clight_core.v | grep -v 'Warning:.*found in the loadpath' | awk '{gsub(/veric[/]Clight_core/,"concurrency/shim/Clight_core",$$0); print}' >>.depend || true
+else
+	$(COQDEP) 2>&1 >.depend `find $(COMPCERT) $(filter $(wildcard *), $(DIRS)) -name "*.v"` | grep -v 'Warning:.*found in the loadpath' || true
+endif
+
+
 
 depend-paco:
 	$(COQDEP) > .depend-paco $(PACO_FILES:%.v=concurrency/paco/src/%.v)
